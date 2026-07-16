@@ -17,7 +17,7 @@
             <RowDefinition Height="Auto" />
         </Grid.RowDefinitions>
 
-        <!-- プレビュー（選択行を現在のフォント設定で表示） -->
+        <!-- プレビュー＋パラメータ調整（選択行を現在のフォント設定で表示） -->
         <Border
             Grid.Row="0"
             Padding="12,8"
@@ -25,10 +25,62 @@
             BorderThickness="1"
             BorderBrush="{ThemeResource DividerStrokeColorDefaultBrush}"
             Background="{ThemeResource LayerFillColorDefaultBrush}">
-            <StackPanel Spacing="4">
-                <StackPanel x:Name="PreviewHost" Orientation="Horizontal" VerticalAlignment="Bottom" MinHeight="56" />
-                <TextBlock x:Name="PreviewCaption" FontSize="11" Foreground="{ThemeResource TextFillColorSecondaryBrush}" Text="行を選択するとプレビューを表示します" />
-            </StackPanel>
+            <Grid ColumnSpacing="16">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="440" />
+                </Grid.ColumnDefinitions>
+
+                <StackPanel Spacing="4" VerticalAlignment="Center">
+                    <StackPanel x:Name="PreviewHost" Orientation="Horizontal" VerticalAlignment="Bottom" MinHeight="56" />
+                    <TextBlock x:Name="PreviewCaption" FontSize="11" Foreground="{ThemeResource TextFillColorSecondaryBrush}" Text="行を選択するとプレビューを見ながら調整できます" />
+                </StackPanel>
+
+                <!-- 選択行のパラメータ調整（動かすとオプション文字列を自動生成） -->
+                <Grid Grid.Column="1" x:Name="ParamPanel" IsEnabled="False" RowSpacing="2" ColumnSpacing="8">
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
+                    </Grid.RowDefinitions>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="104" />
+                        <ColumnDefinition Width="104" />
+                    </Grid.ColumnDefinitions>
+
+                    <Slider
+                        x:Name="ZoomSlider"
+                        Grid.Row="0"
+                        Grid.ColumnSpan="2"
+                        Header="Zoom（アイコンの大きさ %）"
+                        Minimum="10"
+                        Maximum="500"
+                        StepFrequency="5"
+                        Value="100"
+                        ValueChanged="OnZoomSliderChanged" />
+                    <NumberBox
+                        x:Name="ZoomBox"
+                        Grid.Row="0"
+                        Grid.Column="2"
+                        Header="Zoom"
+                        Minimum="10"
+                        Maximum="500"
+                        SmallChange="5"
+                        Value="100"
+                        VerticalAlignment="Bottom"
+                        ValueChanged="OnParamChanged" />
+
+                    <NumberBox x:Name="MarginLeftBox" Grid.Row="1" Grid.Column="0" Header="左余白 px" Minimum="-500" Maximum="500" SmallChange="5" Value="0" ValueChanged="OnParamChanged" />
+                    <NumberBox x:Name="MarginRightBox" Grid.Row="1" Grid.Column="1" Header="右余白 px" Minimum="-500" Maximum="500" SmallChange="5" Value="0" ValueChanged="OnParamChanged" />
+                    <NumberBox x:Name="MarginBottomBox" Grid.Row="1" Grid.Column="2" Header="下余白 px" Minimum="-500" Maximum="500" SmallChange="5" Value="0" ValueChanged="OnParamChanged" />
+
+                    <StackPanel Grid.Row="2" Grid.ColumnSpan="3" Orientation="Horizontal" Spacing="16" Margin="0,4,0,0">
+                        <CheckBox x:Name="FixCheck" Content="Fix（元サイズ維持）" MinWidth="0" Click="OnParamCheckChanged" />
+                        <CheckBox x:Name="NoDecorCheck" Content="NoDecor（文字飾りなし）" MinWidth="0" Click="OnParamCheckChanged" />
+                    </StackPanel>
+                </Grid>
+            </Grid>
         </Border>
 
         <TextBlock

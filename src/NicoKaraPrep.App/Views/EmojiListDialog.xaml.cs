@@ -190,10 +190,103 @@ public sealed partial class EmojiListDialog : ContentDialog
         if (_previewRow is not null) _previewRow.PropertyChanged -= OnPreviewRowChanged;
         _previewRow = SlotList.SelectedItem as EmojiSlotRow;
         if (_previewRow is not null) _previewRow.PropertyChanged += OnPreviewRowChanged;
+        LoadParamsFromRow();
         RenderPreview();
     }
 
-    private void OnPreviewRowChanged(object? sender, PropertyChangedEventArgs e) => RenderPreview();
+    private void OnPreviewRowChanged(object? sender, PropertyChangedEventArgs e)
+    {
+        // オプション文字列を直接編集した場合は調整パネルへ反映する
+        if (e.PropertyName == nameof(EmojiSlotRow.Options) && !_syncingParams)
+        {
+            LoadParamsFromRow();
+        }
+        RenderPreview();
+    }
+
+    // ------------------------------------------------ パラメータ調整パネル
+
+    private bool _syncingParams;
+
+    /// <summary>選択行のオプション文字列を調整パネルの各コントロールへ読み込む。</summary>
+    private void LoadParamsFromRow()
+    {
+        _syncingParams = true;
+        try
+        {
+            if (_previewRow is not EmojiSlotRow row)
+            {
+                ParamPanel.IsEnabled = false;
+                return;
+            }
+            var o = row.ToEntry(null).ParseOptions();
+            ZoomSlider.Value = Math.Clamp(o.ZoomPercent, ZoomSlider.Minimum, ZoomSlider.Maximum);
+            ZoomBox.Value = o.ZoomPercent;
+            MarginLeftBox.Value = o.MarginLeft;
+            MarginRightBox.Value = o.MarginRight;
+            MarginBottomBox.Value = o.MarginBottom;
+            FixCheck.IsChecked = o.Fix;
+            NoDecorCheck.IsChecked = o.NoDecor;
+            ParamPanel.IsEnabled = true;
+        }
+        finally
+        {
+            _syncingParams = false;
+        }
+    }
+
+    /// <summary>調整パネルの値からオプション文字列を組み立てて選択行へ書き戻す。</summary>
+    private void ApplyParamsToRow()
+    {
+        if (_syncingParams || _previewRow is not EmojiSlotRow row) return;
+
+        _syncingParams = true;
+        try
+        {
+            double zoom = double.IsNaN(ZoomBox.Value) ? 100 : ZoomBox.Value;
+            double ml = double.IsNaN(MarginLeftBox.Value) ? 0 : MarginLeftBox.Value;
+            double mr = double.IsNaN(MarginRightBox.Value) ? 0 : MarginRightBox.Value;
+            double mb = double.IsNaN(MarginBottomBox.Value) ? 0 : MarginBottomBox.Value;
+
+            var parts = new List<string>();
+            if (NoDecorCheck.IsChecked == true) parts.Add("NoDecor");
+            if (Math.Abs(zoom - 100) > 0.01) parts.Add($"Zoom={zoom:0.##}");
+            if (FixCheck.IsChecked == true) parts.Add("Fix");
+            if (ml != 0) parts.Add($"MarginLeft={ml:0.##}");
+            if (mr != 0) parts.Add($"MarginRight={mr:0.##}");
+            if (mb != 0) parts.Add($"MarginBottom={mb:0.##}");
+
+            row.Options = string.Join(',', parts);
+        }
+        finally
+        {
+            _syncingParams = false;
+        }
+        RenderPreview();
+    }
+
+    private void OnZoomSliderChanged(object sender, Microsoft.UI.Xaml.Controls.Primitives.RangeBaseValueChangedEventArgs e)
+    {
+        if (_syncingParams) return;
+        _syncingParams = true;
+        ZoomBox.Value = e.NewValue;
+        _syncingParams = false;
+        ApplyParamsToRow();
+    }
+
+    private void OnParamChanged(NumberBox sender, NumberBoxValueChangedEventArgs args)
+    {
+        if (_syncingParams) return;
+        if (sender == ZoomBox && !double.IsNaN(args.NewValue))
+        {
+            _syncingParams = true;
+            ZoomSlider.Value = Math.Clamp(args.NewValue, ZoomSlider.Minimum, ZoomSlider.Maximum);
+            _syncingParams = false;
+        }
+        ApplyParamsToRow();
+    }
+
+    private void OnParamCheckChanged(object sender, RoutedEventArgs e) => ApplyParamsToRow();
 
     /// <summary>選択行を、現在のフォント設定・Zoom・Margin を反映した縮小スケールで描画する。</summary>
     private void RenderPreview()
