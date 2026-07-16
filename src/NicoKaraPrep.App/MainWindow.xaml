@@ -52,6 +52,7 @@
                         <KeyboardAccelerator Modifiers="Control" Key="T" />
                     </MenuFlyoutItem.KeyboardAccelerators>
                 </MenuFlyoutItem>
+                <MenuFlyoutItem Text="タブ分離を解除（すべてメインへ戻す）" Click="OnResetTabsClick" />
                 <MenuFlyoutItem Text="未エクスポート行をすべて選択" Click="OnSelectUnexportedClick" />
                 <MenuFlyoutItem Text="選択行の済マークを解除" Click="OnClearMarksClick" />
             </MenuBarItem>

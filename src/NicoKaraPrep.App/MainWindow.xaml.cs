@@ -551,6 +551,30 @@ public sealed partial class MainWindow : Window
         });
     }
 
+    private async void OnResetTabsClick(object sender, RoutedEventArgs e)
+    {
+        if (ViewModel.Tabs.Count <= 1)
+        {
+            ViewModel.StatusText = "分離タブはありません";
+            return;
+        }
+
+        var dialog = new ContentDialog
+        {
+            Title = "タブ分離の解除",
+            Content = $"分離タブ {ViewModel.Tabs.Count - 1} 個をすべて閉じて、行をメインへ時刻順に戻します。よろしいですか？",
+            PrimaryButtonText = "戻す",
+            CloseButtonText = "キャンセル",
+            DefaultButton = ContentDialogButton.Primary,
+            XamlRoot = Content.XamlRoot,
+        };
+        if (await dialog.ShowAsync() != ContentDialogResult.Primary) return;
+
+        TryRun(ViewModel.ResetAllTabs);
+        SyncTabSelection();
+        RefreshAfterTabChange();
+    }
+
     private async void OnTabDoubleTapped(object sender, Microsoft.UI.Xaml.Input.DoubleTappedRoutedEventArgs e)
     {
         var tab = ViewModel.ActiveTab;

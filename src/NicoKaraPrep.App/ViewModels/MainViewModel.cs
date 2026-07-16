@@ -211,6 +211,32 @@ public partial class MainViewModel : ObservableObject
         }
     }
 
+    /// <summary>すべての分離タブを閉じて、行をメインへ時刻順に戻す（タブ分離の初期化）。</summary>
+    public void ResetAllTabs()
+    {
+        if (Tabs.Count <= 1)
+        {
+            StatusText = "分離タブはありません";
+            return;
+        }
+        StoreActiveTab();
+
+        var main = Tabs.First(t => t.IsMain);
+        int lineCount = 0;
+        foreach (var tab in Tabs.Where(t => !t.IsMain).ToList())
+        {
+            lineCount += tab.Document.Lines.Count;
+            MergeLinesByTime(main.Document, tab.Document);
+            Tabs.Remove(tab);
+        }
+        main.IsModified = true;
+        main.UndoStack.Clear();
+        main.RedoStack.Clear();
+        ActivateTab(main);
+        SaveProject();
+        StatusText = $"タブ分離を解除し、{lineCount} 行をメインへ時刻順に戻しました";
+    }
+
     public void RenameTab(TabState tab, string newName)
     {
         newName = newName.Trim();
