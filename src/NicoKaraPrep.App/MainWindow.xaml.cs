@@ -167,9 +167,10 @@ public sealed partial class MainWindow : Window
 
     private void OnSaveClick(object sender, RoutedEventArgs e)
     {
-        if (ViewModel.CurrentFilePath is string path)
+        // 上書き保存は常に「タブ含む全行」をメインのファイルへ（マスター保存）
+        if (ViewModel.MainFilePath is string path)
         {
-            TryRun(() => ViewModel.SaveTo(path));
+            TryRun(() => ViewModel.SaveFullTo(path));
         }
         else
         {
@@ -179,9 +180,24 @@ public sealed partial class MainWindow : Window
 
     private void OnSaveAsClick(object sender, RoutedEventArgs e)
     {
-        string suggested = ViewModel.GetSuggestedFileBaseName();
+        string? mainPath = ViewModel.MainFilePath;
+        string suggested = mainPath is string mp ? Path.GetFileNameWithoutExtension(mp) : "lyrics";
+        bool rlfFirst = mainPath is not null &&
+                        Path.GetExtension(mainPath).Equals(".rlf", StringComparison.OrdinalIgnoreCase);
 
-        // 現在 rlf を編集中なら rlf を先頭（既定）にする
+        var types = rlfFirst
+            ? new[] { LyricsFileTypes[1], LyricsFileTypes[0], LyricsFileTypes[2] }
+            : LyricsFileTypes;
+
+        string? path = SaveFileDialog.Show(Hwnd, ViewModel.GetDefaultSaveFolder(), suggested, types, rlfFirst ? "rlf" : "lrc");
+        if (path is null) return;
+        TryRun(() => ViewModel.SaveFullTo(path));
+    }
+
+    /// <summary>表示中のタブの内容だけを別ファイルへ保存する。</summary>
+    private void OnSaveTabAsClick(object sender, RoutedEventArgs e)
+    {
+        string suggested = ViewModel.GetSuggestedFileBaseName();
         var types = ViewModel.CurrentFormat == ViewModels.DocumentFormat.Rlf
             ? new[] { LyricsFileTypes[1], LyricsFileTypes[0], LyricsFileTypes[2] }
             : LyricsFileTypes;
@@ -189,7 +205,7 @@ public sealed partial class MainWindow : Window
 
         string? path = SaveFileDialog.Show(Hwnd, ViewModel.GetDefaultSaveFolder(), suggested, types, defaultExt);
         if (path is null) return;
-        TryRun(() => ViewModel.SaveTo(path));
+        TryRun(() => ViewModel.SaveActiveTabCopyTo(path));
     }
 
     // ------------------------------------------------------ クリップボード

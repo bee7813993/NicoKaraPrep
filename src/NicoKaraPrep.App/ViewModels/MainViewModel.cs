@@ -446,6 +446,86 @@ public partial class MainViewModel : ObservableObject
         StatusText = $"保存しました: {Path.GetFileName(path)}";
     }
 
+    /// <summary>メインタブのファイルパス（上書き保存の対象）。</summary>
+    public string? MainFilePath
+    {
+        get
+        {
+            StoreActiveTab();
+            return Tabs.FirstOrDefault(t => t.IsMain)?.FilePath;
+        }
+    }
+
+    /// <summary>全タブを時刻順に統合した全行ドキュメントを作る（タブ構成は変更しない）。</summary>
+    public LyricsDocument BuildMergedDocument()
+    {
+        StoreActiveTab();
+        var main = Tabs.First(t => t.IsMain);
+        var merged = main.Document.Clone();
+        foreach (var tab in Tabs.Where(t => !t.IsMain))
+        {
+            var carrier = new LyricsDocument();
+            carrier.Lines.AddRange(tab.Document.Lines.Select(l => l.Clone()));
+            MergeLinesByTime(merged, carrier);
+        }
+        return merged;
+    }
+
+    /// <summary>
+    /// タブ含む全行を時刻順に統合してファイルへ保存する（マスター保存）。
+    /// 画面上のタブ分離はそのまま維持される。
+    /// </summary>
+    public void SaveFullTo(string path, DocumentFormat? format = null)
+    {
+        var f = format ?? FormatFromExtension(path);
+        var merged = BuildMergedDocument();
+        if (f == DocumentFormat.Rlf)
+        {
+            RlfFormat.WriteFile(path, merged);
+        }
+        else
+        {
+            File.WriteAllText(path, LrcFormat.Write(merged), LrcEncoding);
+        }
+
+        var main = Tabs.First(t => t.IsMain);
+        main.FilePath = path;
+        main.Format = f;
+        foreach (var tab in Tabs) tab.IsModified = false;
+        if (_activeTab.IsMain)
+        {
+            CurrentFilePath = path;
+            CurrentFormat = f;
+        }
+        IsModified = false;
+        UpdateTitle();
+        SaveProject();
+        RememberSaveFolder(path);
+
+        int tabCount = Tabs.Count - 1;
+        StatusText = tabCount > 0
+            ? $"タブ含む全 {merged.Lines.Count} 行を保存しました: {Path.GetFileName(path)}（タブ分離は維持）"
+            : $"保存しました: {Path.GetFileName(path)}";
+    }
+
+    /// <summary>
+    /// 表示中のタブの内容だけをファイルへ書き出す（タブのファイル紐付けは変更しない）。
+    /// </summary>
+    public void SaveActiveTabCopyTo(string path, DocumentFormat? format = null)
+    {
+        var f = format ?? FormatFromExtension(path);
+        if (f == DocumentFormat.Rlf)
+        {
+            RlfFormat.WriteFile(path, Document);
+        }
+        else
+        {
+            File.WriteAllText(path, LrcFormat.Write(Document), LrcEncoding);
+        }
+        RememberSaveFolder(path);
+        StatusText = $"表示中のタブ「{_activeTab.Name}」を保存しました: {Path.GetFileName(path)}（{Document.Lines.Count} 行）";
+    }
+
     /// <summary>
     /// 保存・エクスポートダイアログの初期フォルダ。
     /// 歌詞ファイルのフォルダ → メディアのフォルダ → 前回保存したフォルダ の優先順。

@@ -23,12 +23,13 @@
                         <KeyboardAccelerator Modifiers="Control" Key="O" />
                     </MenuFlyoutItem.KeyboardAccelerators>
                 </MenuFlyoutItem>
-                <MenuFlyoutItem Text="上書き保存" Click="OnSaveClick">
+                <MenuFlyoutItem Text="上書き保存（タブ含む全行）" Click="OnSaveClick">
                     <MenuFlyoutItem.KeyboardAccelerators>
                         <KeyboardAccelerator Modifiers="Control" Key="S" />
                     </MenuFlyoutItem.KeyboardAccelerators>
                 </MenuFlyoutItem>
-                <MenuFlyoutItem Text="名前を付けて保存..." Click="OnSaveAsClick" />
+                <MenuFlyoutItem Text="名前を付けて保存（タブ含む全行）..." Click="OnSaveAsClick" />
+                <MenuFlyoutItem Text="表示中のタブを別ファイルへ保存..." Click="OnSaveTabAsClick" />
                 <MenuFlyoutSeparator />
                 <MenuFlyoutItem Text="クリップボードから貼り付け" Click="OnPasteClick">
                     <MenuFlyoutItem.KeyboardAccelerators>
