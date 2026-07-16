@@ -343,19 +343,33 @@
                         <ColumnDefinition Width="Auto" />
                         <ColumnDefinition Width="*" />
                     </Grid.ColumnDefinitions>
-                    <!-- 行情報欄（開始→終了時刻・横幅。エディタとスクロール同期） -->
+                    <!-- 行の実高さ測定用プローブ（エディタと同一のフォント設定、不可視） -->
+                    <TextBox
+                        x:Name="GutterPitchProbe"
+                        MaxWidth="1"
+                        MinWidth="0"
+                        MinHeight="0"
+                        UseLayoutRounding="False"
+                        Opacity="0"
+                        IsHitTestVisible="False"
+                        IsTabStop="False"
+                        HorizontalAlignment="Left"
+                        VerticalAlignment="Top"
+                        Padding="0"
+                        BorderThickness="0"
+                        AcceptsReturn="True"
+                        FontSize="20"
+                        TextWrapping="NoWrap"
+                        ScrollViewer.VerticalScrollBarVisibility="Disabled"
+                        ScrollViewer.HorizontalScrollBarVisibility="Disabled" />
+                    <!-- 行情報欄（開始→終了時刻・横幅。エディタとスクロール同期、行高さは実測） -->
                     <ScrollViewer
                         x:Name="InsertGutterScroll"
                         VerticalScrollBarVisibility="Hidden"
                         HorizontalScrollBarVisibility="Disabled"
                         IsHitTestVisible="False"
                         IsTabStop="False">
-                        <TextBlock
-                            x:Name="InsertGutter"
-                            FontSize="12"
-                            Margin="0,7,0,0"
-                            LineStackingStrategy="BlockLineHeight"
-                            Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+                        <StackPanel x:Name="InsertGutterStack" Margin="0,7,0,0" UseLayoutRounding="False" />
                     </ScrollViewer>
                     <TextBox
                         x:Name="InsertEditor"

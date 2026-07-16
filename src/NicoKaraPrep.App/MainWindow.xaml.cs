@@ -1302,12 +1302,8 @@ public sealed partial class MainWindow : Window
         if (_insertEditorScroll is null) return;
         _insertEditorScroll.ViewChanged += (_, _) =>
             InsertGutterScroll.ChangeView(null, _insertEditorScroll.VerticalOffset, null, disableAnimation: true);
-        // ウィンドウリサイズでスクロール可否（= 行送りの測定方法）が変わり得るため再計算する
-        InsertEditor.SizeChanged += (_, _) =>
-        {
-            _gutterMetricsRetries = 0;
-            ScheduleInsertGutterMetrics();
-        };
+        // ウィンドウリサイズ後もスクロール位置の同期を取り直す
+        InsertEditor.SizeChanged += (_, _) => ScheduleInsertGutterScrollSync();
     }
 
     /// <summary>チェック結果の重要度 → 行情報欄の文字色（null は既定色のまま）。</summary>
@@ -1318,139 +1314,133 @@ public sealed partial class MainWindow : Window
         _ => null,
     };
 
+    // プローブで測った「行テキスト → 行の実高さ」キャッシュ（同じ行の再測定を避ける）
+    private readonly Dictionary<string, double> _gutterLinePitchCache = new();
+    private double _gutterProbeH2 = double.NaN; // 「あ\rあ」2 行のときのプローブ高さ
+    private double _gutterProbeBasePitch = 27;
+
+    /// <summary>
+    /// プローブ TextBox の高さ = 定数 + Σ各行の実高さ、の定数部分を測定する。
+    /// 行によって実高さが微妙に違う（全角記号や特定の漢字がフォールバックフォントを
+    /// 引いて行が高くなる）ため、均一な行送りではなく行ごとの実測で積む。
+    /// </summary>
+    private void EnsureGutterProbeBaseline()
+    {
+        if (!double.IsNaN(_gutterProbeH2)) return;
+        GutterPitchProbe.Text = "あ";
+        GutterPitchProbe.UpdateLayout();
+        double h1 = GutterPitchProbe.ActualHeight;
+        GutterPitchProbe.Text = "あ\rあ";
+        GutterPitchProbe.UpdateLayout();
+        double h2 = GutterPitchProbe.ActualHeight;
+        GutterPitchProbe.Text = "";
+        if (h1 < 4 || h2 <= h1 + 4) return; // レイアウト未確定（次回の再構築で再試行）
+        _gutterProbeH2 = h2;
+        _gutterProbeBasePitch = h2 - h1;
+    }
+
+    /// <summary>1 行分のテキストをプローブに入れて、その行のエディタ上の実高さを測る。</summary>
+    private double MeasureGutterLinePitch(string lineText)
+    {
+        if (_gutterLinePitchCache.TryGetValue(lineText, out double cached)) return cached;
+
+        // 対象行を 8 回繰り返して「あ」2 行で挟み、基準（あ 2 行）との差分 ÷ 8 を取る。
+        // 単独で測ると空行などで複数行テキスト中の実高さと一致せず、1 回だけの測定では
+        // 高さの量子化誤差（±1px 弱）が同じ行の繰り返しで相関して累積するため。
+        const int Repeat = 8;
+        var sb = new System.Text.StringBuilder("あ");
+        for (int i = 0; i < Repeat; i++)
+        {
+            sb.Append('\r').Append(lineText);
+        }
+        sb.Append('\r').Append('あ');
+        GutterPitchProbe.Text = sb.ToString();
+        GutterPitchProbe.UpdateLayout();
+        double h = GutterPitchProbe.ActualHeight;
+        GutterPitchProbe.Text = "";
+
+        double pitch = (h - _gutterProbeH2) / Repeat;
+        if (pitch < 4) return _gutterProbeBasePitch;
+        _gutterLinePitchCache[lineText] = pitch;
+        return pitch;
+    }
+
     /// <summary>行情報欄（開始→終了時刻・横幅）をドキュメントの現在内容から作り直す。</summary>
     private void RefreshInsertGutter()
     {
         if (!InsertViewActive) return;
+        EnsureGutterProbeBaseline();
 
-        var inlines = InsertGutter.Inlines;
-        inlines.Clear();
+        var defaultBrush = (Microsoft.UI.Xaml.Media.Brush)Microsoft.UI.Xaml.Application.Current.Resources["TextFillColorSecondaryBrush"];
+        var children = InsertGutterStack.Children;
+        children.Clear();
 
-        void AddRun(string text, Microsoft.UI.Xaml.Media.Brush? brush)
-        {
-            if (text.Length == 0) return;
-            var run = new Microsoft.UI.Xaml.Documents.Run { Text = text };
-            if (brush is not null) run.Foreground = brush;
-            inlines.Add(run);
-        }
-
-        bool first = true;
         foreach (var l in ViewModel.Lines)
         {
-            if (!first) inlines.Add(new Microsoft.UI.Xaml.Documents.LineBreak());
-            first = false;
-            if (l.Model.IsEmpty) continue;
+            string lineText = l.Model.IsEmpty ? "" : l.Model.GetDisplayText();
+            double pitch = double.IsNaN(_gutterProbeH2) ? _gutterProbeBasePitch : MeasureGutterLinePitch(lineText);
 
-            // 時間はページ衝突チェック、横幅は横幅チェックの重要度で色分け（通常ビューの列と同じ規則）
-            if (l.TimeText.Length > 0 || l.EndTimeText.Length > 0)
+            var row = new TextBlock
             {
-                AddRun(l.TimeText, GutterBrushFor(l.StartTimeSeverity));
-                AddRun("→", null);
-                AddRun(l.EndTimeText, GutterBrushFor(l.EndTimeSeverity));
-            }
-            if (l.WidthText.Length > 0)
+                FontSize = 12,
+                Height = pitch,
+                Foreground = defaultBrush,
+            };
+
+            void AddRun(string text, Microsoft.UI.Xaml.Media.Brush? brush)
             {
-                // マージン不足・はみ出しは重要度の色、それ以外でも使用率 90% 超なら警告色で予告
-                var widthBrush = GutterBrushFor(l.WidthSeverity)
-                    ?? (l.WidthUsagePercent > 90 ? ViewModels.LineViewModel.WarningTimeBrush : null);
-                AddRun(" ", null);
-                AddRun(l.WidthText, widthBrush);
+                if (text.Length == 0) return;
+                var run = new Microsoft.UI.Xaml.Documents.Run { Text = text };
+                if (brush is not null) run.Foreground = brush;
+                row.Inlines.Add(run);
             }
+
+            if (!l.Model.IsEmpty)
+            {
+                // 時間はページ衝突チェック、横幅は横幅チェックの重要度で色分け（通常ビューの列と同じ規則）
+                if (l.TimeText.Length > 0 || l.EndTimeText.Length > 0)
+                {
+                    AddRun(l.TimeText, GutterBrushFor(l.StartTimeSeverity));
+                    AddRun("→", null);
+                    AddRun(l.EndTimeText, GutterBrushFor(l.EndTimeSeverity));
+                }
+                if (l.WidthText.Length > 0)
+                {
+                    // マージン不足・はみ出しは重要度の色、それ以外でも使用率 90% 超なら警告色で予告
+                    var widthBrush = GutterBrushFor(l.WidthSeverity)
+                        ?? (l.WidthUsagePercent > 90 ? ViewModels.LineViewModel.WarningTimeBrush : null);
+                    AddRun(" ", null);
+                    AddRun(l.WidthText, widthBrush);
+                }
+            }
+
+            children.Add(row);
         }
-        // 末尾の空行はエディタ下端（横スクロールバー分）とのずれ吸収用
-        inlines.Add(new Microsoft.UI.Xaml.Documents.LineBreak());
-        inlines.Add(new Microsoft.UI.Xaml.Documents.LineBreak());
+        // 末尾の余白はエディタ下端（横スクロールバー分）とのずれ吸収用
+        children.Add(new Border { Height = 60 });
 
-        _gutterMetricsRetries = 0;
-        ScheduleInsertGutterMetrics();
+        ScheduleInsertGutterScrollSync();
     }
 
-    private bool _gutterMetricsPending;
-    private int _gutterMetricsRetries;
+    private bool _gutterSyncPending;
 
-    /// <summary>エディタのレイアウト確定後に行送りとスクロール位置を合わせる（確定前は測定値が古いため）。</summary>
-    private void ScheduleInsertGutterMetrics()
+    /// <summary>エディタのレイアウト確定後に行情報欄のスクロール位置を合わせる。</summary>
+    private void ScheduleInsertGutterScrollSync()
     {
-        if (_gutterMetricsPending) return;
-        _gutterMetricsPending = true;
+        if (_gutterSyncPending) return;
+        _gutterSyncPending = true;
 
         void Handler(object? s, object e)
         {
             InsertEditor.LayoutUpdated -= Handler;
-            _gutterMetricsPending = false;
-            UpdateInsertGutterMetrics();
+            _gutterSyncPending = false;
+            HookInsertEditorScroll();
+            if (_insertEditorScroll is { } sv)
+            {
+                InsertGutterScroll.ChangeView(null, sv.VerticalOffset, null, disableAnimation: true);
+            }
         }
         InsertEditor.LayoutUpdated += Handler;
-    }
-
-    private double _measuredEditorLinePitch;
-
-    /// <summary>
-    /// エディタと同じフォントの TextBlock を測定して 1 行分の高さ（行送り）を求める。
-    /// エディタの Extent ÷ 行数は、内容がビューポートより短いとき Extent が
-    /// ビューポート高さに広がって過大になるため使わない。
-    /// </summary>
-    private double MeasureEditorLinePitch()
-    {
-        var tb = new TextBlock
-        {
-            FontSize = InsertEditor.FontSize,
-            FontFamily = InsertEditor.FontFamily,
-            TextWrapping = Microsoft.UI.Xaml.TextWrapping.NoWrap,
-            Text = "あ",
-        };
-        tb.Measure(new Windows.Foundation.Size(double.PositiveInfinity, double.PositiveInfinity));
-        double one = tb.DesiredSize.Height;
-        tb.Text = "あ\nあ";
-        tb.Measure(new Windows.Foundation.Size(double.PositiveInfinity, double.PositiveInfinity));
-        return tb.DesiredSize.Height - one;
-    }
-
-    /// <summary>行情報欄の行送りをエディタの実際の行高さに合わせ、スクロール位置を同期する。</summary>
-    private void UpdateInsertGutterMetrics()
-    {
-        HookInsertEditorScroll();
-        var sv = _insertEditorScroll;
-        if (sv is null || _insertViewText.Length == 0) return;
-
-        int totalLines = 1;
-        foreach (char c in _insertViewText)
-        {
-            if (c == '\r') totalLines++;
-        }
-
-        // スクロールが発生している（内容がビューポートより高い）なら Extent = 内容の実高さなので
-        // Extent ÷ 行数が最も正確（TextBlock のフォント測定は TextBox と 1 行あたり
-        // 0.5px 程度ずれることがあり、行数が多いと蓄積する）。
-        // 内容が短く Extent がビューポート高さに広がっている場合のみフォント測定に頼る。
-        double lineHeight = 0;
-        double extentPitch = (sv.ExtentHeight - InsertEditor.Padding.Top - InsertEditor.Padding.Bottom) / totalLines;
-        if (sv.ScrollableHeight > 1 && extentPitch >= 8)
-        {
-            lineHeight = extentPitch;
-        }
-        else
-        {
-            if (_measuredEditorLinePitch <= 0)
-            {
-                _measuredEditorLinePitch = MeasureEditorLinePitch();
-            }
-            lineHeight = _measuredEditorLinePitch;
-        }
-
-        if (lineHeight < 8)
-        {
-            // 測定に失敗 → 次のレイアウトパスで再試行
-            _measuredEditorLinePitch = 0;
-            if (++_gutterMetricsRetries < 20) ScheduleInsertGutterMetrics();
-            return;
-        }
-
-        if (Math.Abs(InsertGutter.LineHeight - lineHeight) > 0.05)
-        {
-            InsertGutter.LineHeight = lineHeight;
-        }
-        InsertGutterScroll.ChangeView(null, sv.VerticalOffset, null, disableAnimation: true);
     }
 
     /// <summary>カーソル位置の行番号と直前・直後のタイムタグを下部バーに表示する。</summary>
