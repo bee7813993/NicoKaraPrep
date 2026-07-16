@@ -887,13 +887,17 @@ public partial class MainViewModel : ObservableObject
             slot.IsSongOverride = song is not null;
         }
 
+        // スロット表示に出ていないエントリは、スロット番号の状態にかかわらず必ずここに出す
+        // （スロット番号の二重占有などがあってもエントリが不可視にならないようにする）
+        var displayed = new HashSet<EmojiEntry>(
+            EmojiSlots.Where(s => s.Entry is not null).Select(s => s.Entry!));
         UnslottedEmoji.Clear();
-        var seen = new HashSet<string>();
-        foreach (var e in Document.EmojiEntries.Where(e => e.Slot is null && e.ReplaceChar.Length > 0))
+        var seen = new HashSet<string>(displayed.Select(e => e.ReplaceChar));
+        foreach (var e in Document.EmojiEntries.Where(e => !displayed.Contains(e) && e.ReplaceChar.Length > 0))
         {
             if (seen.Add(e.ReplaceChar)) UnslottedEmoji.Add(e);
         }
-        foreach (var e in Settings.GlobalEmojiList.Where(e => e.Slot is null && e.ReplaceChar.Length > 0))
+        foreach (var e in Settings.GlobalEmojiList.Where(e => !displayed.Contains(e) && e.ReplaceChar.Length > 0))
         {
             if (seen.Add(e.ReplaceChar)) UnslottedEmoji.Add(e);
         }
@@ -952,13 +956,16 @@ public partial class MainViewModel : ObservableObject
         int free = Enumerable.Range(1, 20).FirstOrDefault(i => EmojiSlots.First(s => s.Slot == i).Entry is null);
         if (free == 0)
         {
-            // 空きが無い → スロット 20 の曲内エントリを外して入れ替え
-            var last = Document.EmojiEntries.FirstOrDefault(e => e.Slot == 20);
-            if (last is not null) last.Slot = null;
+            // 空きが無い → スロット 20 を持つエントリを曲内・グローバルの両方から外して入れ替え
+            // （曲内だけ外すと、グローバル側が 20 を持ったままの場合に二重占有になり
+            //   昇格したエントリがどのリストにも表示されなくなる）
             free = 20;
+            foreach (var e in Document.EmojiEntries.Where(e => e.Slot == free && e != entry).ToList()) e.Slot = null;
+            foreach (var e in Settings.GlobalEmojiList.Where(e => e.Slot == free && e != entry).ToList()) e.Slot = null;
         }
         entry.Slot = free;
         RefreshEmojiSlots();
+        Settings.Save();  // グローバルエントリの割り当て変更も保存する
         SaveProject();
         StatusText = $"{entry.ReplaceChar} をキー {EmojiSlotViewModel.KeyLabels[free - 1]} に割り当てました（ドラッグで並び替えできます）";
     }
