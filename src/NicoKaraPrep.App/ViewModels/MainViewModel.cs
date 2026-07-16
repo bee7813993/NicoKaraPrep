@@ -1236,8 +1236,8 @@ public partial class MainViewModel : ObservableObject
 
         if (target is not { } t)
         {
-            StatusText = "カーソル位置に絵文字がありません（歌詞の文字はここでは削除できません）";
-            return null;
+            // 絵文字が無ければ空白（半角・全角）の削除を試みる
+            return DeleteSpaceAtViewOffset(offset, lineIndex, charOffset, forward);
         }
 
         PushUndo();
@@ -1269,6 +1269,97 @@ public partial class MainViewModel : ObservableObject
         StatusText = $"絵文字 {t.Value} を削除しました";
 
         return GetInsertViewLineStart(lineIndex) + targetDispStart;
+    }
+
+    private static bool IsSpaceChar(CharUnit c) => c.Text is " " or "　";
+
+    /// <summary>
+    /// カーソルに隣接する空白（半角・全角）を削除する。
+    /// 空白にタイムタグが付いていた場合はタグをスペーサーに移して時刻情報を保持する。
+    /// </summary>
+    private int? DeleteSpaceAtViewOffset(int offset, int lineIndex, int charOffset, bool forward)
+    {
+        var line = Document.Lines[lineIndex];
+        int unitIndex = DisplayOffsetToUnitIndex(line, charOffset);
+
+        // Del はカーソル位置以降、BS はカーソル位置より前の最初の非スペーサー文字を見る
+        int target = -1;
+        if (forward)
+        {
+            for (int i = unitIndex; i < line.Chars.Count; i++)
+            {
+                if (line.Chars[i].IsSpacer) continue;
+                target = i;
+                break;
+            }
+        }
+        else
+        {
+            for (int i = Math.Min(unitIndex, line.Chars.Count) - 1; i >= 0; i--)
+            {
+                if (line.Chars[i].IsSpacer) continue;
+                target = i;
+                break;
+            }
+        }
+
+        if (target < 0 || !IsSpaceChar(line.Chars[target]))
+        {
+            StatusText = "カーソル位置に絵文字・空白がありません（歌詞の文字はここでは削除できません）";
+            return null;
+        }
+
+        PushUndo();
+        if (line.Chars[target].TimeCs is int tagCs)
+        {
+            // タグ付き空白 → 表示幅 0 のスペーサーに置き換えて時刻を残す
+            line.Chars[target] = new CharUnit { Text = CharUnit.Spacer, TimeCs = tagCs };
+        }
+        else
+        {
+            line.Chars.RemoveAt(target);
+        }
+        if (lineIndex < Lines.Count) Lines[lineIndex].RaiseAllChanged();
+        MarkModified();
+        StatusText = "空白を削除しました";
+
+        return forward ? offset : offset - 1;
+    }
+
+    /// <summary>
+    /// 挿入ビューのカーソル位置に空白を挿入する（タイムタグなし。文字位置の調整用）。
+    /// カーソルが絵文字（置き換え文字列）の内側にある場合は、その直後へずらして挿入する。
+    /// 成功時は挿入後のカーソル位置を返す。
+    /// </summary>
+    public int? InsertSpaceAtViewOffset(int offset, bool fullWidth)
+    {
+        if (MapInsertViewOffset(offset) is not var (lineIndex, charOffset)) return null;
+        var line = Document.Lines[lineIndex];
+        int unitIndex = DisplayOffsetToUnitIndex(line, charOffset);
+
+        // 絵文字の置き換え文字列を分断しないようにする
+        var matcher = CreateEmojiMatcher();
+        foreach (var occ in matcher.FindOccurrences(line.Chars))
+        {
+            if (unitIndex > occ.Start && unitIndex < occ.EndExclusive)
+            {
+                unitIndex = occ.EndExclusive;
+                break;
+            }
+        }
+
+        PushUndo();
+        line.Chars.Insert(unitIndex, new CharUnit { Text = fullWidth ? "　" : " " });
+        if (lineIndex < Lines.Count) Lines[lineIndex].RaiseAllChanged();
+        MarkModified();
+        StatusText = fullWidth ? "全角スペースを挿入しました" : "半角スペースを挿入しました";
+
+        int disp = 0;
+        for (int i = 0; i <= unitIndex; i++)
+        {
+            if (!line.Chars[i].IsSpacer) disp += line.Chars[i].Text.Length;
+        }
+        return GetInsertViewLineStart(lineIndex) + disp;
     }
 
     /// <summary>挿入ビューのカーソル位置で行を分割する。成功時は新しいカーソル位置を返す。</summary>

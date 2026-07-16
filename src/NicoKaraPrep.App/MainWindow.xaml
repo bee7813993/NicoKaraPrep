@@ -350,7 +350,7 @@
                     FontSize="12"
                     TextWrapping="Wrap"
                     Foreground="{ThemeResource TextFillColorSecondaryBrush}"
-                    Text="1–0 / Q–P: 絵文字挿入　B: ＿挿入　G: 先行タグ挿入　BS / Del: 絵文字削除　Space: 再生/一時停止　D: カーソル位置から再生　A: 再生　S: 一時停止　Z / X: 数秒戻る / 進む　F: 再生追従　/: 行分割　\: 行結合（Shift+\: スペースを挟む）　Ctrl+Z / Y: 元に戻す / やり直し　Esc: 終了" />
+                    Text="1–0 / Q–P: 絵文字挿入　B: ＿挿入　G: 先行タグ挿入　K: 空白挿入（Shift+K: 全角）　BS / Del: 絵文字・空白削除　Space: 再生/一時停止　D: カーソル位置から再生　A: 再生　S: 一時停止　Z / X: 数秒戻る / 進む　F: 再生追従　/: 行分割　\: 行結合（Shift+\: スペースを挟む）　Ctrl+Z / Y: 元に戻す / やり直し　Esc: 終了" />
                 <Grid Grid.Row="2" ColumnSpacing="8">
                     <Grid.ColumnDefinitions>
                         <ColumnDefinition Width="Auto" />

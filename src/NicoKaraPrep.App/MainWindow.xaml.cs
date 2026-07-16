@@ -1162,6 +1162,16 @@ public sealed partial class MainWindow : Window
                 ScheduleValidation();
                 e.Handled = true;
                 return;
+            case Windows.System.VirtualKey.K:
+                // 空白挿入（Shift で全角）。文字位置の調整用
+                TryRun(() =>
+                {
+                    int? caret = ViewModel.InsertSpaceAtViewOffset(InsertEditor.SelectionStart, fullWidth: shift);
+                    if (caret is int c) RefreshInsertView(c);
+                });
+                ScheduleValidation();
+                e.Handled = true;
+                return;
             case Windows.System.VirtualKey.Space:
                 TogglePlayPause();
                 e.Handled = true;
