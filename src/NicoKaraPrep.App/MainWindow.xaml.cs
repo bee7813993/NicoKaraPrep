@@ -94,6 +94,20 @@ public sealed partial class MainWindow : Window
             };
             timer.Start();
         }
+
+        // デバッグ用: 起動直後に絵文字挿入ビューへ切り替える
+        if (args.Contains("--debug-insert-view"))
+        {
+            var timer = DispatcherQueue.GetForCurrentThread().CreateTimer();
+            timer.Interval = TimeSpan.FromMilliseconds(1500);
+            timer.IsRepeating = false;
+            timer.Tick += (_, _) =>
+            {
+                DebugLog("絵文字挿入ビューを自動オープンします");
+                EmojiModeToggle.IsChecked = true;
+            };
+            timer.Start();
+        }
     }
 
     private static void DebugLog(string message)
@@ -1306,25 +1320,54 @@ public sealed partial class MainWindow : Window
         // 末尾の空行はエディタ下端（横スクロールバー分）とのずれ吸収用
         InsertGutter.Text = string.Join("\r", parts) + "\r\r";
 
-        // エディタの実際の行高さに合わせる（フォントサイズ 12 のまま行送りだけ 20px フォントに揃える）
-        DispatcherQueue.TryEnqueue(() =>
-        {
-            HookInsertEditorScroll();
-            var sv = _insertEditorScroll;
-            if (sv is null || _insertViewText.Length == 0) return;
+        _gutterMetricsRetries = 0;
+        ScheduleInsertGutterMetrics();
+    }
 
-            int totalLines = 1;
-            foreach (char c in _insertViewText)
-            {
-                if (c == '\r') totalLines++;
-            }
-            double lineHeight = (sv.ExtentHeight - InsertEditor.Padding.Top - InsertEditor.Padding.Bottom) / totalLines;
-            if (lineHeight > 4)
-            {
-                InsertGutter.LineHeight = lineHeight;
-            }
-            InsertGutterScroll.ChangeView(null, sv.VerticalOffset, null, disableAnimation: true);
-        });
+    private bool _gutterMetricsPending;
+    private int _gutterMetricsRetries;
+
+    /// <summary>エディタのレイアウト確定後に行送りとスクロール位置を合わせる（確定前は測定値が古いため）。</summary>
+    private void ScheduleInsertGutterMetrics()
+    {
+        if (_gutterMetricsPending) return;
+        _gutterMetricsPending = true;
+
+        void Handler(object? s, object e)
+        {
+            InsertEditor.LayoutUpdated -= Handler;
+            _gutterMetricsPending = false;
+            UpdateInsertGutterMetrics();
+        }
+        InsertEditor.LayoutUpdated += Handler;
+    }
+
+    /// <summary>行情報欄の行送りをエディタの実際の行高さ（Extent から算出）に合わせる。</summary>
+    private void UpdateInsertGutterMetrics()
+    {
+        HookInsertEditorScroll();
+        var sv = _insertEditorScroll;
+        if (sv is null || _insertViewText.Length == 0) return;
+
+        int totalLines = 1;
+        foreach (char c in _insertViewText)
+        {
+            if (c == '\r') totalLines++;
+        }
+
+        double lineHeight = (sv.ExtentHeight - InsertEditor.Padding.Top - InsertEditor.Padding.Bottom) / totalLines;
+        if (lineHeight < 8)
+        {
+            // レイアウトがまだ確定していない → 次のレイアウトパスで再試行
+            if (++_gutterMetricsRetries < 20) ScheduleInsertGutterMetrics();
+            return;
+        }
+
+        if (Math.Abs(InsertGutter.LineHeight - lineHeight) > 0.05)
+        {
+            InsertGutter.LineHeight = lineHeight;
+        }
+        InsertGutterScroll.ChangeView(null, sv.VerticalOffset, null, disableAnimation: true);
     }
 
     /// <summary>カーソル位置の行番号と直前・直後のタイムタグを下部バーに表示する。</summary>
