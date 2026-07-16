@@ -1,0 +1,11 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/TimeTagTool.App/TimeTagTool.App.csproj">
+      <Platform Project="x64" />
+    </Project>
+    <Project Path="src/TimeTagTool.Core/TimeTagTool.Core.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/TimeTagTool.Core.Tests/TimeTagTool.Core.Tests.csproj" />
+  </Folder>
+</Solution>

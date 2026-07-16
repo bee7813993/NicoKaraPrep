@@ -1,0 +1,165 @@
+using TimeTagTool.Core.Formats;
+using TimeTagTool.Core.Model;
+
+namespace TimeTagTool.Core.Tests;
+
+public class LrcFormatTests
+{
+    [Fact]
+    public void 行解析_行頭タグと行末タグ()
+    {
+        var line = LrcFormat.ParseLyricLine("[00:01:00]あい[00:02:00]う[00:03:00]");
+        Assert.Equal(3, line.Chars.Count);
+        Assert.Equal("あ", line.Chars[0].Text);
+        Assert.Equal(100, line.Chars[0].TimeCs);
+        Assert.Equal("い", line.Chars[1].Text);
+        Assert.Null(line.Chars[1].TimeCs);
+        Assert.Equal("う", line.Chars[2].Text);
+        Assert.Equal(200, line.Chars[2].TimeCs);
+        Assert.Equal(300, line.EndTimeCs);
+    }
+
+    [Fact]
+    public void 行解析_2連タグはスペーサーになる()
+    {
+        var line = LrcFormat.ParseLyricLine("[00:01:00]あ[00:02:00][00:03:00]い");
+        Assert.Equal(3, line.Chars.Count);
+        Assert.True(line.Chars[1].IsSpacer);
+        Assert.Equal(200, line.Chars[1].TimeCs);
+        Assert.Equal("い", line.Chars[2].Text);
+        Assert.Equal(300, line.Chars[2].TimeCs);
+    }
+
+    [Fact]
+    public void 行解析_サロゲートペアは1文字扱い()
+    {
+        var line = LrcFormat.ParseLyricLine("[00:01:00]𠮷野家");
+        Assert.Equal(3, line.Chars.Count);
+        Assert.Equal("𠮷", line.Chars[0].Text);
+    }
+
+    [Fact]
+    public void 行書き出し_ラウンドトリップ()
+    {
+        string src = "[00:01:00]あい[00:02:00][00:03:00]う[00:04:00]";
+        var line = LrcFormat.ParseLyricLine(src);
+        Assert.Equal(src, LrcFormat.WriteLyricLine(line));
+    }
+
+    [Fact]
+    public void ドキュメント解析_メタデータと絵文字とルビ()
+    {
+        string src = string.Join("\r\n",
+            "@Title=テスト曲",
+            "@Artist=歌手",
+            "@Emoji=★,star1.png,star2.png",
+            "@Ruby1=漢字,かんじ",
+            "",
+            "[00:01:00]漢[00:01:50]字[00:02:00]の歌[00:03:00]",
+            "");
+        var doc = LrcFormat.Parse(src);
+
+        Assert.Equal("テスト曲", doc.GetTag("Title"));
+        Assert.Equal("歌手", doc.GetTag("Artist"));
+        Assert.Single(doc.EmojiEntries);
+        Assert.Equal("★", doc.EmojiEntries[0].ReplaceChar);
+        Assert.Equal("star2.png", doc.EmojiEntries[0].ImageAfter);
+
+        Assert.Equal(2, doc.Lines.Count);
+        Assert.True(doc.Lines[0].IsEmpty);
+
+        var chars = doc.Lines[1].Chars;
+        Assert.Equal("かんじ", chars[0].Ruby);
+        Assert.True(chars[0].RubyJoinsNext);
+        Assert.Equal("", chars[1].Ruby);
+        Assert.False(chars[1].RubyJoinsNext);
+        Assert.Null(chars[2].Ruby);
+        Assert.Empty(doc.UnappliedRubyEntries);
+    }
+
+    [Fact]
+    public void ルビ_時刻による読み分け()
+    {
+        string src = string.Join("\r\n",
+            "@Ruby1=風,かぜ",
+            "@Ruby2=風,ふう,[00:10:00]",
+            "[00:01:00]風が吹く[00:02:00]",
+            "[00:10:00]風のように[00:11:00]");
+        var doc = LrcFormat.Parse(src);
+
+        Assert.Equal("かぜ", doc.Lines[0].Chars[0].Ruby);
+        Assert.Equal("ふう", doc.Lines[1].Chars[0].Ruby);
+    }
+
+    [Fact]
+    public void ルビ_未適用エントリは保持される()
+    {
+        string src = string.Join("\r\n",
+            "@Ruby1=存在しない,そんざいしない",
+            "[00:01:00]歌詞[00:02:00]");
+        var doc = LrcFormat.Parse(src);
+        Assert.Single(doc.UnappliedRubyEntries);
+
+        string written = LrcFormat.Write(doc);
+        Assert.Contains("@Ruby1=存在しない,そんざいしない", written);
+    }
+
+    [Fact]
+    public void ドキュメント_ラウンドトリップ()
+    {
+        string src = string.Join("\r\n",
+            "@Title=テスト曲",
+            "@Offset=100",
+            "@Emoji=★,star1.png,star2.png",
+            "@Ruby1=漢字,かんじ",
+            "[00:01:00]漢[00:01:50]字[00:02:00]の歌[00:03:00]",
+            "",
+            "[00:10:00]★が光る[00:12:00]",
+            "") ;
+        var doc = LrcFormat.Parse(src);
+        string written = LrcFormat.Write(doc);
+        var doc2 = LrcFormat.Parse(written);
+        string written2 = LrcFormat.Write(doc2);
+
+        Assert.Equal(written, written2);
+        Assert.Contains("@Title=テスト曲", written);
+        Assert.Contains("@Emoji=★,star1.png,star2.png", written);
+        Assert.Contains("@Ruby1=漢字,かんじ", written);
+        Assert.Contains("[00:01:00]漢[00:01:50]字[00:02:00]の歌[00:03:00]", written);
+    }
+
+    [Fact]
+    public void ルビ生成_同一親文字で読みが違えば時刻付きになる()
+    {
+        var doc = new LyricsDocument();
+        var line1 = LrcFormat.ParseLyricLine("[00:01:00]風[00:02:00]");
+        line1.Chars[0].Ruby = "かぜ";
+        var line2 = LrcFormat.ParseLyricLine("[00:10:00]風[00:11:00]");
+        line2.Chars[0].Ruby = "ふう";
+        doc.Lines.Add(line1);
+        doc.Lines.Add(line2);
+
+        var entries = LrcFormat.BuildRubyEntries(doc);
+        Assert.Equal(2, entries.Count);
+        Assert.Null(entries[0].StartCs);
+        Assert.Equal("かぜ", entries[0].Ruby);
+        Assert.Equal(1000, entries[1].StartCs); // [00:10:00] = 1000cs
+        Assert.Equal("ふう", entries[1].Ruby);
+    }
+
+    [Fact]
+    public void 絵文字_使用中のみ出力()
+    {
+        var doc = new LyricsDocument();
+        doc.EmojiEntries.Add(new EmojiEntry { ReplaceChar = "★", ImageBefore = "a.png" });
+        doc.EmojiEntries.Add(new EmojiEntry { ReplaceChar = "♪", ImageBefore = "b.png" });
+        doc.Lines.Add(LrcFormat.ParseLyricLine("[00:01:00]★だけ使う[00:02:00]"));
+
+        string written = LrcFormat.Write(doc);
+        Assert.Contains("@Emoji=★,a.png", written);
+        Assert.DoesNotContain("@Emoji=♪,b.png", written);
+
+        string writtenAll = LrcFormat.Write(doc, new LrcWriteOptions { EmitOnlyUsedEmoji = false });
+        Assert.Contains("@Emoji=♪,b.png", writtenAll);
+    }
+}

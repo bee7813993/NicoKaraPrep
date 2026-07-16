@@ -1,0 +1,17 @@
+# ビルド出力
+bin/
+obj/
+publish/
+*.zip
+
+# IDE
+.vs/
+*.user
+*.suo
+
+# 参考資料（RhythmicaLyrics のソース一式。再配布権が無いためリポジトリには含めない）
+資料/
+
+# 曲プロジェクト・サンプル（歌詞データを含むため）
+*.tttproj
+samples/
