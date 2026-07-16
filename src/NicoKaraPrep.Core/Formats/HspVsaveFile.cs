@@ -38,7 +38,9 @@ public sealed class HspVariable
 /// ファイル構造:
 ///   ヘッダ 16B:  "hspv" | int32 0x1000 | int32 変数数 | int32 データ部開始オフセット
 ///   索引: 変数ごとに 64B（HSP の PVal 構造体ダンプ）
-///     +0x00: 16B ランタイムポインタ等（読込時は無視、書込時はゼロ）
+///     +0x00: int32 変数名オフセット（データ部先頭からの相対。vload はこれで名前を引く）
+///     +0x04: int32 データオフセット（= 名前オフセット + 名前長 + 1）
+///     +0x08: 8B 予約（ゼロ）
 ///     +0x10: int16 flag（型: 2=str, 3=double, 4=int）
 ///     +0x12: int16 mode（=1）
 ///     +0x14: int32 len[5]（len[0]=1 固定、len[1..4]=次元）
@@ -167,9 +169,34 @@ public static class HspVsaveFile
         w.Write(vars.Count);
         w.Write(dataOffset);
 
-        // 索引
-        foreach (var v in vars)
+        // データ部レイアウトを先に計算する
+        // （索引の各レコードは、データ部先頭からの名前/データ相対オフセットを持ち、
+        // 　vload はこのオフセットで各変数を参照する）
+        var nameOffsets = new int[vars.Count];
+        var contentOffsets = new int[vars.Count];
         {
+            int pos = 0;
+            for (int i = 0; i < vars.Count; i++)
+            {
+                var v = vars[i];
+                nameOffsets[i] = pos;
+                pos += Encoding.ASCII.GetByteCount(v.Name) + 1;
+                contentOffsets[i] = pos;
+                pos += v.Type switch
+                {
+                    HspVarType.Int => v.ElementCount * 4,
+                    HspVarType.Double => v.ElementCount * 8,
+                    HspVarType.Str => (v.StrElements ?? throw new InvalidOperationException($"StrElements がありません ({v.Name})"))
+                        .Sum(buf => 8 + buf.Length),
+                    _ => throw new InvalidOperationException($"未対応の変数型 {v.Type} ({v.Name})"),
+                };
+            }
+        }
+
+        // 索引
+        for (int i = 0; i < vars.Count; i++)
+        {
+            var v = vars[i];
             int[] dims = v.Dims.Length == 0 ? new[] { 1 } : v.Dims;
             int elems = v.ElementCount;
             int size = v.Type switch
@@ -178,7 +205,9 @@ public static class HspVsaveFile
                 _ => elems * 4,
             };
 
-            w.Write(0L); w.Write(0L);                       // +0x00 ランタイム値（ゼロ）
+            w.Write(nameOffsets[i]);                         // +0x00 変数名オフセット
+            w.Write(contentOffsets[i]);                      // +0x04 データオフセット
+            w.Write(0L);                                     // +0x08 予約
             w.Write((short)v.Type);                          // +0x10 flag
             w.Write((short)1);                               // +0x12 mode
             w.Write(1);                                      // +0x14 len[0]
