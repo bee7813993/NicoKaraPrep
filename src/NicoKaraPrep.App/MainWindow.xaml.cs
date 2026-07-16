@@ -1387,12 +1387,42 @@ public sealed partial class MainWindow : Window
 
                 if (entryByString.TryGetValue(occ.Value, out var emoji) && File.Exists(emoji.ImageBefore))
                 {
+                    // 絵文字リスト編集のプレビューと同じ式で実機同等のサイズ感にする:
+                    // 高さ = フォントサイズ × Zoom%（プレビューの文字サイズ基準）、幅は縦横比、
+                    // Fix は実寸相当、縁取り分だけ文字下端より下げる
+                    const double previewFontPx = 20;
+                    double pscale = previewFontPx / Math.Max(8, ViewModel.Settings.FontSizePx);
+                    double edgePx = Math.Max(0, ViewModel.Settings.EdgeSizePx);
+                    var opts = emoji.ParseOptions();
+                    double iconW, iconH;
+                    if (Core.Formats.ImageSizeReader.TryGetSize(emoji.ImageBefore, out int imgW, out int imgH) && imgW > 0 && imgH > 0)
+                    {
+                        if (opts.Fix)
+                        {
+                            iconW = imgW * pscale;
+                            iconH = imgH * pscale;
+                        }
+                        else
+                        {
+                            iconH = previewFontPx * opts.ZoomPercent / 100.0;
+                            iconW = iconH * imgW / imgH;
+                        }
+                    }
+                    else
+                    {
+                        iconW = iconH = previewFontPx * opts.ZoomPercent / 100.0;
+                    }
                     PreviewPanel.Children.Add(new Image
                     {
                         Source = new Microsoft.UI.Xaml.Media.Imaging.BitmapImage(new Uri(emoji.ImageBefore)),
-                        Height = 28,
+                        Width = iconW,
+                        Height = iconH,
                         Stretch = Microsoft.UI.Xaml.Media.Stretch.Uniform,
                         VerticalAlignment = VerticalAlignment.Bottom,
+                        Margin = new Thickness(
+                            Math.Max(0, opts.MarginLeft) * pscale, 0,
+                            Math.Max(0, opts.MarginRight) * pscale,
+                            (opts.MarginBottom - edgePx) * pscale),
                     });
                 }
                 else
