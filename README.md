@@ -1,4 +1,4 @@
-# NicoKaraPrep（タイムタグツール）
+﻿# NicoKaraPrep（タイムタグツール）
 
 RhythmicaLyrics で作成したタイムタグ付き歌詞を、ニコカラメーカー3 に読み込ませるために加工する Windows アプリです。
 
@@ -34,18 +34,18 @@ RhythmicaLyrics で作成したタイムタグ付き歌詞を、ニコカラメ�
 
 ```powershell
 dotnet test                          # Core の単体テスト
-dotnet build src/TimeTagTool.App -p:Platform=x64
+dotnet build src/NicoKaraPrep.App -p:Platform=x64
 # 配布用（自己完結型）
-dotnet publish src/TimeTagTool.App -c Release -r win-x64 -p:Platform=x64 --self-contained -o publish
+dotnet publish src/NicoKaraPrep.App -c Release -r win-x64 -p:Platform=x64 --self-contained -o publish
 ```
 
-`publish\TimeTagTool.exe` を実行します（Windows App SDK ランタイム同梱）。
+`publish\NicoKaraPrep.exe` を実行します（Windows App SDK ランタイム同梱）。
 
 ## 構成
 
 ```
-src/TimeTagTool.Core    データモデル・フォーマット(lrc/rlf/テキスト編集モード)・検証・エクスポート
-src/TimeTagTool.App     WinUI 3 アプリ本体
+src/NicoKaraPrep.Core    データモデル・フォーマット(lrc/rlf/テキスト編集モード)・検証・エクスポート
+src/NicoKaraPrep.App     WinUI 3 アプリ本体
 tests/                  xUnit テスト（ラウンドトリップ中心）
 資料/                    RhythmicaLyrics v64 ソース（フォーマット解析の参照元）
 ```

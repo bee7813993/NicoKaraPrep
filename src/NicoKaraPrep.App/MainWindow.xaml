@@ -1,0 +1,401 @@
+﻿<Window
+    x:Class="NicoKaraPrep.App.MainWindow"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:vm="using:NicoKaraPrep.App.ViewModels"
+    xmlns:core="using:NicoKaraPrep.Core.Model"
+    xmlns:val="using:NicoKaraPrep.Core.Validation">
+
+    <Grid>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+        </Grid.RowDefinitions>
+
+        <!-- メニュー -->
+        <MenuBar Grid.Row="0">
+            <MenuBarItem Title="ファイル(F)" AccessKey="F">
+                <MenuFlyoutItem Text="開く..." Click="OnOpenClick">
+                    <MenuFlyoutItem.KeyboardAccelerators>
+                        <KeyboardAccelerator Modifiers="Control" Key="O" />
+                    </MenuFlyoutItem.KeyboardAccelerators>
+                </MenuFlyoutItem>
+                <MenuFlyoutItem Text="上書き保存" Click="OnSaveClick">
+                    <MenuFlyoutItem.KeyboardAccelerators>
+                        <KeyboardAccelerator Modifiers="Control" Key="S" />
+                    </MenuFlyoutItem.KeyboardAccelerators>
+                </MenuFlyoutItem>
+                <MenuFlyoutItem Text="名前を付けて保存..." Click="OnSaveAsClick" />
+                <MenuFlyoutSeparator />
+                <MenuFlyoutItem Text="クリップボードから貼り付け" Click="OnPasteClick">
+                    <MenuFlyoutItem.KeyboardAccelerators>
+                        <KeyboardAccelerator Modifiers="Control,Shift" Key="V" />
+                    </MenuFlyoutItem.KeyboardAccelerators>
+                </MenuFlyoutItem>
+                <MenuFlyoutItem Text="テキスト編集モード形式でコピー" Click="OnCopyClick">
+                    <MenuFlyoutItem.KeyboardAccelerators>
+                        <KeyboardAccelerator Modifiers="Control,Shift" Key="C" />
+                    </MenuFlyoutItem.KeyboardAccelerators>
+                </MenuFlyoutItem>
+                <MenuFlyoutSeparator />
+                <MenuFlyoutItem Text="選択行をエクスポート..." Click="OnExportFileClick">
+                    <MenuFlyoutItem.KeyboardAccelerators>
+                        <KeyboardAccelerator Modifiers="Control" Key="E" />
+                    </MenuFlyoutItem.KeyboardAccelerators>
+                </MenuFlyoutItem>
+                <MenuFlyoutItem Text="選択行をクリップボードへエクスポート" Click="OnExportClipboardClick" />
+                <MenuFlyoutItem Text="未エクスポート行をすべて選択" Click="OnSelectUnexportedClick" />
+                <MenuFlyoutItem Text="選択行の済マークを解除" Click="OnClearMarksClick" />
+            </MenuBarItem>
+            <MenuBarItem Title="編集(E)" AccessKey="E">
+                <MenuFlyoutItem Text="元に戻す" Click="OnUndoClick">
+                    <MenuFlyoutItem.KeyboardAccelerators>
+                        <KeyboardAccelerator Modifiers="Control" Key="Z" />
+                    </MenuFlyoutItem.KeyboardAccelerators>
+                </MenuFlyoutItem>
+                <MenuFlyoutItem Text="やり直し" Click="OnRedoClick">
+                    <MenuFlyoutItem.KeyboardAccelerators>
+                        <KeyboardAccelerator Modifiers="Control" Key="Y" />
+                    </MenuFlyoutItem.KeyboardAccelerators>
+                </MenuFlyoutItem>
+                <MenuFlyoutSeparator />
+                <MenuFlyoutItem Text="カーソル位置で行分割" Click="OnSplitLineClick">
+                    <MenuFlyoutItem.KeyboardAccelerators>
+                        <KeyboardAccelerator Modifiers="Control" Key="Enter" />
+                    </MenuFlyoutItem.KeyboardAccelerators>
+                </MenuFlyoutItem>
+                <MenuFlyoutItem Text="次の行と結合" Click="OnJoinLineClick">
+                    <MenuFlyoutItem.KeyboardAccelerators>
+                        <KeyboardAccelerator Modifiers="Control" Key="J" />
+                    </MenuFlyoutItem.KeyboardAccelerators>
+                </MenuFlyoutItem>
+                <MenuFlyoutSeparator />
+                <MenuFlyoutItem Text="空行（ページ区切り）を下に挿入" Click="OnInsertEmptyLineClick">
+                    <MenuFlyoutItem.KeyboardAccelerators>
+                        <KeyboardAccelerator Modifiers="Control" Key="K" />
+                    </MenuFlyoutItem.KeyboardAccelerators>
+                </MenuFlyoutItem>
+                <MenuFlyoutItem Text="選択行を削除" Click="OnDeleteLinesClick">
+                    <MenuFlyoutItem.KeyboardAccelerators>
+                        <KeyboardAccelerator Modifiers="Control" Key="Delete" />
+                    </MenuFlyoutItem.KeyboardAccelerators>
+                </MenuFlyoutItem>
+            </MenuBarItem>
+            <MenuBarItem Title="再生(P)" AccessKey="P">
+                <MenuFlyoutItem Text="メディアを開く..." Click="OnOpenMediaClick" />
+                <MenuFlyoutItem Text="再生 / 一時停止" Click="OnPlayPauseClick">
+                    <MenuFlyoutItem.KeyboardAccelerators>
+                        <KeyboardAccelerator Modifiers="Control" Key="Space" />
+                    </MenuFlyoutItem.KeyboardAccelerators>
+                </MenuFlyoutItem>
+                <MenuFlyoutItem Text="5秒戻る" Click="OnSeekBackClick">
+                    <MenuFlyoutItem.KeyboardAccelerators>
+                        <KeyboardAccelerator Modifiers="Control" Key="Left" />
+                    </MenuFlyoutItem.KeyboardAccelerators>
+                </MenuFlyoutItem>
+                <MenuFlyoutItem Text="5秒進む" Click="OnSeekForwardClick">
+                    <MenuFlyoutItem.KeyboardAccelerators>
+                        <KeyboardAccelerator Modifiers="Control" Key="Right" />
+                    </MenuFlyoutItem.KeyboardAccelerators>
+                </MenuFlyoutItem>
+                <ToggleMenuFlyoutItem x:Name="FollowToggle" Text="再生位置に追従してハイライト" IsChecked="True" />
+            </MenuBarItem>
+            <MenuBarItem Title="絵文字(G)" AccessKey="G">
+                <MenuFlyoutItem Text="絵文字リスト編集..." Click="OnEmojiListClick" />
+                <MenuFlyoutItem Text="絵文字タイムタグ再計算" Click="OnEmojiRetagClick" />
+            </MenuBarItem>
+            <MenuBarItem Title="チェック(C)" AccessKey="C">
+                <MenuFlyoutItem Text="今すぐチェック" Click="OnValidateClick">
+                    <MenuFlyoutItem.KeyboardAccelerators>
+                        <KeyboardAccelerator Key="F5" />
+                    </MenuFlyoutItem.KeyboardAccelerators>
+                </MenuFlyoutItem>
+                <MenuFlyoutItem Text="設定..." Click="OnSettingsClick" />
+                <MenuFlyoutItem Text="ニコカラメーカーのプロジェクト(n3proj)から設定を読み込み..." Click="OnImportN3ProjClick" />
+            </MenuBarItem>
+            <MenuBarItem Title="テンプレート(T)" AccessKey="T">
+                <MenuFlyoutItem Text="テンプレートとして保存...（絵文字一式＋フォント設定）" Click="OnSaveTemplateClick" />
+                <MenuFlyoutItem Text="テンプレートを読み込み..." Click="OnLoadTemplateClick" />
+            </MenuBarItem>
+        </MenuBar>
+
+        <!-- メディア再生パネル -->
+        <Expander
+            Grid.Row="1"
+            x:Name="MediaPanel"
+            Header="メディア再生（動画・音声ファイルをここにドロップで読み込み）"
+            HorizontalAlignment="Stretch"
+            HorizontalContentAlignment="Stretch"
+            AllowDrop="True"
+            DragOver="OnMediaDragOver"
+            Drop="OnMediaDrop">
+            <Grid>
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="Auto" />
+                </Grid.RowDefinitions>
+                <MediaPlayerElement
+                    x:Name="Player"
+                    Height="260"
+                    AreTransportControlsEnabled="True" />
+                <!-- 高さ変更ハンドル -->
+                <Border
+                    Grid.Row="1"
+                    Height="10"
+                    Background="Transparent"
+                    ManipulationMode="TranslateY"
+                    ManipulationDelta="OnPlayerResizeDelta"
+                    ManipulationCompleted="OnPlayerResizeCompleted"
+                    ToolTipService.ToolTip="ドラッグでプレイヤーの高さを変更">
+                    <Rectangle
+                        Width="48"
+                        Height="4"
+                        RadiusX="2"
+                        RadiusY="2"
+                        HorizontalAlignment="Center"
+                        VerticalAlignment="Center"
+                        Fill="{ThemeResource ControlStrongFillColorDefaultBrush}" />
+                </Border>
+            </Grid>
+        </Expander>
+
+        <!-- メイン -->
+        <Grid Grid.Row="2">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="300" />
+            </Grid.ColumnDefinitions>
+
+            <Grid Grid.Column="0" x:Name="NormalView">
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="*" />
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="Auto" />
+                </Grid.RowDefinitions>
+
+                <!-- 行リスト -->
+                <ListView
+                    x:Name="LineList"
+                    Grid.Row="0"
+                    AllowDrop="True"
+                    DragOver="OnDragOver"
+                    Drop="OnDrop"
+                    ItemsSource="{x:Bind ViewModel.Lines}"
+                    SelectionMode="Extended"
+                    SelectionChanged="OnLineSelectionChanged"
+                    DoubleTapped="OnLineDoubleTapped">
+                    <ListView.ItemTemplate>
+                        <DataTemplate x:DataType="vm:LineViewModel">
+                            <Grid Opacity="{x:Bind Opacity, Mode=OneWay}" ColumnSpacing="8" Background="{x:Bind RowBrush, Mode=OneWay}">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="28" />
+                                    <ColumnDefinition Width="22" />
+                                    <ColumnDefinition Width="36" />
+                                    <ColumnDefinition Width="76" />
+                                    <ColumnDefinition Width="76" />
+                                    <ColumnDefinition Width="22" />
+                                    <ColumnDefinition Width="22" />
+                                    <ColumnDefinition Width="110" />
+                                    <ColumnDefinition Width="36" />
+                                    <ColumnDefinition Width="92" />
+                                    <ColumnDefinition Width="*" />
+                                </Grid.ColumnDefinitions>
+                                <CheckBox Grid.Column="0" MinWidth="0" Padding="0" IsChecked="{x:Bind IsSelected, Mode=OneWay}" Click="OnRowCheckClick" Tag="{x:Bind}" ToolTipService.ToolTip="選択（複数選択してエクスポートなどに使用）" />
+                                <TextBlock Grid.Column="1" Text="{x:Bind ExportedMark, Mode=OneWay}" Foreground="{ThemeResource AccentTextFillColorPrimaryBrush}" ToolTipService.ToolTip="エクスポート済み" />
+                                <TextBlock Grid.Column="2" Text="{x:Bind IndexText, Mode=OneWay}" Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+                                <TextBlock Grid.Column="3" Text="{x:Bind TimeText, Mode=OneWay}" FontFamily="Consolas" Foreground="{x:Bind StartTimeBrush, Mode=OneWay}" ToolTipService.ToolTip="開始時間（ページ衝突時は色付き）" />
+                                <TextBlock Grid.Column="4" Text="{x:Bind EndTimeText, Mode=OneWay}" FontFamily="Consolas" Foreground="{x:Bind EndTimeBrush, Mode=OneWay}" ToolTipService.ToolTip="終了時間（ページ衝突時は色付き）" />
+                                <TextBlock Grid.Column="5" Text="{x:Bind OverlapGlyph, Mode=OneWay}" ToolTipService.ToolTip="同時歌唱などのタイムタグ重なりあり（正常）" />
+                                <TextBlock Grid.Column="6" Text="{x:Bind WidthGlyph, Mode=OneWay}" ToolTipService.ToolTip="横幅チェック結果" />
+                                <TextBlock Grid.Column="7" Text="{x:Bind FontText, Mode=OneWay}" FontSize="11" Foreground="{ThemeResource TextFillColorSecondaryBrush}" TextTrimming="CharacterEllipsis" VerticalAlignment="Center" ToolTipService.ToolTip="{x:Bind FontText, Mode=OneWay}" />
+                                <TextBlock Grid.Column="8" Text="{x:Bind FontSizeText, Mode=OneWay}" FontSize="11" Foreground="{ThemeResource TextFillColorSecondaryBrush}" VerticalAlignment="Center" ToolTipService.ToolTip="フォントサイズ px" />
+                                <TextBlock Grid.Column="9" Text="{x:Bind WidthText, Mode=OneWay}" FontSize="12" Foreground="{ThemeResource TextFillColorSecondaryBrush}" VerticalAlignment="Center" />
+                                <TextBlock Grid.Column="10" Text="{x:Bind DisplayText, Mode=OneWay}" TextTrimming="CharacterEllipsis" />
+                            </Grid>
+                        </DataTemplate>
+                    </ListView.ItemTemplate>
+                </ListView>
+
+                <!-- 行エディタ -->
+                <Grid Grid.Row="1" Padding="8" ColumnSpacing="8" BorderThickness="0,1,0,0" BorderBrush="{ThemeResource DividerStrokeColorDefaultBrush}">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+                    <TextBox
+                        x:Name="LineEditor"
+                        Grid.Column="0"
+                        AcceptsReturn="False"
+                        FontFamily="Consolas"
+                        PlaceholderText="行を選択すると編集できます"
+                        PreviewKeyDown="OnLineEditorPreviewKeyDown"
+                        KeyDown="OnLineEditorKeyDown" />
+                    <Button Grid.Column="1" Content="適用" Click="OnApplyLineClick" VerticalAlignment="Stretch" />
+                </Grid>
+
+                <!-- 行プレビュー（ルビ・絵文字画像） -->
+                <ScrollViewer
+                    Grid.Row="2"
+                    HorizontalScrollBarVisibility="Auto"
+                    VerticalScrollBarVisibility="Disabled"
+                    Padding="8,0"
+                    MaxHeight="88"
+                    BorderThickness="0,1,0,0"
+                    BorderBrush="{ThemeResource DividerStrokeColorDefaultBrush}">
+                    <StackPanel x:Name="PreviewPanel" Orientation="Horizontal" Spacing="2" VerticalAlignment="Bottom" />
+                </ScrollViewer>
+            </Grid>
+
+            <!-- 絵文字挿入ビュー（F2、歌詞全体表示・キーボード専用） -->
+            <Grid Grid.Column="0" x:Name="InsertView" Visibility="Collapsed" Padding="8" RowSpacing="6">
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="*" />
+                </Grid.RowDefinitions>
+                <StackPanel Grid.Row="0" Orientation="Horizontal" Spacing="12">
+                    <TextBlock Text="絵文字挿入ビュー" Style="{ThemeResource SubtitleTextBlockStyle}" />
+                    <TextBlock
+                        x:Name="FollowIndicator"
+                        Text="追従 OFF (F)"
+                        VerticalAlignment="Center"
+                        FontSize="12"
+                        Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+                </StackPanel>
+                <TextBlock
+                    Grid.Row="1"
+                    FontSize="12"
+                    TextWrapping="Wrap"
+                    Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                    Text="1–0 / Q–P: 絵文字挿入　Space: ＿挿入　BS / Del: 絵文字削除　Ctrl+Z / Y: 元に戻す / やり直し　Enter: カーソル位置から再生　A: 再生　S: 一時停止　D: 一時停止/再開　Z / X: 数秒戻る / 進む　F: 再生追従　Ctrl+Enter: 行分割　Ctrl+J: 行結合　Esc: 終了" />
+                <TextBox
+                    x:Name="InsertEditor"
+                    Grid.Row="2"
+                    AcceptsReturn="True"
+                    IsSpellCheckEnabled="False"
+                    IsTextPredictionEnabled="False"
+                    FontSize="20"
+                    TextWrapping="NoWrap"
+                    ScrollViewer.VerticalScrollBarVisibility="Auto"
+                    ScrollViewer.HorizontalScrollBarVisibility="Auto"
+                    BeforeTextChanging="OnInsertEditorBeforeTextChanging"
+                    TextChanged="OnInsertEditorTextChanged"
+                    SelectionChanged="OnInsertEditorSelectionChanged"
+                    PreviewKeyDown="OnInsertEditorPreviewKeyDown" />
+            </Grid>
+
+            <!-- 右パネル: @Emoji パレット -->
+            <Grid
+                Grid.Column="1"
+                BorderThickness="1,0,0,0"
+                BorderBrush="{ThemeResource DividerStrokeColorDefaultBrush}"
+                Padding="8"
+                RowSpacing="8">
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="*" />
+                    <RowDefinition Height="Auto" />
+                </Grid.RowDefinitions>
+
+                <ToggleButton
+                    x:Name="EmojiModeToggle"
+                    Grid.Row="0"
+                    HorizontalAlignment="Stretch"
+                    Content="絵文字挿入ビュー (F2)"
+                    Checked="OnEmojiModeChanged"
+                    Unchecked="OnEmojiModeChanged">
+                    <ToggleButton.KeyboardAccelerators>
+                        <KeyboardAccelerator Key="F2" />
+                    </ToggleButton.KeyboardAccelerators>
+                </ToggleButton>
+                <Button Grid.Row="1" HorizontalAlignment="Stretch" Content="リスト編集..." Click="OnEmojiListClick" />
+
+                <GridView
+                    Grid.Row="2"
+                    ItemsSource="{x:Bind ViewModel.EmojiSlots}"
+                    IsItemClickEnabled="True"
+                    ItemClick="OnEmojiSlotClick"
+                    CanDragItems="True"
+                    CanReorderItems="True"
+                    AllowDrop="True"
+                    SelectionMode="None">
+                    <GridView.ItemTemplate>
+                        <DataTemplate x:DataType="vm:EmojiSlotViewModel">
+                            <Grid Width="60" Height="80" ToolTipService.ToolTip="{x:Bind ToolTipText, Mode=OneWay}">
+                                <Grid.RowDefinitions>
+                                    <RowDefinition Height="Auto" />
+                                    <RowDefinition Height="*" />
+                                    <RowDefinition Height="Auto" />
+                                </Grid.RowDefinitions>
+                                <TextBlock Grid.Row="0" Text="{x:Bind KeyLabel}" FontSize="11" FontWeight="Bold" HorizontalAlignment="Center" Foreground="{ThemeResource AccentTextFillColorPrimaryBrush}" />
+                                <Image Grid.Row="1" Source="{x:Bind Thumbnail, Mode=OneWay}" Stretch="Uniform" MaxHeight="40" />
+                                <TextBlock Grid.Row="2" Text="{x:Bind ReplaceChar, Mode=OneWay}" HorizontalAlignment="Center" FontSize="11" TextTrimming="CharacterEllipsis" />
+                            </Grid>
+                        </DataTemplate>
+                    </GridView.ItemTemplate>
+                </GridView>
+
+                <!-- スロット外の曲内 @Emoji（クリックで挿入） -->
+                <ListView
+                    Grid.Row="3"
+                    MaxHeight="140"
+                    ItemsSource="{x:Bind ViewModel.UnslottedEmoji}"
+                    IsItemClickEnabled="True"
+                    ItemClick="OnUnslottedEmojiClick"
+                    SelectionMode="None">
+                    <ListView.ItemTemplate>
+                        <DataTemplate x:DataType="core:EmojiEntry">
+                            <Grid ColumnSpacing="6">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="Auto" />
+                                </Grid.ColumnDefinitions>
+                                <TextBlock Text="{x:Bind ReplaceChar}" FontSize="12" VerticalAlignment="Center" ToolTipService.ToolTip="{x:Bind ImageBefore}" />
+                                <Button Grid.Column="1" Content="キーへ" FontSize="10" Padding="6,2" Click="OnPromoteEmojiClick" Tag="{x:Bind}" ToolTipService.ToolTip="キー付きスロットへ割り当てる" />
+                            </Grid>
+                        </DataTemplate>
+                    </ListView.ItemTemplate>
+                </ListView>
+            </Grid>
+        </Grid>
+
+        <!-- 検証パネル -->
+        <Expander
+            Grid.Row="3"
+            x:Name="IssuePanel"
+            Header="チェック結果"
+            HorizontalAlignment="Stretch"
+            HorizontalContentAlignment="Stretch"
+            ExpandDirection="Up">
+            <ListView
+                x:Name="IssueList"
+                MaxHeight="180"
+                ItemsSource="{x:Bind ViewModel.Issues}"
+                IsItemClickEnabled="True"
+                ItemClick="OnIssueClick"
+                SelectionMode="None">
+                <ListView.ItemTemplate>
+                    <DataTemplate x:DataType="val:ValidationIssue">
+                        <Grid ColumnSpacing="8">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="70" />
+                                <ColumnDefinition Width="*" />
+                            </Grid.ColumnDefinitions>
+                            <TextBlock Grid.Column="0" Text="{x:Bind Category}" Foreground="{ThemeResource TextFillColorSecondaryBrush}" FontSize="12" VerticalAlignment="Center" />
+                            <TextBlock Grid.Column="1" Text="{x:Bind Message}" TextWrapping="Wrap" FontSize="12" />
+                        </Grid>
+                    </DataTemplate>
+                </ListView.ItemTemplate>
+            </ListView>
+        </Expander>
+
+        <!-- ステータスバー -->
+        <Border Grid.Row="4" Padding="8,4" BorderThickness="0,1,0,0" BorderBrush="{ThemeResource DividerStrokeColorDefaultBrush}">
+            <TextBlock Text="{x:Bind ViewModel.StatusText, Mode=OneWay}" FontSize="12" />
+        </Border>
+    </Grid>
+</Window>
