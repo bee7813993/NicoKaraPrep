@@ -888,9 +888,14 @@ public partial class MainViewModel : ObservableObject
         }
 
         UnslottedEmoji.Clear();
+        var seen = new HashSet<string>();
         foreach (var e in Document.EmojiEntries.Where(e => e.Slot is null && e.ReplaceChar.Length > 0))
         {
-            UnslottedEmoji.Add(e);
+            if (seen.Add(e.ReplaceChar)) UnslottedEmoji.Add(e);
+        }
+        foreach (var e in Settings.GlobalEmojiList.Where(e => e.Slot is null && e.ReplaceChar.Length > 0))
+        {
+            if (seen.Add(e.ReplaceChar)) UnslottedEmoji.Add(e);
         }
     }
 
