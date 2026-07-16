@@ -37,7 +37,14 @@
                 </StackPanel>
 
                 <!-- 選択行のパラメータ調整（動かすとオプション文字列を自動生成） -->
-                <Grid Grid.Column="1" x:Name="ParamPanel" IsEnabled="False" RowSpacing="2" ColumnSpacing="8">
+                <ContentControl
+                    Grid.Column="1"
+                    x:Name="ParamPanel"
+                    IsEnabled="False"
+                    IsTabStop="False"
+                    HorizontalContentAlignment="Stretch"
+                    VerticalContentAlignment="Stretch">
+                <Grid RowSpacing="2" ColumnSpacing="8">
                     <Grid.RowDefinitions>
                         <RowDefinition Height="Auto" />
                         <RowDefinition Height="Auto" />
@@ -80,6 +87,7 @@
                         <CheckBox x:Name="NoDecorCheck" Content="NoDecor（文字飾りなし）" MinWidth="0" Click="OnParamCheckChanged" />
                     </StackPanel>
                 </Grid>
+                </ContentControl>
             </Grid>
         </Border>
 
