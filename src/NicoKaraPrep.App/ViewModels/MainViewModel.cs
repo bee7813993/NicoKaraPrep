@@ -328,6 +328,9 @@ public partial class MainViewModel : ObservableObject
             MediaPath = null;
         }
 
+        Settings.AddRecentFile(path);
+        Settings.Save();
+
         StatusText = $"読み込みました: {Path.GetFileName(path)}（{Lines.Count} 行）";
 
         // 同じフォルダに n3proj が 1 つだけあれば、フォント・画面幅設定を自動で取り込む
@@ -357,6 +360,18 @@ public partial class MainViewModel : ObservableObject
         {
             doc.Lines[i].SplitOrderKey = keys[i];
         }
+    }
+
+    /// <summary>未保存の変更があるか（メイン・分離タブのいずれか）。</summary>
+    public bool HasUnsavedChanges => IsModified || Tabs.Any(t => t.IsModified);
+
+    /// <summary>新規（空）ドキュメントに切り替える。ファイルを閉じる操作を兼ねる。</summary>
+    public void NewDocument()
+    {
+        _n3projLineTimes = null;
+        MediaPath = null;
+        LoadDocument(new LyricsDocument(), null, DocumentFormat.Rlf);
+        StatusText = "新規ドキュメントを作成しました";
     }
 
     /// <summary>クリップボード等のテキストを取り込む（テキスト編集モード形式 / lrc 両対応）。</summary>
@@ -441,6 +456,8 @@ public partial class MainViewModel : ObservableObject
         UpdateTitle();
         SaveProject();
         RememberSaveFolder(path);
+        Settings.AddRecentFile(path);
+        Settings.Save();
         StatusText = $"保存しました: {Path.GetFileName(path)}";
     }
 
@@ -499,6 +516,8 @@ public partial class MainViewModel : ObservableObject
         UpdateTitle();
         SaveProject();
         RememberSaveFolder(path);
+        Settings.AddRecentFile(path);
+        Settings.Save();
 
         int tabCount = Tabs.Count - 1;
         StatusText = tabCount > 0

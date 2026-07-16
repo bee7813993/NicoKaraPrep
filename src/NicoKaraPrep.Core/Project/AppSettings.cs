@@ -67,6 +67,20 @@ public sealed class AppSettings
     /// <summary>前回ファイルを保存（エクスポート）したフォルダ。</summary>
     public string LastSaveFolder { get; set; } = "";
 
+    /// <summary>最近使用したファイル（新しい順、最大 10 件）。</summary>
+    public List<string> RecentFiles { get; set; } = new();
+
+    /// <summary>最近使用したファイルの先頭に追加する（重複除去・最大 10 件）。</summary>
+    public void AddRecentFile(string path)
+    {
+        RecentFiles.RemoveAll(p => string.Equals(p, path, StringComparison.OrdinalIgnoreCase));
+        RecentFiles.Insert(0, path);
+        if (RecentFiles.Count > 10)
+        {
+            RecentFiles.RemoveRange(10, RecentFiles.Count - 10);
+        }
+    }
+
     // ---- ウィンドウ位置・サイズ（前回終了時の状態を復元） ----
     public int WindowX { get; set; }
     public int WindowY { get; set; }

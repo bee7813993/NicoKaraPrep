@@ -79,6 +79,7 @@ public sealed partial class MainWindow : Window
             TryRun(() => ViewModel.OpenFile(args[1]));
             AfterDocumentLoaded();
         }
+        RefreshRecentFilesMenu();
 
         // デバッグ用: 起動直後に絵文字リスト編集を自動で開く
         if (args.Contains("--debug-emoji-dialog"))
@@ -188,6 +189,7 @@ public sealed partial class MainWindow : Window
     {
         SyncTabSelection();
         ScheduleValidation();
+        RefreshRecentFilesMenu();
         if (ViewModel.MediaPath is string mp && File.Exists(mp))
         {
             OpenMedia(mp);
@@ -197,6 +199,73 @@ public sealed partial class MainWindow : Window
     private IntPtr Hwnd => WinRT.Interop.WindowNative.GetWindowHandle(this);
 
     // ------------------------------------------------------------ ファイル
+
+    private async void OnNewClick(object sender, RoutedEventArgs e)
+    {
+        if (ViewModel.HasUnsavedChanges)
+        {
+            var dialog = new ContentDialog
+            {
+                XamlRoot = Content.XamlRoot,
+                Title = "新規作成",
+                Content = "保存されていない変更があります。破棄して新規作成（ファイルを閉じる）しますか？",
+                PrimaryButtonText = "破棄して新規作成",
+                CloseButtonText = "キャンセル",
+                DefaultButton = ContentDialogButton.Close,
+            };
+            if (await dialog.ShowAsync() != ContentDialogResult.Primary) return;
+        }
+
+        if (InsertViewActive) EmojiModeToggle.IsChecked = false;
+        TryRun(ViewModel.NewDocument);
+        CloseMedia();
+        LineEditor.Text = "";
+        RenderPreview();
+        ScheduleValidation();
+    }
+
+    /// <summary>メディアを閉じる（新規作成・ファイルを閉じる時）。</summary>
+    private void CloseMedia()
+    {
+        _mediaTimer?.Stop();
+        Player.Source = null;
+        MediaPanel.IsExpanded = false;
+    }
+
+    /// <summary>「最近使用したファイル」サブメニューを設定から作り直す。</summary>
+    private void RefreshRecentFilesMenu()
+    {
+        RecentFilesMenu.Items.Clear();
+        var files = ViewModel.Settings.RecentFiles.Where(File.Exists).ToList();
+        if (files.Count == 0)
+        {
+            RecentFilesMenu.Items.Add(new MenuFlyoutItem { Text = "（なし）", IsEnabled = false });
+            return;
+        }
+        foreach (string path in files)
+        {
+            var item = new MenuFlyoutItem { Text = Path.GetFileName(path) };
+            ToolTipService.SetToolTip(item, path);
+            string captured = path;
+            item.Click += (_, _) => OpenRecentFile(captured);
+            RecentFilesMenu.Items.Add(item);
+        }
+    }
+
+    private void OpenRecentFile(string path)
+    {
+        if (!File.Exists(path))
+        {
+            ViewModel.Settings.RecentFiles.RemoveAll(p => string.Equals(p, path, StringComparison.OrdinalIgnoreCase));
+            ViewModel.Settings.Save();
+            RefreshRecentFilesMenu();
+            ViewModel.StatusText = $"ファイルが見つかりません: {path}";
+            return;
+        }
+        TryRun(() => ViewModel.OpenFile(path));
+        AfterDocumentLoaded();
+        RefreshRecentFilesMenu();
+    }
 
     private async void OnOpenClick(object sender, RoutedEventArgs e)
     {
@@ -219,6 +288,7 @@ public sealed partial class MainWindow : Window
         if (ViewModel.MainFilePath is string path)
         {
             TryRun(() => ViewModel.SaveFullTo(path));
+            RefreshRecentFilesMenu();
         }
         else
         {
@@ -240,6 +310,7 @@ public sealed partial class MainWindow : Window
         string? path = SaveFileDialog.Show(Hwnd, ViewModel.GetDefaultSaveFolder(), suggested, types, rlfFirst ? "rlf" : "lrc");
         if (path is null) return;
         TryRun(() => ViewModel.SaveFullTo(path));
+        RefreshRecentFilesMenu();
     }
 
     /// <summary>表示中のタブへファイルを読み込んで差し替える。</summary>
@@ -313,8 +384,13 @@ public sealed partial class MainWindow : Window
         var items = await e.DataView.GetStorageItemsAsync();
         if (items.FirstOrDefault(i => i is StorageFile) is not StorageFile file) return;
 
-        // 動画・音声ファイルはメディアとして、それ以外は歌詞として開く
-        if (MediaExtensions.Contains(Path.GetExtension(file.Path)))
+        // n3proj は設定として、動画・音声ファイルはメディアとして、それ以外は歌詞として開く
+        if (Path.GetExtension(file.Path).Equals(".n3proj", StringComparison.OrdinalIgnoreCase))
+        {
+            TryRun(() => ViewModel.ApplyN3ProjSettings(file.Path));
+            ScheduleValidation();
+        }
+        else if (MediaExtensions.Contains(Path.GetExtension(file.Path)))
         {
             OpenMedia(file.Path);
         }
@@ -344,9 +420,14 @@ public sealed partial class MainWindow : Window
         if (items.FirstOrDefault(i => i is StorageFile) is not StorageFile file) return;
 
         // メディアパネルへのドロップは拡張子に関わらずメディアとして開く
-        // （歌詞ファイルだけは歌詞として扱う）
+        // （歌詞ファイルと n3proj だけはそれぞれの読み込みとして扱う）
         string ext = Path.GetExtension(file.Path);
-        if (ext.Equals(".rlf", StringComparison.OrdinalIgnoreCase) ||
+        if (ext.Equals(".n3proj", StringComparison.OrdinalIgnoreCase))
+        {
+            TryRun(() => ViewModel.ApplyN3ProjSettings(file.Path));
+            ScheduleValidation();
+        }
+        else if (ext.Equals(".rlf", StringComparison.OrdinalIgnoreCase) ||
             ext.Equals(".lrc", StringComparison.OrdinalIgnoreCase) ||
             ext.Equals(".kra", StringComparison.OrdinalIgnoreCase))
         {

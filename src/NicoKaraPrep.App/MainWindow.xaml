@@ -18,17 +18,25 @@
         <!-- メニュー -->
         <MenuBar Grid.Row="0">
             <MenuBarItem Title="ファイル(F)" AccessKey="F">
+                <MenuFlyoutItem Text="新規作成（ファイルを閉じる）" Click="OnNewClick">
+                    <MenuFlyoutItem.KeyboardAccelerators>
+                        <KeyboardAccelerator Modifiers="Control" Key="N" />
+                    </MenuFlyoutItem.KeyboardAccelerators>
+                </MenuFlyoutItem>
                 <MenuFlyoutItem Text="開く..." Click="OnOpenClick">
                     <MenuFlyoutItem.KeyboardAccelerators>
                         <KeyboardAccelerator Modifiers="Control" Key="O" />
                     </MenuFlyoutItem.KeyboardAccelerators>
                 </MenuFlyoutItem>
+                <MenuFlyoutSubItem x:Name="RecentFilesMenu" Text="最近使用したファイル" />
+                <MenuFlyoutSeparator />
                 <MenuFlyoutItem Text="上書き保存（タブ含む全行）" Click="OnSaveClick">
                     <MenuFlyoutItem.KeyboardAccelerators>
                         <KeyboardAccelerator Modifiers="Control" Key="S" />
                     </MenuFlyoutItem.KeyboardAccelerators>
                 </MenuFlyoutItem>
                 <MenuFlyoutItem Text="名前を付けて保存（タブ含む全行）..." Click="OnSaveAsClick" />
+                <MenuFlyoutSeparator />
                 <MenuFlyoutItem Text="表示中のタブを別ファイルへ保存..." Click="OnSaveTabAsClick" />
                 <MenuFlyoutItem Text="表示中のタブへファイルを読み込み（差し替え）..." Click="OnReloadTabClick" />
                 <MenuFlyoutSeparator />
@@ -42,21 +50,6 @@
                         <KeyboardAccelerator Modifiers="Control,Shift" Key="C" />
                     </MenuFlyoutItem.KeyboardAccelerators>
                 </MenuFlyoutItem>
-                <MenuFlyoutSeparator />
-                <MenuFlyoutItem Text="選択行をエクスポート..." Click="OnExportFileClick">
-                    <MenuFlyoutItem.KeyboardAccelerators>
-                        <KeyboardAccelerator Modifiers="Control" Key="E" />
-                    </MenuFlyoutItem.KeyboardAccelerators>
-                </MenuFlyoutItem>
-                <MenuFlyoutItem Text="選択行をクリップボードへエクスポート" Click="OnExportClipboardClick" />
-                <MenuFlyoutItem Text="選択行を新しいタブへ分離" Click="OnSplitToTabClick">
-                    <MenuFlyoutItem.KeyboardAccelerators>
-                        <KeyboardAccelerator Modifiers="Control" Key="T" />
-                    </MenuFlyoutItem.KeyboardAccelerators>
-                </MenuFlyoutItem>
-                <MenuFlyoutItem Text="タブ分離を解除（すべてメインへ戻す）" Click="OnResetTabsClick" />
-                <MenuFlyoutItem Text="未エクスポート行をすべて選択" Click="OnSelectUnexportedClick" />
-                <MenuFlyoutItem Text="選択行の済マークを解除" Click="OnClearMarksClick" />
             </MenuBarItem>
             <MenuBarItem Title="編集(E)" AccessKey="E">
                 <MenuFlyoutItem Text="元に戻す" Click="OnUndoClick">
@@ -97,6 +90,24 @@
                     </MenuFlyoutItem.KeyboardAccelerators>
                 </MenuFlyoutItem>
             </MenuBarItem>
+            <MenuBarItem Title="エクスポート(X)" AccessKey="X">
+                <MenuFlyoutItem Text="選択行を新しいタブへ分離" Click="OnSplitToTabClick">
+                    <MenuFlyoutItem.KeyboardAccelerators>
+                        <KeyboardAccelerator Modifiers="Control" Key="T" />
+                    </MenuFlyoutItem.KeyboardAccelerators>
+                </MenuFlyoutItem>
+                <MenuFlyoutItem Text="タブ分離を解除（すべてメインへ戻す）" Click="OnResetTabsClick" />
+                <MenuFlyoutSeparator />
+                <MenuFlyoutItem Text="選択行をエクスポート..." Click="OnExportFileClick">
+                    <MenuFlyoutItem.KeyboardAccelerators>
+                        <KeyboardAccelerator Modifiers="Control" Key="E" />
+                    </MenuFlyoutItem.KeyboardAccelerators>
+                </MenuFlyoutItem>
+                <MenuFlyoutItem Text="選択行をクリップボードへエクスポート" Click="OnExportClipboardClick" />
+                <MenuFlyoutSeparator />
+                <MenuFlyoutItem Text="未エクスポート行をすべて選択" Click="OnSelectUnexportedClick" />
+                <MenuFlyoutItem Text="選択行の済マークを解除" Click="OnClearMarksClick" />
+            </MenuBarItem>
             <MenuBarItem Title="再生(P)" AccessKey="P">
                 <MenuFlyoutItem Text="メディアを開く..." Click="OnOpenMediaClick" />
                 <MenuFlyoutItem Text="再生 / 一時停止" Click="OnPlayPauseClick">
@@ -126,8 +137,9 @@
                         <KeyboardAccelerator Key="F5" />
                     </MenuFlyoutItem.KeyboardAccelerators>
                 </MenuFlyoutItem>
-                <MenuFlyoutItem Text="設定..." Click="OnSettingsClick" />
+                <MenuFlyoutSeparator />
                 <MenuFlyoutItem Text="ニコカラメーカーのプロジェクト(n3proj)から設定を読み込み..." Click="OnImportN3ProjClick" />
+                <MenuFlyoutItem Text="設定..." Click="OnSettingsClick" />
             </MenuBarItem>
             <MenuBarItem Title="テンプレート(T)" AccessKey="T">
                 <MenuFlyoutItem Text="テンプレートとして保存...（絵文字一式＋フォント設定）" Click="OnSaveTemplateClick" />
