@@ -286,28 +286,53 @@ public partial class MainViewModel : ObservableObject
         }
 
         // 曲プロジェクト（.tttproj）から済マーク・メディアパス・スロット並び順・分離タブを復元
+        string? tabRestoreNote = null;
         if (SongProject.TryLoad(path) is { } project)
         {
             MediaPath = project.MediaPath;
+
+            // タブ分離状態の復元:
+            // 分離はファイル自体を書き換えないため、分離後のメインは MainText から復元する。
+            // 歌詞ファイルが外部で変更されていたら（フィンガープリント不一致）、
+            // 古いタブ状態は破棄してファイルの内容をそのまま表示する。
+            bool restoreTabs = project.Tabs.Count > 0 && project.MainText.Length > 0;
+            if (restoreTabs && project.FileFingerprint != SongProject.ComputeFingerprint(path))
+            {
+                restoreTabs = false;
+                tabRestoreNote = "（歌詞ファイルが外部で変更されていたため、前回のタブ分離状態は破棄しました）";
+            }
+
+            if (restoreTabs)
+            {
+                var mainDoc = TextEditModeFormat.Parse(project.MainText);
+                mainDoc.RlfExtras = Document.RlfExtras; // rlf 固有情報はファイル読込分を引き継ぐ
+                Document = mainDoc;
+                _activeTab.Document = mainDoc;
+                RebuildLines();
+            }
+
             foreach (int i in project.ExportedLines)
             {
                 if (i >= 0 && i < Lines.Count) Lines[i].Exported = true;
             }
             ApplySavedSlotOrder(project.EmojiSlots);
 
-            foreach (var pt in project.Tabs)
+            if (restoreTabs)
             {
-                var tabDoc = TextEditModeFormat.Parse(pt.Text);
-                foreach (int i in pt.ExportedLines)
+                foreach (var pt in project.Tabs)
                 {
-                    if (i >= 0 && i < tabDoc.Lines.Count) tabDoc.Lines[i].Exported = true;
+                    var tabDoc = TextEditModeFormat.Parse(pt.Text);
+                    foreach (int i in pt.ExportedLines)
+                    {
+                        if (i >= 0 && i < tabDoc.Lines.Count) tabDoc.Lines[i].Exported = true;
+                    }
+                    Tabs.Add(new TabState
+                    {
+                        Name = pt.Name,
+                        Document = tabDoc,
+                        Format = CurrentFormat,
+                    });
                 }
-                Tabs.Add(new TabState
-                {
-                    Name = pt.Name,
-                    Document = tabDoc,
-                    Format = CurrentFormat,
-                });
             }
         }
         else
@@ -329,6 +354,11 @@ public partial class MainViewModel : ObservableObject
             {
                 // n3proj が読めなくても歌詞の読み込みは成功扱い
             }
+        }
+
+        if (tabRestoreNote is not null)
+        {
+            StatusText += tabRestoreNote;
         }
     }
 
@@ -489,6 +519,15 @@ public partial class MainViewModel : ObservableObject
                     .ToList(),
             });
         }
+
+        // 分離タブがあるときは、分離後のメインの内容も保存する
+        // （分離は歌詞ファイル自体を書き換えないため、これが無いと開き直しで行が重複する）
+        if (project.Tabs.Count > 0)
+        {
+            project.MainText = TextEditModeFormat.Write(main.Document);
+            project.FileFingerprint = SongProject.ComputeFingerprint(path);
+        }
+
         project.Save(path);
     }
 

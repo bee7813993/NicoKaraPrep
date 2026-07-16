@@ -32,6 +32,30 @@ public sealed class SongProject
     /// <summary>分離タブ（メイン以外）。次回開いたとき復元する。</summary>
     public List<SongProjectTab> Tabs { get; set; } = new();
 
+    /// <summary>
+    /// タブ分離中のメインの内容（テキスト編集モード形式）。
+    /// 分離は歌詞ファイル自体を書き換えないため、分離後のメインをここに保存して復元する。
+    /// 分離タブが無いときは空。
+    /// </summary>
+    public string MainText { get; set; } = "";
+
+    /// <summary>保存時の歌詞ファイルのフィンガープリント（外部編集の検出用）。</summary>
+    public string FileFingerprint { get; set; } = "";
+
+    /// <summary>歌詞ファイルのフィンガープリント（サイズ＋更新時刻）を計算する。</summary>
+    public static string ComputeFingerprint(string filePath)
+    {
+        try
+        {
+            var info = new FileInfo(filePath);
+            return info.Exists ? $"{info.Length}:{info.LastWriteTimeUtc.Ticks}" : "";
+        }
+        catch (Exception)
+        {
+            return "";
+        }
+    }
+
     private static readonly JsonSerializerOptions JsonOptions = new()
     {
         WriteIndented = true,
