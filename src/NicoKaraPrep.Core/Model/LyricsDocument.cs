@@ -95,6 +95,18 @@ public sealed class LyricsDocument
         return pages;
     }
 
+    /// <summary>
+    /// 現在の行順で全行に SplitOrderKey（元の行位置キー）を振る。
+    /// タブ分離の前に呼んでおくと、分離解除・全行マージで元の位置へ戻せる。
+    /// </summary>
+    public void AssignSplitOrderKeys()
+    {
+        for (int i = 0; i < Lines.Count; i++)
+        {
+            Lines[i].SplitOrderKey = i;
+        }
+    }
+
     public LyricsDocument Clone()
     {
         var d = new LyricsDocument();

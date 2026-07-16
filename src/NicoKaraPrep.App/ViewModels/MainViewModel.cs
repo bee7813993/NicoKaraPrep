@@ -97,6 +97,13 @@ public partial class MainViewModel : ObservableObject
             return null;
         }
 
+        // 元の位置へ戻すためのキーが未設定なら振っておく（他のタブが無いときだけ。
+        // タブがあるときに振り直すと既存タブのキーと整合しなくなる）
+        if (Tabs.Count == 1 && Document.Lines.Any(l => l.SplitOrderKey is null))
+        {
+            Document.AssignSplitOrderKeys();
+        }
+
         var newDoc = LineOperations.ExtractLines(Document, indexes, GetEffectiveEmojiList());
         foreach (int i in indexes.OrderByDescending(x => x))
         {
@@ -186,30 +193,9 @@ public partial class MainViewModel : ObservableObject
         StatusText = $"タブ「{tab.Name}」の行をメインへ時刻順に戻しました";
     }
 
-    /// <summary>タブの行を、先頭タイムタグの時刻順になるようメインへ挿入する。</summary>
-    private static void MergeLinesByTime(LyricsDocument main, LyricsDocument part)
-    {
-        int insertAfter = -1;
-        foreach (var line in part.Lines)
-        {
-            int idx;
-            if (line.GetFirstTimeCs() is int t)
-            {
-                idx = 0;
-                while (idx < main.Lines.Count &&
-                       (main.Lines[idx].GetFirstTimeCs() is not int mt || mt <= t))
-                {
-                    idx++;
-                }
-            }
-            else
-            {
-                idx = insertAfter + 1; // タグ無し行（空行など）は直前に挿入した行の次へ
-            }
-            main.Lines.Insert(idx, line);
-            insertAfter = idx;
-        }
-    }
+    /// <summary>タブの行をメインへ挿入して戻す（元の行位置キー優先、無ければ時刻順）。</summary>
+    private static void MergeLinesByTime(LyricsDocument main, LyricsDocument part) =>
+        LineOperations.MergeLines(main, part);
 
     /// <summary>すべての分離タブを閉じて、行をメインへ時刻順に戻す（タブ分離の初期化）。</summary>
     public void ResetAllTabs()
@@ -306,6 +292,7 @@ public partial class MainViewModel : ObservableObject
             {
                 var mainDoc = TextEditModeFormat.Parse(project.MainText);
                 mainDoc.RlfExtras = Document.RlfExtras; // rlf 固有情報はファイル読込分を引き継ぐ
+                ApplySavedLineKeys(mainDoc, project.MainLineKeys);
                 Document = mainDoc;
                 _activeTab.Document = mainDoc;
                 RebuildLines();
@@ -322,6 +309,7 @@ public partial class MainViewModel : ObservableObject
                 foreach (var pt in project.Tabs)
                 {
                     var tabDoc = TextEditModeFormat.Parse(pt.Text);
+                    ApplySavedLineKeys(tabDoc, pt.LineKeys);
                     foreach (int i in pt.ExportedLines)
                     {
                         if (i >= 0 && i < tabDoc.Lines.Count) tabDoc.Lines[i].Exported = true;
@@ -362,6 +350,15 @@ public partial class MainViewModel : ObservableObject
         }
     }
 
+    /// <summary>.tttproj に保存した行位置キーをドキュメントの行へ適用する（行数が合う範囲で）。</summary>
+    private static void ApplySavedLineKeys(LyricsDocument doc, List<int?> keys)
+    {
+        for (int i = 0; i < doc.Lines.Count && i < keys.Count; i++)
+        {
+            doc.Lines[i].SplitOrderKey = keys[i];
+        }
+    }
+
     /// <summary>クリップボード等のテキストを取り込む（テキスト編集モード形式 / lrc 両対応）。</summary>
     public void LoadFromText(string text)
     {
@@ -387,6 +384,7 @@ public partial class MainViewModel : ObservableObject
         CurrentFilePath = path;
         CurrentFormat = format;
         IsModified = false;
+        doc.AssignSplitOrderKeys(); // タブ分離を元の位置へ戻すための行位置キー
         RebuildLines();
         AssignSlotsToSongEmoji();
         RefreshEmojiSlots();
@@ -526,6 +524,14 @@ public partial class MainViewModel : ObservableObject
         }
 
         PushUndo();
+        // 行数が変わっていなければ元の行位置キーを引き継ぐ（分離解除で元の位置へ戻すため）
+        if (doc.Lines.Count == Document.Lines.Count)
+        {
+            for (int i = 0; i < doc.Lines.Count; i++)
+            {
+                doc.Lines[i].SplitOrderKey = Document.Lines[i].SplitOrderKey;
+            }
+        }
         Document = doc;
         _activeTab.Document = doc;
         RebuildLines();
@@ -625,6 +631,7 @@ public partial class MainViewModel : ObservableObject
                     .Where(x => x.Line.Exported)
                     .Select(x => x.Index)
                     .ToList(),
+                LineKeys = tab.Document.Lines.Select(l => l.SplitOrderKey).ToList(),
             });
         }
 
@@ -633,6 +640,7 @@ public partial class MainViewModel : ObservableObject
         if (project.Tabs.Count > 0)
         {
             project.MainText = TextEditModeFormat.Write(main.Document);
+            project.MainLineKeys = main.Document.Lines.Select(l => l.SplitOrderKey).ToList();
             project.FileFingerprint = SongProject.ComputeFingerprint(path);
         }
 

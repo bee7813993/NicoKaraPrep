@@ -13,7 +13,8 @@ public static class LineOperations
         var line = doc.Lines[lineIndex];
         charIndex = Math.Clamp(charIndex, 0, line.Chars.Count);
 
-        var newLine = new LyricsLine { EndTimeCs = line.EndTimeCs };
+        // 分割後の後半行は元の行と同じ位置キーを引き継ぐ（マージ時に元の行の直後へ並ぶ）
+        var newLine = new LyricsLine { EndTimeCs = line.EndTimeCs, SplitOrderKey = line.SplitOrderKey };
         for (int i = charIndex; i < line.Chars.Count; i++)
         {
             newLine.Chars.Add(line.Chars[i]);
@@ -75,7 +76,12 @@ public static class LineOperations
     public static void InsertEmptyLine(LyricsDocument doc, int index)
     {
         index = Math.Clamp(index, 0, doc.Lines.Count);
-        doc.Lines.Insert(index, new LyricsLine());
+        var line = new LyricsLine();
+        if (index > 0)
+        {
+            line.SplitOrderKey = doc.Lines[index - 1].SplitOrderKey; // 直前の行に付いて並ぶ
+        }
+        doc.Lines.Insert(index, line);
     }
 
     /// <summary>行を削除する。</summary>
@@ -91,6 +97,50 @@ public static class LineOperations
     /// 選択行だけを含む新しいドキュメントを作る（エクスポート用）。
     /// メタデータと実効絵文字リストを引き継ぐ。
     /// </summary>
+    /// <summary>
+    /// part の行を main へ挿入して戻す（タブ分離の解除・全行マージ用）。
+    /// 元の行位置キー（SplitOrderKey）を持つ行はキー順に元の位置
+    /// （ページ区切りとの前後関係を保った場所）へ、キーが無い行は
+    /// 先頭タイムタグの時刻順に挿入する。
+    /// </summary>
+    public static void MergeLines(LyricsDocument main, LyricsDocument part)
+    {
+        int insertAfter = -1;
+        foreach (var line in part.Lines)
+        {
+            int idx;
+            if (line.SplitOrderKey is int key)
+            {
+                // メイン側でキーを持たない行（後から追加された行・空行）は
+                // 直前のキーを引き継いだものとして扱い、その行に付いて並ばせる
+                idx = 0;
+                int lastEffectiveKey = int.MinValue;
+                for (int i = 0; i < main.Lines.Count; i++)
+                {
+                    int effective = main.Lines[i].SplitOrderKey ?? lastEffectiveKey;
+                    if (effective > key) break;
+                    lastEffectiveKey = effective;
+                    idx = i + 1;
+                }
+            }
+            else if (line.GetFirstTimeCs() is int t)
+            {
+                idx = 0;
+                while (idx < main.Lines.Count &&
+                       (main.Lines[idx].GetFirstTimeCs() is not int mt || mt <= t))
+                {
+                    idx++;
+                }
+            }
+            else
+            {
+                idx = insertAfter + 1; // キーもタグも無い行（空行など）は直前に挿入した行の次へ
+            }
+            main.Lines.Insert(idx, line);
+            insertAfter = idx;
+        }
+    }
+
     public static LyricsDocument ExtractLines(LyricsDocument doc, IEnumerable<int> lineIndexes, IEnumerable<EmojiEntry>? effectiveEmoji = null)
     {
         var result = new LyricsDocument();

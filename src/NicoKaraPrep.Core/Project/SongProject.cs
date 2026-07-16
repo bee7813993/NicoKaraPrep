@@ -12,6 +12,9 @@ public sealed class SongProjectTab
 
     /// <summary>エクスポート済みマークの付いた行インデックス。</summary>
     public List<int> ExportedLines { get; set; } = new();
+
+    /// <summary>各行の元の行位置キー（分離解除で元の位置へ戻すため。Text の行と同順）。</summary>
+    public List<int?> LineKeys { get; set; } = new();
 }
 
 /// <summary>
@@ -38,6 +41,9 @@ public sealed class SongProject
     /// 分離タブが無いときは空。
     /// </summary>
     public string MainText { get; set; } = "";
+
+    /// <summary>メインの各行の元の行位置キー（MainText の行と同順）。</summary>
+    public List<int?> MainLineKeys { get; set; } = new();
 
     /// <summary>保存時の歌詞ファイルのフィンガープリント（外部編集の検出用）。</summary>
     public string FileFingerprint { get; set; } = "";

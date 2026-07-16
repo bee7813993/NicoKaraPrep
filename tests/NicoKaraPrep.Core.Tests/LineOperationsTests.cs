@@ -78,6 +78,53 @@ public class LineOperationsTests
     }
 
     [Fact]
+    public void タブ分離の解除で元のページ区切り位置へ戻る()
+    {
+        // ページ1: A, B ／ ページ2: C（B はページ1の末尾行）
+        var doc = Doc("[00:10:00]あ", "[00:12:00]い", "", "[00:20:00]う");
+        doc.AssignSplitOrderKeys();
+
+        // B（行1）をタブへ分離（クローンして本体から削除）
+        var tab = LineOperations.ExtractLines(doc, new[] { 1 });
+        LineOperations.DeleteLine(doc, 1);
+        Assert.Equal(3, doc.Lines.Count);
+
+        // 解除 → B は空行（ページ区切り）の前＝元の位置へ戻る
+        LineOperations.MergeLines(doc, tab);
+        Assert.Equal(4, doc.Lines.Count);
+        Assert.Equal("い", doc.Lines[1].GetDisplayText());
+        Assert.True(doc.Lines[2].IsEmpty);
+        Assert.Equal("う", doc.Lines[3].GetDisplayText());
+    }
+
+    [Fact]
+    public void タブ分離の解除_次ページ先頭の行も元の位置へ戻る()
+    {
+        // C はページ2 の先頭行（時刻だけでは空行の前後どちらか判別できないケース）
+        var doc = Doc("[00:10:00]あ", "", "[00:12:00]い", "[00:20:00]う");
+        doc.AssignSplitOrderKeys();
+
+        var tab = LineOperations.ExtractLines(doc, new[] { 2 });
+        LineOperations.DeleteLine(doc, 2);
+
+        LineOperations.MergeLines(doc, tab);
+        Assert.True(doc.Lines[1].IsEmpty);
+        Assert.Equal("い", doc.Lines[2].GetDisplayText());
+        Assert.Equal("う", doc.Lines[3].GetDisplayText());
+    }
+
+    [Fact]
+    public void キーが無い行は従来どおり時刻順に挿入される()
+    {
+        var doc = Doc("[00:10:00]あ", "[00:20:00]う");
+        var tab = Doc("[00:12:00]い");
+        LineOperations.MergeLines(doc, tab);
+        Assert.Equal("あ", doc.Lines[0].GetDisplayText());
+        Assert.Equal("い", doc.Lines[1].GetDisplayText());
+        Assert.Equal("う", doc.Lines[2].GetDisplayText());
+    }
+
+    [Fact]
     public void 空行の挿入と削除()
     {
         var doc = Doc("[00:01:00]あ", "[00:02:00]い");

@@ -15,6 +15,13 @@ public sealed class LyricsLine
     /// <summary>エクスポート済みマーク。</summary>
     public bool Exported { get; set; }
 
+    /// <summary>
+    /// タブ分離時の元の行位置キー（ドキュメント読込時の行番号）。
+    /// 分離解除・全行マージのとき、時刻ではなくこのキーで元の位置
+    /// （ページ区切りとの前後関係）へ戻すために使う。ファイル形式には保存しない。
+    /// </summary>
+    public int? SplitOrderKey { get; set; }
+
     /// <summary>空行（ページ区切り）かどうか。</summary>
     public bool IsEmpty => Chars.Count == 0 && EndTimeCs is null;
 
@@ -61,7 +68,7 @@ public sealed class LyricsLine
 
     public LyricsLine Clone()
     {
-        var l = new LyricsLine { EndTimeCs = EndTimeCs, Exported = Exported };
+        var l = new LyricsLine { EndTimeCs = EndTimeCs, Exported = Exported, SplitOrderKey = SplitOrderKey };
         foreach (var c in Chars) l.Chars.Add(c.Clone());
         return l;
     }
