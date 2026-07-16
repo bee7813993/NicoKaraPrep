@@ -319,15 +319,35 @@ public sealed partial class EmojiListDialog : ContentDialog
 
         var font = new Microsoft.UI.Xaml.Media.FontFamily(_settings.FontFamily);
         var weight = _settings.FontBold ? Microsoft.UI.Text.FontWeights.Bold : Microsoft.UI.Text.FontWeights.Normal;
+        double rubyPx = fontPx * 0.5; // ルビはおおよそ本文の半分サイズ
 
-        void AddText(string text) => PreviewHost.Children.Add(new TextBlock
+        // ルビ付きの本文（実際の字幕はルビ込みの高さになるため、全体のバランス確認用）
+        void AddText(string text, string? ruby = null)
         {
-            Text = text,
-            FontSize = fontPx,
-            FontFamily = font,
-            FontWeight = weight,
-            VerticalAlignment = VerticalAlignment.Bottom,
-        });
+            var stack = new StackPanel
+            {
+                Orientation = Orientation.Vertical,
+                VerticalAlignment = VerticalAlignment.Bottom,
+            };
+            stack.Children.Add(new TextBlock
+            {
+                Text = ruby ?? "",
+                FontSize = rubyPx,
+                FontFamily = font,
+                FontWeight = weight,
+                HorizontalAlignment = HorizontalAlignment.Center,
+                Height = rubyPx * 1.3, // ルビ無し部分とも高さを揃える
+            });
+            stack.Children.Add(new TextBlock
+            {
+                Text = text,
+                FontSize = fontPx,
+                FontFamily = font,
+                FontWeight = weight,
+                HorizontalAlignment = HorizontalAlignment.Center,
+            });
+            PreviewHost.Children.Add(stack);
+        }
 
         void AddIcon(string path, string fallback)
         {
@@ -351,9 +371,11 @@ public sealed partial class EmojiListDialog : ContentDialog
             }
         }
 
-        AddText("歌詞");
+        AddText("歌詞", "か し");
         AddIcon(row.ImageBefore.Trim(), row.ReplaceChar.Length > 0 ? row.ReplaceChar : "（画像なし）");
-        AddText("の続き");
+        AddText("の");
+        AddText("続", "つづ");
+        AddText("き");
 
         if (!string.IsNullOrWhiteSpace(row.ImageAfter))
         {
