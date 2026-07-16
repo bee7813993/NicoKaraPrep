@@ -194,6 +194,22 @@ public sealed partial class MainWindow : Window
         TryRun(() => ViewModel.SaveFullTo(path));
     }
 
+    /// <summary>表示中のタブへファイルを読み込んで差し替える。</summary>
+    private async void OnReloadTabClick(object sender, RoutedEventArgs e)
+    {
+        var picker = new FileOpenPicker();
+        WinRT.Interop.InitializeWithWindow.Initialize(picker, Hwnd);
+        picker.FileTypeFilter.Add(".rlf");
+        picker.FileTypeFilter.Add(".lrc");
+        picker.FileTypeFilter.Add(".kra");
+        picker.FileTypeFilter.Add(".txt");
+
+        StorageFile? file = await picker.PickSingleFileAsync();
+        if (file is null) return;
+        TryRun(() => ViewModel.ReloadActiveTabFromFile(file.Path));
+        RefreshAfterTabChange();
+    }
+
     /// <summary>表示中のタブの内容だけを別ファイルへ保存する。</summary>
     private void OnSaveTabAsClick(object sender, RoutedEventArgs e)
     {

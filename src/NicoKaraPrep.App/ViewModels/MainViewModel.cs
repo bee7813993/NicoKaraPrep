@@ -509,6 +509,34 @@ public partial class MainViewModel : ObservableObject
     }
 
     /// <summary>
+    /// 表示中のタブの内容をファイルから読み込んで差し替える
+    /// （RhythmicaLyrics でタイムタグ修正したタブ書き出しファイルを戻す用途。Ctrl+Z で戻せる）。
+    /// </summary>
+    public void ReloadActiveTabFromFile(string path)
+    {
+        LyricsDocument doc;
+        if (Path.GetExtension(path).Equals(".rlf", StringComparison.OrdinalIgnoreCase))
+        {
+            doc = RlfFormat.ReadFile(path);
+        }
+        else
+        {
+            string text = EncodingDetector.ReadAllText(path, out _);
+            doc = TextEditModeFormat.Parse(text);
+        }
+
+        PushUndo();
+        Document = doc;
+        _activeTab.Document = doc;
+        RebuildLines();
+        AssignSlotsToSongEmoji();
+        RefreshEmojiSlots();
+        MarkModified();
+        SaveProject();
+        StatusText = $"タブ「{_activeTab.Name}」へ読み込みました: {Path.GetFileName(path)}（{doc.Lines.Count} 行。Ctrl+Z で差し替え前に戻せます）";
+    }
+
+    /// <summary>
     /// 表示中のタブの内容だけをファイルへ書き出す（タブのファイル紐付けは変更しない）。
     /// </summary>
     public void SaveActiveTabCopyTo(string path, DocumentFormat? format = null)

@@ -30,6 +30,7 @@
                 </MenuFlyoutItem>
                 <MenuFlyoutItem Text="名前を付けて保存（タブ含む全行）..." Click="OnSaveAsClick" />
                 <MenuFlyoutItem Text="表示中のタブを別ファイルへ保存..." Click="OnSaveTabAsClick" />
+                <MenuFlyoutItem Text="表示中のタブへファイルを読み込み（差し替え）..." Click="OnReloadTabClick" />
                 <MenuFlyoutSeparator />
                 <MenuFlyoutItem Text="クリップボードから貼り付け" Click="OnPasteClick">
                     <MenuFlyoutItem.KeyboardAccelerators>
