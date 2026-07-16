@@ -365,9 +365,9 @@ public class EmojiOptionsTests
                 },
             };
             var s = settings.ToLineWidthSettings(emoji);
-            // Zoom 基準 = 字幕サイズ縁取り込み (80 + 10×2) = 100px。枠 = 100 × 150% = 150px。
-            // 横長画像（200×100）は枠に contain フィットするため幅 = 枠 150px、+MarginRight 20 → 170px
-            Assert.Equal(170, s.EmojiWidthPx["（幅広）"], 3);
+            // 高さ = フォントサイズ 80 × 150% = 120px（縁取りは Zoom 基準に含まれない）。
+            // 幅 = 120 × (200/100) = 240px、+MarginRight 20 → 260px
+            Assert.Equal(260, s.EmojiWidthPx["（幅広）"], 3);
         }
         finally
         {

@@ -28,7 +28,7 @@
             <NumberBox x:Name="ScreenWidthBox" Header="画面（動画）の横幅 px" Minimum="320" Maximum="7680" SpinButtonPlacementMode="Inline" />
             <ComboBox x:Name="FontFamilyBox" Header="字幕フォント" IsEditable="True" HorizontalAlignment="Stretch" />
             <NumberBox x:Name="FontSizeBox" Header="フォントサイズ px" Minimum="8" Maximum="400" SpinButtonPlacementMode="Inline" />
-            <NumberBox x:Name="EdgeSizeBox" Header="縁取りサイズ px（片側。@Emoji の Zoom 基準は字幕サイズ＋縁取り込み）" Minimum="0" Maximum="100" SmallChange="1" SpinButtonPlacementMode="Inline" />
+            <NumberBox x:Name="EdgeSizeBox" Header="縁取りサイズ px（片側。@Emoji プレビューのアイコン縦位置に反映）" Minimum="0" Maximum="100" SmallChange="1" SpinButtonPlacementMode="Inline" />
             <CheckBox x:Name="BoldBox" Content="太字" />
             <NumberBox x:Name="MarginBox" Header="左右マージン（片側 %）" Minimum="0" Maximum="40" SmallChange="1" SpinButtonPlacementMode="Inline" />
 

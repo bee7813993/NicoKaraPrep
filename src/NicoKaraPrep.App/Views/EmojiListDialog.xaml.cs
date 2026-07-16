@@ -317,9 +317,9 @@ public sealed partial class EmojiListDialog : ContentDialog
         double scale = Math.Min(1.0, 48.0 / baseFontPx);
         double fontPx = baseFontPx * scale;
 
-        // ニコカラメーカーの Zoom 基準は「字幕サイズ（縁取り込み）」。
-        // その正方形枠にアスペクト比を保って収まるようにフィットする（横長画像は幅=枠になる）。
-        double iconBox = (baseFontPx + edgePx * 2) * scale * opts.ZoomPercent / 100.0;
+        // 実機レンダリングの実測より: アイコン高さ = フォントサイズ × Zoom%
+        // （透明余白込みの画像全体。縁取りはサイズ基準に含まれず、縦位置にのみ影響）
+        double iconBox = baseFontPx * scale * opts.ZoomPercent / 100.0;
 
         var font = new Microsoft.UI.Xaml.Media.FontFamily(_settings.FontFamily);
         var weight = _settings.FontBold ? Microsoft.UI.Text.FontWeights.Bold : Microsoft.UI.Text.FontWeights.Normal;
@@ -357,7 +357,7 @@ public sealed partial class EmojiListDialog : ContentDialog
         {
             if (File.Exists(path))
             {
-                // 画像実寸から表示サイズを決定（正方形枠への contain フィット / Fix は実寸）
+                // 画像実寸から表示サイズを決定（高さ = フォントサイズ×Zoom%、幅は縦横比 / Fix は実寸）
                 double iconW, iconH;
                 if (Core.Formats.ImageSizeReader.TryGetSize(path, out int imgW, out int imgH) && imgW > 0 && imgH > 0)
                 {
@@ -368,9 +368,8 @@ public sealed partial class EmojiListDialog : ContentDialog
                     }
                     else
                     {
-                        double fit = Math.Min(iconBox / imgW, iconBox / imgH);
-                        iconW = imgW * fit;
-                        iconH = imgH * fit;
+                        iconH = iconBox;
+                        iconW = iconBox * imgW / imgH;
                     }
                 }
                 else
@@ -411,9 +410,10 @@ public sealed partial class EmojiListDialog : ContentDialog
         }
 
         PreviewCaption.Text =
-            $"プレビュー: {_settings.FontFamily} {baseFontPx:F0}px＋縁取り{edgePx:F0}px を {scale * 100:F0}% に縮小表示　" +
-            $"Zoom={opts.ZoomPercent:F0}%（基準=字幕サイズ縁取り込み {baseFontPx + edgePx * 2:F0}px）　" +
+            $"プレビュー: {_settings.FontFamily} {baseFontPx:F0}px を {scale * 100:F0}% に縮小表示　" +
+            $"Zoom={opts.ZoomPercent:F0}%（アイコン高さ = フォントサイズ×Zoom%）　" +
             $"MarginL/R/B={opts.MarginLeft:F0}/{opts.MarginRight:F0}/{opts.MarginBottom:F0}" +
+            (edgePx > 0 ? $"　縁取り{edgePx:F0}px(縦位置に反映)" : "") +
             (opts.Fix ? "　Fix(画像の実寸で表示)" : "") +
             (opts.NoDecor ? "　NoDecor" : "");
     }

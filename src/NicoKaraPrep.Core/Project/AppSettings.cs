@@ -35,9 +35,9 @@ public sealed class AppSettings
     public double SideMarginPercent { get; set; } = 5.0;
 
     /// <summary>
-    /// 縁取りサイズ px（片側）。@Emoji の Zoom はニコカラメーカーの仕様で
-    /// 「字幕サイズ（縁取り込み）」が基準になるため、アイコンサイズ計算に使用する。
-    /// n3proj 読み込みで自動設定される。
+    /// 縁取りサイズ px（片側）。実機レンダリングの実測より、アイコンは
+    /// 「文字セル下端＋縁取り」の位置に下端が揃うため、プレビューの縦位置に使用する
+    /// （Zoom のサイズ基準には影響しない）。n3proj 読み込みで自動設定される。
     /// </summary>
     public double EdgeSizePx { get; set; }
 
@@ -121,9 +121,9 @@ public sealed class AppSettings
             s.EmojiZoomPercent[e.ReplaceChar] = opts.ZoomPercent;
 
             // アイコン表示幅を画像実寸から計算:
-            //   通常: Zoom の基準は「字幕サイズ（縁取り込み）」＝ フォントサイズ + 縁取り×2。
-            //         その正方形枠 × Zoom% にアスペクト比を保って収まるようフィット
-            //         （横長画像は幅=枠、高さ=枠×h/w になる）
+            //   通常: 高さ = フォントサイズ × Zoom%（透明余白込みの画像全体）、幅 = 高さ × 縦横比。
+            //         実機レンダリングの実測より、Zoom の基準に縁取りは含まれない
+            //         （縁取りが影響するのは縦位置のみ）
             //   Fix : 画像のピクセルサイズをそのまま使用
             //   左右 Margin を加算
             string imagePath = e.ImageBefore;
@@ -131,13 +131,13 @@ public sealed class AppSettings
             {
                 imagePath = Path.Combine(baseDir, imagePath);
             }
-            double box = (FontSizePx + EdgeSizePx * 2) * opts.ZoomPercent / 100.0;
+            double box = FontSizePx * opts.ZoomPercent / 100.0;
             double width;
             if (Formats.ImageSizeReader.TryGetSize(imagePath, out int imgW, out int imgH) && imgH > 0 && imgW > 0)
             {
                 width = opts.Fix
                     ? imgW
-                    : box * Math.Min(1.0, (double)imgW / imgH);
+                    : box * imgW / imgH;
             }
             else
             {
