@@ -34,7 +34,8 @@ public static class RlfFormat
 
     public static LyricsDocument Read(byte[] bytes)
     {
-        var vars = HspVsaveFile.Read(bytes).ToDictionary(v => v.Name);
+        // HSP は変数名を小文字に正規化して保存するため、大文字小文字を無視して引く
+        var vars = HspVsaveFile.Read(bytes).ToDictionary(v => v.Name, StringComparer.OrdinalIgnoreCase);
 
         var mojitan = Require(vars, "mojitan");
         var mojisu = Require(vars, "mojisu").IntValues!;
@@ -125,7 +126,15 @@ public static class RlfFormat
         {
             bool enabled = vars.TryGetValue(FlagVarNames[i], out var f) && f.IntValues is [> 0, ..];
             if (!enabled) continue;
-            string value = vars.TryGetValue(InpVarNames[i], out var inp) ? DecodeCell(inp.StrElements![0]) : "";
+
+            // at_ss_inp2（@SilencemSec）は int 変数、それ以外は str 変数
+            string value = "";
+            if (vars.TryGetValue(InpVarNames[i], out var inp))
+            {
+                value = inp.Type == HspVarType.Int
+                    ? (inp.IntValues is [var iv, ..] ? iv.ToString() : "")
+                    : DecodeCell(inp.StrElements![0]);
+            }
             doc.Metadata.Add(new MetadataTag(KnownTagNames[i], value));
         }
         if (vars.TryGetValue("at_sonota_inp2", out var sonota))
@@ -287,11 +296,22 @@ public static class RlfFormat
         }
         for (int i = 0; i < InpVarNames.Length; i++)
         {
-            vars.Add(NewStrScalar(InpVarNames[i], inpValues[i]));
+            // at_ss_inp2（@SilencemSec）は RhythmicaLyrics 内部で int 変数。
+            // str で書くと vload が型不一致で読み込みに失敗する（歌詞が空になる）。
+            if (InpVarNames[i] == "at_ss_inp2")
+            {
+                int.TryParse(inpValues[i], out int ssMs);
+                vars.Add(NewIntScalar(InpVarNames[i], ssMs));
+            }
+            else
+            {
+                vars.Add(NewStrScalar(InpVarNames[i], inpValues[i]));
+            }
         }
         vars.Add(NewStrScalar("at_sonota_inp2", string.Join('\n', sonotaLines)));
-        vars.Add(NewIntScalar("SaveMojiCode", extras.SaveMojiCode));
-        vars.Add(NewIntScalar("YomiMojiCode", extras.YomiMojiCode));
+        // HSP の vsave は変数名を小文字で保存する（大文字だと vload が名前照合に失敗する）
+        vars.Add(NewIntScalar("savemojicode", extras.SaveMojiCode));
+        vars.Add(NewIntScalar("yomimojicode", extras.YomiMojiCode));
 
         return HspVsaveFile.Write(vars);
     }

@@ -191,7 +191,8 @@ public static class HspVsaveFile
             w.Write((short)(v.Type == HspVarType.Str ? 0x0A : 0x09)); // +0x34 support
             w.Write((short)0);                               // +0x36 arraycnt
             w.Write(0);                                      // +0x38 offset
-            w.Write(dims.Length >= 2 ? dims[0] : 1);         // +0x3C arraymul
+            // +0x3C arraymul（実ファイル準拠: 2次元以上=第1次元 / 1次元配列=1 / スカラー=0）
+            w.Write(dims.Length >= 2 ? dims[0] : (dims[0] > 1 ? 1 : 0));
         }
 
         // データ部

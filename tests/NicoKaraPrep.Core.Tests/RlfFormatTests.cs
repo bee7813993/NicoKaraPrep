@@ -82,6 +82,26 @@ public class RlfFormatTests
     }
 
     [Fact]
+    public void SilencemSecはint変数として書き出される()
+    {
+        // RhythmicaLyrics 内部で at_ss_inp2 は int 変数。
+        // str で書くと vload が型不一致で失敗し、歌詞が表示されなくなる。
+        var doc = new LyricsDocument();
+        doc.Metadata.Add(new MetadataTag("SilencemSec", "1234"));
+        doc.Lines.Add(LrcFormat.ParseLyricLine("[00:01:00]あ[00:02:00]"));
+
+        byte[] bytes = RlfFormat.Write(doc);
+        var vars = HspVsaveFile.Read(bytes).ToDictionary(v => v.Name);
+
+        Assert.Equal(HspVarType.Int, vars["at_ss_inp2"].Type);
+        Assert.Equal(1234, vars["at_ss_inp2"].IntValues![0]);
+        Assert.Equal(HspVarType.Str, vars["at_ti_inp2"].Type);
+
+        var doc2 = RlfFormat.Read(bytes);
+        Assert.Equal("1234", doc2.GetTag("SilencemSec"));
+    }
+
+    [Fact]
     public void セル変換_SJISと非SJISとスペーサー()
     {
         Assert.Equal("あ", RlfFormat.DecodeCell(RlfFormat.EncodeCell("あ")));
