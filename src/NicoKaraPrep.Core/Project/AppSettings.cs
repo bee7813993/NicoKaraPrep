@@ -34,6 +34,13 @@ public sealed class AppSettings
     public bool FontItalic { get; set; }
     public double SideMarginPercent { get; set; } = 5.0;
 
+    /// <summary>
+    /// 縁取りサイズ px（片側）。@Emoji の Zoom はニコカラメーカーの仕様で
+    /// 「字幕サイズ（縁取り込み）」が基準になるため、アイコンサイズ計算に使用する。
+    /// n3proj 読み込みで自動設定される。
+    /// </summary>
+    public double EdgeSizePx { get; set; }
+
     // ---- @Emoji ----
     /// <summary>絵文字挿入時の先行タグ秒数（開始時刻 = 直後の実文字の時刻 − この秒数）。</summary>
     public double EmojiLeadSeconds { get; set; } = 2.0;
@@ -114,7 +121,9 @@ public sealed class AppSettings
             s.EmojiZoomPercent[e.ReplaceChar] = opts.ZoomPercent;
 
             // アイコン表示幅を画像実寸から計算:
-            //   通常: 高さ = フォントサイズ × Zoom%、幅 = 高さ × 画像の縦横比
+            //   通常: Zoom の基準は「字幕サイズ（縁取り込み）」＝ フォントサイズ + 縁取り×2。
+            //         その正方形枠 × Zoom% にアスペクト比を保って収まるようフィット
+            //         （横長画像は幅=枠、高さ=枠×h/w になる）
             //   Fix : 画像のピクセルサイズをそのまま使用
             //   左右 Margin を加算
             string imagePath = e.ImageBefore;
@@ -122,16 +131,17 @@ public sealed class AppSettings
             {
                 imagePath = Path.Combine(baseDir, imagePath);
             }
+            double box = (FontSizePx + EdgeSizePx * 2) * opts.ZoomPercent / 100.0;
             double width;
-            if (Formats.ImageSizeReader.TryGetSize(imagePath, out int imgW, out int imgH) && imgH > 0)
+            if (Formats.ImageSizeReader.TryGetSize(imagePath, out int imgW, out int imgH) && imgH > 0 && imgW > 0)
             {
                 width = opts.Fix
                     ? imgW
-                    : FontSizePx * opts.ZoomPercent / 100.0 * imgW / imgH;
+                    : box * Math.Min(1.0, (double)imgW / imgH);
             }
             else
             {
-                width = FontSizePx * opts.ZoomPercent / 100.0; // 画像が読めない場合は正方形近似
+                width = box; // 画像が読めない場合は正方形近似
             }
             s.EmojiWidthPx[e.ReplaceChar] = width + Math.Max(0, opts.MarginLeft) + Math.Max(0, opts.MarginRight);
         }
@@ -185,6 +195,7 @@ public sealed class AppSettings
         FontBold = other.FontBold;
         FontItalic = other.FontItalic;
         SideMarginPercent = other.SideMarginPercent;
+        EdgeSizePx = other.EdgeSizePx;
         EmojiLeadSeconds = other.EmojiLeadSeconds;
         EmojiTagPerEmoji = other.EmojiTagPerEmoji;
         PlaceholderChar = other.PlaceholderChar;

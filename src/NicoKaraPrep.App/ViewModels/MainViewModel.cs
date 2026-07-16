@@ -1305,6 +1305,7 @@ public partial class MainViewModel : ObservableObject
             Settings.FontFamily = font.FontName;
             Settings.FontSizePx = Math.Round(font.SizePx, 1);
             Settings.FontBold = font.IsBoldLike;
+            Settings.EdgeSizePx = Math.Round(font.EdgeSizePx, 1);
         }
         Settings.Save();
         _n3projLineTimes = s.LineTimes.Count > 0 ? s.LineTimes : null;

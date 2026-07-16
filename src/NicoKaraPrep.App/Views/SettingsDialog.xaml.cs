@@ -28,6 +28,7 @@ public sealed partial class SettingsDialog : ContentDialog
         ScreenWidthBox.Value = settings.ScreenWidthPx;
         FontFamilyBox.Text = settings.FontFamily;
         FontSizeBox.Value = settings.FontSizePx;
+        EdgeSizeBox.Value = settings.EdgeSizePx;
         BoldBox.IsChecked = settings.FontBold;
         MarginBox.Value = settings.SideMarginPercent;
         EmojiLeadBox.Value = settings.EmojiLeadSeconds;
@@ -49,6 +50,7 @@ public sealed partial class SettingsDialog : ContentDialog
         _settings.ScreenWidthPx = ToInt(ScreenWidthBox.Value, 1920);
         if (!string.IsNullOrWhiteSpace(FontFamilyBox.Text)) _settings.FontFamily = FontFamilyBox.Text;
         _settings.FontSizePx = ToDouble(FontSizeBox.Value, 80);
+        _settings.EdgeSizePx = ToDouble(EdgeSizeBox.Value, 0);
         _settings.FontBold = BoldBox.IsChecked == true;
         _settings.SideMarginPercent = ToDouble(MarginBox.Value, 5.0);
         _settings.EmojiLeadSeconds = ToDouble(EmojiLeadBox.Value, 2.0);

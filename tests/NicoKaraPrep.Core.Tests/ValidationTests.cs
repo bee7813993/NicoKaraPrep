@@ -354,7 +354,7 @@ public class EmojiOptionsTests
             Assert.Equal(200, w);
             Assert.Equal(100, h);
 
-            var settings = new NicoKaraPrep.Core.Project.AppSettings { FontSizePx = 80 };
+            var settings = new NicoKaraPrep.Core.Project.AppSettings { FontSizePx = 80, EdgeSizePx = 10 };
             var emoji = new[]
             {
                 new NicoKaraPrep.Core.Model.EmojiEntry
@@ -365,8 +365,9 @@ public class EmojiOptionsTests
                 },
             };
             var s = settings.ToLineWidthSettings(emoji);
-            // 高さ = 80 × 150% = 120px、幅 = 120 × (200/100) = 240px、+MarginRight 20 → 260px
-            Assert.Equal(260, s.EmojiWidthPx["（幅広）"], 3);
+            // Zoom 基準 = 字幕サイズ縁取り込み (80 + 10×2) = 100px。枠 = 100 × 150% = 150px。
+            // 横長画像（200×100）は枠に contain フィットするため幅 = 枠 150px、+MarginRight 20 → 170px
+            Assert.Equal(170, s.EmojiWidthPx["（幅広）"], 3);
         }
         finally
         {

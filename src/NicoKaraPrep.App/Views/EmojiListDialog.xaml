@@ -32,7 +32,7 @@
                 </Grid.ColumnDefinitions>
 
                 <StackPanel Spacing="4" VerticalAlignment="Center">
-                    <StackPanel x:Name="PreviewHost" Orientation="Horizontal" VerticalAlignment="Bottom" MinHeight="56" />
+                    <StackPanel x:Name="PreviewHost" Orientation="Horizontal" VerticalAlignment="Bottom" MinHeight="56" Margin="0,0,0,12" />
                     <TextBlock x:Name="PreviewCaption" FontSize="11" Foreground="{ThemeResource TextFillColorSecondaryBrush}" Text="行を選択するとプレビューを見ながら調整できます" />
                 </StackPanel>
 

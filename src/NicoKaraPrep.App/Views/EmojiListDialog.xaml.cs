@@ -313,9 +313,13 @@ public sealed partial class EmojiListDialog : ContentDialog
 
         var opts = row.ToEntry(null).ParseOptions();
         double baseFontPx = Math.Max(8, _settings.FontSizePx);
+        double edgePx = Math.Max(0, _settings.EdgeSizePx);
         double scale = Math.Min(1.0, 48.0 / baseFontPx);
         double fontPx = baseFontPx * scale;
-        double iconHeight = fontPx * opts.ZoomPercent / 100.0;
+
+        // ニコカラメーカーの Zoom 基準は「字幕サイズ（縁取り込み）」。
+        // その正方形枠にアスペクト比を保って収まるようにフィットする（横長画像は幅=枠になる）。
+        double iconBox = (baseFontPx + edgePx * 2) * scale * opts.ZoomPercent / 100.0;
 
         var font = new Microsoft.UI.Xaml.Media.FontFamily(_settings.FontFamily);
         var weight = _settings.FontBold ? Microsoft.UI.Text.FontWeights.Bold : Microsoft.UI.Text.FontWeights.Normal;
@@ -353,16 +357,39 @@ public sealed partial class EmojiListDialog : ContentDialog
         {
             if (File.Exists(path))
             {
+                // 画像実寸から表示サイズを決定（正方形枠への contain フィット / Fix は実寸）
+                double iconW, iconH;
+                if (Core.Formats.ImageSizeReader.TryGetSize(path, out int imgW, out int imgH) && imgW > 0 && imgH > 0)
+                {
+                    if (opts.Fix)
+                    {
+                        iconW = imgW * scale;
+                        iconH = imgH * scale;
+                    }
+                    else
+                    {
+                        double fit = Math.Min(iconBox / imgW, iconBox / imgH);
+                        iconW = imgW * fit;
+                        iconH = imgH * fit;
+                    }
+                }
+                else
+                {
+                    iconW = iconH = iconBox; // サイズ不明時は正方形近似
+                }
+
+                // 縁取り込みの枠は文字の下端より縁取り分だけ下まで伸びるため、その分下げる
                 PreviewHost.Children.Add(new Image
                 {
                     Source = new Microsoft.UI.Xaml.Media.Imaging.BitmapImage(new Uri(path)),
-                    Height = iconHeight,
+                    Width = iconW,
+                    Height = iconH,
                     Stretch = Microsoft.UI.Xaml.Media.Stretch.Uniform,
                     VerticalAlignment = VerticalAlignment.Bottom,
                     Margin = new Thickness(
                         Math.Max(0, opts.MarginLeft) * scale, 0,
                         Math.Max(0, opts.MarginRight) * scale,
-                        opts.MarginBottom * scale),
+                        (opts.MarginBottom - edgePx) * scale),
                 });
             }
             else
@@ -384,9 +411,10 @@ public sealed partial class EmojiListDialog : ContentDialog
         }
 
         PreviewCaption.Text =
-            $"プレビュー: {_settings.FontFamily} {baseFontPx:F0}px を {scale * 100:F0}% に縮小表示　" +
-            $"Zoom={opts.ZoomPercent:F0}%　MarginL/R/B={opts.MarginLeft:F0}/{opts.MarginRight:F0}/{opts.MarginBottom:F0}" +
-            (opts.Fix ? "　Fix(元サイズ・実寸は反映されません)" : "") +
+            $"プレビュー: {_settings.FontFamily} {baseFontPx:F0}px＋縁取り{edgePx:F0}px を {scale * 100:F0}% に縮小表示　" +
+            $"Zoom={opts.ZoomPercent:F0}%（基準=字幕サイズ縁取り込み {baseFontPx + edgePx * 2:F0}px）　" +
+            $"MarginL/R/B={opts.MarginLeft:F0}/{opts.MarginRight:F0}/{opts.MarginBottom:F0}" +
+            (opts.Fix ? "　Fix(画像の実寸で表示)" : "") +
             (opts.NoDecor ? "　NoDecor" : "");
     }
 

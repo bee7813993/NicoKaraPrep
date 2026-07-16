@@ -11,7 +11,8 @@ namespace NicoKaraPrep.Core.Formats;
 /// <param name="SizePx">画面高さ換算のフォントサイズ px。</param>
 /// <param name="Index">FontInfos 内のインデックス（歌詞文字の FontIndex が参照）。</param>
 /// <param name="SettingsName">ニコカラメーカー上の設定名（例: 歌詞／漢字）。</param>
-public sealed record N3ProjFontInfo(string FontName, string? FaceName, double SizePx, int Index, string? SettingsName)
+/// <param name="EdgeSizePx">縁取りサイズ px（@Emoji の Zoom 基準「字幕サイズ縁取り込み」の計算に使用）。</param>
+public sealed record N3ProjFontInfo(string FontName, string? FaceName, double SizePx, int Index, string? SettingsName, double EdgeSizePx = 0)
 {
     /// <summary>フェイス名から太字相当かどうかを推定する。</summary>
     public bool IsBoldLike =>
@@ -81,7 +82,16 @@ public static class N3ProjFormat
                     sizePx = ratio > 0 ? ratio * height : (reference > 0 ? size * height / reference : size);
                 }
 
-                fonts.Add(new N3ProjFontInfo(name, face, sizePx, index, settingsName));
+                double edgePx = 0;
+                if (fi.TryGetProperty("EdgeSize", out var es))
+                {
+                    double ratio = es.TryGetProperty("Ratio", out var r2) ? r2.GetDouble() : 0;
+                    double size = es.TryGetProperty("Size", out var sz2) ? sz2.GetDouble() : 0;
+                    double reference = es.TryGetProperty("Reference", out var rf2) ? rf2.GetDouble() : height;
+                    edgePx = ratio > 0 ? ratio * height : (reference > 0 ? size * height / reference : size);
+                }
+
+                fonts.Add(new N3ProjFontInfo(name, face, sizePx, index, settingsName, edgePx));
             }
         }
 
