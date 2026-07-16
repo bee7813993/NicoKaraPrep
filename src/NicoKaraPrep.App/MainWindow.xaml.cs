@@ -1304,21 +1304,56 @@ public sealed partial class MainWindow : Window
             InsertGutterScroll.ChangeView(null, _insertEditorScroll.VerticalOffset, null, disableAnimation: true);
     }
 
+    /// <summary>チェック結果の重要度 → 行情報欄の文字色（null は既定色のまま）。</summary>
+    private static Microsoft.UI.Xaml.Media.Brush? GutterBrushFor(Core.Validation.IssueSeverity? severity) => severity switch
+    {
+        Core.Validation.IssueSeverity.Error => ViewModels.LineViewModel.ErrorTimeBrush,
+        Core.Validation.IssueSeverity.Warning => ViewModels.LineViewModel.WarningTimeBrush,
+        _ => null,
+    };
+
     /// <summary>行情報欄（開始→終了時刻・横幅）をドキュメントの現在内容から作り直す。</summary>
     private void RefreshInsertGutter()
     {
         if (!InsertViewActive) return;
 
-        var parts = ViewModel.Lines.Select(l =>
+        var inlines = InsertGutter.Inlines;
+        inlines.Clear();
+
+        void AddRun(string text, Microsoft.UI.Xaml.Media.Brush? brush)
         {
-            if (l.Model.IsEmpty) return "";
-            string time = l.TimeText.Length > 0 || l.EndTimeText.Length > 0
-                ? $"{l.TimeText}→{l.EndTimeText}"
-                : "";
-            return (time + " " + l.WidthText).Trim();
-        });
+            if (text.Length == 0) return;
+            var run = new Microsoft.UI.Xaml.Documents.Run { Text = text };
+            if (brush is not null) run.Foreground = brush;
+            inlines.Add(run);
+        }
+
+        bool first = true;
+        foreach (var l in ViewModel.Lines)
+        {
+            if (!first) inlines.Add(new Microsoft.UI.Xaml.Documents.LineBreak());
+            first = false;
+            if (l.Model.IsEmpty) continue;
+
+            // 時間はページ衝突チェック、横幅は横幅チェックの重要度で色分け（通常ビューの列と同じ規則）
+            if (l.TimeText.Length > 0 || l.EndTimeText.Length > 0)
+            {
+                AddRun(l.TimeText, GutterBrushFor(l.StartTimeSeverity));
+                AddRun("→", null);
+                AddRun(l.EndTimeText, GutterBrushFor(l.EndTimeSeverity));
+            }
+            if (l.WidthText.Length > 0)
+            {
+                // マージン不足・はみ出しは重要度の色、それ以外でも使用率 90% 超なら警告色で予告
+                var widthBrush = GutterBrushFor(l.WidthSeverity)
+                    ?? (l.WidthUsagePercent > 90 ? ViewModels.LineViewModel.WarningTimeBrush : null);
+                AddRun(" ", null);
+                AddRun(l.WidthText, widthBrush);
+            }
+        }
         // 末尾の空行はエディタ下端（横スクロールバー分）とのずれ吸収用
-        InsertGutter.Text = string.Join("\r", parts) + "\r\r";
+        inlines.Add(new Microsoft.UI.Xaml.Documents.LineBreak());
+        inlines.Add(new Microsoft.UI.Xaml.Documents.LineBreak());
 
         _gutterMetricsRetries = 0;
         ScheduleInsertGutterMetrics();
@@ -1342,23 +1377,45 @@ public sealed partial class MainWindow : Window
         InsertEditor.LayoutUpdated += Handler;
     }
 
-    /// <summary>行情報欄の行送りをエディタの実際の行高さ（Extent から算出）に合わせる。</summary>
+    private double _measuredEditorLinePitch;
+
+    /// <summary>
+    /// エディタと同じフォントの TextBlock を測定して 1 行分の高さ（行送り）を求める。
+    /// エディタの Extent ÷ 行数は、内容がビューポートより短いとき Extent が
+    /// ビューポート高さに広がって過大になるため使わない。
+    /// </summary>
+    private double MeasureEditorLinePitch()
+    {
+        var tb = new TextBlock
+        {
+            FontSize = InsertEditor.FontSize,
+            FontFamily = InsertEditor.FontFamily,
+            TextWrapping = Microsoft.UI.Xaml.TextWrapping.NoWrap,
+            Text = "あ",
+        };
+        tb.Measure(new Windows.Foundation.Size(double.PositiveInfinity, double.PositiveInfinity));
+        double one = tb.DesiredSize.Height;
+        tb.Text = "あ\nあ";
+        tb.Measure(new Windows.Foundation.Size(double.PositiveInfinity, double.PositiveInfinity));
+        return tb.DesiredSize.Height - one;
+    }
+
+    /// <summary>行情報欄の行送りをエディタの行高さ（フォント実測）に合わせ、スクロール位置を同期する。</summary>
     private void UpdateInsertGutterMetrics()
     {
         HookInsertEditorScroll();
         var sv = _insertEditorScroll;
         if (sv is null || _insertViewText.Length == 0) return;
 
-        int totalLines = 1;
-        foreach (char c in _insertViewText)
+        if (_measuredEditorLinePitch <= 0)
         {
-            if (c == '\r') totalLines++;
+            _measuredEditorLinePitch = MeasureEditorLinePitch();
         }
-
-        double lineHeight = (sv.ExtentHeight - InsertEditor.Padding.Top - InsertEditor.Padding.Bottom) / totalLines;
+        double lineHeight = _measuredEditorLinePitch;
         if (lineHeight < 8)
         {
-            // レイアウトがまだ確定していない → 次のレイアウトパスで再試行
+            // 測定に失敗 → 次のレイアウトパスで再試行
+            _measuredEditorLinePitch = 0;
             if (++_gutterMetricsRetries < 20) ScheduleInsertGutterMetrics();
             return;
         }

@@ -100,15 +100,25 @@ public partial class LineViewModel : ObservableObject
     [ObservableProperty]
     private string overlapGlyph = "";
 
+    /// <summary>横幅チェックの重要度（挿入ビューの行情報欄の色分け用）。</summary>
+    public IssueSeverity? WidthSeverity { get; private set; }
+
+    /// <summary>有効幅（マージン除き）に対する使用率 %（挿入ビューの行情報欄の色分け用）。</summary>
+    public double WidthUsagePercent { get; private set; }
+
     public void SetWidthResult(LineWidthResult? result)
     {
         if (result is null || Model.IsEmpty)
         {
             WidthText = "";
             WidthGlyph = "";
+            WidthSeverity = null;
+            WidthUsagePercent = 0;
             return;
         }
         WidthText = $"{result.WidthPx:F0}px {result.UsagePercent:F0}%";
+        WidthSeverity = result.Severity;
+        WidthUsagePercent = result.UsagePercent;
         WidthGlyph = result.Severity switch
         {
             IssueSeverity.Error => "⛔",
@@ -133,16 +143,22 @@ public partial class LineViewModel : ObservableObject
     private static readonly Microsoft.UI.Xaml.Media.Brush WarningRowBrush =
         new Microsoft.UI.Xaml.Media.SolidColorBrush(Windows.UI.Color.FromArgb(0x26, 0xFF, 0xB9, 0x00));
 
-    private static readonly Microsoft.UI.Xaml.Media.Brush ErrorTimeBrush =
+    internal static readonly Microsoft.UI.Xaml.Media.Brush ErrorTimeBrush =
         new Microsoft.UI.Xaml.Media.SolidColorBrush(Windows.UI.Color.FromArgb(0xFF, 0xE8, 0x11, 0x23));
 
-    private static readonly Microsoft.UI.Xaml.Media.Brush WarningTimeBrush =
+    internal static readonly Microsoft.UI.Xaml.Media.Brush WarningTimeBrush =
         new Microsoft.UI.Xaml.Media.SolidColorBrush(Windows.UI.Color.FromArgb(0xFF, 0xC8, 0x7A, 0x00));
 
     private bool _isCurrent;
     private IssueSeverity? _rowSeverity;
     private IssueSeverity? _startTimeSeverity;
     private IssueSeverity? _endTimeSeverity;
+
+    /// <summary>ページ衝突チェックの重要度（開始時間側。挿入ビューの行情報欄の色分け用）。</summary>
+    public IssueSeverity? StartTimeSeverity => _startTimeSeverity;
+
+    /// <summary>ページ衝突チェックの重要度（終了時間側。挿入ビューの行情報欄の色分け用）。</summary>
+    public IssueSeverity? EndTimeSeverity => _endTimeSeverity;
 
     /// <summary>再生位置がこの行にあるとき true。</summary>
     public bool IsCurrent
