@@ -50,6 +50,8 @@
                         <KeyboardAccelerator Modifiers="Control,Shift" Key="C" />
                     </MenuFlyoutItem.KeyboardAccelerators>
                 </MenuFlyoutItem>
+                <MenuFlyoutSeparator />
+                <MenuFlyoutItem Text="設定..." Click="OnSettingsClick" />
             </MenuBarItem>
             <MenuBarItem Title="編集(E)" AccessKey="E">
                 <MenuFlyoutItem Text="元に戻す" Click="OnUndoClick">
@@ -139,7 +141,6 @@
                 </MenuFlyoutItem>
                 <MenuFlyoutSeparator />
                 <MenuFlyoutItem Text="ニコカラメーカーのプロジェクト(n3proj)から設定を読み込み..." Click="OnImportN3ProjClick" />
-                <MenuFlyoutItem Text="設定..." Click="OnSettingsClick" />
             </MenuBarItem>
             <MenuBarItem Title="テンプレート(T)" AccessKey="T">
                 <MenuFlyoutItem Text="テンプレートとして保存...（絵文字一式＋フォント設定）" Click="OnSaveTemplateClick" />
