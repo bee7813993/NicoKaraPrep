@@ -72,6 +72,10 @@ public sealed partial class EmojiListDialog : ContentDialog
         _settings = settings;
         _document = document;
 
+        // ContentDialog の既定最大幅(約548px)ではリストが右側で見切れるため広げる
+        Resources["ContentDialogMaxWidth"] = 1100d;
+        Resources["ContentDialogMaxHeight"] = 900d;
+
         for (int i = 1; i <= 20; i++)
         {
             var row = new EmojiSlotRow(i);
