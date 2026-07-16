@@ -75,6 +75,36 @@ public sealed partial class MainWindow : Window
             TryRun(() => ViewModel.OpenFile(args[1]));
             AfterDocumentLoaded();
         }
+
+        // デバッグ用: 起動直後に絵文字リスト編集を自動で開く
+        if (args.Contains("--debug-emoji-dialog"))
+        {
+            var timer = DispatcherQueue.GetForCurrentThread().CreateTimer();
+            timer.Interval = TimeSpan.FromMilliseconds(1500);
+            timer.IsRepeating = false;
+            timer.Tick += (_, _) =>
+            {
+                DebugLog("絵文字リスト編集を自動オープンします");
+                OnEmojiListClick(this, new RoutedEventArgs());
+                DebugLog("OnEmojiListClick 呼び出し直後（ShowAsync 待機中）");
+            };
+            timer.Start();
+        }
+    }
+
+    private static void DebugLog(string message)
+    {
+        try
+        {
+            string dir = Path.Combine(
+                Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "NicoKaraPrep");
+            Directory.CreateDirectory(dir);
+            File.AppendAllText(Path.Combine(dir, "crash.log"),
+                $"[{DateTime.Now:HH:mm:ss.fff}] {message}\n");
+        }
+        catch
+        {
+        }
     }
 
     // ------------------------------------------------ ウィンドウ位置・サイズの復元

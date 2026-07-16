@@ -103,9 +103,18 @@ public sealed partial class EmojiListDialog : ContentDialog
         if (Rows.Count == 0) Rows.Add(new EmojiSlotRow());
 
         InitializeComponent();
+        _controlsReady = true; // XAML 解析中の ValueChanged 発火（Minimum 設定時など）をガード
         UpdateKeyLabels();
         PrimaryButtonClick += (_, _) => Apply();
     }
+
+    /// <summary>
+    /// InitializeComponent 完了フラグ。
+    /// コンパイル済み XAML ではイベント接続がプロパティ設定より先に行われるため、
+    /// Slider.Minimum 設定による Value 強制変更で ValueChanged が解析中に発火する。
+    /// そのとき他のコントロール（ZoomBox など）はまだ null なのでガードが必要。
+    /// </summary>
+    private readonly bool _controlsReady;
 
     /// <summary>行の並び順に応じてキー表示を振り直す（上から 20 行にキー）。</summary>
     private void UpdateKeyLabels()
@@ -267,7 +276,7 @@ public sealed partial class EmojiListDialog : ContentDialog
 
     private void OnZoomSliderChanged(object sender, Microsoft.UI.Xaml.Controls.Primitives.RangeBaseValueChangedEventArgs e)
     {
-        if (_syncingParams) return;
+        if (!_controlsReady || _syncingParams) return;
         _syncingParams = true;
         ZoomBox.Value = e.NewValue;
         _syncingParams = false;
@@ -276,7 +285,7 @@ public sealed partial class EmojiListDialog : ContentDialog
 
     private void OnParamChanged(NumberBox sender, NumberBoxValueChangedEventArgs args)
     {
-        if (_syncingParams) return;
+        if (!_controlsReady || _syncingParams) return;
         if (sender == ZoomBox && !double.IsNaN(args.NewValue))
         {
             _syncingParams = true;
@@ -286,7 +295,11 @@ public sealed partial class EmojiListDialog : ContentDialog
         ApplyParamsToRow();
     }
 
-    private void OnParamCheckChanged(object sender, RoutedEventArgs e) => ApplyParamsToRow();
+    private void OnParamCheckChanged(object sender, RoutedEventArgs e)
+    {
+        if (!_controlsReady) return;
+        ApplyParamsToRow();
+    }
 
     /// <summary>選択行を、現在のフォント設定・Zoom・Margin を反映した縮小スケールで描画する。</summary>
     private void RenderPreview()
