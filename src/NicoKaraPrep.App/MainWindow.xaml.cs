@@ -135,9 +135,10 @@ public sealed partial class MainWindow : Window
         _validateTimer.Start();
     }
 
-    /// <summary>ドキュメント読込直後の共通処理（チェック実行・関連メディアのロード）。</summary>
+    /// <summary>ドキュメント読込直後の共通処理（タブ同期・チェック実行・関連メディアのロード）。</summary>
     private void AfterDocumentLoaded()
     {
+        SyncTabSelection();
         ScheduleValidation();
         if (ViewModel.MediaPath is string mp && File.Exists(mp))
         {
@@ -178,9 +179,7 @@ public sealed partial class MainWindow : Window
 
     private void OnSaveAsClick(object sender, RoutedEventArgs e)
     {
-        string suggested = ViewModel.CurrentFilePath is string p
-            ? Path.GetFileNameWithoutExtension(p)
-            : "lyrics";
+        string suggested = ViewModel.GetSuggestedFileBaseName();
 
         // 現在 rlf を編集中なら rlf を先頭（既定）にする
         var types = ViewModel.CurrentFormat == ViewModels.DocumentFormat.Rlf
@@ -441,6 +440,89 @@ public sealed partial class MainWindow : Window
 
     private void OnRedoClick(object sender, RoutedEventArgs e) => PerformRedo();
 
+    // ------------------------------------------------------------ タブ
+
+    private bool _suppressTabSelection;
+
+    /// <summary>TabView の選択を ViewModel のアクティブタブに合わせる。</summary>
+    private void SyncTabSelection()
+    {
+        _suppressTabSelection = true;
+        try
+        {
+            DocTabs.SelectedIndex = ViewModel.ActiveTabIndex;
+        }
+        finally
+        {
+            _suppressTabSelection = false;
+        }
+    }
+
+    /// <summary>タブ切替後の画面更新。</summary>
+    private void RefreshAfterTabChange()
+    {
+        LineEditor.Text = ViewModel.SelectedLine?.RawText ?? "";
+        RenderPreview();
+        ScheduleValidation();
+    }
+
+    private void OnTabSelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (_suppressTabSelection) return;
+        int index = DocTabs.SelectedIndex;
+        if (index < 0) return;
+        TryRun(() => ViewModel.SwitchTab(index));
+        RefreshAfterTabChange();
+    }
+
+    private void OnTabCloseRequested(TabView sender, TabViewTabCloseRequestedEventArgs args)
+    {
+        if (args.Item is not ViewModels.TabState tab || tab.IsMain) return;
+        TryRun(() => ViewModel.CloseTab(tab));
+        SyncTabSelection();
+        RefreshAfterTabChange();
+    }
+
+    private void OnSplitToTabClick(object sender, RoutedEventArgs e)
+    {
+        if (InsertViewActive) return;
+        var indexes = SelectedIndexes;
+        if (indexes.Count == 0)
+        {
+            ViewModel.StatusText = "分離する行を選択してください";
+            return;
+        }
+        TryRun(() =>
+        {
+            var tab = ViewModel.SplitSelectedToNewTab(indexes);
+            if (tab is null) return;
+            ViewModel.SwitchTab(ViewModel.Tabs.IndexOf(tab));
+            SyncTabSelection();
+            RefreshAfterTabChange();
+        });
+    }
+
+    private async void OnTabDoubleTapped(object sender, Microsoft.UI.Xaml.Input.DoubleTappedRoutedEventArgs e)
+    {
+        var tab = ViewModel.ActiveTab;
+        if (tab.IsMain) return;
+
+        var box = new TextBox { Text = tab.Name, SelectionStart = tab.Name.Length };
+        var dialog = new ContentDialog
+        {
+            Title = "タブ名の変更",
+            Content = box,
+            PrimaryButtonText = "OK",
+            CloseButtonText = "キャンセル",
+            DefaultButton = ContentDialogButton.Primary,
+            XamlRoot = Content.XamlRoot,
+        };
+        if (await dialog.ShowAsync() == ContentDialogResult.Primary && !string.IsNullOrWhiteSpace(box.Text))
+        {
+            TryRun(() => ViewModel.RenameTab(tab, box.Text));
+        }
+    }
+
     // ------------------------------------------------------------ 行操作
 
     private List<int> SelectedIndexes =>
@@ -511,9 +593,7 @@ public sealed partial class MainWindow : Window
             return;
         }
 
-        string suggested = ViewModel.CurrentFilePath is string p
-            ? Path.GetFileNameWithoutExtension(p) + "_part"
-            : "lyrics_part";
+        string suggested = ViewModel.GetSuggestedFileBaseName() + (ViewModel.ActiveTabIsMain ? "_part" : "");
 
         string? path = SaveFileDialog.Show(Hwnd, ViewModel.GetDefaultSaveFolder(), suggested, LyricsFileTypes, "lrc");
         if (path is null) return;

@@ -37,6 +37,162 @@ public partial class MainViewModel : ObservableObject
 
     public LyricsDocument Document { get; private set; } = new();
 
+    // ------------------------------------------------------------ タブ
+
+    /// <summary>ドキュメントタブ（先頭は常にメイン）。</summary>
+    public ObservableCollection<TabState> Tabs { get; } = new();
+
+    private TabState _activeTab;
+
+    public MainViewModel()
+    {
+        _activeTab = new TabState { IsMain = true };
+        Tabs.Add(_activeTab);
+    }
+
+    public TabState ActiveTab => _activeTab;
+
+    public int ActiveTabIndex => Tabs.IndexOf(_activeTab);
+
+    public bool ActiveTabIsMain => _activeTab.IsMain;
+
+    /// <summary>アクティブタブの内容をタブ状態へ書き戻す（切替・保存の前に呼ぶ）。</summary>
+    private void StoreActiveTab()
+    {
+        _activeTab.Document = Document;
+        _activeTab.FilePath = CurrentFilePath;
+        _activeTab.Format = CurrentFormat;
+        _activeTab.IsModified = IsModified;
+    }
+
+    private void ActivateTab(TabState tab)
+    {
+        _activeTab = tab;
+        Document = tab.Document;
+        CurrentFilePath = tab.FilePath;
+        CurrentFormat = tab.Format;
+        IsModified = tab.IsModified;
+        RebuildLines();
+        RefreshEmojiSlots();
+        UpdateTitle();
+    }
+
+    public void SwitchTab(int index)
+    {
+        if (index < 0 || index >= Tabs.Count || Tabs[index] == _activeTab) return;
+        StoreActiveTab();
+        ActivateTab(Tabs[index]);
+        StatusText = $"タブ「{_activeTab.Name}」に切り替えました";
+    }
+
+    /// <summary>
+    /// 選択行を新しいタブへ移動して分離する。タブを閉じるとメインへ戻る。
+    /// </summary>
+    public TabState? SplitSelectedToNewTab(IReadOnlyList<int> indexes)
+    {
+        if (indexes.Count == 0) return null;
+        if (indexes.Count >= Document.Lines.Count(l => !l.IsEmpty))
+        {
+            StatusText = "すべての行を分離することはできません";
+            return null;
+        }
+
+        var newDoc = LineOperations.ExtractLines(Document, indexes, GetEffectiveEmojiList());
+        foreach (int i in indexes.OrderByDescending(x => x))
+        {
+            LineOperations.DeleteLine(Document, i);
+        }
+
+        // 分離は「タブを閉じる」で戻せるため、混乱を避けて Undo 履歴はリセットする
+        _activeTab.UndoStack.Clear();
+        _activeTab.RedoStack.Clear();
+        RebuildLines();
+        MarkModified();
+        StoreActiveTab();
+
+        var tab = new TabState
+        {
+            Name = $"パート{Tabs.Count}",
+            Document = newDoc,
+            Format = CurrentFormat,
+            IsModified = true,
+        };
+        Tabs.Add(tab);
+        SaveProject();
+        StatusText = $"{indexes.Count} 行を「{tab.Name}」タブへ分離しました（タブを閉じるとメインへ戻ります）";
+        return tab;
+    }
+
+    /// <summary>タブを閉じて、行をメインへ時刻順にマージして戻す。</summary>
+    public void CloseTab(TabState tab)
+    {
+        if (tab.IsMain || !Tabs.Contains(tab)) return;
+        StoreActiveTab();
+
+        var main = Tabs.First(t => t.IsMain);
+        MergeLinesByTime(main.Document, tab.Document);
+        main.IsModified = true;
+        main.UndoStack.Clear();
+        main.RedoStack.Clear();
+        Tabs.Remove(tab);
+
+        if (_activeTab == tab)
+        {
+            ActivateTab(main);
+        }
+        else if (_activeTab == main)
+        {
+            RebuildLines();
+            MarkModified();
+        }
+        SaveProject();
+        StatusText = $"タブ「{tab.Name}」の行をメインへ時刻順に戻しました";
+    }
+
+    /// <summary>タブの行を、先頭タイムタグの時刻順になるようメインへ挿入する。</summary>
+    private static void MergeLinesByTime(LyricsDocument main, LyricsDocument part)
+    {
+        int insertAfter = -1;
+        foreach (var line in part.Lines)
+        {
+            int idx;
+            if (line.GetFirstTimeCs() is int t)
+            {
+                idx = 0;
+                while (idx < main.Lines.Count &&
+                       (main.Lines[idx].GetFirstTimeCs() is not int mt || mt <= t))
+                {
+                    idx++;
+                }
+            }
+            else
+            {
+                idx = insertAfter + 1; // タグ無し行（空行など）は直前に挿入した行の次へ
+            }
+            main.Lines.Insert(idx, line);
+            insertAfter = idx;
+        }
+    }
+
+    public void RenameTab(TabState tab, string newName)
+    {
+        newName = newName.Trim();
+        if (newName.Length == 0) return;
+        tab.Name = newName;
+        if (tab == _activeTab) UpdateTitle();
+        SaveProject();
+    }
+
+    /// <summary>保存・エクスポートの推奨ファイル名（拡張子なし）。分離タブは「メイン名_タブ名」。</summary>
+    public string GetSuggestedFileBaseName()
+    {
+        if (CurrentFilePath is string p) return Path.GetFileNameWithoutExtension(p);
+        string baseName = Tabs.FirstOrDefault(t => t.IsMain)?.FilePath is string mp
+            ? Path.GetFileNameWithoutExtension(mp)
+            : "lyrics";
+        return _activeTab.IsMain ? baseName : $"{baseName}_{_activeTab.Name}";
+    }
+
     /// <summary>アプリ設定（検証・絵文字）。</summary>
     public AppSettings Settings { get; } = AppSettings.Load();
 
@@ -66,7 +222,7 @@ public partial class MainViewModel : ObservableObject
             LoadDocument(TextEditModeFormat.Parse(text), path, DocumentFormat.Lrc);
         }
 
-        // 曲プロジェクト（.tttproj）から済マーク・メディアパス・スロット並び順を復元
+        // 曲プロジェクト（.tttproj）から済マーク・メディアパス・スロット並び順・分離タブを復元
         if (SongProject.TryLoad(path) is { } project)
         {
             MediaPath = project.MediaPath;
@@ -75,6 +231,21 @@ public partial class MainViewModel : ObservableObject
                 if (i >= 0 && i < Lines.Count) Lines[i].Exported = true;
             }
             ApplySavedSlotOrder(project.EmojiSlots);
+
+            foreach (var pt in project.Tabs)
+            {
+                var tabDoc = TextEditModeFormat.Parse(pt.Text);
+                foreach (int i in pt.ExportedLines)
+                {
+                    if (i >= 0 && i < tabDoc.Lines.Count) tabDoc.Lines[i].Exported = true;
+                }
+                Tabs.Add(new TabState
+                {
+                    Name = pt.Name,
+                    Document = tabDoc,
+                    Format = CurrentFormat,
+                });
+            }
         }
         else
         {
@@ -108,6 +279,17 @@ public partial class MainViewModel : ObservableObject
 
     public void LoadDocument(LyricsDocument doc, string? path, DocumentFormat format)
     {
+        // ファイルを開き直したらタブ構成もリセット（分離タブは .tttproj から復元される）
+        Tabs.Clear();
+        _activeTab = new TabState
+        {
+            IsMain = true,
+            Document = doc,
+            FilePath = path,
+            Format = format,
+        };
+        Tabs.Add(_activeTab);
+
         Document = doc;
         CurrentFilePath = path;
         CurrentFormat = format;
@@ -182,6 +364,11 @@ public partial class MainViewModel : ObservableObject
         {
             return lyricsDir;
         }
+        if (Tabs.FirstOrDefault(t => t.IsMain)?.FilePath is string mainPath &&
+            Path.GetDirectoryName(mainPath) is string mainDir && Directory.Exists(mainDir))
+        {
+            return mainDir; // 分離タブ（未保存）はメインのフォルダを既定にする
+        }
         if (MediaPath is string m &&
             Path.GetDirectoryName(m) is string mediaDir && Directory.Exists(mediaDir))
         {
@@ -203,21 +390,41 @@ public partial class MainViewModel : ObservableObject
         }
     }
 
-    /// <summary>曲プロジェクト（.tttproj）を保存する（済マーク・メディアパス）。</summary>
+    /// <summary>曲プロジェクト（.tttproj）を保存する（済マーク・メディアパス・分離タブ）。</summary>
     public void SaveProject()
     {
-        if (CurrentFilePath is not string path) return;
+        StoreActiveTab();
+        var main = Tabs.FirstOrDefault(t => t.IsMain);
+        if (main?.FilePath is not string path) return;
+
         var project = new SongProject
         {
             MediaPath = MediaPath,
-            ExportedLines = Lines.Where(l => l.Exported).Select(l => l.Index).ToList(),
+            ExportedLines = main.Document.Lines
+                .Select((l, i) => (Line: l, Index: i))
+                .Where(x => x.Line.Exported)
+                .Select(x => x.Index)
+                .ToList(),
         };
-        foreach (var e in Document.EmojiEntries)
+        foreach (var e in main.Document.EmojiEntries)
         {
             if (e.Slot is int slot && e.ReplaceChar.Length > 0)
             {
                 project.EmojiSlots[e.ReplaceChar] = slot;
             }
+        }
+        foreach (var tab in Tabs.Where(t => !t.IsMain))
+        {
+            project.Tabs.Add(new SongProjectTab
+            {
+                Name = tab.Name,
+                Text = TextEditModeFormat.Write(tab.Document),
+                ExportedLines = tab.Document.Lines
+                    .Select((l, i) => (Line: l, Index: i))
+                    .Where(x => x.Line.Exported)
+                    .Select(x => x.Index)
+                    .ToList(),
+            });
         }
         project.Save(path);
     }
@@ -252,42 +459,44 @@ public partial class MainViewModel : ObservableObject
 
     // ------------------------------------------------------------ Undo / Redo
 
-    private readonly List<LyricsDocument> _undoStack = new();
-    private readonly List<LyricsDocument> _redoStack = new();
     private const int MaxUndo = 100;
 
-    /// <summary>ドキュメントを変更する操作の直前に呼ぶ。</summary>
+    /// <summary>ドキュメントを変更する操作の直前に呼ぶ（アクティブタブの履歴に積む）。</summary>
     public void PushUndo()
     {
-        _undoStack.Add(Document.Clone());
-        if (_undoStack.Count > MaxUndo) _undoStack.RemoveAt(0);
-        _redoStack.Clear();
+        _activeTab.UndoStack.Add(Document.Clone());
+        if (_activeTab.UndoStack.Count > MaxUndo) _activeTab.UndoStack.RemoveAt(0);
+        _activeTab.RedoStack.Clear();
     }
 
     public bool Undo()
     {
-        if (_undoStack.Count == 0)
+        var undo = _activeTab.UndoStack;
+        if (undo.Count == 0)
         {
             StatusText = "元に戻す操作はありません";
             return false;
         }
-        _redoStack.Add(Document.Clone());
-        Document = _undoStack[^1];
-        _undoStack.RemoveAt(_undoStack.Count - 1);
+        _activeTab.RedoStack.Add(Document.Clone());
+        Document = undo[^1];
+        undo.RemoveAt(undo.Count - 1);
+        _activeTab.Document = Document;
         AfterDocumentRestored("元に戻しました");
         return true;
     }
 
     public bool Redo()
     {
-        if (_redoStack.Count == 0)
+        var redo = _activeTab.RedoStack;
+        if (redo.Count == 0)
         {
             StatusText = "やり直す操作はありません";
             return false;
         }
-        _undoStack.Add(Document.Clone());
-        Document = _redoStack[^1];
-        _redoStack.RemoveAt(_redoStack.Count - 1);
+        _activeTab.UndoStack.Add(Document.Clone());
+        Document = redo[^1];
+        redo.RemoveAt(redo.Count - 1);
+        _activeTab.Document = Document;
         AfterDocumentRestored("やり直しました");
         return true;
     }
@@ -1060,7 +1269,9 @@ public partial class MainViewModel : ObservableObject
 
     private void UpdateTitle()
     {
-        string name = CurrentFilePath is null ? "(無題)" : Path.GetFileName(CurrentFilePath);
-        WindowTitle = $"{name}{(IsModified ? " *" : "")} - {AppName}";
+        string? filePath = CurrentFilePath ?? Tabs.FirstOrDefault(t => t.IsMain)?.FilePath;
+        string name = filePath is null ? "(無題)" : Path.GetFileName(filePath);
+        string tab = _activeTab.IsMain ? "" : $" [{_activeTab.Name}]";
+        WindowTitle = $"{name}{tab}{(IsModified ? " *" : "")} - {AppName}";
     }
 }

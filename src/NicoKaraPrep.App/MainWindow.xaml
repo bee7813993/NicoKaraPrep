@@ -47,6 +47,11 @@
                     </MenuFlyoutItem.KeyboardAccelerators>
                 </MenuFlyoutItem>
                 <MenuFlyoutItem Text="選択行をクリップボードへエクスポート" Click="OnExportClipboardClick" />
+                <MenuFlyoutItem Text="選択行を新しいタブへ分離" Click="OnSplitToTabClick">
+                    <MenuFlyoutItem.KeyboardAccelerators>
+                        <KeyboardAccelerator Modifiers="Control" Key="T" />
+                    </MenuFlyoutItem.KeyboardAccelerators>
+                </MenuFlyoutItem>
                 <MenuFlyoutItem Text="未エクスポート行をすべて選択" Click="OnSelectUnexportedClick" />
                 <MenuFlyoutItem Text="選択行の済マークを解除" Click="OnClearMarksClick" />
             </MenuBarItem>
@@ -171,15 +176,35 @@
 
             <Grid Grid.Column="0" x:Name="NormalView">
                 <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto" />
                     <RowDefinition Height="*" />
                     <RowDefinition Height="Auto" />
                     <RowDefinition Height="Auto" />
                 </Grid.RowDefinitions>
 
+                <!-- ドキュメントタブ（メイン＋分離タブ。ダブルクリックで名前変更） -->
+                <TabView
+                    x:Name="DocTabs"
+                    Grid.Row="0"
+                    IsAddTabButtonVisible="False"
+                    CanReorderTabs="False"
+                    CanDragTabs="False"
+                    TabWidthMode="SizeToContent"
+                    TabItemsSource="{x:Bind ViewModel.Tabs}"
+                    SelectionChanged="OnTabSelectionChanged"
+                    TabCloseRequested="OnTabCloseRequested"
+                    DoubleTapped="OnTabDoubleTapped">
+                    <TabView.TabItemTemplate>
+                        <DataTemplate x:DataType="vm:TabState">
+                            <TabViewItem Header="{x:Bind Name, Mode=OneWay}" IsClosable="{x:Bind IsClosable}" />
+                        </DataTemplate>
+                    </TabView.TabItemTemplate>
+                </TabView>
+
                 <!-- 行リスト -->
                 <ListView
                     x:Name="LineList"
-                    Grid.Row="0"
+                    Grid.Row="1"
                     AllowDrop="True"
                     DragOver="OnDragOver"
                     Drop="OnDrop"
@@ -220,7 +245,7 @@
                 </ListView>
 
                 <!-- 行エディタ -->
-                <Grid Grid.Row="1" Padding="8" ColumnSpacing="8" BorderThickness="0,1,0,0" BorderBrush="{ThemeResource DividerStrokeColorDefaultBrush}">
+                <Grid Grid.Row="2" Padding="8" ColumnSpacing="8" BorderThickness="0,1,0,0" BorderBrush="{ThemeResource DividerStrokeColorDefaultBrush}">
                     <Grid.ColumnDefinitions>
                         <ColumnDefinition Width="*" />
                         <ColumnDefinition Width="Auto" />
@@ -238,7 +263,7 @@
 
                 <!-- 行プレビュー（ルビ・絵文字画像） -->
                 <ScrollViewer
-                    Grid.Row="2"
+                    Grid.Row="3"
                     HorizontalScrollBarVisibility="Auto"
                     VerticalScrollBarVisibility="Disabled"
                     Padding="8,0"
