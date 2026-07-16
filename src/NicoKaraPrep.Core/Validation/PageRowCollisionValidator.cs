@@ -1,4 +1,4 @@
-﻿using NicoKaraPrep.Core.Model;
+using NicoKaraPrep.Core.Model;
 
 namespace NicoKaraPrep.Core.Validation;
 
@@ -26,6 +26,12 @@ public sealed class PageCollisionSettings
     /// <summary>この重なり量（10ms 単位）を超えたらエラー、以下は警告（ニコカラメーカー側の自動調整余地）。</summary>
     public int ErrorThresholdCs { get; set; } = 100;
 
+    /// <summary>
+    /// 1 行だけのページが「下から 2 行目」に昇格するために必要な、
+    /// 次ページの上段行の表示開始までの余裕（10ms 単位。0 = 重ならなければ昇格）。
+    /// </summary>
+    public int SingleLinePromoteGapCs { get; set; }
+
     /// <summary>タグを無視する文字の判定（絵文字の先行タグ除外に使用）。</summary>
     public Func<CharUnit, bool>? ExcludeChar { get; set; }
 
@@ -41,8 +47,12 @@ public sealed class PageCollisionSettings
 }
 
 /// <summary>
-/// ニコカラメーカー3 のページ表示を想定した、隣接ページ間の「下から同じ位置の行」同士の
+/// ニコカラメーカー3 のページ表示を想定した、隣接ページ間の「同じ画面位置の行」同士の
 /// 表示時間の重なりを検出する（このツールの最重要チェック）。
+///
+/// 下から対応付けモードでは、1 行だけのページはニコカラメーカーの仕様に合わせて
+/// 「次ページの上段行の表示開始まで十分時間がある場合、下から 2 行目に表示される」
+/// ものとして扱う。
 /// </summary>
 public static class PageRowCollisionValidator
 {
@@ -52,45 +62,80 @@ public static class PageRowCollisionValidator
         var pages = doc.GetPages(settings.PageMode, settings.FixedLineCount);
         var exclude = settings.ExcludeChar;
 
-        for (int p = 0; p + 1 < pages.Count; p++)
+        // 行の表示終了（n3proj の実表示時間があれば優先、無ければ 最終タグ＋表示後秒数）
+        int? DisplayEnd(int lineIdx)
         {
-            var prev = pages[p];
-            var next = pages[p + 1];
-            int rows = Math.Min(prev.Count, next.Count);
+            if (settings.LineDisplayCs?.TryGetValue(lineIdx, out var disp) == true) return disp.EndCs;
+            if (doc.Lines[lineIdx].GetLastTimeCs(exclude) is int last) return last + settings.DisplayTailCs;
+            return null;
+        }
 
-            for (int k = 1; k <= rows; k++)
+        // 行の希望表示開始（常に 先頭タグ − 表示前秒数。ニコカラメーカーの早出し/遅延調整は
+        // 演出であり、「この時刻までに出したい」に間に合うかを判定基準とする）
+        int? DisplayStart(int lineIdx)
+        {
+            if (doc.Lines[lineIdx].GetFirstTimeCs(exclude) is int first) return first - settings.DisplayLeadCs;
+            return null;
+        }
+
+        // ページごとの「画面位置 → 行インデックス」の対応を作る
+        // 上から対応付け: 位置 = 上から k 行目 / 下から対応付け: 位置 = 下から k 行目
+        Dictionary<int, int> BuildRowMap(int pageIdx)
+        {
+            var page = pages[pageIdx];
+            var map = new Dictionary<int, int>();
+
+            if (settings.AlignFromTop)
             {
-                // 上から（または下から）数えて同じ行番号同士だけを比較する。
-                // 例（上から）: ページの 2 行目は次ページの 2 行目の表示開始までに消えていればよく、
-                //               次ページの 1 行目とは画面上の位置が異なるため比較しない。
-                int prevLineIdx = settings.AlignFromTop ? prev[k - 1] : prev[^k];
-                int nextLineIdx = settings.AlignFromTop ? next[k - 1] : next[^k];
+                for (int k = 1; k <= page.Count; k++) map[k] = page[k - 1];
+                return map;
+            }
 
-                // 前行の表示終了: n3proj の実表示時間があれば優先、無ければ推定（最終タグ＋表示後秒数）
-                int displayEnd;
-                if (settings.LineDisplayCs?.TryGetValue(prevLineIdx, out var prevDisp) == true)
+            // 下から対応付け:
+            // 1 行だけのページは、次ページの上段（下から 2 行目）の表示開始まで
+            // 十分時間があれば「下から 2 行目」に昇格して表示される
+            if (page.Count == 1)
+            {
+                int line = page[0];
+                bool promoted = false;
+                if (pageIdx + 1 < pages.Count)
                 {
-                    displayEnd = prevDisp.EndCs;
-                }
-                else if (doc.Lines[prevLineIdx].GetLastTimeCs(exclude) is int pl)
-                {
-                    displayEnd = pl + settings.DisplayTailCs;
+                    var next = pages[pageIdx + 1];
+                    int candidate = next.Count >= 2 ? next[^2] : next[0];
+                    if (DisplayEnd(line) is int end && DisplayStart(candidate) is int start)
+                    {
+                        promoted = start - end >= settings.SingleLinePromoteGapCs;
+                    }
                 }
                 else
                 {
-                    continue;
+                    promoted = true; // 最終ページの 1 行は上段に出るものとして扱う
                 }
+                map[promoted ? 2 : 1] = line;
+                return map;
+            }
 
-                // 次行の希望表示開始: 常に「先頭タグ − 表示前秒数」で判定する。
-                // （ニコカラメーカーは空いていれば早く・塞がっていれば遅く表示を調整するため、
-                // 　実際の表示開始ではなく「これまでに出したい時刻」に間に合うかを見る）
-                if (doc.Lines[nextLineIdx].GetFirstTimeCs(exclude) is not int nf) continue;
-                int displayStart = nf - settings.DisplayLeadCs;
+            for (int k = 1; k <= page.Count; k++) map[k] = page[^k];
+            return map;
+        }
+
+        var rowMaps = new Dictionary<int, int>[pages.Count];
+        for (int i = 0; i < pages.Count; i++) rowMaps[i] = BuildRowMap(i);
+
+        for (int p = 0; p + 1 < pages.Count; p++)
+        {
+            foreach (var (pos, prevLineIdx) in rowMaps[p])
+            {
+                // 同じ画面位置に次ページの行が来る場合だけ比較する
+                if (!rowMaps[p + 1].TryGetValue(pos, out int nextLineIdx)) continue;
+
+                if (DisplayEnd(prevLineIdx) is not int displayEnd) continue;
+                if (DisplayStart(nextLineIdx) is not int displayStart) continue;
 
                 int overlap = displayEnd - displayStart;
                 if (overlap <= 0) continue;
 
-                string rowLabel = settings.AlignFromTop ? $"上から{k}行目" : $"下から{k}行目";
+                string rowLabel = settings.AlignFromTop ? $"上から{pos}行目" : $"下から{pos}行目";
                 var severity = overlap > settings.ErrorThresholdCs ? IssueSeverity.Error : IssueSeverity.Warning;
                 issues.Add(new ValidationIssue(
                     severity,

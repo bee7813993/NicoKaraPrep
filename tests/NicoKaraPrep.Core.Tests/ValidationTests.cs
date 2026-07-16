@@ -28,26 +28,30 @@ public class PageRowCollisionValidatorTests
     [Fact]
     public void 下から同位置の行が重なるとエラー()
     {
-        // 前ページの表示終了 = 10:00 + 1秒 = 11:00
-        // 次ページの表示開始 = 11:50 - 2秒 = 09:50 → 重なり 1.1 秒 > 閾値 1 秒 → エラー
+        // 前ページ下段の表示終了 = 10:00 + 1秒 = 11:00
+        // 次ページ下段の表示開始 = 11:50 - 2秒 = 09:50 → 重なり 1.1 秒 > 閾値 1 秒 → エラー
         var doc = Doc(
+            "[00:01:00]前の上段[00:02:00]",
             "[00:05:00]あ[00:10:00]",
             "",
+            "[00:30:00]次の上段[00:35:00]",
             "[00:11:50]い[00:20:00]");
         var settings = new PageCollisionSettings { DisplayLeadCs = 200, DisplayTailCs = 100, ErrorThresholdCs = 100 };
         var issues = PageRowCollisionValidator.Validate(doc, settings);
         Assert.Single(issues);
         Assert.Equal(IssueSeverity.Error, issues[0].Severity);
-        Assert.Equal(2, issues[0].LineIndex);
+        Assert.Equal(4, issues[0].LineIndex);
     }
 
     [Fact]
     public void 重なりが閾値以下なら警告()
     {
-        // 表示終了 11:00 vs 表示開始 10:50 → 重なり 0.5 秒 <= 閾値 1 秒 → 警告
+        // 下段: 表示終了 11:00 vs 表示開始 10:50 → 重なり 0.5 秒 <= 閾値 1 秒 → 警告
         var doc = Doc(
+            "[00:01:00]前の上段[00:02:00]",
             "[00:05:00]あ[00:10:00]",
             "",
+            "[00:30:00]次の上段[00:35:00]",
             "[00:12:50]い[00:20:00]");
         var settings = new PageCollisionSettings { DisplayLeadCs = 200, DisplayTailCs = 100, ErrorThresholdCs = 100 };
         var issues = PageRowCollisionValidator.Validate(doc, settings);
@@ -93,26 +97,85 @@ public class PageRowCollisionValidatorTests
     [Fact]
     public void 下からの位置合わせ_設定で切替()
     {
-        // ページ1: 2行 / ページ2: 1行 → 下から対応付けではページ2の行はページ1の最終行とだけ比較
+        // 2行ページ同士: 下から対応付けでは下段同士・上段同士を比較
         var doc = Doc(
             "[00:01:00]上の行はずっと前[00:02:00]",
             "[00:05:00]下の行[00:10:00]",
             "",
-            "[00:11:00]次ページ[00:20:00]");
+            "[00:11:00]次の上の行[00:20:00]",
+            "[00:21:00]次の下の行[00:25:00]");
         var settings = new PageCollisionSettings { AlignFromTop = false, DisplayLeadCs = 200, DisplayTailCs = 100, ErrorThresholdCs = 0 };
         var issues = PageRowCollisionValidator.Validate(doc, settings);
-        Assert.Single(issues); // 下の行(10:00+1s=11:00) vs 次ページ(11:00-2s=09:00) のみ
+        // 上段: 02:00+1s=03:00 vs 11:00-2s=09:00 → OK
+        // 下段: 10:00+1s=11:00 vs 21:00-2s=19:00 → OK … にならないよう下段を詰める
+        Assert.Empty(issues);
+
+        var doc2 = Doc(
+            "[00:01:00]上の行はずっと前[00:02:00]",
+            "[00:05:00]下の行[00:10:00]",
+            "",
+            "[00:11:00]次の上の行[00:20:00]",
+            "[00:12:00]次の下の行[00:25:00]"); // 下段開始 12:00-2s=10:00 < 下の行の表示終了 11:00
+        var issues2 = PageRowCollisionValidator.Validate(doc2, settings);
+        Assert.Single(issues2);
+        Assert.Contains("下から1行目", issues2[0].Message);
+    }
+
+    [Fact]
+    public void 一行ページ_十分時間があれば下から2行目に昇格()
+    {
+        // ページ2 は 1 行のみ。次ページの上段の表示開始まで十分時間がある → 下から2行目扱い。
+        // そのため前ページの「上段」（ずっと表示が残っている）と衝突として検出される。
+        var doc = Doc(
+            "[00:01:00]前の上段ずっと残る[00:14:00]",   // 表示終了 14:00+1s=15:00
+            "[00:02:00]前の下段[00:05:00]",
+            "",
+            "[00:15:50]ソロの一行[00:20:00]",           // 表示開始 15:50-2s=13:50 ← 上段15:00と重なる
+            "",
+            "[00:40:00]次の上段[00:45:00]",             // ソロ行の表示終了 21:00 ≪ 38:00 → 昇格
+            "[00:46:00]次の下段[00:50:00]");
+        var settings = new PageCollisionSettings { AlignFromTop = false, DisplayLeadCs = 200, DisplayTailCs = 100, ErrorThresholdCs = 0 };
+        var issues = PageRowCollisionValidator.Validate(doc, settings);
+        Assert.Single(issues);
+        Assert.Contains("下から2行目", issues[0].Message);
+        Assert.Equal(3, issues[0].LineIndex);      // ソロの一行
+        Assert.Equal(0, issues[0].RelatedLineIndex); // 前の上段
+
+        // 前ページの「下段」とは比較されない（下段はソロ行の直前に終わっていても問題なし）
+        Assert.DoesNotContain(issues, i => i.RelatedLineIndex == 1);
+    }
+
+    [Fact]
+    public void 一行ページ_時間が足りなければ下から1行目のまま()
+    {
+        // ソロ行の表示終了と次ページ上段の表示開始が重なる → 昇格せず下から1行目扱い。
+        // 前ページの「下段」との衝突が検出される。
+        var doc = Doc(
+            "[00:01:00]前の上段[00:03:00]",
+            "[00:05:00]前の下段ずっと残る[00:14:00]",   // 表示終了 15:00
+            "",
+            "[00:15:50]ソロの一行[00:20:00]",           // 表示開始 13:50 ← 下段15:00と重なる / 表示終了 21:00
+            "",
+            "[00:22:00]次の上段[00:30:00]",             // 表示開始 20:00 < ソロ表示終了 21:00 → 昇格しない
+            "[00:31:00]次の下段[00:35:00]");
+        var settings = new PageCollisionSettings { AlignFromTop = false, DisplayLeadCs = 200, DisplayTailCs = 100, ErrorThresholdCs = 0 };
+        var issues = PageRowCollisionValidator.Validate(doc, settings);
+        Assert.Single(issues);
         Assert.Contains("下から1行目", issues[0].Message);
+        Assert.Equal(3, issues[0].LineIndex);
+        Assert.Equal(1, issues[0].RelatedLineIndex); // 前の下段
     }
 
     [Fact]
     public void 絵文字の先行タグは除外される()
     {
-        // ★ = 絵文字。次ページ先頭の ★ に付いた先行タグ [00:09:00] は無視され、
+        // ★ = 絵文字。次ページ下段の ★ に付いた先行タグ [00:09:00] は無視され、
         // 実文字の [00:30:00] が表示開始の基準になる
         var doc = Doc(
+            "[00:01:00]前の上段[00:02:00]",
             "[00:05:00]あ[00:10:00]",
             "",
+            "[00:40:00]次の上段[00:45:00]",
             "[00:09:00]★[00:30:00]い[00:35:00]");
         var settings = new PageCollisionSettings
         {
