@@ -1400,6 +1400,43 @@ public partial class MainViewModel : ObservableObject
     /// 挿入ビューのカーソル位置に対応するタイムタグ時刻を返す（カーソル位置から再生用）。
     /// カーソル位置以降で最初にタグを持つ実文字（絵文字・プレースホルダを除く）の時刻。
     /// </summary>
+    /// <summary>
+    /// カーソル位置の直前・直後のタイムタグ時刻（情報表示用）。
+    /// 絵文字・スペーサーに付いたタグもそのまま含める（G で入れた先行タグの確認にも使う）。
+    /// </summary>
+    public (int? PrevCs, int? NextCs) GetTagTimesAroundViewOffset(int offset)
+    {
+        if (MapInsertViewOffset(offset) is not var (lineIndex, charOffset)) return (null, null);
+
+        var line = Document.Lines[lineIndex];
+        int unitIndex = DisplayOffsetToUnitIndex(line, charOffset);
+
+        // 直前: 現在行のカーソルより前 → それでも無ければ前の行を末尾から
+        int? prev = null;
+        for (int i = Math.Min(unitIndex, line.Chars.Count) - 1; i >= 0 && prev is null; i--)
+        {
+            prev = line.Chars[i].TimeCs;
+        }
+        for (int li = lineIndex - 1; li >= 0 && prev is null; li--)
+        {
+            var l = Document.Lines[li];
+            if (l.EndTimeCs is int e) { prev = e; break; }
+            for (int i = l.Chars.Count - 1; i >= 0 && prev is null; i--) prev = l.Chars[i].TimeCs;
+        }
+
+        // 直後: 現在行のカーソル以降 → 無ければ後続行
+        int? next = null;
+        for (int li = lineIndex; li < Document.Lines.Count && next is null; li++)
+        {
+            var l = Document.Lines[li];
+            int start = li == lineIndex ? unitIndex : 0;
+            for (int i = start; i < l.Chars.Count && next is null; i++) next = l.Chars[i].TimeCs;
+            if (next is null && l.EndTimeCs is int e) next = e;
+        }
+
+        return (prev, next);
+    }
+
     public int? FindTimeAtViewOffset(int offset)
     {
         if (MapInsertViewOffset(offset) is not var (lineIndex, charOffset)) return null;

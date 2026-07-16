@@ -44,7 +44,11 @@ public sealed partial class MainWindow : Window
         _validateTimer = DispatcherQueue.GetForCurrentThread().CreateTimer();
         _validateTimer.Interval = TimeSpan.FromMilliseconds(400);
         _validateTimer.IsRepeating = false;
-        _validateTimer.Tick += (_, _) => TryRun(ViewModel.RunValidation);
+        _validateTimer.Tick += (_, _) =>
+        {
+            TryRun(ViewModel.RunValidation);
+            RefreshInsertGutter(); // 挿入ビュー表示中なら横幅などの再計算結果を行情報欄へ反映
+        };
 
         // パレットのドラッグ＆ドロップ並び替え → スロット番号を振り直す
         ViewModel.EmojiSlots.CollectionChanged += (_, e) =>
@@ -980,7 +984,9 @@ public sealed partial class MainWindow : Window
         int caret = ViewModel.SelectedLine is { } sel ? ViewModel.GetInsertViewLineStart(sel.Index) : 0;
         InsertEditor.Focus(FocusState.Programmatic);
         InsertEditor.SelectionStart = Math.Min(caret, InsertEditor.Text.Length);
-        ViewModel.StatusText = "絵文字挿入ビュー: 1–0 / Q–P で挿入、BS/Del で絵文字削除、A/S/D/Z/X で再生操作、F で再生追従、Esc で終了";
+        RefreshInsertGutter();
+        UpdateInsertCursorInfo();
+        ViewModel.StatusText = "絵文字挿入ビュー: 1–0 / Q–P で挿入、BS/Del で絵文字削除、Space/D/A/S/Z/X で再生操作、F で再生追従、Esc で終了";
     }
 
     private void ExitInsertView()
@@ -1214,6 +1220,8 @@ public sealed partial class MainWindow : Window
 
         SetInsertEditorText(ViewModel.BuildInsertViewText());
         InsertEditor.SelectionStart = Math.Min(Math.Max(0, caret), InsertEditor.Text.Length);
+        RefreshInsertGutter();
+        UpdateInsertCursorInfo();
 
         if (sv is not null)
         {
@@ -1265,6 +1273,69 @@ public sealed partial class MainWindow : Window
     {
         if (!InsertViewActive) return;
         EnsureInsertCaretMarginVisible();
+        UpdateInsertCursorInfo();
+    }
+
+    // ------------------------------------------------ 挿入ビューの行情報・カーソル情報
+
+    private ScrollViewer? _insertEditorScroll;
+
+    /// <summary>エディタ内部の ScrollViewer に行情報欄のスクロール同期を仕込む。</summary>
+    private void HookInsertEditorScroll()
+    {
+        if (_insertEditorScroll is not null) return;
+        _insertEditorScroll = FindDescendant<ScrollViewer>(InsertEditor);
+        if (_insertEditorScroll is null) return;
+        _insertEditorScroll.ViewChanged += (_, _) =>
+            InsertGutterScroll.ChangeView(null, _insertEditorScroll.VerticalOffset, null, disableAnimation: true);
+    }
+
+    /// <summary>行情報欄（開始→終了時刻・横幅）をドキュメントの現在内容から作り直す。</summary>
+    private void RefreshInsertGutter()
+    {
+        if (!InsertViewActive) return;
+
+        var parts = ViewModel.Lines.Select(l =>
+        {
+            if (l.Model.IsEmpty) return "";
+            string time = l.TimeText.Length > 0 || l.EndTimeText.Length > 0
+                ? $"{l.TimeText}→{l.EndTimeText}"
+                : "";
+            return (time + " " + l.WidthText).Trim();
+        });
+        // 末尾の空行はエディタ下端（横スクロールバー分）とのずれ吸収用
+        InsertGutter.Text = string.Join("\r", parts) + "\r\r";
+
+        // エディタの実際の行高さに合わせる（フォントサイズ 12 のまま行送りだけ 20px フォントに揃える）
+        DispatcherQueue.TryEnqueue(() =>
+        {
+            HookInsertEditorScroll();
+            var sv = _insertEditorScroll;
+            if (sv is null || _insertViewText.Length == 0) return;
+
+            int totalLines = 1;
+            foreach (char c in _insertViewText)
+            {
+                if (c == '\r') totalLines++;
+            }
+            double lineHeight = (sv.ExtentHeight - InsertEditor.Padding.Top - InsertEditor.Padding.Bottom) / totalLines;
+            if (lineHeight > 4)
+            {
+                InsertGutter.LineHeight = lineHeight;
+            }
+            InsertGutterScroll.ChangeView(null, sv.VerticalOffset, null, disableAnimation: true);
+        });
+    }
+
+    /// <summary>カーソル位置の行番号と直前・直後のタイムタグを下部バーに表示する。</summary>
+    private void UpdateInsertCursorInfo()
+    {
+        int offset = InsertEditor.SelectionStart;
+        var (prev, next) = ViewModel.GetTagTimesAroundViewOffset(offset);
+        static string F(int? cs) => cs is int c ? TimeTag.Format(c).Trim('[', ']') : "なし";
+        InsertCursorInfo.Text = ViewModel.MapInsertViewOffset(offset) is var (li, _)
+            ? $"行 {li + 1}　カーソル位置のタグ ─ 直前: {F(prev)}　直後: {F(next)}"
+            : "";
     }
 
     private static T? FindDescendant<T>(Microsoft.UI.Xaml.DependencyObject root) where T : Microsoft.UI.Xaml.DependencyObject

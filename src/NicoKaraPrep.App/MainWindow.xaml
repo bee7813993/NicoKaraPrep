@@ -321,6 +321,7 @@
                     <RowDefinition Height="Auto" />
                     <RowDefinition Height="Auto" />
                     <RowDefinition Height="*" />
+                    <RowDefinition Height="Auto" />
                 </Grid.RowDefinitions>
                 <StackPanel Grid.Row="0" Orientation="Horizontal" Spacing="12">
                     <TextBlock Text="絵文字挿入ビュー" Style="{ThemeResource SubtitleTextBlockStyle}" />
@@ -337,20 +338,46 @@
                     TextWrapping="Wrap"
                     Foreground="{ThemeResource TextFillColorSecondaryBrush}"
                     Text="1–0 / Q–P: 絵文字挿入　B: ＿挿入　G: 先行タグ挿入　BS / Del: 絵文字削除　Space: 再生/一時停止　D: カーソル位置から再生　A: 再生　S: 一時停止　Z / X: 数秒戻る / 進む　F: 再生追従　/: 行分割　\: 行結合（Shift+\: スペースを挟む）　Ctrl+Z / Y: 元に戻す / やり直し　Esc: 終了" />
-                <TextBox
-                    x:Name="InsertEditor"
-                    Grid.Row="2"
-                    AcceptsReturn="True"
-                    IsSpellCheckEnabled="False"
-                    IsTextPredictionEnabled="False"
-                    FontSize="20"
-                    TextWrapping="NoWrap"
-                    ScrollViewer.VerticalScrollBarVisibility="Auto"
-                    ScrollViewer.HorizontalScrollBarVisibility="Auto"
-                    BeforeTextChanging="OnInsertEditorBeforeTextChanging"
-                    TextChanged="OnInsertEditorTextChanged"
-                    SelectionChanged="OnInsertEditorSelectionChanged"
-                    PreviewKeyDown="OnInsertEditorPreviewKeyDown" />
+                <Grid Grid.Row="2" ColumnSpacing="8">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="Auto" />
+                        <ColumnDefinition Width="*" />
+                    </Grid.ColumnDefinitions>
+                    <!-- 行情報欄（開始→終了時刻・横幅。エディタとスクロール同期） -->
+                    <ScrollViewer
+                        x:Name="InsertGutterScroll"
+                        VerticalScrollBarVisibility="Hidden"
+                        HorizontalScrollBarVisibility="Disabled"
+                        IsHitTestVisible="False"
+                        IsTabStop="False">
+                        <TextBlock
+                            x:Name="InsertGutter"
+                            FontSize="12"
+                            Margin="0,7,0,0"
+                            LineStackingStrategy="BlockLineHeight"
+                            Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+                    </ScrollViewer>
+                    <TextBox
+                        x:Name="InsertEditor"
+                        Grid.Column="1"
+                        Padding="10,6,6,6"
+                        AcceptsReturn="True"
+                        IsSpellCheckEnabled="False"
+                        IsTextPredictionEnabled="False"
+                        FontSize="20"
+                        TextWrapping="NoWrap"
+                        ScrollViewer.VerticalScrollBarVisibility="Auto"
+                        ScrollViewer.HorizontalScrollBarVisibility="Auto"
+                        BeforeTextChanging="OnInsertEditorBeforeTextChanging"
+                        TextChanged="OnInsertEditorTextChanged"
+                        SelectionChanged="OnInsertEditorSelectionChanged"
+                        PreviewKeyDown="OnInsertEditorPreviewKeyDown" />
+                </Grid>
+                <TextBlock
+                    x:Name="InsertCursorInfo"
+                    Grid.Row="3"
+                    FontSize="12"
+                    Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
             </Grid>
 
             <!-- 右パネル: @Emoji パレット -->
