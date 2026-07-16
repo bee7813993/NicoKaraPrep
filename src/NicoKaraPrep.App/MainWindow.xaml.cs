@@ -1468,7 +1468,10 @@ public sealed partial class MainWindow : Window
 
         foreach (var l in ViewModel.Lines)
         {
-            string lineText = l.Model.IsEmpty ? "" : l.Model.GetDisplayText();
+            // エディタに実際に表示される文字列（行末空白の可視化込み）で高さを測る
+            string lineText = l.Model.IsEmpty
+                ? ""
+                : ViewModels.MainViewModel.FormatInsertViewLine(l.Model.GetDisplayText());
             double pitch = double.IsNaN(_gutterProbeH2) ? _gutterProbeBasePitch : MeasureGutterLinePitch(lineText);
 
             var row = new TextBlock

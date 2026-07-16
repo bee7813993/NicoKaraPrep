@@ -1108,11 +1108,33 @@ public partial class MainViewModel : ObservableObject
     // ------------------------------------------------------ 絵文字挿入ビュー
 
     /// <summary>
+    /// 挿入ビューの 1 行分の表示テキスト。行末の空白は目視できないため
+    /// 可視化文字（半角 → ␣、全角 → □）に置き換えて表示する（1 文字 = 1 文字の
+    /// 置き換えなのでオフセット計算には影響しない。データ自体は変わらない）。
+    /// </summary>
+    public static string FormatInsertViewLine(string displayText)
+    {
+        int end = displayText.Length;
+        while (end > 0 && displayText[end - 1] is ' ' or '　')
+        {
+            end--;
+        }
+        if (end == displayText.Length) return displayText;
+
+        var sb = new System.Text.StringBuilder(displayText[..end]);
+        for (int i = end; i < displayText.Length; i++)
+        {
+            sb.Append(displayText[i] == ' ' ? '␣' : '□'); // ␣ / □
+        }
+        return sb.ToString();
+    }
+
+    /// <summary>
     /// 挿入ビュー用の全文テキスト（タグ・スペーサーなし、行区切りは \r）。
     /// WinUI の TextBox は改行を \r に正規化するため、オフセット計算も \r 前提で行う。
     /// </summary>
     public string BuildInsertViewText() =>
-        string.Join("\r", Document.Lines.Select(l => l.GetDisplayText()));
+        string.Join("\r", Document.Lines.Select(l => FormatInsertViewLine(l.GetDisplayText())));
 
     /// <summary>挿入ビューの表示オフセット → (行, 行内の表示文字オフセット)。</summary>
     public (int LineIndex, int CharOffset)? MapInsertViewOffset(int offset)
