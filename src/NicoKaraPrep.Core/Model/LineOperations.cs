@@ -44,7 +44,8 @@ public static class LineOperations
     /// 行 lineIndex に次の行を結合する。
     /// 前半行の行末タグは、次行の先頭タグと同時刻なら捨て、異なるならスペーサー（2連タグ）として残す。
     /// </summary>
-    public static void JoinWithNextLine(LyricsDocument doc, int lineIndex)
+    /// <param name="insertSpace">true なら結合位置（改行のあった場所）に半角スペースを挟む。</param>
+    public static void JoinWithNextLine(LyricsDocument doc, int lineIndex, bool insertSpace = false)
     {
         if (lineIndex + 1 >= doc.Lines.Count) return;
         var line = doc.Lines[lineIndex];
@@ -57,6 +58,11 @@ public static class LineOperations
                 line.Chars.Add(new CharUnit { Text = CharUnit.Spacer, TimeCs = endCs });
             }
             line.EndTimeCs = null;
+        }
+
+        if (insertSpace && line.Chars.Count > 0 && next.Chars.Count > 0)
+        {
+            line.Chars.Add(new CharUnit { Text = " " });
         }
 
         line.Chars.AddRange(next.Chars);

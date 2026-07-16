@@ -38,7 +38,7 @@
                 <ComboBoxItem Content="各絵文字それぞれにタグを付ける（デフォルト）" />
                 <ComboBoxItem Content="ブロックの先頭と末尾だけに付ける" />
             </ComboBox>
-            <TextBox x:Name="PlaceholderBox" Header="プレースホルダ文字（挿入ビューの Space キーで挿入。アイコン同等のタイムタグ付き）" MaxLength="4" />
+            <TextBox x:Name="PlaceholderBox" Header="プレースホルダ文字（挿入ビューの B キーで挿入。アイコン同等のタイムタグ付き）" MaxLength="4" />
 
             <TextBlock Text="メディア再生" Style="{ThemeResource SubtitleTextBlockStyle}" Margin="0,8,0,0" />
             <NumberBox x:Name="SeekSecondsBox" Header="Z / X（Ctrl+←/→）でシークする秒数" Minimum="0.5" Maximum="60" SmallChange="0.5" SpinButtonPlacementMode="Inline" />

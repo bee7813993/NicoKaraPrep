@@ -684,14 +684,18 @@ public sealed partial class MainWindow : Window
         ScheduleValidation();
     }
 
-    private void OnJoinLineClick(object sender, RoutedEventArgs e)
+    private void OnJoinLineClick(object sender, RoutedEventArgs e) => JoinLineFromMenu(insertSpace: false);
+
+    private void OnJoinLineWithSpaceClick(object sender, RoutedEventArgs e) => JoinLineFromMenu(insertSpace: true);
+
+    private void JoinLineFromMenu(bool insertSpace)
     {
-        if (InsertViewActive) return; // 挿入ビューでは Ctrl+J を PreviewKeyDown で処理
+        if (InsertViewActive) return; // 挿入ビューでは Ctrl+J / Ctrl+Shift+J を PreviewKeyDown で処理
         if (ViewModel.SelectedLine is null) return;
         int index = ViewModel.SelectedLine.Index;
         TryRun(() =>
         {
-            if (ViewModel.JoinSelectedWithNext()) SelectLineAt(index);
+            if (ViewModel.JoinSelectedWithNext(insertSpace)) SelectLineAt(index);
         });
         ScheduleValidation();
     }
@@ -997,10 +1001,17 @@ public sealed partial class MainWindow : Window
         ViewModel.StatusText = "絵文字挿入ビューを終了しました";
     }
 
+    // JIS/US 配列共通の OEM キー（VirtualKey enum に名前が無いためコードで判定）
+    private const Windows.System.VirtualKey KeySlash = (Windows.System.VirtualKey)191;      // '/'（め）
+    private const Windows.System.VirtualKey KeyBackslashYen = (Windows.System.VirtualKey)220; // '￥'
+    private const Windows.System.VirtualKey KeyBackslashRo = (Windows.System.VirtualKey)226;  // '＼'（ろ）
+
     private void OnInsertEditorPreviewKeyDown(object sender, KeyRoutedEventArgs e)
     {
         bool ctrl = (Microsoft.UI.Input.InputKeyboardSource.GetKeyStateForCurrentThread(Windows.System.VirtualKey.Control)
                      & Windows.UI.Core.CoreVirtualKeyStates.Down) != 0;
+        bool shift = (Microsoft.UI.Input.InputKeyboardSource.GetKeyStateForCurrentThread(Windows.System.VirtualKey.Shift)
+                      & Windows.UI.Core.CoreVirtualKeyStates.Down) != 0;
 
         if (ctrl)
         {
@@ -1015,21 +1026,11 @@ public sealed partial class MainWindow : Window
                     e.Handled = true;
                     return;
                 case Windows.System.VirtualKey.Enter:
-                    TryRun(() =>
-                    {
-                        int? caret = ViewModel.SplitLineAtViewOffset(InsertEditor.SelectionStart);
-                        if (caret is int c) RefreshInsertView(c);
-                    });
-                    ScheduleValidation();
+                    SplitLineInView();
                     e.Handled = true;
                     return;
                 case Windows.System.VirtualKey.J:
-                    TryRun(() =>
-                    {
-                        int? caret = ViewModel.JoinLineAtViewOffset(InsertEditor.SelectionStart);
-                        if (caret is int c) RefreshInsertView(c);
-                    });
-                    ScheduleValidation();
+                    JoinLineInView(insertSpace: shift);
                     e.Handled = true;
                     return;
             }
@@ -1042,7 +1043,7 @@ public sealed partial class MainWindow : Window
                 EmojiModeToggle.IsChecked = false;
                 e.Handled = true;
                 return;
-            case Windows.System.VirtualKey.Space:
+            case Windows.System.VirtualKey.B:
                 // プレースホルダ（＿）をアイコン同等のタイムタグ付きで挿入
                 if (!string.IsNullOrEmpty(ViewModel.Settings.PlaceholderChar))
                 {
@@ -1050,25 +1051,23 @@ public sealed partial class MainWindow : Window
                 }
                 e.Handled = true;
                 return;
-            case Windows.System.VirtualKey.Enter:
-                // カーソル位置から再生
+            case Windows.System.VirtualKey.G:
+                // 先行タグ（文字なし、直後のタグの表示秒数前）を挿入
                 TryRun(() =>
                 {
-                    if (ViewModel.FindTimeAtViewOffset(InsertEditor.SelectionStart) is not int cs)
-                    {
-                        ViewModel.StatusText = "カーソル位置以降にタイムタグがありません";
-                        return;
-                    }
-                    var session = PlayerWithSource?.PlaybackSession;
-                    if (session is null)
-                    {
-                        ViewModel.StatusText = "メディアが開かれていません（再生 > メディアを開く）";
-                        return;
-                    }
-                    session.Position = TimeSpan.FromSeconds(ViewModel.TagCsToMediaSeconds(cs));
-                    PlayerWithSource?.Play();
-                    ViewModel.StatusText = $"カーソル位置 {TimeTag.Format(cs)} から再生します";
+                    int? caret = ViewModel.InsertLeadTagAtViewOffset(InsertEditor.SelectionStart);
+                    if (caret is int c) RefreshInsertView(c);
                 });
+                ScheduleValidation();
+                e.Handled = true;
+                return;
+            case Windows.System.VirtualKey.Space:
+                TogglePlayPause();
+                e.Handled = true;
+                return;
+            case Windows.System.VirtualKey.Enter:
+                // 旧割り当て（カーソル位置から再生）の案内だけ出す
+                ViewModel.StatusText = "カーソル位置から再生は D キーになりました（Space: 再生/一時停止）";
                 e.Handled = true;
                 return;
             case Windows.System.VirtualKey.Back:
@@ -1100,7 +1099,7 @@ public sealed partial class MainWindow : Window
                 e.Handled = true;
                 return;
             case Windows.System.VirtualKey.D:
-                TogglePlayPause();
+                PlayFromInsertCursor();
                 e.Handled = true;
                 return;
             case Windows.System.VirtualKey.Z:
@@ -1111,6 +1110,15 @@ public sealed partial class MainWindow : Window
                 SeekBy(+ViewModel.Settings.SeekSeconds);
                 e.Handled = true;
                 return;
+            case KeySlash:
+                SplitLineInView();
+                e.Handled = true;
+                return;
+            case KeyBackslashYen:
+            case KeyBackslashRo:
+                JoinLineInView(insertSpace: shift);
+                e.Handled = true;
+                return;
         }
 
         int slot = SlotFromKey(e.Key);
@@ -1119,6 +1127,48 @@ public sealed partial class MainWindow : Window
             InsertEmojiInView(slot);
             e.Handled = true;
         }
+    }
+
+    private void SplitLineInView()
+    {
+        TryRun(() =>
+        {
+            int? caret = ViewModel.SplitLineAtViewOffset(InsertEditor.SelectionStart);
+            if (caret is int c) RefreshInsertView(c);
+        });
+        ScheduleValidation();
+    }
+
+    private void JoinLineInView(bool insertSpace)
+    {
+        TryRun(() =>
+        {
+            int? caret = ViewModel.JoinLineAtViewOffset(InsertEditor.SelectionStart, insertSpace);
+            if (caret is int c) RefreshInsertView(c);
+        });
+        ScheduleValidation();
+    }
+
+    /// <summary>挿入ビューのカーソル位置のタイムタグからメディアを再生する。</summary>
+    private void PlayFromInsertCursor()
+    {
+        TryRun(() =>
+        {
+            if (ViewModel.FindTimeAtViewOffset(InsertEditor.SelectionStart) is not int cs)
+            {
+                ViewModel.StatusText = "カーソル位置以降にタイムタグがありません";
+                return;
+            }
+            var session = PlayerWithSource?.PlaybackSession;
+            if (session is null)
+            {
+                ViewModel.StatusText = "メディアが開かれていません（再生 > メディアを開く）";
+                return;
+            }
+            session.Position = TimeSpan.FromSeconds(ViewModel.TagCsToMediaSeconds(cs));
+            PlayerWithSource?.Play();
+            ViewModel.StatusText = $"カーソル位置 {TimeTag.Format(cs)} から再生します";
+        });
     }
 
     private void InsertEmojiInView(int slot)

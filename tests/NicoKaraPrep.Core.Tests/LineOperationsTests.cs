@@ -50,6 +50,16 @@ public class LineOperationsTests
     }
 
     [Fact]
+    public void 行結合_スペースを挟むオプション()
+    {
+        var doc = Doc("[1|00:01:00]あい[00:02:00]", "[1|00:03:00]うえ[00:04:00]");
+        LineOperations.JoinWithNextLine(doc, 0, insertSpace: true);
+
+        Assert.Single(doc.Lines);
+        Assert.Equal("[1|00:01:00]あい[00:02:00] [1|00:03:00]うえ[00:04:00]", TextEditModeFormat.WriteLyricLine(doc.Lines[0]));
+    }
+
+    [Fact]
     public void 行結合_同時刻なら行末タグは捨てる()
     {
         var doc = Doc("[1|00:01:00]あい[00:03:00]", "[1|00:03:00]うえ[00:04:00]");

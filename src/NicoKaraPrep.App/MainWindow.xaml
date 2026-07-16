@@ -80,6 +80,11 @@
                         <KeyboardAccelerator Modifiers="Control" Key="J" />
                     </MenuFlyoutItem.KeyboardAccelerators>
                 </MenuFlyoutItem>
+                <MenuFlyoutItem Text="次の行と結合（スペースを挟む）" Click="OnJoinLineWithSpaceClick">
+                    <MenuFlyoutItem.KeyboardAccelerators>
+                        <KeyboardAccelerator Modifiers="Control,Shift" Key="J" />
+                    </MenuFlyoutItem.KeyboardAccelerators>
+                </MenuFlyoutItem>
                 <MenuFlyoutSeparator />
                 <MenuFlyoutItem Text="空行（ページ区切り）を下に挿入" Click="OnInsertEmptyLineClick">
                     <MenuFlyoutItem.KeyboardAccelerators>
@@ -331,7 +336,7 @@
                     FontSize="12"
                     TextWrapping="Wrap"
                     Foreground="{ThemeResource TextFillColorSecondaryBrush}"
-                    Text="1–0 / Q–P: 絵文字挿入　Space: ＿挿入　BS / Del: 絵文字削除　Ctrl+Z / Y: 元に戻す / やり直し　Enter: カーソル位置から再生　A: 再生　S: 一時停止　D: 一時停止/再開　Z / X: 数秒戻る / 進む　F: 再生追従　Ctrl+Enter: 行分割　Ctrl+J: 行結合　Esc: 終了" />
+                    Text="1–0 / Q–P: 絵文字挿入　B: ＿挿入　G: 先行タグ挿入　BS / Del: 絵文字削除　Space: 再生/一時停止　D: カーソル位置から再生　A: 再生　S: 一時停止　Z / X: 数秒戻る / 進む　F: 再生追従　/: 行分割　\: 行結合（Shift+\: スペースを挟む）　Ctrl+Z / Y: 元に戻す / やり直し　Esc: 終了" />
                 <TextBox
                     x:Name="InsertEditor"
                     Grid.Row="2"

@@ -744,16 +744,16 @@ public partial class MainViewModel : ObservableObject
     }
 
     /// <summary>選択行に次の行を結合する。</summary>
-    public bool JoinSelectedWithNext()
+    public bool JoinSelectedWithNext(bool insertSpace = false)
     {
         if (SelectedLine is null) return false;
         int index = SelectedLine.Index;
         if (index + 1 >= Document.Lines.Count) return false;
         PushUndo();
-        LineOperations.JoinWithNextLine(Document, index);
+        LineOperations.JoinWithNextLine(Document, index, insertSpace);
         RebuildLinesPreservingMarks();
         MarkModified();
-        StatusText = "行を結合しました";
+        StatusText = insertSpace ? "行を結合しました（スペースを挿入）" : "行を結合しました";
         return true;
     }
 
@@ -1260,16 +1260,61 @@ public partial class MainViewModel : ObservableObject
     }
 
     /// <summary>挿入ビューのカーソル行に次の行を結合する。成功時はカーソル位置（変化なし）を返す。</summary>
-    public int? JoinLineAtViewOffset(int offset)
+    public int? JoinLineAtViewOffset(int offset, bool insertSpace = false)
     {
         if (MapInsertViewOffset(offset) is not var (lineIndex, _)) return null;
         if (lineIndex + 1 >= Document.Lines.Count) return null;
 
         PushUndo();
-        LineOperations.JoinWithNextLine(Document, lineIndex);
+        LineOperations.JoinWithNextLine(Document, lineIndex, insertSpace);
         RebuildLinesPreservingMarks();
         MarkModified();
-        StatusText = "行を結合しました";
+        StatusText = insertSpace ? "行を結合しました（スペースを挿入）" : "行を結合しました";
+        return offset;
+    }
+
+    /// <summary>
+    /// 挿入ビューのカーソル位置に「先行タイムタグ」を挿入する。
+    /// 時刻は直後のタイムタグ付き実文字（絵文字・スペーサー除く）の開始時間 − 絵文字表示秒数。
+    /// 文字は増やさず、タグを載せたスペーサー（RhythmicaLyrics の 2 連タグ表現）を挿入する。
+    /// 成功時はカーソル位置（変化なし）を返す。
+    /// </summary>
+    public int? InsertLeadTagAtViewOffset(int offset)
+    {
+        if (MapInsertViewOffset(offset) is not var (lineIndex, charOffset)) return null;
+        var line = Document.Lines[lineIndex];
+        int unitIndex = DisplayOffsetToUnitIndex(line, charOffset);
+
+        // 直後の「絵文字でもスペーサーでもない」タイムタグ付き文字を探す
+        var matcher = CreateEmojiMatcher();
+        var emojiUnitIndexes = new HashSet<int>();
+        foreach (var o in matcher.FindOccurrences(line.Chars))
+        {
+            for (int i = o.Start; i < o.EndExclusive; i++) emojiUnitIndexes.Add(i);
+        }
+        int? baseCs = null;
+        for (int i = unitIndex; i < line.Chars.Count; i++)
+        {
+            var c = line.Chars[i];
+            if (c.IsSpacer || emojiUnitIndexes.Contains(i)) continue;
+            if (c.TimeCs is int t)
+            {
+                baseCs = t;
+                break;
+            }
+        }
+        if (baseCs is not int b)
+        {
+            StatusText = "カーソル位置より後にタイムタグ付きの文字がありません（先行タグを付けられません）";
+            return null;
+        }
+
+        int leadCs = Math.Max(1, b - Settings.EmojiLeadCs);
+        PushUndo();
+        line.Chars.Insert(unitIndex, new CharUnit { Text = CharUnit.Spacer, TimeCs = leadCs });
+        if (lineIndex < Lines.Count) Lines[lineIndex].RaiseAllChanged();
+        MarkModified();
+        StatusText = $"先行タグ [{TimeTag.Format(leadCs)}] を挿入しました（直後のタグ {TimeTag.Format(b)} の {Settings.EmojiLeadSeconds:0.#} 秒前。削除は Ctrl+Z か行エディタで）";
         return offset;
     }
 
