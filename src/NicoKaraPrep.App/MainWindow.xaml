@@ -199,6 +199,25 @@
                             <TabViewItem Header="{x:Bind Name, Mode=OneWay}" IsClosable="{x:Bind IsClosable}" />
                         </DataTemplate>
                     </TabView.TabItemTemplate>
+                    <TabView.TabStripFooter>
+                        <StackPanel Orientation="Horizontal" Spacing="4" VerticalAlignment="Center" Margin="8,0">
+                            <Button
+                                Content="選択行を分離"
+                                FontSize="12"
+                                Padding="8,4"
+                                Click="OnSplitToTabClick"
+                                ToolTipService.ToolTip="選択した行を新しいタブへ移動します (Ctrl+T)" />
+                            <DropDownButton
+                                Content="選択行を移動"
+                                FontSize="12"
+                                Padding="8,4"
+                                ToolTipService.ToolTip="選択した行を既存のタブへ移動します（時刻順に挿入）">
+                                <DropDownButton.Flyout>
+                                    <MenuFlyout x:Name="MoveToTabFlyout" Opening="OnMoveToTabFlyoutOpening" />
+                                </DropDownButton.Flyout>
+                            </DropDownButton>
+                        </StackPanel>
+                    </TabView.TabStripFooter>
                 </TabView>
 
                 <!-- 行リスト -->
@@ -211,7 +230,21 @@
                     ItemsSource="{x:Bind ViewModel.Lines}"
                     SelectionMode="Extended"
                     SelectionChanged="OnLineSelectionChanged"
-                    DoubleTapped="OnLineDoubleTapped">
+                    DoubleTapped="OnLineDoubleTapped"
+                    RightTapped="OnLineRightTapped">
+                    <ListView.ContextFlyout>
+                        <MenuFlyout x:Name="LineContextMenu" Opening="OnLineContextMenuOpening">
+                            <MenuFlyoutItem Text="選択行を新しいタブへ分離" Click="OnSplitToTabClick" />
+                            <MenuFlyoutSubItem x:Name="MoveToTabSub" Text="選択行を既存のタブへ移動" />
+                            <MenuFlyoutSeparator />
+                            <MenuFlyoutItem Text="選択行をエクスポート..." Click="OnExportFileClick" />
+                            <MenuFlyoutItem Text="選択行をクリップボードへエクスポート" Click="OnExportClipboardClick" />
+                            <MenuFlyoutItem Text="選択行の済マークを解除" Click="OnClearMarksClick" />
+                            <MenuFlyoutSeparator />
+                            <MenuFlyoutItem Text="空行（ページ区切り）を下に挿入" Click="OnInsertEmptyLineClick" />
+                            <MenuFlyoutItem Text="選択行を削除" Click="OnDeleteLinesClick" />
+                        </MenuFlyout>
+                    </ListView.ContextFlyout>
                     <ListView.ItemTemplate>
                         <DataTemplate x:DataType="vm:LineViewModel">
                             <Grid Opacity="{x:Bind Opacity, Mode=OneWay}" ColumnSpacing="8" Background="{x:Bind RowBrush, Mode=OneWay}">

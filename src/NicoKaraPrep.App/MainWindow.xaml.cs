@@ -502,6 +502,55 @@ public sealed partial class MainWindow : Window
         });
     }
 
+    /// <summary>「選択行を移動」メニューに移動先タブの一覧を並べる。</summary>
+    private void PopulateMoveToTabItems(IList<MenuFlyoutItemBase> items)
+    {
+        items.Clear();
+        foreach (var tab in ViewModel.Tabs)
+        {
+            if (tab == ViewModel.ActiveTab) continue;
+            var target = tab;
+            var item = new MenuFlyoutItem { Text = tab.Name };
+            item.Click += (_, _) => MoveSelectedToTab(target);
+            items.Add(item);
+        }
+        if (items.Count == 0)
+        {
+            items.Add(new MenuFlyoutItem { Text = "（移動先のタブがありません。まず「選択行を分離」でタブを作成）", IsEnabled = false });
+        }
+    }
+
+    private void OnMoveToTabFlyoutOpening(object sender, object e) => PopulateMoveToTabItems(MoveToTabFlyout.Items);
+
+    private void OnLineContextMenuOpening(object sender, object e) => PopulateMoveToTabItems(MoveToTabSub.Items);
+
+    /// <summary>右クリックした行が未選択なら、その行だけを選択してからメニューを出す。</summary>
+    private void OnLineRightTapped(object sender, Microsoft.UI.Xaml.Input.RightTappedRoutedEventArgs e)
+    {
+        if ((e.OriginalSource as FrameworkElement)?.DataContext is LineViewModel line &&
+            !LineList.SelectedItems.Contains(line))
+        {
+            LineList.SelectedItem = line;
+        }
+    }
+
+    private void MoveSelectedToTab(ViewModels.TabState target)
+    {
+        var indexes = SelectedIndexes;
+        if (indexes.Count == 0)
+        {
+            ViewModel.StatusText = "移動する行を選択してください";
+            return;
+        }
+        TryRun(() =>
+        {
+            if (ViewModel.MoveSelectedToTab(indexes, target))
+            {
+                RefreshAfterTabChange();
+            }
+        });
+    }
+
     private async void OnTabDoubleTapped(object sender, Microsoft.UI.Xaml.Input.DoubleTappedRoutedEventArgs e)
     {
         var tab = ViewModel.ActiveTab;

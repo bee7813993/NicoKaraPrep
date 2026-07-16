@@ -123,6 +123,43 @@ public partial class MainViewModel : ObservableObject
         return tab;
     }
 
+    /// <summary>
+    /// 選択行を既存のタブへ移動する（時刻順にマージ。済マークなどの行状態は維持）。
+    /// </summary>
+    public bool MoveSelectedToTab(IReadOnlyList<int> indexes, TabState target)
+    {
+        if (target == _activeTab || indexes.Count == 0 || !Tabs.Contains(target)) return false;
+
+        var lines = indexes.Distinct().OrderBy(x => x)
+            .Where(i => i >= 0 && i < Document.Lines.Count)
+            .Select(i => Document.Lines[i])
+            .ToList();
+        if (lines.Count == 0) return false;
+
+        foreach (int i in indexes.Distinct().OrderByDescending(x => x))
+        {
+            LineOperations.DeleteLine(Document, i);
+        }
+
+        // タブ間の行移動は Undo 対象外（逆向きの移動で戻せる）
+        _activeTab.UndoStack.Clear();
+        _activeTab.RedoStack.Clear();
+        RebuildLines();
+        MarkModified();
+        StoreActiveTab();
+
+        var carrier = new LyricsDocument();
+        carrier.Lines.AddRange(lines);
+        MergeLinesByTime(target.Document, carrier);
+        target.IsModified = true;
+        target.UndoStack.Clear();
+        target.RedoStack.Clear();
+
+        SaveProject();
+        StatusText = $"{lines.Count} 行を「{target.Name}」タブへ移動しました（時刻順に挿入）";
+        return true;
+    }
+
     /// <summary>タブを閉じて、行をメインへ時刻順にマージして戻す。</summary>
     public void CloseTab(TabState tab)
     {
