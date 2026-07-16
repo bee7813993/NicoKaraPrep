@@ -1302,6 +1302,12 @@ public sealed partial class MainWindow : Window
         if (_insertEditorScroll is null) return;
         _insertEditorScroll.ViewChanged += (_, _) =>
             InsertGutterScroll.ChangeView(null, _insertEditorScroll.VerticalOffset, null, disableAnimation: true);
+        // ウィンドウリサイズでスクロール可否（= 行送りの測定方法）が変わり得るため再計算する
+        InsertEditor.SizeChanged += (_, _) =>
+        {
+            _gutterMetricsRetries = 0;
+            ScheduleInsertGutterMetrics();
+        };
     }
 
     /// <summary>チェック結果の重要度 → 行情報欄の文字色（null は既定色のまま）。</summary>
@@ -1400,18 +1406,38 @@ public sealed partial class MainWindow : Window
         return tb.DesiredSize.Height - one;
     }
 
-    /// <summary>行情報欄の行送りをエディタの行高さ（フォント実測）に合わせ、スクロール位置を同期する。</summary>
+    /// <summary>行情報欄の行送りをエディタの実際の行高さに合わせ、スクロール位置を同期する。</summary>
     private void UpdateInsertGutterMetrics()
     {
         HookInsertEditorScroll();
         var sv = _insertEditorScroll;
         if (sv is null || _insertViewText.Length == 0) return;
 
-        if (_measuredEditorLinePitch <= 0)
+        int totalLines = 1;
+        foreach (char c in _insertViewText)
         {
-            _measuredEditorLinePitch = MeasureEditorLinePitch();
+            if (c == '\r') totalLines++;
         }
-        double lineHeight = _measuredEditorLinePitch;
+
+        // スクロールが発生している（内容がビューポートより高い）なら Extent = 内容の実高さなので
+        // Extent ÷ 行数が最も正確（TextBlock のフォント測定は TextBox と 1 行あたり
+        // 0.5px 程度ずれることがあり、行数が多いと蓄積する）。
+        // 内容が短く Extent がビューポート高さに広がっている場合のみフォント測定に頼る。
+        double lineHeight = 0;
+        double extentPitch = (sv.ExtentHeight - InsertEditor.Padding.Top - InsertEditor.Padding.Bottom) / totalLines;
+        if (sv.ScrollableHeight > 1 && extentPitch >= 8)
+        {
+            lineHeight = extentPitch;
+        }
+        else
+        {
+            if (_measuredEditorLinePitch <= 0)
+            {
+                _measuredEditorLinePitch = MeasureEditorLinePitch();
+            }
+            lineHeight = _measuredEditorLinePitch;
+        }
+
         if (lineHeight < 8)
         {
             // 測定に失敗 → 次のレイアウトパスで再試行
