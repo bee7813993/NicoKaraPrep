@@ -15,6 +15,9 @@ public sealed class SongProjectTab
 
     /// <summary>各行の元の行位置キー（分離解除で元の位置へ戻すため。Text の行と同順）。</summary>
     public List<int?> LineKeys { get; set; } = new();
+
+    /// <summary>このタブを別ファイルへ保存した先（タブの上書き保存の対象）。</summary>
+    public string? FilePath { get; set; }
 }
 
 /// <summary>

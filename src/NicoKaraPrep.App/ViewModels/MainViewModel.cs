@@ -319,6 +319,7 @@ public partial class MainViewModel : ObservableObject
                         Name = pt.Name,
                         Document = tabDoc,
                         Format = CurrentFormat,
+                        CopyFilePath = pt.FilePath,
                     });
                 }
             }
@@ -553,6 +554,7 @@ public partial class MainViewModel : ObservableObject
         }
         Document = doc;
         _activeTab.Document = doc;
+        _activeTab.CopyFilePath = path; // 読み込んだファイルが「タブの上書き保存」の対象になる
         RebuildLines();
         AssignSlotsToSongEmoji();
         RefreshEmojiSlots();
@@ -576,8 +578,13 @@ public partial class MainViewModel : ObservableObject
             File.WriteAllText(path, LrcFormat.Write(Document, LrcOptionsWithEffectiveEmoji(path)), LrcEncoding);
         }
         RememberSaveFolder(path);
+        _activeTab.CopyFilePath = path; // 次回から「表示中のタブを上書き保存」の対象になる
+        SaveProject();
         StatusText = $"表示中のタブ「{_activeTab.Name}」を保存しました: {Path.GetFileName(path)}（{Document.Lines.Count} 行）";
     }
+
+    /// <summary>表示中のタブの上書き保存先（別ファイルへ保存した先。未保存なら null）。</summary>
+    public string? GetActiveTabCopyPath() => _activeTab.CopyFilePath;
 
     /// <summary>
     /// 保存・エクスポートダイアログの初期フォルダ。
@@ -644,6 +651,7 @@ public partial class MainViewModel : ObservableObject
             project.Tabs.Add(new SongProjectTab
             {
                 Name = tab.Name,
+                FilePath = tab.CopyFilePath,
                 Text = TextEditModeFormat.Write(tab.Document),
                 ExportedLines = tab.Document.Lines
                     .Select((l, i) => (Line: l, Index: i))

@@ -17,6 +17,12 @@ public partial class TabState : ObservableObject
     /// <summary>このタブを保存したファイル（未保存の分離タブは null）。</summary>
     public string? FilePath { get; set; }
 
+    /// <summary>
+    /// 「表示中のタブを別ファイルへ保存」した先（タブの上書き保存の対象）。
+    /// タブへのファイル読み込み（差し替え）でも設定される。
+    /// </summary>
+    public string? CopyFilePath { get; set; }
+
     public DocumentFormat Format { get; set; } = DocumentFormat.Lrc;
 
     public bool IsModified { get; set; }

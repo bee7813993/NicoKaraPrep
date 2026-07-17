@@ -380,18 +380,42 @@ public sealed partial class MainWindow : Window
         RefreshAfterTabChange();
     }
 
-    /// <summary>表示中のタブの内容だけを別ファイルへ保存する。</summary>
+    /// <summary>
+    /// 表示中のタブの内容だけを別ファイルへ保存する。
+    /// デフォルト形式はニコカラメーカー向けの lrc（rlf を開いていても）。
+    /// 前回の保存先があれば、そのフォルダ・ファイル名・形式を初期値にする。
+    /// </summary>
     private void OnSaveTabAsClick(object sender, RoutedEventArgs e)
     {
         string suggested = ViewModel.GetSuggestedFileBaseName();
-        var types = ViewModel.CurrentFormat == ViewModels.DocumentFormat.Rlf
+        string? folder = ViewModel.GetDefaultSaveFolder();
+        string defaultExt = "lrc";
+        if (ViewModel.GetActiveTabCopyPath() is string prev)
+        {
+            suggested = Path.GetFileNameWithoutExtension(prev);
+            if (Path.GetDirectoryName(prev) is string prevDir && Directory.Exists(prevDir)) folder = prevDir;
+            defaultExt = Path.GetExtension(prev).TrimStart('.').ToLowerInvariant() is "rlf" ? "rlf" : "lrc";
+        }
+        var types = defaultExt == "rlf"
             ? new[] { LyricsFileTypes[1], LyricsFileTypes[0], LyricsFileTypes[2] }
             : LyricsFileTypes;
-        string defaultExt = ViewModel.CurrentFormat == ViewModels.DocumentFormat.Rlf ? "rlf" : "lrc";
 
-        string? path = SaveFileDialog.Show(Hwnd, ViewModel.GetDefaultSaveFolder(), suggested, types, defaultExt);
+        string? path = SaveFileDialog.Show(Hwnd, folder, suggested, types, defaultExt);
         if (path is null) return;
         TryRun(() => ViewModel.SaveActiveTabCopyTo(path));
+    }
+
+    /// <summary>表示中のタブを前回の保存先へ上書き保存する（未保存なら保存ダイアログへ）。</summary>
+    private void OnSaveTabOverwriteClick(object sender, RoutedEventArgs e)
+    {
+        if (ViewModel.GetActiveTabCopyPath() is string path)
+        {
+            TryRun(() => ViewModel.SaveActiveTabCopyTo(path));
+        }
+        else
+        {
+            OnSaveTabAsClick(sender, e);
+        }
     }
 
     // ------------------------------------------------------ クリップボード

@@ -37,6 +37,11 @@
                 </MenuFlyoutItem>
                 <MenuFlyoutItem Text="名前を付けて保存（タブ含む全行）..." Click="OnSaveAsClick" />
                 <MenuFlyoutSeparator />
+                <MenuFlyoutItem Text="表示中のタブを上書き保存" Click="OnSaveTabOverwriteClick">
+                    <MenuFlyoutItem.KeyboardAccelerators>
+                        <KeyboardAccelerator Modifiers="Control,Shift" Key="S" />
+                    </MenuFlyoutItem.KeyboardAccelerators>
+                </MenuFlyoutItem>
                 <MenuFlyoutItem Text="表示中のタブを別ファイルへ保存..." Click="OnSaveTabAsClick" />
                 <MenuFlyoutItem Text="表示中のタブへファイルを読み込み（差し替え）..." Click="OnReloadTabClick" />
                 <MenuFlyoutSeparator />
