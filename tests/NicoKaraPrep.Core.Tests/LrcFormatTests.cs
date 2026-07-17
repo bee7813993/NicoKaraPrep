@@ -186,4 +186,19 @@ public class LrcFormatTests
         string written = LrcFormat.Write(doc, new LrcWriteOptions { EmojiEntriesOverride = effective });
         Assert.Contains("@Emoji=(歩夢),a.png,,NoDecor,Zoom=150", written);
     }
+
+    [Fact]
+    public void 絵文字_保存先フォルダ配下の画像は相対パスで出力()
+    {
+        var doc = new LyricsDocument();
+        doc.EmojiEntries.Add(new EmojiEntry { ReplaceChar = "(歩夢)", ImageBefore = @"C:\songs\icons\歩夢.png" });
+        doc.EmojiEntries.Add(new EmojiEntry { ReplaceChar = "(愛)", ImageBefore = @"D:\other\愛.png" });
+        doc.EmojiEntries.Add(new EmojiEntry { ReplaceChar = "(玲)", ImageBefore = @"C:\songs\玲.png", ImageAfter = @"C:\songs\icons\玲後.png" });
+        doc.Lines.Add(LrcFormat.ParseLyricLine("[00:01:00]あ[00:02:00]"));
+
+        string written = LrcFormat.Write(doc, new LrcWriteOptions { BaseFolder = @"C:\songs" });
+        Assert.Contains(@"@Emoji=(歩夢),icons\歩夢.png", written);   // 配下 → 相対
+        Assert.Contains(@"@Emoji=(愛),D:\other\愛.png", written);    // 配下でない → 絶対のまま
+        Assert.Contains(@"@Emoji=(玲),玲.png,icons\玲後.png", written); // 同一フォルダ → ファイル名のみ
+    }
 }

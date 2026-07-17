@@ -21,6 +21,12 @@ public sealed class LrcWriteOptions
     /// </summary>
     public IReadOnlyList<EmojiEntry>? EmojiEntriesOverride { get; set; }
 
+    /// <summary>
+    /// lrc の保存先フォルダ。指定すると、このフォルダと同じかその配下にある画像は
+    /// 相対パスで出力する（フォルダごと移動・共有できるように）。配下にない画像は絶対パスのまま。
+    /// </summary>
+    public string? BaseFolder { get; set; }
+
     /// <summary>@Ruby タグを出力するか。</summary>
     public bool EmitRubyTags { get; set; } = true;
 }
@@ -91,7 +97,7 @@ public static class LrcFormat
         {
             foreach (var e in SelectEmojiEntries(doc, options))
             {
-                sb.Append("@Emoji=").Append(e.ToTagValue()).Append(nl);
+                sb.Append("@Emoji=").Append(WithRelativeImagePaths(e, options.BaseFolder).ToTagValue()).Append(nl);
             }
         }
 
@@ -130,6 +136,37 @@ public static class LrcFormat
             }
         }
         return source.Where(e => used.Contains(e.ReplaceChar));
+    }
+
+    /// <summary>保存先フォルダ配下にある画像パスを相対パスへ変換したエントリを返す（対象外はそのまま）。</summary>
+    private static EmojiEntry WithRelativeImagePaths(EmojiEntry e, string? baseFolder)
+    {
+        if (string.IsNullOrEmpty(baseFolder)) return e;
+
+        string before = TryMakeRelative(e.ImageBefore, baseFolder);
+        string? after = string.IsNullOrEmpty(e.ImageAfter) ? e.ImageAfter : TryMakeRelative(e.ImageAfter!, baseFolder);
+        if (before == e.ImageBefore && after == e.ImageAfter) return e;
+
+        var clone = e.Clone();
+        clone.ImageBefore = before;
+        clone.ImageAfter = after;
+        return clone;
+    }
+
+    private static string TryMakeRelative(string path, string baseFolder)
+    {
+        try
+        {
+            if (string.IsNullOrEmpty(path) || !Path.IsPathRooted(path)) return path;
+            string rel = Path.GetRelativePath(baseFolder, path);
+            // 「..」で上へ出る・別ドライブになる場合は配下ではないので絶対パスのまま
+            if (rel.StartsWith("..", StringComparison.Ordinal) || Path.IsPathRooted(rel)) return path;
+            return rel;
+        }
+        catch (Exception)
+        {
+            return path;
+        }
     }
 
     /// <summary>歌詞 1 行をタイムタグ付きテキストにする。</summary>

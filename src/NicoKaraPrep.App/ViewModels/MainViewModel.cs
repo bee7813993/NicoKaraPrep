@@ -447,7 +447,7 @@ public partial class MainViewModel : ObservableObject
                 RlfFormat.WriteFile(path, Document);
                 break;
             default:
-                File.WriteAllText(path, LrcFormat.Write(Document, LrcOptionsWithEffectiveEmoji()), LrcEncoding);
+                File.WriteAllText(path, LrcFormat.Write(Document, LrcOptionsWithEffectiveEmoji(path)), LrcEncoding);
                 break;
         }
         CurrentFilePath = path;
@@ -500,7 +500,7 @@ public partial class MainViewModel : ObservableObject
         }
         else
         {
-            File.WriteAllText(path, LrcFormat.Write(merged, LrcOptionsWithEffectiveEmoji()), LrcEncoding);
+            File.WriteAllText(path, LrcFormat.Write(merged, LrcOptionsWithEffectiveEmoji(path)), LrcEncoding);
         }
 
         var main = Tabs.First(t => t.IsMain);
@@ -573,7 +573,7 @@ public partial class MainViewModel : ObservableObject
         }
         else
         {
-            File.WriteAllText(path, LrcFormat.Write(Document, LrcOptionsWithEffectiveEmoji()), LrcEncoding);
+            File.WriteAllText(path, LrcFormat.Write(Document, LrcOptionsWithEffectiveEmoji(path)), LrcEncoding);
         }
         RememberSaveFolder(path);
         StatusText = $"表示中のタブ「{_activeTab.Name}」を保存しました: {Path.GetFileName(path)}（{Document.Lines.Count} 行）";
@@ -672,10 +672,12 @@ public partial class MainViewModel : ObservableObject
     /// <summary>
     /// lrc 書き出しオプション。@Emoji はドキュメント内の定義だけでなく、
     /// グローバル（テンプレート）分も含む実効リストを全件出力する。
+    /// 保存先フォルダ配下にある画像は相対パスで出力される。
     /// </summary>
-    private LrcWriteOptions LrcOptionsWithEffectiveEmoji() => new()
+    private LrcWriteOptions LrcOptionsWithEffectiveEmoji(string path) => new()
     {
         EmojiEntriesOverride = GetEffectiveEmojiList(),
+        BaseFolder = Path.GetDirectoryName(path),
     };
 
     /// <summary>テキスト編集モード形式の全文（クリップボード用）。</summary>
@@ -836,7 +838,7 @@ public partial class MainViewModel : ObservableObject
         }
         else
         {
-            File.WriteAllText(path, LrcFormat.Write(doc), LrcEncoding);
+            File.WriteAllText(path, LrcFormat.Write(doc, LrcOptionsWithEffectiveEmoji(path)), LrcEncoding);
         }
         MarkExported(indexes, true);
         RememberSaveFolder(path);
