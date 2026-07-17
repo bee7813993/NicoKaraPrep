@@ -114,11 +114,12 @@ public class TextEditModeFormatTests
     [Fact]
     public void lrcとの相互変換()
     {
-        // テキスト編集モード → lrc（チェック数・ルビ詳細は落ちるがタグと文字は保持）
+        // テキスト編集モード → lrc（タグと文字を保持。ルビは文字ごとのワイプタグ付きで出力）
         var doc = TextEditModeFormat.Parse("[2|00:12:34]歌{漢字|[1|00:13:00]かん＋[1|00:13:50]じ}");
         string lrc = LrcFormat.Write(doc);
         Assert.Contains("[00:12:34]歌[00:13:00]漢[00:13:50]字", lrc);
-        Assert.Contains("@Ruby1=漢字,かんじ", lrc);
+        // 「字(じ)」のタグ 00:13:50 はグループ先頭 00:13:00 から +50 のワイプ区切りになる
+        Assert.Contains("@Ruby1=漢字,かん[00:00:50]じ", lrc);
     }
 
     [Fact]

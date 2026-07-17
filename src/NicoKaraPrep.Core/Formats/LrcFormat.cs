@@ -183,13 +183,41 @@ public static class LrcFormat
     }
 
     /// <summary>
+    /// ルビ文字列に文字ごとワイプのタイムタグ（グループ先頭文字の時刻からの相対値）を埋め込む。
+    /// 例: "カ[00:00:15]ル[00:00:35]テッ[00:02:12]ト"。
+    /// 文字内の分割数はチェック数（= 1 + 口パク補助タグ数）、区切り時刻は補助タグの絶対時刻から求める。
+    /// </summary>
+    private static string BuildRubyWithWipeTags(List<CharUnit> groupChars, int groupTimeCs)
+    {
+        var sb = new StringBuilder();
+        bool firstUnit = true;
+        foreach (var c in groupChars)
+        {
+            if (string.IsNullOrEmpty(c.Ruby)) continue;
+
+            var units = RubyEntry.SplitIntoWipeUnits(c.Ruby, 1 + c.AuxTimeTagsCs.Count);
+            for (int u = 0; u < units.Count; u++)
+            {
+                int? abs = u == 0 ? c.TimeCs : (u - 1 < c.AuxTimeTagsCs.Count ? c.AuxTimeTagsCs[u - 1] : null);
+                if (!firstUnit && abs is int a && a > groupTimeCs)
+                {
+                    sb.Append(TimeTag.Format(a - groupTimeCs));
+                }
+                sb.Append(units[u]);
+                firstUnit = false;
+            }
+        }
+        return sb.ToString();
+    }
+
+    /// <summary>
     /// 文字単位のルビ情報から @Ruby エントリを生成する。
-    /// 同じ親文字がすべて同じ読みなら時刻なしの 1 件に集約し、
-    /// 読みが異なる場合は適用開始・終了時刻で区間を区切ったエントリを出力する。
+    /// 同じ親文字がすべて同じ内容（読み＋ワイプタイミング）なら時刻なしの 1 件に集約し、
+    /// 内容が異なる場合は適用開始・終了時刻で区間を区切ったエントリを出力する。
     /// </summary>
     public static List<RubyEntry> BuildRubyEntries(LyricsDocument doc)
     {
-        // グループ（親文字, ルビ, 時刻）を文書順に収集
+        // グループ（親文字, ワイプタグ入りルビ, 時刻）を文書順に収集
         var groups = new List<(string Parent, string Ruby, int TimeCs)>();
         int prevailingCs = 0;
 
@@ -207,22 +235,23 @@ public static class LrcFormat
                     continue;
                 }
 
-                var parent = new StringBuilder();
-                var ruby = new StringBuilder();
+                var groupChars = new List<CharUnit>();
                 int? groupTime = null;
                 int j = i;
                 while (j < realChars.Count)
                 {
                     var c = realChars[j];
-                    parent.Append(c.Text);
-                    ruby.Append(c.Ruby);
+                    groupChars.Add(c);
                     groupTime ??= c.TimeCs;
                     j++;
                     if (!realChars[j - 1].RubyJoinsNext) break;
                 }
+
+                int groupCs = groupTime ?? prevailingCs;
+                string ruby = BuildRubyWithWipeTags(groupChars, groupCs);
                 if (ruby.Length > 0)
                 {
-                    groups.Add((parent.ToString(), ruby.ToString(), groupTime ?? prevailingCs));
+                    groups.Add((string.Concat(groupChars.Select(c => c.Text)), ruby, groupCs));
                 }
                 i = j;
             }

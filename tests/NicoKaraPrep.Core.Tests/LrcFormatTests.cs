@@ -158,6 +158,61 @@ public class LrcFormatTests
     }
 
     [Fact]
+    public void ルビ生成_文字ごとワイプのタグを埋め込む()
+    {
+        // 躓(つまづ): チェック3（補助タグ2つ）→ つ[+11]ま[+31]づ（グループ先頭からの相対時刻）
+        var doc = new LyricsDocument();
+        var line = LrcFormat.ParseLyricLine("[00:40:82]躓[00:41:40]");
+        line.Chars[0].Ruby = "つまづ";
+        line.Chars[0].CheckCount = 3;
+        line.Chars[0].AuxTimeTagsCs.Add(4093);
+        line.Chars[0].AuxTimeTagsCs.Add(4113);
+        doc.Lines.Add(line);
+
+        string written = LrcFormat.Write(doc);
+        Assert.Contains("@Ruby1=躓,つ[00:00:11]ま[00:00:31]づ", written);
+    }
+
+    [Fact]
+    public void ルビ生成_複数文字の親は各文字の時刻で区切り促音は前に付く()
+    {
+        // Quartet 相当: Q(カ) u(なし) r(ル) t(テッ) t(ト) を連結（実ファイルの値）
+        var doc = new LyricsDocument();
+        var line = LrcFormat.ParseLyricLine("[00:05:46]Q[00:05:50]u[00:05:61]r[00:05:81]t[00:07:58]t[00:08:00]");
+        line.Chars[0].Ruby = "カ";
+        line.Chars[0].RubyJoinsNext = true;
+        line.Chars[1].RubyJoinsNext = true; // u はルビなしで連結のみ
+        line.Chars[2].Ruby = "ル";
+        line.Chars[2].RubyJoinsNext = true;
+        line.Chars[3].Ruby = "テッ";
+        line.Chars[3].RubyJoinsNext = true;
+        line.Chars[4].Ruby = "ト";
+        doc.Lines.Add(line);
+
+        string written = LrcFormat.Write(doc);
+        Assert.Contains("@Ruby1=Qurtt,カ[00:00:15]ル[00:00:35]テッ[00:02:12]ト", written);
+    }
+
+    [Fact]
+    public void ルビワイプタグのラウンドトリップ()
+    {
+        string src = string.Join("\r\n",
+            "@Ruby1=毎,ま[00:00:18]い",
+            "[00:14:28]毎[00:15:00]日[00:15:50]",
+            "");
+        var doc = LrcFormat.Parse(src);
+
+        // 読みはタグ抜きで文字に付き、ワイプは補助タグ（絶対時刻）として復元される
+        var mai = doc.Lines[0].Chars[0];
+        Assert.Equal("まい", mai.Ruby);
+        Assert.Equal(2, mai.CheckCount);
+        Assert.Equal(1446, Assert.Single(mai.AuxTimeTagsCs));
+
+        string written = LrcFormat.Write(doc);
+        Assert.Contains("@Ruby1=毎,ま[00:00:18]い", written);
+    }
+
+    [Fact]
     public void 絵文字_デフォルトは全件出力()
     {
         var doc = new LyricsDocument();

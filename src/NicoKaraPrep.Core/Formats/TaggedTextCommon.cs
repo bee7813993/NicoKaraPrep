@@ -101,11 +101,26 @@ internal static class TaggedTextCommon
 
                     if (Enumerable.Range(i, matchLen).Any(k => realChars[k].HasRubyInfo)) continue;
 
+                    // ルビ内のワイプタグ（グループ先頭からの相対時刻）を分離する
+                    var (plainRuby, segments) = RubyEntry.ParseWipeSegments(entry.Ruby);
+
                     for (int k = 0; k < matchLen; k++)
                     {
                         var c = realChars[i + k];
-                        c.Ruby = k == 0 ? entry.Ruby : "";
+                        c.Ruby = k == 0 ? plainRuby : "";
                         c.RubyJoinsNext = k < matchLen - 1;
+                    }
+
+                    // ワイプタグ付きなら先頭文字にチェック数・口パク補助タグ（絶対時刻）として復元する
+                    if (segments.Count > 1)
+                    {
+                        var head = realChars[i];
+                        head.CheckCount = Math.Max(1, segments.Count);
+                        head.AuxTimeTagsCs.Clear();
+                        foreach (var (_, rel) in segments.Skip(1))
+                        {
+                            if (rel is int r) head.AuxTimeTagsCs.Add(matchCs + r);
+                        }
                     }
                     used.Add(entry);
                     i += matchLen;
