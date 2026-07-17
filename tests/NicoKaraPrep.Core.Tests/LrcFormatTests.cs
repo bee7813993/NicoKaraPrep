@@ -129,22 +129,32 @@ public class LrcFormatTests
     }
 
     [Fact]
-    public void ルビ生成_同一親文字で読みが違えば時刻付きになる()
+    public void ルビ生成_同一親文字で読みが違えば適用区間で区切られる()
     {
         var doc = new LyricsDocument();
         var line1 = LrcFormat.ParseLyricLine("[00:01:00]風[00:02:00]");
         line1.Chars[0].Ruby = "かぜ";
         var line2 = LrcFormat.ParseLyricLine("[00:10:00]風[00:11:00]");
         line2.Chars[0].Ruby = "ふう";
+        var line3 = LrcFormat.ParseLyricLine("[00:20:00]風[00:21:00]");
+        line3.Chars[0].Ruby = "かぜ";
         doc.Lines.Add(line1);
         doc.Lines.Add(line2);
+        doc.Lines.Add(line3);
 
         var entries = LrcFormat.BuildRubyEntries(doc);
-        Assert.Equal(2, entries.Count);
-        Assert.Null(entries[0].StartCs);
-        Assert.Equal("かぜ", entries[0].Ruby);
-        Assert.Equal(1000, entries[1].StartCs); // [00:10:00] = 1000cs
-        Assert.Equal("ふう", entries[1].Ruby);
+        Assert.Equal(3, entries.Count);
+
+        // 区間が連続して閉じている（最初は開始なし、最後は終了なし）
+        Assert.Equal(("かぜ", (int?)null, (int?)1000), (entries[0].Ruby, entries[0].StartCs, entries[0].EndCs));
+        Assert.Equal(("ふう", (int?)1000, (int?)2000), (entries[1].Ruby, entries[1].StartCs, entries[1].EndCs));
+        Assert.Equal(("かぜ", (int?)2000, (int?)null), (entries[2].Ruby, entries[2].StartCs, entries[2].EndCs));
+
+        // タグ表記: 開始なしは「,,終了」形式
+        string written = LrcFormat.Write(doc);
+        Assert.Contains("@Ruby1=風,かぜ,,[00:10:00]", written);
+        Assert.Contains("@Ruby2=風,ふう,[00:10:00],[00:20:00]", written);
+        Assert.Contains("@Ruby3=風,かぜ,[00:20:00]", written);
     }
 
     [Fact]

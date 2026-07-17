@@ -185,7 +185,7 @@ public static class LrcFormat
     /// <summary>
     /// 文字単位のルビ情報から @Ruby エントリを生成する。
     /// 同じ親文字がすべて同じ読みなら時刻なしの 1 件に集約し、
-    /// 読みが異なる場合は 2 件目以降に適用開始時刻を付ける。
+    /// 読みが異なる場合は適用開始・終了時刻で区間を区切ったエントリを出力する。
     /// </summary>
     public static List<RubyEntry> BuildRubyEntries(LyricsDocument doc)
     {
@@ -238,17 +238,23 @@ public static class LrcFormat
                 continue;
             }
 
-            // 読みが変わる位置ごとにエントリ化（最初は時刻なし、以降は開始時刻付き）
+            // 読みが変わる位置ごとにエントリ化し、適用区間で完全に区切る:
+            // 各エントリの適用終了 = 次のエントリの適用開始（最初は開始なし、最後は終了なし）。
+            // 区間を閉じずに複数エントリを出すと、ニコカラメーカーが
+            // 「ルビ情報が複数存在するため、適切なルビを選択できていない場合があります」と警告する。
+            var changes = new List<(string Ruby, int TimeCs)>();
             string? lastRuby = null;
-            bool first = true;
             foreach (var g in list)
             {
                 if (g.Ruby == lastRuby) continue;
-                result.Add(first
-                    ? new RubyEntry(byParent.Key, g.Ruby)
-                    : new RubyEntry(byParent.Key, g.Ruby, g.TimeCs));
+                changes.Add((g.Ruby, g.TimeCs));
                 lastRuby = g.Ruby;
-                first = false;
+            }
+            for (int k = 0; k < changes.Count; k++)
+            {
+                int? start = k == 0 ? null : changes[k].TimeCs;
+                int? end = k + 1 < changes.Count ? changes[k + 1].TimeCs : null;
+                result.Add(new RubyEntry(byParent.Key, changes[k].Ruby, start, end));
             }
         }
 
