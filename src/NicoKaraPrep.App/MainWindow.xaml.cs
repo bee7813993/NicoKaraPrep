@@ -1456,10 +1456,24 @@ public sealed partial class MainWindow : Window
         return pitch;
     }
 
+    /// <summary>
+    /// 行情報欄の幅を想定最大の情報文字列から一度だけ決めて固定する。
+    /// Auto 幅のままだと編集のたびに内容の桁数で列幅が伸縮し、
+    /// 情報と歌詞の境目が動いて見づらくなるため。
+    /// </summary>
+    private void EnsureGutterFixedWidth()
+    {
+        if (!double.IsNaN(InsertGutterScroll.Width)) return;
+        var tb = new TextBlock { FontSize = 12, Text = "00:00:00→00:00:00 8888px 888%" };
+        tb.Measure(new Windows.Foundation.Size(double.PositiveInfinity, double.PositiveInfinity));
+        InsertGutterScroll.Width = Math.Ceiling(tb.DesiredSize.Width) + 8;
+    }
+
     /// <summary>行情報欄（開始→終了時刻・横幅）をドキュメントの現在内容から作り直す。</summary>
     private void RefreshInsertGutter()
     {
         if (!InsertViewActive) return;
+        EnsureGutterFixedWidth();
         EnsureGutterProbeBaseline();
 
         var defaultBrush = (Microsoft.UI.Xaml.Media.Brush)Microsoft.UI.Xaml.Application.Current.Resources["TextFillColorSecondaryBrush"];
@@ -1479,6 +1493,7 @@ public sealed partial class MainWindow : Window
                 FontSize = 12,
                 Height = pitch,
                 Foreground = defaultBrush,
+                TextTrimming = Microsoft.UI.Xaml.TextTrimming.CharacterEllipsis, // 固定幅からはみ出す場合は省略
             };
 
             void AddRun(string text, Microsoft.UI.Xaml.Media.Brush? brush)
