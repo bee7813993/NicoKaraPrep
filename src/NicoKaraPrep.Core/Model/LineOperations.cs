@@ -13,6 +13,24 @@ public static class LineOperations
         var line = doc.Lines[lineIndex];
         charIndex = Math.Clamp(charIndex, 0, line.Chars.Count);
 
+        // 分割位置以降に実文字が無い（スペーサーだけ、または何も無い）場合は「行末で分割」
+        // とみなし、行末タグや不可視スペーサーは前半行へ残して本当の空行を作る。
+        // そうしないと見た目は空行なのにタグだけが残り、ページ区切りにならない。
+        bool tailHasRealChar = false;
+        for (int i = charIndex; i < line.Chars.Count; i++)
+        {
+            if (!line.Chars[i].IsSpacer)
+            {
+                tailHasRealChar = true;
+                break;
+            }
+        }
+        if (!tailHasRealChar)
+        {
+            doc.Lines.Insert(lineIndex + 1, new LyricsLine { SplitOrderKey = line.SplitOrderKey });
+            return;
+        }
+
         // 分割後の後半行は元の行と同じ位置キーを引き継ぐ（マージ時に元の行の直後へ並ぶ）
         var newLine = new LyricsLine { EndTimeCs = line.EndTimeCs, SplitOrderKey = line.SplitOrderKey };
         for (int i = charIndex; i < line.Chars.Count; i++)

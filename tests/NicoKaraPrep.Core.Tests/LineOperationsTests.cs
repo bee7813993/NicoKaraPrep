@@ -68,6 +68,31 @@ public class LineOperationsTests
     }
 
     [Fact]
+    public void 行末で分割すると本当の空行ができる()
+    {
+        // 行末タグ（EndTimeCs）は前半行に残り、後半はページ区切りになる空行
+        var doc = Doc("[1|00:01:00]あい[00:02:00]");
+        LineOperations.SplitLine(doc, 0, 2);
+
+        Assert.Equal(2, doc.Lines.Count);
+        Assert.True(doc.Lines[1].IsEmpty);
+        Assert.Equal("[1|00:01:00]あい[00:02:00]", TextEditModeFormat.WriteLyricLine(doc.Lines[0]));
+    }
+
+    [Fact]
+    public void 行末のスペーサー手前で分割しても本当の空行ができる()
+    {
+        // 行末が 2 連タグ（実文字 + タグ付きスペーサー + 行末タグ）の行を
+        // 挿入ビューの「行末」相当位置（スペーサーの手前）で分割する
+        var doc = Doc("[1|00:01:00]あ[00:02:00][00:03:00]");
+        LineOperations.SplitLine(doc, 0, 1);
+
+        Assert.Equal(2, doc.Lines.Count);
+        Assert.True(doc.Lines[1].IsEmpty);
+        Assert.Equal("[1|00:01:00]あ[00:02:00][00:03:00]", TextEditModeFormat.WriteLyricLine(doc.Lines[0]));
+    }
+
+    [Fact]
     public void 分割して結合すると元に戻る()
     {
         string src = "[2|00:01:00]歌詞のテスト[00:03:00]";

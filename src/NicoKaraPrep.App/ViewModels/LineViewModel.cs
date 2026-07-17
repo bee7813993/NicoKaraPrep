@@ -64,8 +64,16 @@ public partial class LineViewModel : ObservableObject
         FontSizeText = $"{sizePx:F0}";
     }
 
-    /// <summary>表示テキスト（空行は視認用の記号）。</summary>
-    public string DisplayText => Model.IsEmpty ? "── ページ区切り ──" : Model.GetDisplayText();
+    /// <summary>表示テキスト（空行は視認用の記号。タグだけが残った行は注意書きを出す）。</summary>
+    public string DisplayText
+    {
+        get
+        {
+            if (Model.IsEmpty) return "── ページ区切り ──";
+            string text = Model.GetDisplayText();
+            return text.Length == 0 ? "（タグのみの行 ─ ページ区切りにはなりません）" : text;
+        }
+    }
 
     public bool Exported
     {
