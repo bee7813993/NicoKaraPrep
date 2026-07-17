@@ -447,7 +447,7 @@ public partial class MainViewModel : ObservableObject
                 RlfFormat.WriteFile(path, Document);
                 break;
             default:
-                File.WriteAllText(path, LrcFormat.Write(Document), LrcEncoding);
+                File.WriteAllText(path, LrcFormat.Write(Document, LrcOptionsWithEffectiveEmoji()), LrcEncoding);
                 break;
         }
         CurrentFilePath = path;
@@ -500,7 +500,7 @@ public partial class MainViewModel : ObservableObject
         }
         else
         {
-            File.WriteAllText(path, LrcFormat.Write(merged), LrcEncoding);
+            File.WriteAllText(path, LrcFormat.Write(merged, LrcOptionsWithEffectiveEmoji()), LrcEncoding);
         }
 
         var main = Tabs.First(t => t.IsMain);
@@ -573,7 +573,7 @@ public partial class MainViewModel : ObservableObject
         }
         else
         {
-            File.WriteAllText(path, LrcFormat.Write(Document), LrcEncoding);
+            File.WriteAllText(path, LrcFormat.Write(Document, LrcOptionsWithEffectiveEmoji()), LrcEncoding);
         }
         RememberSaveFolder(path);
         StatusText = $"表示中のタブ「{_activeTab.Name}」を保存しました: {Path.GetFileName(path)}（{Document.Lines.Count} 行）";
@@ -668,6 +668,15 @@ public partial class MainViewModel : ObservableObject
 
     public static DocumentFormat FormatFromExtension(string path) =>
         Path.GetExtension(path).ToLowerInvariant() == ".rlf" ? DocumentFormat.Rlf : DocumentFormat.Lrc;
+
+    /// <summary>
+    /// lrc 書き出しオプション。@Emoji はドキュメント内の定義だけでなく、
+    /// グローバル（テンプレート）分も含む実効リストを全件出力する。
+    /// </summary>
+    private LrcWriteOptions LrcOptionsWithEffectiveEmoji() => new()
+    {
+        EmojiEntriesOverride = GetEffectiveEmojiList(),
+    };
 
     /// <summary>テキスト編集モード形式の全文（クリップボード用）。</summary>
     public string GetTextEditModeText() => TextEditModeFormat.Write(Document);

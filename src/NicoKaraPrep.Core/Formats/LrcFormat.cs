@@ -12,8 +12,14 @@ public sealed class LrcWriteOptions
     /// <summary>@Emoji タグを出力するか。</summary>
     public bool EmitEmojiTags { get; set; } = true;
 
-    /// <summary>歌詞中で使われている置き換え文字の @Emoji だけを出力する（false で全件出力）。</summary>
-    public bool EmitOnlyUsedEmoji { get; set; } = true;
+    /// <summary>true なら歌詞中で使われている置き換え文字列の @Emoji だけを出力する。デフォルトは全件出力。</summary>
+    public bool EmitOnlyUsedEmoji { get; set; }
+
+    /// <summary>
+    /// @Emoji の出力元リスト。null ならドキュメント内の定義（doc.EmojiEntries）を使う。
+    /// アプリからはグローバル分も含む実効リストを渡す。
+    /// </summary>
+    public IReadOnlyList<EmojiEntry>? EmojiEntriesOverride { get; set; }
 
     /// <summary>@Ruby タグを出力するか。</summary>
     public bool EmitRubyTags { get; set; } = true;
@@ -108,17 +114,22 @@ public static class LrcFormat
 
     private static IEnumerable<EmojiEntry> SelectEmojiEntries(LyricsDocument doc, LrcWriteOptions options)
     {
-        if (!options.EmitOnlyUsedEmoji) return doc.EmojiEntries;
+        IEnumerable<EmojiEntry> source =
+            (options.EmojiEntriesOverride ?? (IReadOnlyList<EmojiEntry>)doc.EmojiEntries)
+            .Where(e => e.ReplaceChar.Length > 0);
+        if (!options.EmitOnlyUsedEmoji) return source;
 
-        var usedChars = new HashSet<string>();
+        // 置き換え文字列は複数文字のことがあるため、1 文字単位ではなく出現検索で判定する
+        var matcher = new EmojiMatcher(source.Select(e => e.ReplaceChar));
+        var used = new HashSet<string>();
         foreach (var line in doc.Lines)
         {
-            foreach (var c in line.Chars)
+            foreach (var occ in matcher.FindOccurrences(line.Chars))
             {
-                if (!c.IsSpacer) usedChars.Add(c.Text);
+                used.Add(occ.Value);
             }
         }
-        return doc.EmojiEntries.Where(e => usedChars.Contains(e.ReplaceChar));
+        return source.Where(e => used.Contains(e.ReplaceChar));
     }
 
     /// <summary>歌詞 1 行をタイムタグ付きテキストにする。</summary>

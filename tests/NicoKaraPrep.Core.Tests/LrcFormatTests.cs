@@ -148,7 +148,7 @@ public class LrcFormatTests
     }
 
     [Fact]
-    public void 絵文字_使用中のみ出力()
+    public void 絵文字_デフォルトは全件出力()
     {
         var doc = new LyricsDocument();
         doc.EmojiEntries.Add(new EmojiEntry { ReplaceChar = "★", ImageBefore = "a.png" });
@@ -157,9 +157,33 @@ public class LrcFormatTests
 
         string written = LrcFormat.Write(doc);
         Assert.Contains("@Emoji=★,a.png", written);
-        Assert.DoesNotContain("@Emoji=♪,b.png", written);
+        Assert.Contains("@Emoji=♪,b.png", written);
+    }
 
-        string writtenAll = LrcFormat.Write(doc, new LrcWriteOptions { EmitOnlyUsedEmoji = false });
-        Assert.Contains("@Emoji=♪,b.png", writtenAll);
+    [Fact]
+    public void 絵文字_使用中のみ出力は複数文字の置き換え文字列でも判定できる()
+    {
+        var doc = new LyricsDocument();
+        doc.EmojiEntries.Add(new EmojiEntry { ReplaceChar = "(歩夢)", ImageBefore = "a.png" });
+        doc.EmojiEntries.Add(new EmojiEntry { ReplaceChar = "(愛)", ImageBefore = "b.png" });
+        doc.Lines.Add(LrcFormat.ParseLyricLine("[00:01:00](歩夢)だけ使う[00:02:00]"));
+
+        string written = LrcFormat.Write(doc, new LrcWriteOptions { EmitOnlyUsedEmoji = true });
+        Assert.Contains("@Emoji=(歩夢),a.png", written);
+        Assert.DoesNotContain("@Emoji=(愛),b.png", written);
+    }
+
+    [Fact]
+    public void 絵文字_実効リストの上書き出力()
+    {
+        var doc = new LyricsDocument();
+        doc.Lines.Add(LrcFormat.ParseLyricLine("[00:01:00]あ[00:02:00]"));
+
+        var effective = new List<EmojiEntry>
+        {
+            new() { ReplaceChar = "(歩夢)", ImageBefore = "a.png", Options = "NoDecor,Zoom=150" },
+        };
+        string written = LrcFormat.Write(doc, new LrcWriteOptions { EmojiEntriesOverride = effective });
+        Assert.Contains("@Emoji=(歩夢),a.png,,NoDecor,Zoom=150", written);
     }
 }
