@@ -109,6 +109,57 @@ public sealed partial class MainWindow : Window
             };
             timer.Start();
         }
+
+        // デバッグ用: 再チェック発火の検証シナリオ
+        // （挿入ビュー→＿挿入→復帰→行エディタ適用→タブ分離→解除 を 1.5 秒間隔で自動実行）
+        if (args.Contains("--debug-recheck"))
+        {
+            int step = 0;
+            var timer = DispatcherQueue.GetForCurrentThread().CreateTimer();
+            timer.Interval = TimeSpan.FromMilliseconds(1500);
+            timer.IsRepeating = true;
+            timer.Tick += (_, _) =>
+            {
+                step++;
+                DebugLog($"debug-recheck step {step}");
+                switch (step)
+                {
+                    case 1:
+                        EmojiModeToggle.IsChecked = true;
+                        break;
+                    case 2:
+                        InsertEmojiStringInView(ViewModel.Settings.PlaceholderChar);
+                        break;
+                    case 3:
+                        EmojiModeToggle.IsChecked = false;
+                        break;
+                    case 4:
+                        SelectLineAt(0);
+                        LineEditor.Text = (ViewModel.SelectedLine?.RawText ?? "") + "ああああああああああ";
+                        ApplyLineEditor();
+                        break;
+                    case 5:
+                        TryRun(() =>
+                        {
+                            var tab = ViewModel.SplitSelectedToNewTab(new List<int> { 0, 1 });
+                            if (tab is not null)
+                            {
+                                ViewModel.SwitchTab(ViewModel.Tabs.IndexOf(tab));
+                                SyncTabSelection();
+                                RefreshAfterTabChange();
+                            }
+                        });
+                        break;
+                    case 6:
+                        TryRun(ViewModel.ResetAllTabs);
+                        SyncTabSelection();
+                        RefreshAfterTabChange();
+                        timer.Stop();
+                        break;
+                }
+            };
+            timer.Start();
+        }
     }
 
     private static void DebugLog(string message)

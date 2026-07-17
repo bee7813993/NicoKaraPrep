@@ -114,6 +114,7 @@ public partial class LineViewModel : ObservableObject
             WidthGlyph = "";
             WidthSeverity = null;
             WidthUsagePercent = 0;
+            OnPropertyChanged(nameof(WidthBrush));
             return;
         }
         WidthText = $"{result.WidthPx:F0}px {result.UsagePercent:F0}%";
@@ -125,7 +126,22 @@ public partial class LineViewModel : ObservableObject
             IssueSeverity.Warning => "⚠",
             _ => "",
         };
+        OnPropertyChanged(nameof(WidthBrush));
     }
+
+    /// <summary>
+    /// 横幅セルの文字色。マージン不足・はみ出しは重要度の色、
+    /// それ以外でも使用率 90% 超は警告色で予告（挿入ビューの行情報欄と同じ規則）。
+    /// </summary>
+    public Microsoft.UI.Xaml.Media.Brush WidthBrush =>
+        WidthSeverity switch
+        {
+            IssueSeverity.Error => ErrorTimeBrush,
+            IssueSeverity.Warning => WarningTimeBrush,
+            _ => WidthUsagePercent > 90
+                ? WarningTimeBrush
+                : (Microsoft.UI.Xaml.Media.Brush)Microsoft.UI.Xaml.Application.Current.Resources["TextFillColorSecondaryBrush"],
+        };
 
     public void SetOverlapInfo(bool overlapped) => OverlapGlyph = overlapped ? "♪" : "";
 

@@ -291,7 +291,7 @@
                                 <TextBlock Grid.Column="6" Text="{x:Bind WidthGlyph, Mode=OneWay}" ToolTipService.ToolTip="横幅チェック結果" />
                                 <TextBlock Grid.Column="7" Text="{x:Bind FontText, Mode=OneWay}" FontSize="11" Foreground="{ThemeResource TextFillColorSecondaryBrush}" TextTrimming="CharacterEllipsis" VerticalAlignment="Center" ToolTipService.ToolTip="{x:Bind FontText, Mode=OneWay}" />
                                 <TextBlock Grid.Column="8" Text="{x:Bind FontSizeText, Mode=OneWay}" FontSize="11" Foreground="{ThemeResource TextFillColorSecondaryBrush}" VerticalAlignment="Center" ToolTipService.ToolTip="フォントサイズ px" />
-                                <TextBlock Grid.Column="9" Text="{x:Bind WidthText, Mode=OneWay}" FontSize="12" Foreground="{ThemeResource TextFillColorSecondaryBrush}" VerticalAlignment="Center" />
+                                <TextBlock Grid.Column="9" Text="{x:Bind WidthText, Mode=OneWay}" FontSize="12" Foreground="{x:Bind WidthBrush, Mode=OneWay}" VerticalAlignment="Center" ToolTipService.ToolTip="横幅 px と有効幅（マージン除き）に対する使用率。90% 超はオレンジで予告" />
                                 <TextBlock Grid.Column="10" Text="{x:Bind DisplayText, Mode=OneWay}" TextTrimming="CharacterEllipsis" />
                             </Grid>
                         </DataTemplate>
