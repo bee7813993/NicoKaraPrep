@@ -81,6 +81,7 @@ public sealed partial class MainWindow : Window
         }
         RefreshRecentFilesMenu();
         LoadQuickEmojiSettings();
+        RebuildInsertKeyBindings();
 
         // デバッグ用: 起動直後に絵文字リスト編集を自動で開く
         if (args.Contains("--debug-emoji-dialog"))
@@ -108,6 +109,16 @@ public sealed partial class MainWindow : Window
                 DebugLog("絵文字挿入ビューを自動オープンします");
                 EmojiModeToggle.IsChecked = true;
             };
+            timer.Start();
+        }
+
+        // デバッグ用: 起動直後にキー割り当てダイアログを開く
+        if (args.Contains("--debug-keybindings"))
+        {
+            var timer = DispatcherQueue.GetForCurrentThread().CreateTimer();
+            timer.Interval = TimeSpan.FromMilliseconds(1500);
+            timer.IsRepeating = false;
+            timer.Tick += (_, _) => OnKeyBindingsClick(this, new RoutedEventArgs());
             timer.Start();
         }
 
@@ -615,6 +626,18 @@ public sealed partial class MainWindow : Window
         if (file is null) return;
         TryRun(() => ViewModel.ApplyN3ProjSettings(file.Path));
         ScheduleValidation();
+    }
+
+    private async void OnKeyBindingsClick(object sender, RoutedEventArgs e)
+    {
+        var dialog = new KeyBindingsDialog(_insertKeys) { XamlRoot = Content.XamlRoot };
+        if (await dialog.ShowAsync() == ContentDialogResult.Primary)
+        {
+            ViewModel.Settings.InsertViewKeys = InsertViewKeyMap.ToStored(dialog.Result);
+            ViewModel.Settings.Save();
+            RebuildInsertKeyBindings();
+            ViewModel.StatusText = "キー割り当てを保存しました（挿入ビュー上部の凡例に反映）";
+        }
     }
 
     private async void OnSettingsClick(object sender, RoutedEventArgs e)
@@ -1228,7 +1251,7 @@ public sealed partial class MainWindow : Window
         InsertEditor.SelectionStart = Math.Min(caret, InsertEditor.Text.Length);
         RefreshInsertGutter();
         UpdateInsertCursorInfo();
-        ViewModel.StatusText = "絵文字挿入ビュー: 1–0 / Q–P で挿入、BS/Del で絵文字削除、Space/D/A/S/Z/X で再生操作、F で再生追従、Esc で終了";
+        ViewModel.StatusText = "絵文字挿入ビュー: 1–0 / Q–P で挿入。キー操作は上部の凡例参照（ファイル > キー割り当て で変更可）、Esc で終了";
     }
 
     private void ExitInsertView()
@@ -1249,10 +1272,101 @@ public sealed partial class MainWindow : Window
         ViewModel.StatusText = "絵文字挿入ビューを終了しました";
     }
 
-    // JIS/US 配列共通の OEM キー（VirtualKey enum に名前が無いためコードで判定）
-    private const Windows.System.VirtualKey KeySlash = (Windows.System.VirtualKey)191;      // '/'（め）
-    private const Windows.System.VirtualKey KeyBackslashYen = (Windows.System.VirtualKey)220; // '￥'
-    private const Windows.System.VirtualKey KeyBackslashRo = (Windows.System.VirtualKey)226;  // '＼'（ろ）
+    // ------------------------------------------------ 挿入ビューのキー割り当て
+
+    private Dictionary<InsertViewAction, string> _insertKeys = new();
+    private Dictionary<Windows.System.VirtualKey, InsertViewAction> _insertKeyLookup = new();
+
+    /// <summary>設定からキー割り当てを再構築し、凡例表示も更新する。</summary>
+    private void RebuildInsertKeyBindings()
+    {
+        _insertKeys = InsertViewKeyMap.Normalize(ViewModel.Settings.InsertViewKeys);
+        _insertKeyLookup = new Dictionary<Windows.System.VirtualKey, InsertViewAction>();
+        foreach (var (action, keyId) in _insertKeys)
+        {
+            foreach (var vk in InsertViewKeyMap.ToVirtualKeys(keyId))
+            {
+                _insertKeyLookup[vk] = action;
+            }
+        }
+        UpdateInsertLegend();
+        UpdateFollowIndicator();
+    }
+
+    /// <summary>現在のキー割り当てから挿入ビューの凡例テキストを組み立てる。</summary>
+    private void UpdateInsertLegend()
+    {
+        string K(InsertViewAction a) => InsertViewKeyMap.KeyLabel(_insertKeys[a]);
+        InsertLegend.Text =
+            $"1–0 / Q–P: 絵文字挿入　{K(InsertViewAction.PlaceholderInsert)}: ＿挿入　{K(InsertViewAction.LeadTagInsert)}: 先行タグ挿入　" +
+            $"{K(InsertViewAction.SpaceInsert)}: 空白挿入（Shift+{K(InsertViewAction.SpaceInsert)}: 全角）　BS / Del: 絵文字・空白削除　" +
+            $"{K(InsertViewAction.PlayPause)}: 再生/一時停止　{K(InsertViewAction.PlayFromCursor)}: カーソル位置から再生　" +
+            $"{K(InsertViewAction.Play)}: 再生　{K(InsertViewAction.Pause)}: 一時停止　" +
+            $"{K(InsertViewAction.SeekBack)} / {K(InsertViewAction.SeekForward)}: 数秒戻る / 進む　{K(InsertViewAction.FollowToggle)}: 再生追従　" +
+            $"{K(InsertViewAction.SplitLine)}: 行分割　{K(InsertViewAction.JoinLine)}: 行結合（Shift+{K(InsertViewAction.JoinLine)}: スペースを挟む）　" +
+            "Ctrl+Z / Y: 元に戻す / やり直し　Esc: 終了（キーは ファイル > キー割り当て で変更可）";
+    }
+
+    /// <summary>割り当てられた機能を実行する。</summary>
+    private void ExecuteInsertViewAction(InsertViewAction action, bool shift)
+    {
+        switch (action)
+        {
+            case InsertViewAction.PlaceholderInsert:
+                if (!string.IsNullOrEmpty(ViewModel.Settings.PlaceholderChar))
+                {
+                    InsertEmojiStringInView(ViewModel.Settings.PlaceholderChar);
+                }
+                break;
+            case InsertViewAction.LeadTagInsert:
+                TryRun(() =>
+                {
+                    int? caret = ViewModel.InsertLeadTagAtViewOffset(InsertEditor.SelectionStart);
+                    if (caret is int c) RefreshInsertView(c);
+                });
+                ScheduleValidation();
+                break;
+            case InsertViewAction.SpaceInsert:
+                TryRun(() =>
+                {
+                    int? caret = ViewModel.InsertSpaceAtViewOffset(InsertEditor.SelectionStart, fullWidth: shift);
+                    if (caret is int c) RefreshInsertView(c);
+                });
+                ScheduleValidation();
+                break;
+            case InsertViewAction.PlayPause:
+                TogglePlayPause();
+                break;
+            case InsertViewAction.PlayFromCursor:
+                PlayFromInsertCursor();
+                break;
+            case InsertViewAction.Play:
+                PlayMedia();
+                break;
+            case InsertViewAction.Pause:
+                PauseMedia();
+                break;
+            case InsertViewAction.SeekBack:
+                SeekBy(-ViewModel.Settings.SeekSeconds);
+                break;
+            case InsertViewAction.SeekForward:
+                SeekBy(+ViewModel.Settings.SeekSeconds);
+                break;
+            case InsertViewAction.FollowToggle:
+                _insertFollow = !_insertFollow;
+                UpdateFollowIndicator();
+                ViewModel.StatusText = _insertFollow
+                    ? "再生追従カーソル ON: 再生中は次に歌われる文字の位置へカーソルが移動します"
+                    : "再生追従カーソル OFF";
+                break;
+            case InsertViewAction.SplitLine:
+                SplitLineInView();
+                break;
+            case InsertViewAction.JoinLine:
+                JoinLineInView(insertSpace: shift);
+                break;
+        }
+    }
 
     private void OnInsertEditorPreviewKeyDown(object sender, KeyRoutedEventArgs e)
     {
@@ -1291,43 +1405,6 @@ public sealed partial class MainWindow : Window
                 EmojiModeToggle.IsChecked = false;
                 e.Handled = true;
                 return;
-            case Windows.System.VirtualKey.B:
-                // プレースホルダ（＿）をアイコン同等のタイムタグ付きで挿入
-                if (!string.IsNullOrEmpty(ViewModel.Settings.PlaceholderChar))
-                {
-                    InsertEmojiStringInView(ViewModel.Settings.PlaceholderChar);
-                }
-                e.Handled = true;
-                return;
-            case Windows.System.VirtualKey.G:
-                // 先行タグ（文字なし、直後のタグの表示秒数前）を挿入
-                TryRun(() =>
-                {
-                    int? caret = ViewModel.InsertLeadTagAtViewOffset(InsertEditor.SelectionStart);
-                    if (caret is int c) RefreshInsertView(c);
-                });
-                ScheduleValidation();
-                e.Handled = true;
-                return;
-            case Windows.System.VirtualKey.K:
-                // 空白挿入（Shift で全角）。文字位置の調整用
-                TryRun(() =>
-                {
-                    int? caret = ViewModel.InsertSpaceAtViewOffset(InsertEditor.SelectionStart, fullWidth: shift);
-                    if (caret is int c) RefreshInsertView(c);
-                });
-                ScheduleValidation();
-                e.Handled = true;
-                return;
-            case Windows.System.VirtualKey.Space:
-                TogglePlayPause();
-                e.Handled = true;
-                return;
-            case Windows.System.VirtualKey.Enter:
-                // 旧割り当て（カーソル位置から再生）の案内だけ出す
-                ViewModel.StatusText = "カーソル位置から再生は D キーになりました（Space: 再生/一時停止）";
-                e.Handled = true;
-                return;
             case Windows.System.VirtualKey.Back:
             case Windows.System.VirtualKey.Delete:
                 TryRun(() =>
@@ -1340,43 +1417,14 @@ public sealed partial class MainWindow : Window
                 ScheduleValidation();
                 e.Handled = true;
                 return;
-            case Windows.System.VirtualKey.F:
-                _insertFollow = !_insertFollow;
-                UpdateFollowIndicator();
-                ViewModel.StatusText = _insertFollow
-                    ? "再生追従カーソル ON: 再生中は次に歌われる文字の位置へカーソルが移動します"
-                    : "再生追従カーソル OFF";
-                e.Handled = true;
-                return;
-            case Windows.System.VirtualKey.A:
-                PlayMedia();
-                e.Handled = true;
-                return;
-            case Windows.System.VirtualKey.S:
-                PauseMedia();
-                e.Handled = true;
-                return;
-            case Windows.System.VirtualKey.D:
-                PlayFromInsertCursor();
-                e.Handled = true;
-                return;
-            case Windows.System.VirtualKey.Z:
-                SeekBy(-ViewModel.Settings.SeekSeconds);
-                e.Handled = true;
-                return;
-            case Windows.System.VirtualKey.X:
-                SeekBy(+ViewModel.Settings.SeekSeconds);
-                e.Handled = true;
-                return;
-            case KeySlash:
-                SplitLineInView();
-                e.Handled = true;
-                return;
-            case KeyBackslashYen:
-            case KeyBackslashRo:
-                JoinLineInView(insertSpace: shift);
-                e.Handled = true;
-                return;
+        }
+
+        // 割り当て可能キー（ファイル > キー割り当て で変更）
+        if (_insertKeyLookup.TryGetValue(e.Key, out var action))
+        {
+            ExecuteInsertViewAction(action, shift);
+            e.Handled = true;
+            return;
         }
 
         int slot = SlotFromKey(e.Key);
@@ -1441,7 +1489,10 @@ public sealed partial class MainWindow : Window
 
     private void UpdateFollowIndicator()
     {
-        FollowIndicator.Text = _insertFollow ? "追従 ON (F で解除)" : "追従 OFF (F)";
+        string key = _insertKeys.TryGetValue(InsertViewAction.FollowToggle, out string? k)
+            ? InsertViewKeyMap.KeyLabel(k)
+            : "F";
+        FollowIndicator.Text = _insertFollow ? $"追従 ON ({key} で解除)" : $"追従 OFF ({key})";
         FollowIndicator.Foreground = _insertFollow
             ? (Microsoft.UI.Xaml.Media.Brush)Microsoft.UI.Xaml.Application.Current.Resources["AccentTextFillColorPrimaryBrush"]
             : (Microsoft.UI.Xaml.Media.Brush)Microsoft.UI.Xaml.Application.Current.Resources["TextFillColorSecondaryBrush"];

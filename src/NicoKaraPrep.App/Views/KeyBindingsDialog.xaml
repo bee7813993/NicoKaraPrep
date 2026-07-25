@@ -1,0 +1,19 @@
+<ContentDialog
+    x:Class="NicoKaraPrep.App.Views.KeyBindingsDialog"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    Title="キー割り当て（絵文字挿入ビュー）"
+    PrimaryButtonText="OK"
+    CloseButtonText="キャンセル"
+    DefaultButton="Primary">
+
+    <StackPanel Spacing="10" MinWidth="840">
+        <TextBlock
+            FontSize="12"
+            TextWrapping="Wrap"
+            Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+            Text="キーをクリックして機能を選ぶと、そのキーへ割り当てます。選んだ機能が別のキーにあった場合は入れ替わります。グレーのキーは固定です。" />
+        <StackPanel x:Name="KeyboardHost" Spacing="4" />
+        <Button Content="デフォルトに戻す" Click="OnResetClick" />
+    </StackPanel>
+</ContentDialog>

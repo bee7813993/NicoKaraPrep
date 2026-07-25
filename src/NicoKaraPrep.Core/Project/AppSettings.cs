@@ -60,6 +60,12 @@ public sealed class AppSettings
     /// <summary>グローバルの @Emoji リスト（スロット 1–20）。</summary>
     public List<EmojiEntry> GlobalEmojiList { get; set; } = new();
 
+    /// <summary>
+    /// 挿入ビューの機能キー割り当て（機能 ID → キー ID）。
+    /// 既定値・正規化はアプリ側（InsertViewKeyMap）が担当する。
+    /// </summary>
+    public Dictionary<string, string> InsertViewKeys { get; set; } = new();
+
     // ---- メディア再生 ----
     /// <summary>Z / X（および Ctrl+←/→）でシークする秒数。</summary>
     public double SeekSeconds { get; set; } = 3.0;
