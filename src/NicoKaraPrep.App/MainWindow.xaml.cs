@@ -639,6 +639,7 @@ public sealed partial class MainWindow : Window
     {
         _quickEmojiReady = false;
         QuickEmojiLeadBox.Value = ViewModel.Settings.EmojiLeadSeconds;
+        QuickLeadZeroToggle.IsChecked = ViewModel.Settings.EmojiLeadSeconds == 0;
         QuickEmojiModeBox.SelectedIndex = ViewModel.Settings.EmojiTagPerEmoji ? 0 : 1;
         QuickPlaceholderBox.Text = ViewModel.Settings.PlaceholderChar;
         _quickEmojiReady = true;
@@ -647,10 +648,38 @@ public sealed partial class MainWindow : Window
     private void OnQuickEmojiLeadChanged(NumberBox sender, NumberBoxValueChangedEventArgs args)
     {
         if (!_quickEmojiReady || double.IsNaN(args.NewValue)) return;
-        ViewModel.Settings.EmojiLeadSeconds = Math.Clamp(args.NewValue, 0, 30);
+        double v = Math.Clamp(args.NewValue, 0, 30);
+        ViewModel.Settings.EmojiLeadSeconds = v;
+        if (v > 0) ViewModel.Settings.EmojiLeadResumeSeconds = v; // 0秒トグル解除時の復元値
         ViewModel.Settings.Save();
+
+        _quickEmojiReady = false;
+        QuickLeadZeroToggle.IsChecked = v == 0;
+        _quickEmojiReady = true;
+
         ViewModel.StatusText =
-            $"絵文字の表示秒数を {ViewModel.Settings.EmojiLeadSeconds:0.#} 秒にしました（既存の絵文字へは 絵文字 > 絵文字タイムタグ再計算 で適用）";
+            $"絵文字の表示秒数を {v:0.#} 秒にしました（既存の絵文字へは 絵文字 > 絵文字タイムタグ再計算 で適用）";
+    }
+
+    /// <summary>「0秒」トグル: ワイプしない絵文字用に表示秒数を 0 ⇔ 元の秒数で切り替える。</summary>
+    private void OnQuickLeadZeroToggled(object sender, RoutedEventArgs e)
+    {
+        if (!_quickEmojiReady) return;
+        bool on = QuickLeadZeroToggle.IsChecked == true;
+        double resume = ViewModel.Settings.EmojiLeadResumeSeconds;
+        double v = on ? 0 : (resume > 0 ? resume : 2.0);
+
+        ViewModel.Settings.EmojiLeadSeconds = v;
+        if (v > 0) ViewModel.Settings.EmojiLeadResumeSeconds = v;
+        ViewModel.Settings.Save();
+
+        _quickEmojiReady = false;
+        QuickEmojiLeadBox.Value = v;
+        _quickEmojiReady = true;
+
+        ViewModel.StatusText = on
+            ? "絵文字の表示秒数を 0 にしました（ワイプしない絵文字用。もう一度押すと元の秒数へ戻ります）"
+            : $"絵文字の表示秒数を {v:0.#} 秒へ戻しました";
     }
 
     private void OnQuickEmojiModeChanged(object sender, SelectionChangedEventArgs e)

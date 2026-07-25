@@ -453,8 +453,17 @@
                     </Grid.RowDefinitions>
                     <TextBlock Text="表示秒数" FontSize="12" VerticalAlignment="Center"
                                ToolTipService.ToolTip="アイコン・＿・先行タグを直後の文字の何秒前から表示するか（新しく挿入する分に適用。既存分は 絵文字 > 絵文字タイムタグ再計算）" />
-                    <NumberBox Grid.Column="1" x:Name="QuickEmojiLeadBox" Minimum="0" Maximum="30" SmallChange="0.5"
-                               SpinButtonPlacementMode="Compact" ValueChanged="OnQuickEmojiLeadChanged" />
+                    <Grid Grid.Column="1" ColumnSpacing="4">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
+                        <NumberBox x:Name="QuickEmojiLeadBox" Minimum="0" Maximum="30" SmallChange="0.5"
+                                   SpinButtonPlacementMode="Compact" ValueChanged="OnQuickEmojiLeadChanged" />
+                        <ToggleButton Grid.Column="1" x:Name="QuickLeadZeroToggle" Content="0秒" Padding="8,5"
+                                      Checked="OnQuickLeadZeroToggled" Unchecked="OnQuickLeadZeroToggled"
+                                      ToolTipService.ToolTip="ワイプしない絵文字用に表示秒数を 0 にする（もう一度押すと元の秒数へ戻す）" />
+                    </Grid>
                     <TextBlock Grid.Row="1" Text="連続タグ" FontSize="12" VerticalAlignment="Center"
                                ToolTipService.ToolTip="連続する絵文字のタグ付け方" />
                     <ComboBox Grid.Row="1" Grid.Column="1" x:Name="QuickEmojiModeBox" HorizontalAlignment="Stretch"

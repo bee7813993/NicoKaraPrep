@@ -45,6 +45,9 @@ public sealed class AppSettings
     /// <summary>絵文字挿入時の先行タグ秒数（開始時刻 = 直後の実文字の時刻 − この秒数）。</summary>
     public double EmojiLeadSeconds { get; set; } = 2.0;
 
+    /// <summary>「0 秒」トグルを解除したときに戻す表示秒数（最後に使っていた 0 より大きい値）。</summary>
+    public double EmojiLeadResumeSeconds { get; set; } = 2.0;
+
     /// <summary>true: 連続絵文字それぞれにタグを付与 / false: ブロックの先頭と末尾のみ。</summary>
     public bool EmojiTagPerEmoji { get; set; } = true;
 
@@ -211,6 +214,7 @@ public sealed class AppSettings
         SideMarginPercent = other.SideMarginPercent;
         EdgeSizePx = other.EdgeSizePx;
         EmojiLeadSeconds = other.EmojiLeadSeconds;
+        EmojiLeadResumeSeconds = other.EmojiLeadResumeSeconds;
         EmojiTagPerEmoji = other.EmojiTagPerEmoji;
         PlaceholderChar = other.PlaceholderChar;
         SeekSeconds = other.SeekSeconds;

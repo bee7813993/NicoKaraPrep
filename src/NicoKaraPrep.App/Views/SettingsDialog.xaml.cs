@@ -54,6 +54,7 @@ public sealed partial class SettingsDialog : ContentDialog
         _settings.FontBold = BoldBox.IsChecked == true;
         _settings.SideMarginPercent = ToDouble(MarginBox.Value, 5.0);
         _settings.EmojiLeadSeconds = ToDouble(EmojiLeadBox.Value, 2.0);
+        if (_settings.EmojiLeadSeconds > 0) _settings.EmojiLeadResumeSeconds = _settings.EmojiLeadSeconds;
         _settings.EmojiTagPerEmoji = EmojiModeBox.SelectedIndex == 0;
         _settings.PlaceholderChar = PlaceholderBox.Text.Trim();
         _settings.SeekSeconds = ToDouble(SeekSecondsBox.Value, 3.0);
