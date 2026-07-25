@@ -2,7 +2,7 @@
     x:Class="NicoKaraPrep.App.Views.KeyBindingsDialog"
     xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-    Title="キー割り当て（絵文字挿入ビュー）"
+    Title="キー一覧・割り当て（絵文字挿入ビュー）"
     PrimaryButtonText="OK"
     CloseButtonText="キャンセル"
     DefaultButton="Primary">
@@ -14,6 +14,11 @@
             Foreground="{ThemeResource TextFillColorSecondaryBrush}"
             Text="キーをクリックして機能を選ぶと、そのキーへ割り当てます。選んだ機能が別のキーにあった場合は入れ替わります。グレーのキーは固定です。" />
         <StackPanel x:Name="KeyboardHost" Spacing="4" />
+        <TextBlock
+            FontSize="12"
+            TextWrapping="Wrap"
+            Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+            Text="そのほかの固定キー: Ctrl+Z / Ctrl+Y = 元に戻す / やり直し　Ctrl+Enter = 行分割　Ctrl+J = 行結合（Ctrl+Shift+J: スペースを挟む）　Shift+空白キー = 全角スペース　Shift+結合キー = スペースを挟んで結合" />
         <Button Content="デフォルトに戻す" Click="OnResetClick" />
     </StackPanel>
 </ContentDialog>

@@ -350,6 +350,13 @@
                         VerticalAlignment="Center"
                         FontSize="12"
                         Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+                    <Button
+                        Content="キー一覧..."
+                        FontSize="12"
+                        Padding="8,3"
+                        VerticalAlignment="Center"
+                        Click="OnKeyBindingsClick"
+                        ToolTipService.ToolTip="キーボード配列でキー操作の一覧を表示（クリックで割り当て変更も可能）" />
                 </StackPanel>
                 <TextBlock
                     x:Name="InsertLegend"

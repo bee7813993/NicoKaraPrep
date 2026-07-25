@@ -46,7 +46,48 @@ public sealed partial class KeyBindingsDialog : ContentDialog
         spaceRow.Children.Add(MakeAssignableKey("Space", width: 230));
         spaceRow.Children.Add(MakeFixedKey("BS / Del", "絵文字・空白削除", width: 130));
         spaceRow.Children.Add(MakeFixedKey("Esc", "ビュー終了", width: 90));
+        spaceRow.Children.Add(MakeArrowCluster());
         KeyboardHost.Children.Add(spaceRow);
+    }
+
+    /// <summary>方向キー（カーソル移動）の説明表示。逆 T 字の配置で並べる。</summary>
+    private static UIElement MakeArrowCluster()
+    {
+        var grid = new Grid { ColumnSpacing = 3, RowSpacing = 3, VerticalAlignment = VerticalAlignment.Center };
+        for (int i = 0; i < 3; i++) grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+        grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+
+        static UIElement Key(string label) => new Button
+        {
+            Width = 44,
+            Height = 26,
+            IsEnabled = false,
+            Padding = new Thickness(0),
+            Content = new TextBlock { Text = label, FontSize = 12, HorizontalAlignment = HorizontalAlignment.Center },
+        };
+
+        void Add(UIElement el, int row, int col)
+        {
+            Grid.SetRow((FrameworkElement)el, row);
+            Grid.SetColumn((FrameworkElement)el, col);
+            grid.Children.Add(el);
+        }
+        Add(Key("↑"), 0, 1);
+        Add(Key("←"), 1, 0);
+        Add(Key("↓"), 1, 1);
+        Add(Key("→"), 1, 2);
+
+        var panel = new StackPanel { Margin = new Thickness(24, 0, 0, 0), VerticalAlignment = VerticalAlignment.Center };
+        panel.Children.Add(grid);
+        panel.Children.Add(new TextBlock
+        {
+            Text = "カーソル移動",
+            FontSize = 10,
+            HorizontalAlignment = HorizontalAlignment.Center,
+            Margin = new Thickness(0, 2, 0, 0),
+        });
+        return panel;
     }
 
     private void AddRow(double indent, IEnumerable<UIElement> keys)
