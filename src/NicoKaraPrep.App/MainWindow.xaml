@@ -422,6 +422,7 @@
                 <Grid.RowDefinitions>
                     <RowDefinition Height="Auto" />
                     <RowDefinition Height="Auto" />
+                    <RowDefinition Height="Auto" />
                     <RowDefinition Height="*" />
                     <RowDefinition Height="Auto" />
                 </Grid.RowDefinitions>
@@ -439,8 +440,36 @@
                 </ToggleButton>
                 <Button Grid.Row="1" HorizontalAlignment="Stretch" Content="リスト編集..." Click="OnEmojiListClick" />
 
+                <!-- 絵文字挿入設定のクイック調整（設定ダイアログと同じ項目を常時表示） -->
+                <Grid Grid.Row="2" ColumnSpacing="6" RowSpacing="4">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="Auto" />
+                        <ColumnDefinition Width="*" />
+                    </Grid.ColumnDefinitions>
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
+                    </Grid.RowDefinitions>
+                    <TextBlock Text="表示秒数" FontSize="12" VerticalAlignment="Center"
+                               ToolTipService.ToolTip="アイコン・＿・先行タグを直後の文字の何秒前から表示するか（新しく挿入する分に適用。既存分は 絵文字 > 絵文字タイムタグ再計算）" />
+                    <NumberBox Grid.Column="1" x:Name="QuickEmojiLeadBox" Minimum="0" Maximum="30" SmallChange="0.5"
+                               SpinButtonPlacementMode="Compact" ValueChanged="OnQuickEmojiLeadChanged" />
+                    <TextBlock Grid.Row="1" Text="連続タグ" FontSize="12" VerticalAlignment="Center"
+                               ToolTipService.ToolTip="連続する絵文字のタグ付け方" />
+                    <ComboBox Grid.Row="1" Grid.Column="1" x:Name="QuickEmojiModeBox" HorizontalAlignment="Stretch"
+                              SelectionChanged="OnQuickEmojiModeChanged">
+                        <ComboBoxItem Content="各絵文字ごと" />
+                        <ComboBoxItem Content="先頭と末尾のみ" />
+                    </ComboBox>
+                    <TextBlock Grid.Row="2" Text="＿文字" FontSize="12" VerticalAlignment="Center"
+                               ToolTipService.ToolTip="プレースホルダ文字（挿入ビューの B キーで挿入）" />
+                    <TextBox Grid.Row="2" Grid.Column="1" x:Name="QuickPlaceholderBox" MaxLength="4"
+                             TextChanged="OnQuickPlaceholderChanged" />
+                </Grid>
+
                 <GridView
-                    Grid.Row="2"
+                    Grid.Row="3"
                     ItemsSource="{x:Bind ViewModel.EmojiSlots}"
                     IsItemClickEnabled="True"
                     ItemClick="OnEmojiSlotClick"
@@ -466,7 +495,7 @@
 
                 <!-- スロット外の曲内 @Emoji（クリックで挿入） -->
                 <ListView
-                    Grid.Row="3"
+                    Grid.Row="4"
                     MaxHeight="140"
                     ItemsSource="{x:Bind ViewModel.UnslottedEmoji}"
                     IsItemClickEnabled="True"

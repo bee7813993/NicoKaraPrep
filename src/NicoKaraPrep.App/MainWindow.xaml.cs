@@ -80,6 +80,7 @@ public sealed partial class MainWindow : Window
             AfterDocumentLoaded();
         }
         RefreshRecentFilesMenu();
+        LoadQuickEmojiSettings();
 
         // デバッグ用: 起動直後に絵文字リスト編集を自動で開く
         if (args.Contains("--debug-emoji-dialog"))
@@ -601,6 +602,7 @@ public sealed partial class MainWindow : Window
         StorageFile? file = await picker.PickSingleFileAsync();
         if (file is null) return;
         TryRun(() => ViewModel.LoadTemplate(file.Path));
+        LoadQuickEmojiSettings();
         ScheduleValidation();
     }
 
@@ -621,8 +623,49 @@ public sealed partial class MainWindow : Window
         var result = await dialog.ShowAsync();
         if (result == ContentDialogResult.Primary)
         {
+            LoadQuickEmojiSettings();
             TryRun(ViewModel.RunValidation);
         }
+    }
+
+    // ------------------------------------------ パレットの絵文字挿入クイック設定
+
+    // コンパイル済み XAML はプロパティ設定前にイベントを接続するため、
+    // 初期値の流し込みが終わるまで変更ハンドラを無効にする
+    private bool _quickEmojiReady;
+
+    /// <summary>パレットのクイック設定欄へ現在の設定値を反映する。</summary>
+    private void LoadQuickEmojiSettings()
+    {
+        _quickEmojiReady = false;
+        QuickEmojiLeadBox.Value = ViewModel.Settings.EmojiLeadSeconds;
+        QuickEmojiModeBox.SelectedIndex = ViewModel.Settings.EmojiTagPerEmoji ? 0 : 1;
+        QuickPlaceholderBox.Text = ViewModel.Settings.PlaceholderChar;
+        _quickEmojiReady = true;
+    }
+
+    private void OnQuickEmojiLeadChanged(NumberBox sender, NumberBoxValueChangedEventArgs args)
+    {
+        if (!_quickEmojiReady || double.IsNaN(args.NewValue)) return;
+        ViewModel.Settings.EmojiLeadSeconds = Math.Clamp(args.NewValue, 0, 30);
+        ViewModel.Settings.Save();
+        ViewModel.StatusText =
+            $"絵文字の表示秒数を {ViewModel.Settings.EmojiLeadSeconds:0.#} 秒にしました（既存の絵文字へは 絵文字 > 絵文字タイムタグ再計算 で適用）";
+    }
+
+    private void OnQuickEmojiModeChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (!_quickEmojiReady) return;
+        ViewModel.Settings.EmojiTagPerEmoji = QuickEmojiModeBox.SelectedIndex == 0;
+        ViewModel.Settings.Save();
+    }
+
+    private void OnQuickPlaceholderChanged(object sender, TextChangedEventArgs e)
+    {
+        if (!_quickEmojiReady) return;
+        ViewModel.Settings.PlaceholderChar = QuickPlaceholderBox.Text.Trim();
+        ViewModel.Settings.Save();
+        ScheduleValidation(); // プレースホルダは絵文字扱い（チェック除外）の対象に含まれるため
     }
 
     private void OnIssueClick(object sender, ItemClickEventArgs e)
