@@ -388,13 +388,14 @@
                         TextWrapping="NoWrap"
                         ScrollViewer.VerticalScrollBarVisibility="Disabled"
                         ScrollViewer.HorizontalScrollBarVisibility="Disabled" />
-                    <!-- 行情報欄（開始→終了時刻・横幅。エディタとスクロール同期、行高さは実測） -->
+                    <!-- 行情報欄（開始→終了時刻・横幅。エディタとスクロール同期、行高さは実測。
+                         クリックで行選択、右クリックで行操作メニュー） -->
                     <ScrollViewer
                         x:Name="InsertGutterScroll"
                         VerticalScrollBarVisibility="Hidden"
                         HorizontalScrollBarVisibility="Disabled"
-                        IsHitTestVisible="False"
-                        IsTabStop="False">
+                        IsTabStop="False"
+                        PointerWheelChanged="OnGutterWheel">
                         <StackPanel x:Name="InsertGutterStack" Margin="0,7,0,0" UseLayoutRounding="False" />
                     </ScrollViewer>
                     <TextBox

@@ -541,6 +541,9 @@ public sealed partial class MainWindow : Window
         {
             line.IsSelected = selected.Contains(line);
         }
+
+        // 挿入ビュー表示中は行情報欄の選択ハイライトも追従させる
+        QueueGutterRefresh();
     }
 
     /// <summary>行のチェックボックスで選択に追加 / 解除する（他の行の選択は維持）。</summary>
@@ -794,6 +797,15 @@ public sealed partial class MainWindow : Window
     {
         LineEditor.Text = ViewModel.SelectedLine?.RawText ?? "";
         RenderPreview();
+
+        // 挿入ビュー表示中にタブ操作（分離・移動・解除・切り替え）をした場合はビューを作り直す
+        if (InsertViewActive)
+        {
+            SetInsertEditorText(ViewModel.BuildInsertViewText());
+            InsertEditor.SelectionStart = 0;
+            RefreshInsertGutter();
+            UpdateInsertCursorInfo();
+        }
         ScheduleValidation();
     }
 
@@ -816,7 +828,6 @@ public sealed partial class MainWindow : Window
 
     private void OnSplitToTabClick(object sender, RoutedEventArgs e)
     {
-        if (InsertViewActive) return;
         var indexes = SelectedIndexes;
         if (indexes.Count == 0)
         {
@@ -1006,6 +1017,7 @@ public sealed partial class MainWindow : Window
         string? path = SaveFileDialog.Show(Hwnd, ViewModel.GetDefaultSaveFolder(), suggested, LyricsFileTypes, "lrc");
         if (path is null) return;
         TryRun(() => ViewModel.ExportLinesToFile(path, indexes));
+        QueueGutterRefresh(); // 済マーク表示を更新
     }
 
     private void OnExportClipboardClick(object sender, RoutedEventArgs e)
@@ -1024,6 +1036,7 @@ public sealed partial class MainWindow : Window
             ViewModel.MarkExported(indexes, true);
             ViewModel.StatusText = $"{indexes.Count} 行をクリップボードへエクスポートしました";
         });
+        QueueGutterRefresh(); // 済マーク表示を更新
     }
 
     private void OnSelectUnexportedClick(object sender, RoutedEventArgs e)
@@ -1045,6 +1058,7 @@ public sealed partial class MainWindow : Window
         if (indexes.Count == 0) return;
         ViewModel.MarkExported(indexes, false);
         ViewModel.StatusText = "済マークを解除しました";
+        QueueGutterRefresh(); // 済マーク表示を更新
     }
 
     // ------------------------------------------------------------ メディア再生
@@ -1304,7 +1318,8 @@ public sealed partial class MainWindow : Window
             $"{K(InsertViewAction.Play)}: 再生　{K(InsertViewAction.Pause)}: 一時停止　" +
             $"{K(InsertViewAction.SeekBack)} / {K(InsertViewAction.SeekForward)}: 数秒戻る / 進む　{K(InsertViewAction.FollowToggle)}: 再生追従　" +
             $"{K(InsertViewAction.SplitLine)}: 行分割　{K(InsertViewAction.JoinLine)}: 行結合（Shift+{K(InsertViewAction.JoinLine)}: スペースを挟む）　" +
-            "Ctrl+Z / Y: 元に戻す / やり直し　Esc: 終了（キーは ファイル > キー割り当て で変更可）";
+            "Ctrl+Z / Y: 元に戻す / やり直し　Esc: 終了（キーは ファイル > キー割り当て で変更可）　" +
+            "左の行情報クリック: 行選択（Shift+クリック: 範囲、右クリック: 分離・エクスポート等）";
     }
 
     /// <summary>割り当てられた機能を実行する。</summary>
@@ -1678,8 +1693,10 @@ public sealed partial class MainWindow : Window
         var children = InsertGutterStack.Children;
         children.Clear();
 
-        foreach (var l in ViewModel.Lines)
+        for (int index = 0; index < ViewModel.Lines.Count; index++)
         {
+            var l = ViewModel.Lines[index];
+
             // エディタに実際に表示される文字列（行末空白の可視化込み）で高さを測る
             string lineText = l.Model.IsEmpty
                 ? ""
@@ -1689,9 +1706,9 @@ public sealed partial class MainWindow : Window
             var row = new TextBlock
             {
                 FontSize = 12,
-                Height = pitch,
                 Foreground = defaultBrush,
                 TextTrimming = Microsoft.UI.Xaml.TextTrimming.CharacterEllipsis, // 固定幅からはみ出す場合は省略
+                VerticalAlignment = VerticalAlignment.Top,
             };
 
             void AddRun(string text, Microsoft.UI.Xaml.Media.Brush? brush)
@@ -1704,6 +1721,10 @@ public sealed partial class MainWindow : Window
 
             if (!l.Model.IsEmpty)
             {
+                if (l.Exported)
+                {
+                    AddRun("✓", null); // エクスポート済み
+                }
                 // 時間はページ衝突チェック、横幅は横幅チェックの重要度で色分け（通常ビューの列と同じ規則）
                 if (l.TimeText.Length > 0 || l.EndTimeText.Length > 0)
                 {
@@ -1721,12 +1742,157 @@ public sealed partial class MainWindow : Window
                 }
             }
 
-            children.Add(row);
+            // クリックで行選択できるようにホストの Border で包む（透明背景はヒットテスト用）
+            var host = new Border
+            {
+                Height = pitch,
+                Background = l.IsSelected ? GutterSelectedBrush : GutterTransparentBrush,
+                Child = row,
+                Tag = index,
+            };
+            host.Tapped += OnGutterRowTapped;
+            host.RightTapped += OnGutterRowRightTapped;
+            children.Add(host);
         }
         // 末尾の余白はエディタ下端（横スクロールバー分）とのずれ吸収用
         children.Add(new Border { Height = 60 });
 
         ScheduleInsertGutterScrollSync();
+    }
+
+    // ------------------------------------------ 挿入ビューの行選択（行情報欄クリック）
+
+    private static readonly Microsoft.UI.Xaml.Media.Brush GutterSelectedBrush =
+        new Microsoft.UI.Xaml.Media.SolidColorBrush(Windows.UI.Color.FromArgb(0x30, 0x00, 0x99, 0xFF));
+
+    private static readonly Microsoft.UI.Xaml.Media.Brush GutterTransparentBrush =
+        new Microsoft.UI.Xaml.Media.SolidColorBrush(Microsoft.UI.Colors.Transparent);
+
+    private int _gutterAnchorIndex = -1;
+    private bool _gutterRefreshQueued;
+    private MenuFlyout? _gutterContextMenu;
+
+    /// <summary>行情報欄の再構築を 1 フレームにまとめて予約する（選択変更の連発対策）。</summary>
+    private void QueueGutterRefresh()
+    {
+        if (!InsertViewActive || _gutterRefreshQueued) return;
+        _gutterRefreshQueued = true;
+        DispatcherQueue.TryEnqueue(() =>
+        {
+            _gutterRefreshQueued = false;
+            RefreshInsertGutter();
+        });
+    }
+
+    /// <summary>行情報欄クリック: 行選択をトグル（Shift+クリックで範囲選択）。</summary>
+    private void OnGutterRowTapped(object sender, Microsoft.UI.Xaml.Input.TappedRoutedEventArgs e)
+    {
+        if ((sender as FrameworkElement)?.Tag is not int index) return;
+        if (index < 0 || index >= ViewModel.Lines.Count) return;
+
+        bool shift = (Microsoft.UI.Input.InputKeyboardSource.GetKeyStateForCurrentThread(Windows.System.VirtualKey.Shift)
+                      & Windows.UI.Core.CoreVirtualKeyStates.Down) != 0;
+
+        if (shift && _gutterAnchorIndex >= 0 && _gutterAnchorIndex < ViewModel.Lines.Count)
+        {
+            int lo = Math.Min(_gutterAnchorIndex, index);
+            int hi = Math.Max(_gutterAnchorIndex, index);
+            for (int i = lo; i <= hi; i++)
+            {
+                var vm = ViewModel.Lines[i];
+                if (!LineList.SelectedItems.Contains(vm)) LineList.SelectedItems.Add(vm);
+            }
+        }
+        else
+        {
+            var vm = ViewModel.Lines[index];
+            if (LineList.SelectedItems.Contains(vm))
+            {
+                LineList.SelectedItems.Remove(vm);
+            }
+            else
+            {
+                LineList.SelectedItems.Add(vm);
+            }
+            _gutterAnchorIndex = index;
+        }
+
+        int count = LineList.SelectedItems.Count;
+        ViewModel.StatusText = count == 0
+            ? "行の選択を解除しました"
+            : $"{count} 行選択中（右クリックで分離・エクスポートなどの操作）";
+        e.Handled = true;
+    }
+
+    /// <summary>行情報欄の右クリック: 未選択行ならその行だけを選択してから行操作メニューを出す。</summary>
+    private void OnGutterRowRightTapped(object sender, Microsoft.UI.Xaml.Input.RightTappedRoutedEventArgs e)
+    {
+        if ((sender as FrameworkElement)?.Tag is not int index) return;
+        if (index < 0 || index >= ViewModel.Lines.Count) return;
+
+        var vm = ViewModel.Lines[index];
+        if (!LineList.SelectedItems.Contains(vm))
+        {
+            LineList.SelectedItems.Clear();
+            LineList.SelectedItems.Add(vm);
+            _gutterAnchorIndex = index;
+        }
+
+        _gutterContextMenu ??= BuildGutterContextMenu();
+        _gutterContextMenu.ShowAt((FrameworkElement)sender, e.GetPosition((UIElement)sender));
+        e.Handled = true;
+    }
+
+    /// <summary>挿入ビュー用の行操作メニュー（通常ビューの右クリックメニュー相当）。</summary>
+    private MenuFlyout BuildGutterContextMenu()
+    {
+        var menu = new MenuFlyout();
+
+        var split = new MenuFlyoutItem { Text = "選択行を新しいタブへ分離" };
+        split.Click += OnSplitToTabClick;
+        menu.Items.Add(split);
+
+        var moveSub = new MenuFlyoutSubItem { Text = "選択行を既存のタブへ移動" };
+        menu.Items.Add(moveSub);
+        menu.Opening += (_, _) => PopulateMoveToTabItems(moveSub.Items);
+
+        menu.Items.Add(new MenuFlyoutSeparator());
+
+        var export = new MenuFlyoutItem { Text = "選択行をエクスポート..." };
+        export.Click += OnExportFileClick;
+        menu.Items.Add(export);
+
+        var exportClip = new MenuFlyoutItem { Text = "選択行をクリップボードへエクスポート" };
+        exportClip.Click += OnExportClipboardClick;
+        menu.Items.Add(exportClip);
+
+        menu.Items.Add(new MenuFlyoutSeparator());
+
+        var selectUnexported = new MenuFlyoutItem { Text = "未エクスポート行をすべて選択" };
+        selectUnexported.Click += OnSelectUnexportedClick;
+        menu.Items.Add(selectUnexported);
+
+        var clearMarks = new MenuFlyoutItem { Text = "選択行の済マークを解除" };
+        clearMarks.Click += OnClearMarksClick;
+        menu.Items.Add(clearMarks);
+
+        var clearSelection = new MenuFlyoutItem { Text = "選択をすべて解除" };
+        clearSelection.Click += (_, _) => LineList.SelectedItems.Clear();
+        menu.Items.Add(clearSelection);
+
+        return menu;
+    }
+
+    /// <summary>行情報欄上のホイールはエディタ側をスクロールさせる（同期ずれ防止）。</summary>
+    private void OnGutterWheel(object sender, Microsoft.UI.Xaml.Input.PointerRoutedEventArgs e)
+    {
+        HookInsertEditorScroll();
+        if (_insertEditorScroll is { } sv)
+        {
+            int delta = e.GetCurrentPoint(InsertGutterScroll).Properties.MouseWheelDelta;
+            sv.ChangeView(null, sv.VerticalOffset - delta, null, disableAnimation: true);
+        }
+        e.Handled = true;
     }
 
     private bool _gutterSyncPending;
