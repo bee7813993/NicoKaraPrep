@@ -1,0 +1,633 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="にこぷれっぷ（NicoKaraPrep）の使い方マニュアル。ファイルの読み書き、@Emoji アイコンの挿入、絵文字挿入ビューのキー操作、タイムタグの重なり・行幅チェック、タブ分離とエクスポート、設定項目を説明します。">
+  <meta name="theme-color" content="#ffffff">
+  <title>使い方マニュアル | にこぷれっぷ</title>
+  <link rel="icon" href="images/nicokaraprep-icon.png">
+  <link rel="stylesheet" href="../../assets/style.css">
+  <style>
+    .manual-toc {
+      margin: 0 0 2.5rem;
+      padding: 1.25rem 1.5rem;
+      background: var(--soft);
+      border: 1px solid var(--line);
+      border-radius: 12px;
+    }
+    .manual-toc ul {
+      margin: .6rem 0 0;
+      padding: 0;
+      list-style: none;
+      columns: 2;
+      column-gap: 2rem;
+      font-size: 15px;
+    }
+    .manual-toc li { margin: .25rem 0; break-inside: avoid; }
+
+    /* 固定ヘッダーに隠れないように、もくじからの移動先をずらす */
+    .manual-body h2[id],
+    .manual-body h3[id] { scroll-margin-top: 88px; }
+
+    .manual-body table {
+      width: 100%;
+      margin: 1.2rem 0 1.6rem;
+      border-collapse: collapse;
+      font-size: 15px;
+    }
+    .manual-body th,
+    .manual-body td {
+      padding: .55rem .8rem;
+      border: 1px solid var(--line);
+      text-align: left;
+      vertical-align: top;
+    }
+    .manual-body th { background: var(--soft); white-space: nowrap; }
+    .manual-body .table-scroll { overflow-x: auto; }
+
+    .manual-body code {
+      padding: 1px 5px;
+      background: var(--soft);
+      border: 1px solid var(--line);
+      border-radius: 4px;
+      font-size: .88em;
+    }
+    .manual-body kbd {
+      padding: 1px 6px;
+      background: var(--paper);
+      border: 1px solid var(--line);
+      border-bottom-width: 2px;
+      border-radius: 4px;
+      font-family: inherit;
+      font-size: .85em;
+      font-weight: 700;
+      white-space: nowrap;
+    }
+    /* 画面構成の図 */
+    .layout-figure {
+      margin: 1.4rem 0 1.8rem;
+      padding: 14px;
+      background: var(--soft);
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      font-size: 13px;
+      line-height: 1.6;
+    }
+    .layout-figure .lf-row {
+      padding: 10px 12px;
+      background: var(--paper);
+      border: 1px solid var(--line);
+      border-radius: 6px;
+      text-align: center;
+      font-weight: 700;
+    }
+    .layout-figure .lf-row + .lf-row,
+    .layout-figure .lf-main + .lf-row,
+    .layout-figure .lf-row + .lf-main { margin-top: 8px; }
+    .layout-figure .lf-main { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 200px); gap: 8px; }
+    .layout-figure .lf-col { display: grid; gap: 8px; align-content: start; }
+    .layout-figure .lf-cell {
+      padding: 12px;
+      background: var(--paper);
+      border: 1px solid var(--line);
+      border-radius: 6px;
+    }
+    .layout-figure .lf-cell strong { display: block; }
+    .layout-figure .lf-cell span { color: var(--muted); font-size: 12px; }
+    .layout-figure .lf-side { display: grid; place-content: center; text-align: center; background: var(--lavender); }
+    .layout-figure .lf-tabs { background: var(--lavender); }
+    .layout-figure .lf-status { color: var(--muted); font-weight: 400; }
+    @media (max-width: 560px) {
+      .layout-figure .lf-main { grid-template-columns: 1fr; }
+    }
+    .manual-body .note {
+      margin: 1.2rem 0;
+      padding: .9rem 1.1rem;
+      background: var(--lavender);
+      border-left: 3px solid var(--violet);
+      border-radius: 0 8px 8px 0;
+    }
+    .manual-body .note p { margin: 0; }
+    .manual-body .note p + p { margin-top: .5rem; }
+    .manual-body figure { margin: 1.4rem 0; }
+    .manual-body figure img {
+      width: 100%;
+      border: 1px solid var(--line);
+      border-radius: 10px;
+    }
+    .manual-body figcaption { margin-top: .6rem; color: var(--muted); font-size: 14px; }
+    .manual-body .to-top { font-size: 13px; font-weight: 700; }
+
+    @media (max-width: 760px) {
+      .manual-toc ul { columns: 1; }
+    }
+  </style>
+</head>
+<body>
+  <a class="skip-link" href="#main">本文へ移動</a>
+
+  <header class="site-header">
+    <div class="header-inner">
+      <a class="brand" href="../../index.html" aria-label="YFRTeam トップページ">YFRTeam</a>
+      <nav class="site-nav" aria-label="にこぷれっぷ ナビゲーション">
+        <a href="index.html">にこぷれっぷ</a>
+        <a aria-current="page" href="manual.html">使い方</a>
+        <a href="privacy.html">プライバシー</a>
+        <a href="../../contact.html">お問い合わせ</a>
+      </nav>
+    </div>
+  </header>
+
+  <main id="main" class="document-main">
+    <header class="document-header">
+      <div class="content-narrow">
+        <p class="section-label">USER GUIDE</p>
+        <h1>にこぷれっぷ 使い方マニュアル</h1>
+        <p>RhythmicaLyrics で作ったタイムタグ付き歌詞を、ニコカラメーカー3 向けに加工するための Windows アプリです。1 行の横幅とページ間のタイムタグ重なりをチェックしながら行を分割・結合し、アイコン（@Emoji）の挿入をキーボードだけで素早く行い、パート分けのために行を選んで切り出す——ニコカラ制作の下ごしらえを支援します。</p>
+        <p><a class="back-to-team" href="index.html">← にこぷれっぷ の紹介ページへ</a></p>
+      </div>
+    </header>
+
+    <article class="document-body manual-body content-narrow">
+      <nav class="manual-toc" aria-label="もくじ">
+        <strong>もくじ</strong>
+        <ul>
+          <li><a href="#ch1">1. インストールと起動</a></li>
+          <li><a href="#ch2">2. 基本の流れ</a></li>
+          <li><a href="#ch3">3. 画面構成</a></li>
+          <li><a href="#ch4">4. ファイルの読み込みと保存</a></li>
+          <li><a href="#ch5">5. ニコカラメーカー設定の取り込み</a></li>
+          <li><a href="#ch6">6. @Emoji アイコン</a></li>
+          <li><a href="#ch7">7. 絵文字挿入ビュー（F2）</a></li>
+          <li><a href="#ch8">8. 行の分割・結合と行編集</a></li>
+          <li><a href="#ch9">9. チェック機能</a></li>
+          <li><a href="#ch10">10. メディア再生</a></li>
+          <li><a href="#ch11">11. タブ分離と部分エクスポート</a></li>
+          <li><a href="#ch12">12. テンプレート</a></li>
+          <li><a href="#ch13">13. 設定リファレンス</a></li>
+          <li><a href="#ch14">14. ファイルの場所まとめ</a></li>
+          <li><a href="#ch15">15. 困ったとき</a></li>
+          <li><a href="#ch16">16. ショートカット一覧</a></li>
+        </ul>
+      </nav>
+
+      <section>
+        <h2 id="ch1">1. インストールと起動</h2>
+        <ol>
+          <li><a href="https://github.com/bee7813993/NicoKaraPrep/releases/latest" rel="noopener noreferrer">最新版の zip</a> をダウンロードし、任意の場所へ展開します</li>
+          <li><code>NicoKaraPrep.exe</code> をダブルクリックで起動します（インストール作業は不要です）</li>
+        </ol>
+        <ul>
+          <li>対応 OS: Windows 10 / 11（64bit）</li>
+          <li>設定は <code>%APPDATA%\NicoKaraPrep\settings.json</code> に保存されます（アプリフォルダは汚しません）</li>
+          <li>前回終了時のウィンドウ位置・サイズで起動します</li>
+        </ul>
+      </section>
+
+      <section>
+        <h2 id="ch2">2. 基本の流れ（クイックスタート）</h2>
+        <p>はじめて使うときの手順です。RhythmicaLyrics でタイムタグを打ち終えた歌詞ファイルと、ニコカラメーカー3 のプロジェクトが手元にある状態から始めます。</p>
+
+        <h3>1. 歌詞ファイル（.rlf）を開く</h3>
+        <ul>
+          <li><strong>ファイル &gt; 開く</strong>、または画面へドラッグ＆ドロップします。RhythmicaLyrics の編集ファイル <code>.rlf</code> を開くのが基本です（保存も rlf のままなので、RhythmicaLyrics との行き来ができます）</li>
+          <li>タイムタグ付きの <code>.lrc</code> も開けます。RhythmicaLyrics の「テキスト編集モード」のテキストは <strong>ファイル &gt; クリップボードから貼り付け</strong>（<kbd>Ctrl+Shift+V</kbd>）でも読み込めます</li>
+          <li>2 回目以降は <strong>ファイル &gt; 最近使用したファイル</strong> からすぐ開けます</li>
+        </ul>
+
+        <h3>2. ニコカラメーカーの設定を取り込む</h3>
+        <p><strong>チェック &gt; ニコカラメーカーのプロジェクト(n3proj)から設定を読み込み</strong> で <code>.n3proj</code> を選びます（画面へドラッグ＆ドロップでも可）。</p>
+        <ul>
+          <li>取り込むのは<strong>この曲用にフォント・文字サイズ・画面サイズを設定したあとのプロジェクト</strong>です。ニコカラメーカーで一度設定して保存してから読み込んでください</li>
+          <li>設定前の作りたてのプロジェクトを読み込んでも、チェックに使う値が入っていないため意味がありません</li>
+          <li>同じスタイルで作る場合は、<strong>別の曲で作った n3proj を使い回して構いません</strong>（画面サイズとフォントが同じなら結果は同じです）</li>
+          <li>歌詞ファイルと同じフォルダに n3proj が 1 つだけあれば、ファイルを開いたとき自動で取り込みます</li>
+          <li>n3proj が用意できないときは <strong>ファイル &gt; 設定</strong> で画面の横幅・フォント・サイズを直接指定しても構いません</li>
+        </ul>
+
+        <h3>3. アイコン（@Emoji）を使う場合はリストを用意する</h3>
+        <ul>
+          <li>読み込んだ <code>.rlf</code> / <code>.lrc</code> に <code>@Emoji=</code> タグが入っていれば、<strong>開いた時点でパレットへ自動登録</strong>されます（本アプリで保存した rlf、ニコカラメーカー用に書き出した lrc などが該当します）</li>
+          <li>入っていない場合は <strong>絵文字 &gt; 絵文字リスト編集</strong> で画像を選んで登録します（6 章）</li>
+          <li>作品シリーズで使い回すなら、<strong>テンプレート &gt; テンプレートを読み込み</strong> でアイコン一式とフォント設定をまとめて適用できます（12 章）</li>
+          <li>アイコンを使わない曲では、この手順は不要です</li>
+        </ul>
+
+        <h3>4. メディアを読み込む（任意）</h3>
+        <p>メディア再生パネルへ動画 / 音源をドロップすると、再生位置の行が自動でハイライトされ、行をダブルクリックでその時刻へ飛べます。歌詞と時刻の確認がしやすくなります。</p>
+
+        <h3>5. チェック結果を見ながら行を分割・結合する</h3>
+        <p>画面下のチェック結果に、<strong>1 行のはみ出し</strong>と<strong>ページ間のタイムタグ重なり</strong>が出ます。ここを消していくのが主な作業です。</p>
+        <ul>
+          <li>結果をクリックすると該当行へジャンプします</li>
+          <li>長すぎる行は <strong>行分割</strong>（<kbd>Ctrl+Enter</kbd>／挿入ビューでは <kbd>/</kbd>）で分けます</li>
+          <li>短い行が続いてページが詰まるときは <strong>行結合</strong>（<kbd>Ctrl+J</kbd>、スペースを挟むなら <kbd>Ctrl+Shift+J</kbd>／挿入ビューでは <kbd>\</kbd>・<kbd>Shift+\</kbd>）でつなぎます</li>
+          <li>直すたびに自動で再チェックされるので、警告が消えるまで繰り返します（8 章・9 章）</li>
+        </ul>
+
+        <h3>6. 必要ならアイコンを挿入する</h3>
+        <p>パート分けなどでアイコンを使う曲だけ、<kbd>F2</kbd> で<strong>絵文字挿入ビュー</strong>に切り替え、カーソルを動かしてキー <kbd>1</kbd>–<kbd>0</kbd> / <kbd>Q</kbd>–<kbd>P</kbd> で挿入します（7 章）。</p>
+        <ul>
+          <li>このビューでも <kbd>/</kbd>・<kbd>\</kbd> で<strong>行の分割・結合ができます</strong>。5 の作業をここで続けても構いません（左に横幅と時刻が出ているので、直した結果もその場で確認できます）</li>
+          <li>アイコンを入れると行が長くなるので、<strong>挿入したあとにもう一度横幅を確認</strong>してください</li>
+        </ul>
+        <div class="note">
+          <p><strong>コツ</strong></p>
+          <p>両手をキーボードに置いたまま、カーソル移動・挿入・行の分割結合・再生を続けて行えます。詳しくは <a href="#hands">7 章「手の置き方と進め方」</a>を見てください（アイコンは<strong>再生に合わせて押す必要はありません</strong>）。</p>
+        </div>
+
+        <h3>7. 保存して、必要な行を書き出す</h3>
+        <ul>
+          <li><kbd>Ctrl+S</kbd> で上書き保存（rlf のまま保存され、RhythmicaLyrics でそのまま開けます）</li>
+          <li>必要な行を選択して <strong>選択行をエクスポート</strong>（<kbd>Ctrl+E</kbd>）で、ニコカラメーカー用の lrc を書き出します（11 章）</li>
+        </ul>
+      </section>
+
+      <section>
+        <h2 id="ch3">3. 画面構成</h2>
+        <div class="layout-figure" role="img" aria-label="画面構成の図。上からメニューバー、メディア再生パネル、タブ、左に行リスト・行エディタ・行プレビュー、右に @Emoji パレット、下にチェック結果とステータスバー。">
+          <p class="lf-row">メニューバー</p>
+          <p class="lf-row">メディア再生パネル（折りたたみ可、下端ドラッグで高さ変更）</p>
+          <p class="lf-row lf-tabs">タブ（メイン＋分離タブ）</p>
+          <div class="lf-main">
+            <div class="lf-col">
+              <div class="lf-cell"><strong>行リスト</strong><span>済 / 選択 / 時刻 / 幅 / 歌詞</span></div>
+              <div class="lf-cell"><strong>行エディタ</strong><span>選択行の生テキスト編集</span></div>
+              <div class="lf-cell"><strong>行プレビュー</strong><span>ルビ・アイコンを実際の比率で表示</span></div>
+            </div>
+            <div class="lf-cell lf-side"><strong>@Emoji パレット</strong><span>20 スロット</span></div>
+          </div>
+          <p class="lf-row">チェック結果（クリックで該当行へジャンプ）</p>
+          <p class="lf-row lf-status">ステータスバー</p>
+        </div>
+        <p><kbd>F2</kbd> を押すと左側が<strong>絵文字挿入ビュー</strong>（歌詞全体の一枚表示）に切り替わります。</p>
+        <figure>
+          <img src="images/shot-main.png" width="978" height="1017" alt="にこぷれっぷ のメイン画面" loading="lazy">
+          <figcaption>メイン画面（通常ビュー）</figcaption>
+        </figure>
+      </section>
+
+      <section>
+        <h2 id="ch4">4. ファイルの読み込みと保存</h2>
+
+        <h3>対応形式</h3>
+        <div class="table-scroll">
+          <table>
+            <thead>
+              <tr><th>形式</th><th>読み込み</th><th>保存</th></tr>
+            </thead>
+            <tbody>
+              <tr><td>RhythmicaLyrics 編集ファイル（.rlf）</td><td>○</td><td>○（チェック数・ルビ・口パクタグ等も保持）</td></tr>
+              <tr><td>タイムタグ付き lrc（ルビ拡張 @RubyX・@Emoji 対応）</td><td>○</td><td>○</td></tr>
+              <tr><td>テキスト編集モード形式</td><td>クリップボード貼り付け</td><td>クリップボードへコピー</td></tr>
+              <tr><td>テキスト（.txt）</td><td>○</td><td>○</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <p>エンコーディングは自動判別します（Shift-JIS / UTF-8 / UTF-16）。</p>
+
+        <h3>保存メニューの違い（タブ分離中は特に注意）</h3>
+        <ul>
+          <li><strong>上書き保存（タブ含む全行）</strong> … 分離したタブの行も<strong>時刻順にマージして</strong>元ファイルへ保存します。普段はこれを使えば行を失いません</li>
+          <li><strong>表示中のタブを上書き保存</strong>（<kbd>Ctrl+Shift+S</kbd>） … 表示中のタブを前回「別ファイルへ保存」した先へそのまま上書きします（未保存なら保存ダイアログが開きます）。保存先はタブごとに記憶され、<code>.tttproj</code> にも保存されます</li>
+          <li><strong>表示中のタブを別ファイルへ保存</strong> … いま表示しているタブの行だけを別ファイルに書き出します。デフォルト形式はニコカラメーカー向けの <strong>lrc</strong>（rlf を開いていても）</li>
+          <li><strong>表示中のタブへファイルを読み込み（差し替え）</strong> … タブ保存した rlf を RhythmicaLyrics でタグ修正して戻ってきたときに、そのタブへ読み込み直します（読み込んだファイルがタブの上書き保存先になります）</li>
+        </ul>
+
+        <h3>自動保存される作業状態（.tttproj）</h3>
+        <p>歌詞ファイルの隣に <code>&lt;ファイル名&gt;.tttproj</code> が自動保存され、次回開いたとき復元されます。</p>
+        <ul>
+          <li>エクスポート済みマーク、メディアファイルのパス、パレットの並び順、タブ分離の状態</li>
+        </ul>
+        <p>歌詞ファイル自体には手を加えないので、rlf / lrc はきれいなまま保たれます。</p>
+      </section>
+
+      <section>
+        <h2 id="ch5">5. ニコカラメーカー設定の取り込み（n3proj）</h2>
+        <p><strong>チェック &gt; ニコカラメーカーのプロジェクト(n3proj)から設定を読み込み</strong> で <code>.n3proj</code> を選ぶ（または <code>.n3proj</code> を画面へドラッグ＆ドロップする）と、以下が自動設定されます。</p>
+        <ul>
+          <li>画面（動画）の横幅 → 横幅チェックに使用</li>
+          <li>字幕フォント・サイズ・太字・<strong>縁取りサイズ</strong> → 横幅チェック、プレビュー表示に使用</li>
+          <li><strong>字幕行ごとの実際の表示区間</strong> → ページ衝突チェックの精度が上がります（ニコカラメーカーが「1 行目と同時表示」等で調整した後の実時間を使うため）</li>
+        </ul>
+        <p>歌詞ファイルと同じフォルダに n3proj が 1 つだけあれば、ファイルを開いたとき自動で取り込みます。</p>
+      </section>
+
+      <section>
+        <h2 id="ch6">6. @Emoji アイコン</h2>
+
+        <h3>6.1 リスト編集（絵文字 &gt; 絵文字リスト編集）</h3>
+        <p>アイコンの登録・編集はすべてこの画面で行います。</p>
+        <ul>
+          <li><strong>行の追加・複製・削除・並び替え</strong>（上下ボタン）。上から 20 行にキー <kbd>1</kbd>–<kbd>0</kbd> / <kbd>Q</kbd>–<kbd>P</kbd> が割り当てられます。21 行目以降もパレットのリストからクリックで挿入できます</li>
+          <li><strong>文字</strong>: 歌詞中でアイコンに置き換える文字列（例 <code>(歩夢)</code>）。複数文字も可</li>
+          <li><strong>ワイプ前 / ワイプ後画像</strong>: ニコカラメーカーの @Emoji と同じ意味です（ワイプ後は省略可）</li>
+          <li><strong>オプション</strong>: <code>NoDecor,Zoom=150,MarginRight=20</code> のような @Emoji オプション文字列</li>
+          <li><strong>曲専用</strong>: チェックを付けた行はこの曲だけで有効（<code>.tttproj</code> に保存）。外すとアプリ共通（グローバル）</li>
+          <li>行を選択すると上部に<strong>プレビュー</strong>が表示され、<strong>Zoom スライダー・余白・Fix・NoDecor</strong> を操作するとオプション文字列が自動生成されます。プレビューは実測に基づき実機とほぼ同じ比率です（アイコン高さ = フォントサイズ × Zoom%、横長画像は幅が広がる、縁取り分だけ文字より下に沈む）</li>
+        </ul>
+        <p>読み込んだ rlf / lrc に <code>@Emoji=</code> タグが含まれていれば、自動でリストに登録されます。</p>
+        <figure>
+          <img src="images/shot-emoji-list.png" width="1165" height="497" alt="絵文字リスト編集画面" loading="lazy">
+          <figcaption>絵文字リスト編集。上部のプレビューと Zoom スライダーで、オプション文字列を作りながら見た目を確認できます</figcaption>
+        </figure>
+
+        <h3>6.2 パレット（右サイド）</h3>
+        <ul>
+          <li>スロットをクリックしてもカーソル位置に挿入できます</li>
+          <li>ドラッグで並び替え（キー割り当ても変わります）</li>
+          <li>20 枠に入らなかったアイコンは下のリストに表示され、<strong>「キーへ」ボタン</strong>で枠へ昇格できます（いっぱいのときは 20 番目のアイコンと入れ替わり）</li>
+          <li>パレット上部に<strong>絵文字挿入設定（表示秒数・連続タグ・プレースホルダ文字）</strong>が常時表示され、作業中にその場で微調整できます（変更は新しく挿入する分に適用。既存の絵文字へは 絵文字 &gt; 絵文字タイムタグ再計算）</li>
+          <li>表示秒数の横の <strong>「0秒」トグル</strong>で、ワイプしない絵文字用に表示秒数を 0 ⇔ 元の秒数でワンプッシュ切り替えできます</li>
+        </ul>
+
+        <h3>6.3 アイコンのタイムタグの仕組み</h3>
+        <ul>
+          <li>アイコンの<strong>終了時刻 = 直後の実文字のタグ時刻 T</strong>、<strong>開始時刻 = T − 表示秒数</strong>（設定「絵文字の表示秒数」、デフォルト 2 秒）</li>
+          <li>連続するアイコンは設定で「各絵文字それぞれにタグ」（デフォルト）/「ブロックの先頭と末尾のみ」を選べます</li>
+          <li>後から歌詞のタイムタグを修正したら <strong>絵文字 &gt; 絵文字タイムタグ再計算</strong> で全アイコンのタグを付け直せます</li>
+          <li>アイコンの先行タグ（T−n 秒）は重なりチェックの計算から除外されます</li>
+        </ul>
+      </section>
+
+      <section>
+        <h2 id="ch7">7. 絵文字挿入ビュー（F2）</h2>
+        <p>歌詞全体を 1 画面に表示し、<strong>キーボードだけで</strong>アイコン挿入・行操作・再生操作ができる専用ビューです。文字の直接入力はできません（誤編集防止）。</p>
+        <p>下表のキーは<strong>デフォルト</strong>です。<strong>ファイル &gt; キー割り当て（挿入ビュー）</strong>（または挿入ビュー上部の<strong>「キー一覧...」ボタン</strong>）で、キーボード配列の画面からキー操作の一覧を確認でき、クリックで自由に変更もできます（選んだ機能が別のキーにあった場合は入れ替え。スロットキー 1–0 / Q–P、BS/Del/Esc、方向キー＝カーソル移動、Ctrl 系は固定）。現在の割り当ては挿入ビュー上部の凡例に常に表示されます。</p>
+        <ul>
+          <li>左側に各行の<strong>開始→終了時刻と横幅</strong>が表示されます（本文とスクロール同期。エクスポート済みの行は ✓ 付き）
+            <ul>
+              <li>時刻はページ衝突チェックの結果で色分けされます（赤 = エラー / オレンジ = 警告。通常ビューの時刻列と同じ規則）</li>
+              <li>横幅は「はみ出し = 赤」「マージン不足 = オレンジ」に加え、<strong>使用率 90% 超</strong>でもオレンジで予告表示されます</li>
+            </ul>
+          </li>
+          <li><strong>行情報をクリックすると行を選択</strong>できます（クリックでトグル、Shift+クリックで範囲選択）。<strong>右クリックで行操作メニュー</strong>（タブ分離・既存タブへ移動・エクスポート・済マーク解除・未エクスポート選択）が開き、通常ビューへ戻らずにパート分けとエクスポートまで完結できます</li>
+          <li>画面下部に<strong>カーソル位置の行番号と直前・直後のタイムタグ時刻</strong>が表示されます（G で入れた先行タグの確認にも便利です）</li>
+        </ul>
+        <figure>
+          <img src="images/shot-insert.png" width="978" height="1017" alt="絵文字挿入ビュー" loading="lazy">
+          <figcaption>絵文字挿入ビュー（F2）。上部に現在のキー割り当ての凡例、左に各行の時刻と横幅、下部にカーソル位置の情報が出ます</figcaption>
+        </figure>
+        <div class="table-scroll">
+          <table>
+            <thead><tr><th>キー</th><th>動作</th></tr></thead>
+            <tbody>
+              <tr><td><kbd>1</kbd>–<kbd>0</kbd> / <kbd>Q</kbd>–<kbd>P</kbd></td><td>カーソル位置にスロットのアイコンを挿入</td></tr>
+              <tr><td><kbd>B</kbd></td><td>プレースホルダ文字（＿）を挿入（アイコン同等のタイムタグ付き。文字は設定で変更可）</td></tr>
+              <tr><td><kbd>G</kbd></td><td><strong>先行タグを挿入</strong> — 文字を増やさず、「直後のタグの表示秒数前」のタイムタグだけを置く。行を早めに表示させたいときに（コーラス行など）</td></tr>
+              <tr><td><kbd>K</kbd></td><td>空白を挿入（<kbd>Shift+K</kbd> で全角スペース）。行分割・結合後の文字位置調整に。行末の空白は <code>␣</code>（半角）/ <code>□</code>（全角）で可視化されます</td></tr>
+              <tr><td><kbd>BS</kbd> / <kbd>Del</kbd></td><td>カーソル位置のアイコン・＿・空白を削除（歌詞の文字は消えません。タグ付き空白は時刻を残して文字だけ消えます）</td></tr>
+              <tr><td><kbd>Space</kbd></td><td>再生 / 一時停止</td></tr>
+              <tr><td><kbd>D</kbd></td><td>カーソル位置のタイムタグから再生</td></tr>
+              <tr><td><kbd>A</kbd> / <kbd>S</kbd></td><td>再生 / 一時停止（個別）</td></tr>
+              <tr><td><kbd>Z</kbd> / <kbd>X</kbd></td><td>数秒戻る / 進む（秒数は設定で変更可）</td></tr>
+              <tr><td><kbd>F</kbd></td><td><strong>再生追従カーソル</strong> ON/OFF — 再生中、次に歌われる文字の位置へカーソルが自動移動します</td></tr>
+              <tr><td><kbd>/</kbd></td><td>カーソル位置で行分割</td></tr>
+              <tr><td><kbd>\</kbd></td><td>次の行と結合（<kbd>Shift+\</kbd> でスペースを挟んで結合）</td></tr>
+              <tr><td><kbd>Ctrl+Z</kbd> / <kbd>Ctrl+Y</kbd></td><td>元に戻す / やり直し</td></tr>
+              <tr><td><kbd>Esc</kbd></td><td>挿入ビューを終了</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <h3 id="hands">手の置き方と進め方</h3>
+        <p>このビューは、両手をキーボードに置いたまま作業できるようにキーを配置しています。</p>
+        <ul>
+          <li><strong>右手</strong>は基本的に<strong>カーソルキー</strong>（<kbd>←</kbd> <kbd>→</kbd> <kbd>↑</kbd> <kbd>↓</kbd>）に置きます。行の分割・結合をしたいときだけ、そのまま隣の <kbd>/</kbd>・<kbd>\</kbd> を押します</li>
+          <li><strong>左手</strong>はキーボードの左側全体に置きます。アイコンのスロットキー <kbd>1</kbd>–<kbd>0</kbd> / <kbd>Q</kbd>–<kbd>P</kbd>、<kbd>B</kbd> <kbd>G</kbd> <kbd>K</kbd>、再生操作の <kbd>A</kbd> <kbd>S</kbd> <kbd>D</kbd> <kbd>Z</kbd> <kbd>X</kbd> はすべてこの範囲にあります</li>
+          <li>進め方は<strong>「カーソルキーで位置を決める → その場でキーを押す」</strong>の繰り返しです。アイコン挿入も、行の分割・結合も、同じリズムで進みます</li>
+        </ul>
+
+        <h3>確認のための再生</h3>
+        <p>歌詞のどこで切り替わるかを確かめたいときは、左手のまま再生を操作します。</p>
+        <ul>
+          <li><kbd>A</kbd> で再生、<kbd>S</kbd> で停止。<kbd>Space</kbd> は押すたびに再生 / 一時停止が切り替わります</li>
+          <li><kbd>D</kbd> で<strong>カーソル位置のタイムタグから再生</strong>。いま見ている場所をすぐ聴き直せます</li>
+          <li><kbd>Z</kbd> / <kbd>X</kbd> で数秒戻る / 進む（秒数は設定で変更できます）</li>
+        </ul>
+        <div class="note">
+          <p><strong>再生に合わせてキーを押す必要はありません</strong></p>
+          <p>アイコンの挿入位置は<strong>カーソルのある場所</strong>で決まり、タイムタグは<strong>直後の文字のタグから自動で計算</strong>されます。RhythmicaLyrics のタイムタグ打ちのように、曲の進行に合わせてリアルタイムでキーを叩く操作ではありません。</p>
+          <p>再生はあくまで「ここで合っているか」を耳で確かめるためのものです。停止したままカーソルを動かして挿入しても、結果はまったく同じになります。</p>
+        </div>
+      </section>
+
+      <section>
+        <h2 id="ch8">8. 行の分割・結合と行編集</h2>
+        <p>ニコカラでは「1 行が画面に収まるか」「ページの切り替わりで前の行と重ならないか」で、行の切り方がそのまま仕上がりに出ます。チェック結果を見ながら行を分けたりつないだりして整えるのが、このアプリの主な作業です（アイコンを使わない曲でも、この作業のためだけに使えます）。</p>
+
+        <h3>行の分割・結合</h3>
+        <div class="table-scroll">
+          <table>
+            <thead><tr><th>操作</th><th>通常ビュー</th><th>挿入ビュー</th></tr></thead>
+            <tbody>
+              <tr><td>カーソル位置で行を分ける</td><td><kbd>Ctrl+Enter</kbd></td><td><kbd>/</kbd></td></tr>
+              <tr><td>次の行と結合する</td><td><kbd>Ctrl+J</kbd></td><td><kbd>\</kbd></td></tr>
+              <tr><td>スペースを挟んで結合する</td><td><kbd>Ctrl+Shift+J</kbd></td><td><kbd>Shift+\</kbd></td></tr>
+              <tr><td>空行（ページ区切り）を挿入する</td><td><kbd>Ctrl+K</kbd></td><td>—</td></tr>
+              <tr><td>行を削除する</td><td><kbd>Ctrl+Delete</kbd></td><td>—</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <ul>
+          <li><strong>タイムタグはそのまま引き継がれます。</strong>分割したときは、前半の行の終了時刻に後半の行の先頭タグの時刻が補われ、分割前のワイプの終わり方が保たれます</li>
+          <li>結合したときは、前の行の行末タグが次の行の先頭タグと違う時刻なら、スペーサー（2 連タグ）として残ります</li>
+          <li>操作するたびに自動で再チェックされるので、<strong>横幅の使用率と警告が消えるかをその場で確認</strong>できます</li>
+          <li>やり直したいときは <kbd>Ctrl+Z</kbd> / <kbd>Ctrl+Y</kbd> で元に戻す・やり直しができます</li>
+        </ul>
+
+        <h3>通常ビューの各部</h3>
+        <ul>
+          <li><strong>行リスト</strong>: クリックで選択、チェックボックスまたは Ctrl+クリックで複数選択。ダブルクリックでその行の時刻へシーク。行を右クリックすると分離・エクスポート等のメニューが出ます</li>
+          <li><strong>行エディタ</strong>: 選択行をテキスト編集モード形式（<code>[2|00:12:34]</code> や <code>{漢字|かん＋じ}</code>）のまま直接編集できます。<kbd>Ctrl+1</kbd>–<kbd>0</kbd> でアイコン挿入も可能</li>
+          <li><strong>行プレビュー</strong>: 選択行をルビ・アイコン込みの実際の比率で表示します</li>
+        </ul>
+      </section>
+
+      <section>
+        <h2 id="ch9">9. チェック機能</h2>
+        <p>編集のたびに自動で再チェックされます（<kbd>F5</kbd> で即時実行）。結果は画面下の一覧に表示され、クリックで該当行へジャンプします。行リストにも色が付きます。ここに出た警告は、多くの場合 <a href="#ch8">8 章の行の分割・結合</a>で解消できます。</p>
+
+        <h3>ページ間のタイムタグ重なり（最重要）</h3>
+        <p>ニコカラメーカーは空行を字幕ページの区切りとして扱います。前のページの行が消える前に、次のページの同じ位置（下から数えて同じ段）の行が出ようとすると、表示が破綻します。このチェックはそれを検出します。</p>
+        <ul>
+          <li>行の表示区間 = 先頭タグ − 表示前秒数（デフォルト 1.5 秒）〜 最終タグ + 表示後秒数（デフォルト 0.5 秒）</li>
+          <li>n3proj を取り込んでいる場合、前ページ側の「実際に消える時刻」はニコカラメーカーの計算値を使います</li>
+          <li>1 行だけのページは、次のページまで十分時間があれば「下から 2 行目」に昇格するニコカラメーカーの挙動も再現しています</li>
+          <li>重なり秒数がしきい値（デフォルト 1 秒）を超えるとエラー、以下は警告</li>
+          <li>行内の時刻逆行や隣接行の重なり（パート分け同時歌唱で普通に起きるもの）はエラーにせず ♪ 印の情報表示のみ</li>
+        </ul>
+
+        <h3>1 行の横幅</h3>
+        <p>設定のフォント・サイズで実測し、<strong>画面からのはみ出し（エラー）</strong>と<strong>左右マージン不足（警告、デフォルト片側 5%）</strong>を判定します。アイコンは実際の表示幅（フォントサイズ × Zoom% × 縦横比 + 余白）で計算します。行リストに幅 px と使用率が表示されます。</p>
+        <figure>
+          <img src="images/shot-check-list.png" width="1183" height="1401" alt="通常ビューのチェック結果" loading="lazy">
+          <figcaption>通常ビュー。行リストの時刻・幅が色分けされ、画面下にチェック結果の一覧が出ます</figcaption>
+        </figure>
+        <figure>
+          <img src="images/shot-check-insert.png" width="1183" height="1401" alt="挿入ビューでのチェック結果" loading="lazy">
+          <figcaption>挿入ビューでも同じチェック結果を確認できます（左の行情報が同じ規則で色分けされます）</figcaption>
+        </figure>
+      </section>
+
+      <section>
+        <h2 id="ch10">10. メディア再生</h2>
+        <ul>
+          <li>メディア再生パネルへ動画 / 音声ファイルをドロップ（または 再生 &gt; メディアを開く）</li>
+          <li><kbd>Ctrl+Space</kbd> 再生 / 一時停止、<kbd>Ctrl+←</kbd> / <kbd>Ctrl+→</kbd> シーク（通常ビュー時）</li>
+          <li>再生位置の行が自動でハイライトされます（再生メニューで OFF 可）</li>
+          <li>パネル下端のバーをドラッグすると高さを変えられます。使わないときは折りたたみ可</li>
+          <li>メディアのパスは <code>.tttproj</code> に保存され、次回自動で開きます</li>
+        </ul>
+      </section>
+
+      <section>
+        <h2 id="ch11">11. タブ分離と部分エクスポート</h2>
+        <p>パート分けなどで「一部の行だけ別ファイルにしたい」ときの機能です。</p>
+
+        <h3>タブ分離</h3>
+        <ol>
+          <li>行を選択して <strong>選択行を分離</strong>（<kbd>Ctrl+T</kbd>、タブ横のボタン・右クリックからも可）→ 新しいタブへ移動します</li>
+          <li>入れ忘れた行は「選択行を移動」でタブを選んで追加できます（時刻順に挿入）</li>
+          <li>タブ名はダブルクリックで変更できます</li>
+          <li><strong>エクスポート &gt; タブ分離を解除</strong> で全行をメインに戻せます（元のページ区切り位置に復元されます）</li>
+          <li>タブ構成は <code>.tttproj</code> に保存され、次回復元されます（元ファイルが変更されていた場合は復元されません）</li>
+        </ol>
+
+        <h3>エクスポートと済マーク</h3>
+        <ul>
+          <li>行を選択して <strong>選択行をエクスポート</strong>（<kbd>Ctrl+E</kbd>、lrc / rlf / txt）または <strong>クリップボードへエクスポート</strong>（テキスト編集モード形式）</li>
+          <li>エクスポートした行には ✓ <strong>済マーク</strong>が付き、グレー表示になります（元データからは消えません）</li>
+          <li><strong>未エクスポート行をすべて選択</strong> → 残りをまとめて出力、<strong>済マークを解除</strong> も可能です</li>
+          <li>lrc 出力時は、使用中のアイコンの <code>@Emoji=</code> タグをヘッダへ自動出力します</li>
+          <li>保存先の初期フォルダは「歌詞ファイルのフォルダ → メディアのフォルダ → 前回保存したフォルダ」の順で選ばれます</li>
+        </ul>
+      </section>
+
+      <section>
+        <h2 id="ch12">12. テンプレート</h2>
+        <p>アイコン一式＋フォント・チェック設定をまとめて保存・適用できます（作品シリーズごとに 1 つ作っておくと便利です）。</p>
+        <ul>
+          <li><strong>テンプレート &gt; テンプレートとして保存...</strong> → <code>.tttpl</code> ファイル</li>
+          <li><strong>テンプレート &gt; テンプレートを読み込み...</strong> → アプリ共通設定に適用されます</li>
+        </ul>
+      </section>
+
+      <section>
+        <h2 id="ch13">13. 設定リファレンス（ファイル &gt; 設定）</h2>
+        <div class="table-scroll">
+          <table>
+            <thead><tr><th>項目</th><th>意味</th><th>デフォルト</th></tr></thead>
+            <tbody>
+              <tr><td>ページ区切り</td><td>空行で区切る / 固定行数でページ化</td><td>空行</td></tr>
+              <tr><td>行の表示開始 / 終了</td><td>先頭タグの n 秒前に出現 / 最終タグの n 秒後に消える</td><td>1.5 / 0.5 秒</td></tr>
+              <tr><td>行の対応付け</td><td>ページ間で比較する行（下から / 上から）</td><td>下から</td></tr>
+              <tr><td>エラーとする重なり秒数</td><td>これ以下は警告</td><td>1 秒</td></tr>
+              <tr><td>画面の横幅 px</td><td>横幅チェックの基準</td><td>1920</td></tr>
+              <tr><td>字幕フォント / サイズ / 太字</td><td>横幅チェック・プレビューに使用</td><td>メイリオ 80px</td></tr>
+              <tr><td>縁取りサイズ px</td><td>プレビューのアイコン縦位置に反映（n3proj から自動取得）</td><td>0</td></tr>
+              <tr><td>左右マージン</td><td>片側 %。不足すると警告</td><td>5%</td></tr>
+              <tr><td>絵文字の表示秒数</td><td>アイコン・＿・先行タグの「何秒前から表示」</td><td>2 秒</td></tr>
+              <tr><td>連続する絵文字のタグ付け</td><td>各絵文字ごと / 先頭と末尾のみ</td><td>各絵文字ごと</td></tr>
+              <tr><td>プレースホルダ文字</td><td>挿入ビューの B キーで挿入する文字</td><td>＿</td></tr>
+              <tr><td>シーク秒数</td><td>Z / X・Ctrl+←/→ で動く秒数</td><td>3 秒</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <section>
+        <h2 id="ch14">14. ファイルの場所まとめ</h2>
+        <div class="table-scroll">
+          <table>
+            <thead><tr><th>ファイル</th><th>場所</th><th>内容</th></tr></thead>
+            <tbody>
+              <tr><td><code>settings.json</code></td><td><code>%APPDATA%\NicoKaraPrep\</code></td><td>アプリ設定・グローバル絵文字リスト</td></tr>
+              <tr><td><code>&lt;歌詞ファイル名&gt;.tttproj</code></td><td>歌詞ファイルの隣</td><td>済マーク・メディアパス・タブ・パレット並び</td></tr>
+              <tr><td><code>*.tttpl</code></td><td>任意（保存時に指定）</td><td>テンプレート</td></tr>
+              <tr><td><code>crash.log</code></td><td><code>%APPDATA%\NicoKaraPrep\</code></td><td>異常終了時のログ</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <section>
+        <h2 id="ch15">15. 困ったとき</h2>
+        <ul>
+          <li><strong>rlf を保存したのに RhythmicaLyrics で歌詞が表示されない</strong> → 本アプリの旧バージョンの不具合です。最新版で開いて保存し直してください</li>
+          <li><strong>アイコンのプレビューと実際の見た目が違う</strong> → ファイル &gt; 設定 のフォント・サイズ・縁取りが実際のニコカラメーカー設定と合っているか確認してください（n3proj 取り込みが確実です）</li>
+          <li><strong>挿入ビューで文字が打てない</strong> → 仕様です（誤編集防止）。歌詞の修正は通常ビューの行エディタか RhythmicaLyrics で行ってください</li>
+          <li><strong>タブが復元されない</strong> → 元の歌詞ファイルが外部で変更されると、安全のためタブ構成を破棄します（メインに全行が読み込まれます）</li>
+          <li><strong>lrc を更新したのにニコカラメーカーでルビが出ない・古い読みが出る</strong> → ニコカラメーカー 3 は歌詞ファイルの「（更新）」再読み込み時にルビの適用結果を使い回すことがあります。歌詞設定で歌詞ファイルを一度消して選び直す（またはニコカラメーカーを再起動する）と正しく反映されます</li>
+          <li><strong>アプリが落ちた</strong> → <code>%APPDATA%\NicoKaraPrep\crash.log</code> を添えて<a href="../../contact.html">お問い合わせ</a>ください</li>
+        </ul>
+      </section>
+
+      <section>
+        <h2 id="ch16">16. ショートカット一覧</h2>
+
+        <h3>どこでも</h3>
+        <div class="table-scroll">
+          <table>
+            <thead><tr><th>キー</th><th>動作</th></tr></thead>
+            <tbody>
+              <tr><td><kbd>Ctrl+N</kbd></td><td>新規作成（ファイルを閉じる）</td></tr>
+              <tr><td><kbd>Ctrl+O</kbd> / <kbd>Ctrl+S</kbd></td><td>開く / 上書き保存（全行マージ）</td></tr>
+              <tr><td><kbd>Ctrl+Shift+S</kbd></td><td>表示中のタブを上書き保存</td></tr>
+              <tr><td><kbd>Ctrl+Shift+V</kbd> / <kbd>Ctrl+Shift+C</kbd></td><td>テキスト編集モード形式の貼り付け / コピー</td></tr>
+              <tr><td><kbd>Ctrl+E</kbd></td><td>選択行をエクスポート</td></tr>
+              <tr><td><kbd>Ctrl+T</kbd></td><td>選択行を新しいタブへ分離</td></tr>
+              <tr><td><kbd>Ctrl+Z</kbd> / <kbd>Ctrl+Y</kbd></td><td>元に戻す / やり直し</td></tr>
+              <tr><td><kbd>Ctrl+Enter</kbd> / <kbd>Ctrl+J</kbd> / <kbd>Ctrl+Shift+J</kbd></td><td>行分割 / 行結合 / スペースを挟んで結合</td></tr>
+              <tr><td><kbd>Ctrl+K</kbd> / <kbd>Ctrl+Delete</kbd></td><td>空行挿入 / 選択行削除</td></tr>
+              <tr><td><kbd>Ctrl+Space</kbd>、<kbd>Ctrl+←</kbd> / <kbd>Ctrl+→</kbd></td><td>再生・一時停止、シーク</td></tr>
+              <tr><td><kbd>F2</kbd> / <kbd>F5</kbd></td><td>絵文字挿入ビュー切り替え / 今すぐチェック</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <h3>絵文字挿入ビュー（F2 中）</h3>
+        <div class="table-scroll">
+          <table>
+            <thead><tr><th>キー</th><th>動作</th></tr></thead>
+            <tbody>
+              <tr><td><kbd>1</kbd>–<kbd>0</kbd> / <kbd>Q</kbd>–<kbd>P</kbd></td><td>アイコン挿入</td></tr>
+              <tr><td><kbd>B</kbd> / <kbd>G</kbd> / <kbd>K</kbd></td><td>＿挿入 / 先行タグ挿入 / 空白挿入（<kbd>Shift+K</kbd>: 全角）</td></tr>
+              <tr><td><kbd>BS</kbd> / <kbd>Del</kbd></td><td>アイコン・＿・空白の削除</td></tr>
+              <tr><td><kbd>Space</kbd> / <kbd>D</kbd> / <kbd>A</kbd> / <kbd>S</kbd> / <kbd>Z</kbd> / <kbd>X</kbd></td><td>再生一時停止 / カーソル位置から再生 / 再生 / 一時停止 / 戻る / 進む</td></tr>
+              <tr><td><kbd>F</kbd></td><td>再生追従カーソル</td></tr>
+              <tr><td><kbd>/</kbd> と <kbd>\</kbd>（<kbd>Shift+\</kbd>）</td><td>行分割 / 行結合（スペースを挟む）</td></tr>
+              <tr><td><kbd>Esc</kbd></td><td>終了</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <h3>行エディタ</h3>
+        <div class="table-scroll">
+          <table>
+            <thead><tr><th>キー</th><th>動作</th></tr></thead>
+            <tbody>
+              <tr><td><kbd>Ctrl+1</kbd>–<kbd>0</kbd></td><td>スロット 1–10 のアイコンをカーソル位置に挿入</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <p class="to-top"><a href="#main">↑ ページの先頭へ</a></p>
+      </section>
+    </article>
+  </main>
+
+  <footer class="site-footer">
+    <div class="footer-inner">
+      <p class="footer-brand">YFRTeam</p>
+      <nav aria-label="フッターナビゲーション">
+        <a href="../../index.html">YFRTeamトップ</a>
+        <a href="index.html">にこぷれっぷ</a>
+        <a href="privacy.html">プライバシーポリシー</a>
+        <a href="../../contact.html">お問い合わせ</a>
+      </nav>
+      <p class="copyright">&copy; 2026 YFRTeam</p>
+    </div>
+  </footer>
+</body>
+</html>
