@@ -6,20 +6,17 @@
   IgnorableNamespaces="uap rescap">
 
   <!--
-    Identity の Name / Publisher は Partner Center でアプリ名を予約すると確定する値。
-    「アプリ管理 > Product identity」に表示される Package/Identity/Name と
-    Package/Identity/Publisher をここに転記する（Visual Studio の
-    [発行 > アプリケーションを Store と関連付ける] を使えば自動で書き換わる）。
+    Identity / PublisherDisplayName は Partner Center の「Product identity」の値。
     Version の第 4 セグメントは Store 予約のため 0 固定。
   -->
   <Identity
-    Name="bee7813993.NicoKaraPrep"
-    Publisher="CN=00000000-0000-0000-0000-000000000000"
+    Name="YFRTeam.8571E940AEEA"
+    Publisher="CN=7F20441E-C8F2-4A45-B847-6FECA63733DB"
     Version="0.1.0.0" />
 
   <Properties>
     <DisplayName>NicoKaraPrep</DisplayName>
-    <PublisherDisplayName>bee7813993</PublisherDisplayName>
+    <PublisherDisplayName>YFRTeam</PublisherDisplayName>
     <Logo>Assets\StoreLogo.png</Logo>
   </Properties>
 
