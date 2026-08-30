@@ -182,6 +182,7 @@
           <li>対応 OS: Windows 10 / 11（64bit）</li>
           <li>設定は <code>%APPDATA%\NicoKaraPrep\settings.json</code> に保存されます（アプリフォルダは汚しません）</li>
           <li>前回終了時のウィンドウ位置・サイズで起動します</li>
+          <li><strong>Microsoft Store 版は配信準備中です。</strong>公開までは上記の zip をご利用ください</li>
         </ul>
       </section>
 
@@ -207,10 +208,12 @@
         </ul>
 
         <h3>3. アイコン（@Emoji）を使う場合はリストを用意する</h3>
+        <p><strong>歌詞ファイルには <code>@Emoji</code> タグを入れず、アイコンの定義はこのアプリ側に持たせるのがおすすめです。</strong>RhythmicaLyrics で扱う rlf をきれいなまま保てますし、一度登録したアイコンは次の曲でもそのまま使い回せます。</p>
         <ul>
-          <li>読み込んだ <code>.rlf</code> / <code>.lrc</code> に <code>@Emoji=</code> タグが入っていれば、<strong>開いた時点でパレットへ自動登録</strong>されます（本アプリで保存した rlf、ニコカラメーカー用に書き出した lrc などが該当します）</li>
-          <li>入っていない場合は <strong>絵文字 &gt; 絵文字リスト編集</strong> で画像を選んで登録します（6 章）</li>
-          <li>作品シリーズで使い回すなら、<strong>テンプレート &gt; テンプレートを読み込み</strong> でアイコン一式とフォント設定をまとめて適用できます（12 章）</li>
+          <li>登録は <strong>絵文字 &gt; 絵文字リスト編集</strong> で行います（6 章）。<strong>「曲専用」のチェックを外しておけばアプリ共通（グローバル）として保存され</strong>、別の曲を開いてもそのまま使えます</li>
+          <li>作品シリーズごとに一式を切り替えたいときは、<strong>テンプレート</strong>に保存しておき、必要なときに読み込みます（12 章）</li>
+          <li>ニコカラメーカーへ渡す lrc を書き出すときに、<strong>使用中のアイコンの <code>@Emoji=</code> タグがヘッダへ自動で出力されます</strong>。歌詞ファイル側に定義を持たせておく必要はありません</li>
+          <li>読み込んだ <code>.rlf</code> / <code>.lrc</code> に <code>@Emoji=</code> タグが入っている場合は、<strong>開いた時点でパレットへ自動登録</strong>されます（人から受け取ったファイルや、以前このアプリで書き出した lrc を読み込んだときなど）</li>
           <li>アイコンを使わない曲では、この手順は不要です</li>
         </ul>
 
@@ -328,6 +331,12 @@
           <li>行を選択すると上部に<strong>プレビュー</strong>が表示され、<strong>Zoom スライダー・余白・Fix・NoDecor</strong> を操作するとオプション文字列が自動生成されます。プレビューは実測に基づき実機とほぼ同じ比率です（アイコン高さ = フォントサイズ × Zoom%、横長画像は幅が広がる、縁取り分だけ文字より下に沈む）</li>
         </ul>
         <p>読み込んだ rlf / lrc に <code>@Emoji=</code> タグが含まれていれば、自動でリストに登録されます。</p>
+        <div class="note">
+          <p><strong>おすすめの持ち方：歌詞ファイルには @Emoji を入れず、アプリ側で定義する</strong></p>
+          <p>アイコンは<strong>「曲専用」を外してグローバルに登録</strong>しておくのがおすすめです。歌詞ファイル（rlf）には <code>@Emoji</code> タグが書き込まれないので RhythmicaLyrics 側をきれいに保てますし、<strong>次の曲でもそのまま同じアイコンを使えます</strong>。作品ごとに一式を切り替えたいときはテンプレート（12 章）に保存しておきます。</p>
+          <p>ニコカラメーカーが必要とする <code>@Emoji=</code> タグは、<strong>lrc を書き出すときにグローバル・曲専用をまとめた実効リストからヘッダへ自動出力</strong>されます。定義を歌詞ファイル側に持たせておく必要はありません。</p>
+          <p>「曲専用」は、その曲だけ拡大率や画像を変えたいときに使います。曲専用の行だけは <code>.tttproj</code> に保存され、rlf を保存したときにも <code>@Emoji</code> タグとして書き込まれます。</p>
+        </div>
         <figure>
           <img src="images/shot-emoji-list.png" width="1165" height="497" alt="絵文字リスト編集画面" loading="lazy">
           <figcaption>絵文字リスト編集。上部のプレビューと Zoom スライダーで、オプション文字列を作りながら見た目を確認できます</figcaption>

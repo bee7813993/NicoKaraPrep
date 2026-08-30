@@ -12,13 +12,14 @@ apps/NicoKaraPrep/index.html      紹介ページ（https://ykr.moe/apps/NicoKar
 apps/NicoKaraPrep/manual.html     使い方マニュアル
 apps/NicoKaraPrep/privacy.html    プライバシーポリシー（既存ページをサイトのデザインに移植したもの）
 apps/NicoKaraPrep/images/         画像（アプリアイコン・スクリーンショット）
+index.html                        トップページ（提供アプリ一覧に「にこぷれっぷ」を追加したもの）
 ```
 
 `privacy.html` は公開中のページを**本文はそのままに**、サイト共通のヘッダー・フッター・スタイルへ移植したものです（本文の差分がないことは確認済み）。上書きアップロードすると、他のページと同じ見た目になり、ヘッダーから紹介ページ・使い方へ戻れるようになります。
 
 アプリ名は対外的には「にこぷれっぷ」で統一しています。実行ファイル名・設定フォルダ名・GitHub リポジトリ名・このページの URL は `NicoKaraPrep` のままです。
 
-- `web/assets/style.css` は**ローカル表示確認用のコピー**です。サイト側に同じものが既にあるので、アップロードは不要です。
+- `web/assets/` の中身（`style.css`・`yukanavi-icon.png`）は**ローカル表示確認用のコピー**です。サイト側に同じものが既にあるので、アップロードは不要です。
 - `images/nicokaraprep-icon.png` はアプリの `app.ico` から取り出した 256px の PNG です。
 
 ## ローカルで表示を確認する
@@ -31,20 +32,24 @@ cd web && python -m http.server 8791
 
 ## トップページへの追加
 
-`https://ykr.moe/index.html` の `#apps` セクション（ゆかナビの `<article class="app-entry">` の下）に、次を追加すると一覧に載ります。
+`web/index.html` が、**公開中のトップページに「にこぷれっぷ」の項目を足しただけ**のファイルです（2026-08-31 時点の内容から作成。差分は下記の 1 ブロックのみ）。そのままサイトのルートへ上書きアップロードできます。
+
+アップロード前に公開中のトップページが更新されていた場合は、上書きせず次のブロックを `#apps` セクションのゆかナビの `<article class="app-entry">` の下に挿入してください。
 
 ```html
 <article class="app-entry">
-  <img src="apps/NicoKaraPrep/images/nicokaraprep-icon.png" width="256" height="256" alt="NicoKaraPrep のアプリアイコン">
+  <img src="apps/NicoKaraPrep/images/nicokaraprep-icon.png" width="256" height="256" alt="にこぷれっぷのアプリアイコン">
   <div class="app-entry-content">
     <p class="app-category">ニコカラ制作支援アプリ</p>
-    <h3>NicoKaraPrep</h3>
+    <h3>にこぷれっぷ</h3>
     <p>RhythmicaLyrics で作ったタイムタグ付き歌詞を、ニコカラメーカー3 向けに仕上げる Windows アプリです。</p>
     <p class="app-release-status">Windows版 配布中</p>
-    <a class="primary-link" href="apps/NicoKaraPrep/index.html">NicoKaraPrep を見る</a>
+    <a class="primary-link" href="apps/NicoKaraPrep/index.html">にこぷれっぷを見る</a>
   </div>
 </article>
 ```
+
+アイコン画像は `apps/NicoKaraPrep/images/nicokaraprep-icon.png` を参照しているので、トップページ用に画像を追加する必要はありません。
 
 ## ダウンロードリンク
 
