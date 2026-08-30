@@ -14,8 +14,9 @@
     Publisher="CN=7F20441E-C8F2-4A45-B847-6FECA63733DB"
     Version="0.1.0.0" />
 
+  <!-- DisplayName は Partner Center で予約したアプリ名「にこぷれっぷ」と一致させること -->
   <Properties>
-    <DisplayName>NicoKaraPrep</DisplayName>
+    <DisplayName>にこぷれっぷ</DisplayName>
     <PublisherDisplayName>YFRTeam</PublisherDisplayName>
     <Logo>Assets\StoreLogo.png</Logo>
   </Properties>
@@ -32,7 +33,7 @@
   <Applications>
     <Application Id="App" Executable="$targetnametoken$.exe" EntryPoint="$targetentrypoint$">
       <uap:VisualElements
-        DisplayName="NicoKaraPrep"
+        DisplayName="にこぷれっぷ"
         Description="RhythmicaLyrics で作成したタイムタグ付き歌詞を、ニコカラメーカー3 に読み込ませるために加工するツール"
         BackgroundColor="transparent"
         Square150x150Logo="Assets\Square150x150Logo.png"
