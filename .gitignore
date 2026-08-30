@@ -4,6 +4,11 @@ obj/
 publish/
 *.zip
 
+# MSIX パッケージ出力（Store 提出用）
+AppPackages/
+*.msix
+*.msixupload
+
 # IDE
 .vs/
 *.user

@@ -17,8 +17,13 @@
     <!-- MVVMTK0045: AOT 用の partial property 推奨警告。本アプリは AOT 非対象のため抑制 -->
     <NoWarn>$(NoWarn);MVVMTK0045</NoWarn>
     <EnableMsixTooling>true</EnableMsixTooling>
-    <WindowsPackageType>None</WindowsPackageType>
-    <WindowsAppSDKSelfContained>true</WindowsAppSDKSelfContained>
+    <!-- 通常ビルドは非パッケージ（開発・zip 配布用）。
+         Store 提出用 MSIX を作るときは -p:Packaged=true を付けてビルドする（README 参照） -->
+    <WindowsPackageType Condition="'$(Packaged)' != 'true'">None</WindowsPackageType>
+    <WindowsAppSDKSelfContained Condition="'$(Packaged)' != 'true'">true</WindowsAppSDKSelfContained>
+    <PublishProfile>Properties\PublishProfiles\win-$(Platform).pubxml</PublishProfile>
+    <!-- Store 提出パッケージは審査通過後に Microsoft が署名するため自前署名は無効 -->
+    <AppxPackageSigningEnabled>false</AppxPackageSigningEnabled>
     <Version>0.1.0</Version>
   </PropertyGroup>
 
@@ -37,6 +42,8 @@
     <Content Include="Assets\app.ico">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </Content>
+    <!-- MSIX パッケージ用ロゴ（Package.appxmanifest から参照） -->
+    <Content Include="Assets\*.png" />
   </ItemGroup>
 
 </Project>

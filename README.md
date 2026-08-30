@@ -42,6 +42,31 @@ dotnet publish src/NicoKaraPrep.App -c Release -r win-x64 -p:Platform=x64 --self
 
 `publish\NicoKaraPrep.exe` を実行します（Windows App SDK ランタイム同梱）。
 
+### Microsoft Store 提出用 MSIX パッケージ
+
+通常ビルドは非パッケージのまま。`-p:Packaged=true` を付けると MSIX 構成
+（フレームワーク依存の Windows App SDK ＋ Store 用マニフェスト）でビルドされる。
+MSIX の生成には Visual Studio （または Build Tools）の MSBuild が必要。
+
+```powershell
+# 開発者コマンドプロンプト、または MSBuild.exe のフルパスで実行
+msbuild src/NicoKaraPrep.App/NicoKaraPrep.App.csproj /restore /p:Configuration=Release /p:Platform=x64   /p:Packaged=true /p:GenerateAppxPackageOnBuild=true
+msbuild src/NicoKaraPrep.App/NicoKaraPrep.App.csproj /restore /p:Configuration=Release /p:Platform=ARM64 /p:Packaged=true /p:GenerateAppxPackageOnBuild=true
+```
+
+出力: `src\NicoKaraPrep.App\bin\<Platform>\Release\net8.0-windows10.0.19041.0\win-<arch>\AppPackages\` 配下の `.msix`。
+
+提出前のチェックリスト:
+
+1. Partner Center でアプリ名を予約し、「Product identity」の
+   `Package/Identity/Name`・`Package/Identity/Publisher` を
+   `src/NicoKaraPrep.App/Package.appxmanifest` の `<Identity>` に転記する
+   （Visual Studio の［発行 > アプリケーションを Store と関連付ける］でも可）
+2. バージョンを上げるときは `Package.appxmanifest` の `Version` を更新
+   （第 4 セグメントは Store 予約のため 0 固定）
+3. Partner Center の提出画面へ x64 / ARM64 の `.msix` を両方アップロード
+   （署名は不要。審査通過後に Microsoft が署名する）
+
 ## 構成
 
 ```
