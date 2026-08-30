@@ -1,0 +1,320 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="RhythmicaLyrics で作ったタイムタグ付き歌詞を、ニコカラメーカー3 向けに仕上げる Windows アプリ『にこぷれっぷ（NicoKaraPrep）』。アイコン挿入・タイムタグの重なりチェック・行幅チェックをまとめて行えます。">
+  <meta name="theme-color" content="#ffffff">
+  <title>にこぷれっぷ | YFRTeam</title>
+  <link rel="icon" href="images/nicokaraprep-icon.png">
+  <link rel="stylesheet" href="../../assets/style.css">
+  <meta property="og:type" content="website">
+  <meta property="og:title" content="にこぷれっぷ（NicoKaraPrep）">
+  <meta property="og:description" content="RhythmicaLyrics の歌詞を、ニコカラメーカー3 向けに仕上げる Windows アプリ。">
+  <meta property="og:url" content="https://ykr.moe/apps/NicoKaraPrep/">
+  <meta property="og:image" content="https://ykr.moe/apps/NicoKaraPrep/images/nicokaraprep-icon.png">
+  <style>
+    /* ダウンロード案内（Windows デスクトップアプリ） */
+    .dl-panel {
+      margin: 1.75rem auto 0;
+      padding: 1.5rem 1.25rem;
+      max-width: 40rem;
+      background: rgba(255, 255, 255, .8);
+      border: 1px solid rgba(0, 0, 0, .1);
+      border-radius: 16px;
+      text-align: center;
+    }
+    .dl-lead { margin: 0 0 1.1rem; font-size: .95rem; line-height: 1.7; }
+    .dl-panel .primary-link { margin-top: 0; padding: 14px 26px; font-size: 1rem; }
+    .dl-note { margin: 1.1rem 0 0; font-size: .82rem; opacity: .75; line-height: 1.6; }
+
+    /* 特徴の 2 行目も 1 行目と同じ色順に */
+    .feature-item:nth-child(5) { border-top-color: var(--sky-dark); }
+    .feature-item:nth-child(6) { border-top-color: var(--coral); }
+
+    /* 動作環境 */
+    .spec-list { margin: 0; border-top: 1px solid rgba(25, 94, 120, .24); }
+    .spec-list > div {
+      display: grid;
+      grid-template-columns: 150px minmax(0, 1fr);
+      gap: 24px;
+      padding: 18px 0;
+      border-bottom: 1px solid rgba(25, 94, 120, .24);
+    }
+    .spec-list dt { color: var(--sky-dark); font-size: 13px; font-weight: 800; }
+    .spec-list dd { margin: 0; }
+
+    /* 使う流れ */
+    .flow-list { margin: 48px 0 0; padding: 0; list-style: none; counter-reset: flow; }
+    .flow-list li {
+      position: relative;
+      padding: 0 0 26px 62px;
+      counter-increment: flow;
+    }
+    .flow-list li::before {
+      content: counter(flow);
+      position: absolute;
+      top: 2px;
+      left: 0;
+      width: 38px;
+      height: 38px;
+      display: grid;
+      place-items: center;
+      color: var(--paper);
+      background: var(--violet-dark);
+      border-radius: 50%;
+      font-size: 14px;
+      font-weight: 800;
+    }
+    .flow-list li:not(:last-child)::after {
+      content: "";
+      position: absolute;
+      top: 48px;
+      bottom: 4px;
+      left: 18px;
+      width: 2px;
+      background: var(--line);
+    }
+    .flow-list h3 { margin: 6px 0; font-size: 19px; line-height: 1.5; }
+    .flow-list p { margin: 0; color: var(--muted); font-size: 15px; }
+
+    kbd {
+      padding: 1px 6px;
+      background: var(--paper);
+      border: 1px solid var(--line);
+      border-bottom-width: 2px;
+      border-radius: 4px;
+      font-family: inherit;
+      font-size: .85em;
+      font-weight: 700;
+      white-space: nowrap;
+    }
+
+    /* 画面写真 */
+    .shot-list { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 40px; margin-top: 50px; }
+    .shot-list figure { margin: 0; }
+    .shot-list img {
+      width: 100%;
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      box-shadow: 0 12px 30px rgba(32, 32, 39, .1);
+    }
+    .shot-list figcaption { margin-top: 12px; color: var(--muted); font-size: 14px; line-height: 1.7; }
+    .shot-list .shot-wide { grid-column: 1 / -1; }
+
+    @media (max-width: 760px) {
+      .shot-list { grid-template-columns: 1fr; gap: 32px; margin-top: 36px; }
+      .spec-list > div { grid-template-columns: 110px minmax(0, 1fr); gap: 16px; }
+    }
+    @media (max-width: 430px) {
+      .spec-list > div { grid-template-columns: 1fr; gap: 4px; }
+    }
+  </style>
+</head>
+<body>
+  <a class="skip-link" href="#main">本文へ移動</a>
+
+  <header class="site-header">
+    <div class="header-inner">
+      <a class="brand" href="../../index.html" aria-label="YFRTeam トップページ">YFRTeam</a>
+      <nav class="site-nav" aria-label="にこぷれっぷ ナビゲーション">
+        <a aria-current="page" href="index.html">にこぷれっぷ</a>
+        <a href="manual.html">使い方</a>
+        <a href="privacy.html">プライバシー</a>
+        <a href="../../contact.html">お問い合わせ</a>
+      </nav>
+    </div>
+  </header>
+
+  <main id="main">
+    <section class="hero" aria-labelledby="hero-title">
+      <div class="hero-inner">
+        <a class="back-to-team" href="../../index.html">YFRTeamの提供アプリ</a>
+        <img class="app-icon" src="images/nicokaraprep-icon.png" width="256" height="256" alt="にこぷれっぷ のアプリアイコン">
+        <p class="eyebrow">YFRTeam presents</p>
+        <h1 id="hero-title">にこぷれっぷ</h1>
+        <p class="hero-copy">RhythmicaLyrics で作ったタイムタグ付き歌詞を、ニコカラメーカー3 向けに仕上げる。ニコカラ制作の「下ごしらえ」専用の Windows アプリです。</p>
+        <p class="release-status">Windows 10 / 11（64bit）対応・無料</p>
+
+        <div class="dl-panel">
+          <p class="dl-lead">zip を展開して <code>NicoKaraPrep.exe</code> を実行するだけ。インストール作業は不要です。</p>
+          <a class="primary-link" href="https://github.com/bee7813993/NicoKaraPrep/releases/latest" rel="noopener noreferrer">最新版をダウンロード（GitHub）</a>
+          <p class="dl-note">GitHub の Releases ページが開きます。「Assets」から zip を選んでください。<br>設定は <code>%APPDATA%\NicoKaraPrep\</code> に保存され、アプリのフォルダやレジストリは汚しません。</p>
+        </div>
+      </div>
+    </section>
+
+    <section class="section section-intro" aria-labelledby="about-app">
+      <div class="content-narrow">
+        <p class="section-label">ABOUT THE APP</p>
+        <h2 id="about-app">歌詞ができてからの手作業を、まとめて引き受ける。</h2>
+        <p class="lead">タイムタグを打ち終えた歌詞をニコカラにするには、1 行が画面からはみ出していないか確かめて行を分け直し、ページをまたいだ字幕の重なりを潰し、必要ならキャラアイコン（@Emoji）を入れる——という地道な作業が続きます。にこぷれっぷは、その一連の作業をひとつの画面にまとめたツールです。</p>
+        <p class="lead">RhythmicaLyrics の編集ファイル（.rlf）をそのまま読み書きできるので、タグの微調整は今まで通り RhythmicaLyrics で。仕上げだけをこのアプリで行う、という使い分けができます。</p>
+      </div>
+    </section>
+
+    <section class="section feature-band" aria-labelledby="features">
+      <div class="content-wide">
+        <p class="section-label">FEATURES</p>
+        <h2 id="features">行の整形も、アイコン挿入も、切り出しも。</h2>
+        <div class="feature-list">
+          <article class="feature-item">
+            <p class="feature-number" aria-hidden="true">01</p>
+            <h3>キーボードだけで進む挿入ビュー</h3>
+            <p>歌詞全体を 1 画面に表示し、カーソルを動かしてキーひとつでアイコンを挿入。20 個のアイコンが <kbd>1</kbd>–<kbd>0</kbd> / <kbd>Q</kbd>–<kbd>P</kbd> に並びます。タイムタグは直後の文字から自動計算されるので、再生に合わせて叩く必要はありません。</p>
+          </article>
+          <article class="feature-item">
+            <p class="feature-number" aria-hidden="true">02</p>
+            <h3>チェックを見ながらの行分割・結合</h3>
+            <p>長すぎる行を分け、短い行をつないで、字幕に収まる形へ整えます。分割・結合するたびに横幅と表示時間が再計算されるので、警告が消えるまでその場で確かめながら作業できます。アイコンを使わない曲でも、ここだけのために使えます。</p>
+          </article>
+          <article class="feature-item">
+            <p class="feature-number" aria-hidden="true">03</p>
+            <h3>ページ間の重なりチェック</h3>
+            <p>ニコカラメーカーが空行で区切る「字幕ページ」を再現し、前のページの行が消える前に次のページの行が出てしまう箇所を検出します。表示前後の秒数はニコカラメーカー側の設定に合わせられます。</p>
+          </article>
+          <article class="feature-item">
+            <p class="feature-number" aria-hidden="true">04</p>
+            <h3>1 行の横幅をピクセルで実測</h3>
+            <p>指定したフォント・サイズで実際に描画幅を測り、画面からのはみ出しと左右マージン不足を判定します。アイコンの表示幅（拡大率・縦横比・余白）も計算に含みます。</p>
+          </article>
+          <article class="feature-item">
+            <p class="feature-number" aria-hidden="true">05</p>
+            <h3>.rlf をそのまま読み書き</h3>
+            <p>RhythmicaLyrics の編集ファイルをバイナリのまま読み書きします。チェック数・ルビ・口パクタグも保持するので、保存したファイルを RhythmicaLyrics で開き直して作業を続けられます。</p>
+          </article>
+          <article class="feature-item">
+            <p class="feature-number" aria-hidden="true">06</p>
+            <h3>パート分けのための切り出し</h3>
+            <p>選んだ行を別タブへ分離し、パートごとに lrc へ書き出せます。出した行には ✓ が付くので「まだ出していない行」だけをまとめて選ぶことができ、出し忘れ・二重出しを防げます。</p>
+          </article>
+        </div>
+      </div>
+    </section>
+
+    <section class="section" aria-labelledby="screens">
+      <div class="content-wide">
+        <p class="section-label">SCREENS</p>
+        <h2 id="screens">画面</h2>
+        <div class="shot-list">
+          <figure>
+            <img src="images/shot-main.png" width="978" height="1017" alt="にこぷれっぷ のメイン画面" loading="lazy">
+            <figcaption>メイン画面。上にメディア再生、中央に行リストと行エディタ・プレビュー、右に @Emoji パレット。下部にチェック結果が並びます。</figcaption>
+          </figure>
+          <figure>
+            <img src="images/shot-insert.png" width="978" height="1017" alt="絵文字挿入ビュー" loading="lazy">
+            <figcaption>絵文字挿入ビュー（F2）。歌詞全体を一枚に表示し、キーボードだけでアイコン挿入と行操作ができます。左側には各行の時刻と横幅が並びます。</figcaption>
+          </figure>
+          <figure>
+            <img src="images/shot-check-list.png" width="1183" height="1401" alt="通常ビューのチェック結果" loading="lazy">
+            <figcaption>チェック結果は画面下に一覧表示され、行リストの時刻・幅にも色が付きます（赤 = エラー / オレンジ = 警告）。</figcaption>
+          </figure>
+          <figure>
+            <img src="images/shot-check-insert.png" width="1183" height="1401" alt="挿入ビューでのチェック結果" loading="lazy">
+            <figcaption>同じチェック結果は挿入ビューでも確認できます。作業中のビューを離れずに、はみ出しや重なりを直せます。</figcaption>
+          </figure>
+          <figure class="shot-wide">
+            <img src="images/shot-emoji-list.png" width="1165" height="497" alt="絵文字リスト編集画面" loading="lazy">
+            <figcaption>絵文字リスト編集。拡大率や余白をスライダーで調整すると、@Emoji のオプション文字列が自動生成され、実機に近い比率のプレビューで仕上がりを確認できます。</figcaption>
+          </figure>
+        </div>
+      </div>
+    </section>
+
+    <section class="section" aria-labelledby="flow">
+      <div class="content-narrow">
+        <p class="section-label">WORKFLOW</p>
+        <h2 id="flow">使う流れ</h2>
+        <ol class="flow-list">
+          <li>
+            <h3>歌詞ファイル（.rlf）を開く</h3>
+            <p>RhythmicaLyrics でタイムタグを打ち終えた <code>.rlf</code> をドラッグ＆ドロップします（タイムタグ付きの <code>.lrc</code> も開けます）。</p>
+          </li>
+          <li>
+            <h3>ニコカラメーカーの設定を取り込む</h3>
+            <p>この曲用にフォント・画面サイズを決めた <code>.n3proj</code> を読み込みます。同じスタイルで作った別の曲のプロジェクトでも構いません。</p>
+          </li>
+          <li>
+            <h3>メディアを読み込む（任意）</h3>
+            <p>動画・音源をパネルへドロップすると、再生位置の行が自動でハイライトされ、行をダブルクリックしてその時刻へ飛べます。</p>
+          </li>
+          <li>
+            <h3>チェック結果を見ながら行を整える</h3>
+            <p>はみ出しやページ間の重なりが一覧に出ます。クリックで該当行へ飛び、<strong>行の分割・結合</strong>で警告が消えるまで整えます。</p>
+          </li>
+          <li>
+            <h3>必要ならアイコンを入れる</h3>
+            <p>パート分けなどでアイコンを使う曲だけ、<kbd>F2</kbd> の挿入ビューでキーを押して入れていきます。このビューでも行の分割・結合ができるので、4 の作業をここで続けても構いません。</p>
+          </li>
+          <li>
+            <h3>保存して、必要な行を書き出す</h3>
+            <p><kbd>Ctrl+S</kbd> で rlf のまま保存。パートごとに行を選び、<kbd>Ctrl+E</kbd> でニコカラメーカー用の lrc を書き出します。</p>
+          </li>
+        </ol>
+      </div>
+    </section>
+
+    <section class="section org-about-band" aria-labelledby="spec">
+      <div class="content-wide operator-layout">
+        <div>
+          <p class="section-label">REQUIREMENTS</p>
+          <h2 id="spec">動作環境</h2>
+        </div>
+        <dl class="spec-list">
+          <div>
+            <dt>対応 OS</dt>
+            <dd>Windows 10（1809 以降）/ Windows 11、64bit</dd>
+          </div>
+          <div>
+            <dt>インストール</dt>
+            <dd>不要。zip を展開して <code>NicoKaraPrep.exe</code> を実行します（必要なランタイムは同梱）</dd>
+          </div>
+          <div>
+            <dt>一緒に使うもの</dt>
+            <dd>RhythmicaLyrics（タイムタグ付け）、ニコカラメーカー3（動画化）</dd>
+          </div>
+          <div>
+            <dt>対応ファイル</dt>
+            <dd>.rlf / .lrc（ルビ拡張 @RubyX・@Emoji 対応）/ .txt / .n3proj（設定の取り込み）</dd>
+          </div>
+          <div>
+            <dt>価格</dt>
+            <dd>無料</dd>
+          </div>
+          <div>
+            <dt>英字表記</dt>
+            <dd>NicoKaraPrep（実行ファイル名・設定フォルダ名に使われます）</dd>
+          </div>
+        </dl>
+      </div>
+    </section>
+
+    <section class="section app-links-band" aria-labelledby="app-links">
+      <div class="content-wide">
+        <p class="section-label">INFORMATION</p>
+        <h2 id="app-links">アプリ情報</h2>
+        <ul class="link-list app-info-links">
+          <li><a href="manual.html">使い方マニュアル</a></li>
+          <li><a href="https://github.com/bee7813993/NicoKaraPrep/releases/latest" rel="noopener noreferrer">ダウンロード（GitHub Releases）</a></li>
+          <li><a href="https://github.com/bee7813993/NicoKaraPrep" rel="noopener noreferrer">GitHubプロジェクト</a></li>
+          <li><a href="privacy.html">プライバシーポリシー</a></li>
+          <li><a href="../../contact.html">お問い合わせ</a></li>
+        </ul>
+      </div>
+    </section>
+  </main>
+
+  <footer class="site-footer">
+    <div class="footer-inner">
+      <p class="footer-brand">YFRTeam</p>
+      <nav aria-label="フッターナビゲーション">
+        <a href="../../index.html">YFRTeamトップ</a>
+        <a href="manual.html">使い方</a>
+        <a href="privacy.html">プライバシーポリシー</a>
+        <a href="../../contact.html">お問い合わせ</a>
+      </nav>
+      <p class="copyright">&copy; 2026 YFRTeam</p>
+    </div>
+  </footer>
+</body>
+</html>
