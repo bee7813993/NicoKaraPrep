@@ -51,14 +51,17 @@ cd web && python -m http.server 8791
 
 アイコン画像は `apps/NicoKaraPrep/images/nicokaraprep-icon.png` を参照しているので、トップページ用に画像を追加する必要はありません。
 
-## ダウンロードリンク
+## 入手先リンク
 
-紹介ページとマニュアルから、次の 2 つの URL を参照しています。リポジトリを公開し、Release を作成してから設置してください。
+**Microsoft Store をメインの入手先**として案内しています。zip（GitHub Releases）は「インストールせずに使いたい場合」の副の導線です。
 
-- `https://github.com/bee7813993/NicoKaraPrep/releases/latest`
-- `https://github.com/bee7813993/NicoKaraPrep`
+| URL | 参照している場所 |
+|---|---|
+| `https://apps.microsoft.com/detail/9nb4v45g33bp` | `index.html` のダウンロードボタンとアプリ情報、`manual.html` 1 章 |
+| `https://github.com/bee7813993/NicoKaraPrep/releases/latest` | `index.html` のダウンロード欄とアプリ情報、`manual.html` 1 章 |
+| `https://github.com/bee7813993/NicoKaraPrep` | `index.html` のアプリ情報 |
 
-配布方法を変える場合は、両ページ内のこの URL を書き換えます（`index.html` に 3 か所、`manual.html` に 1 か所）。
+入手先を変える場合は、上記の箇所を書き換えます。「Microsoft Store で配信中」の表記はトップページの提供アプリ欄・紹介ページのステータスにも入っています。
 
 ## スクリーンショット
 
