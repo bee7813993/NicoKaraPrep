@@ -27,15 +27,16 @@
     .dl-lead { margin: 0 0 1.1rem; font-size: .95rem; line-height: 1.7; }
     .dl-panel .primary-link { margin-top: 0; padding: 14px 26px; font-size: 1rem; }
     .dl-note { margin: 1.1rem 0 0; font-size: .82rem; opacity: .75; line-height: 1.6; }
-    .dl-store {
+    .dl-sub {
       margin: 1.1rem 0 0;
-      padding: .55rem .8rem;
+      padding: .6rem .85rem;
       background: var(--sky);
       border-radius: 8px;
       color: var(--sky-dark);
       font-size: .85rem;
-      line-height: 1.6;
+      line-height: 1.7;
     }
+    .dl-sub a { color: var(--sky-dark); font-weight: 700; }
 
     /* 特徴の 2 行目も 1 行目と同じ色順に */
     .feature-item:nth-child(5) { border-top-color: var(--sky-dark); }
@@ -144,13 +145,13 @@
         <p class="eyebrow">YFRTeam presents</p>
         <h1 id="hero-title">にこぷれっぷ</h1>
         <p class="hero-copy">RhythmicaLyrics で作ったタイムタグ付き歌詞を、ニコカラメーカー3 向けに仕上げる。ニコカラ制作の「下ごしらえ」専用の Windows アプリです。</p>
-        <p class="release-status">Windows 10 / 11（64bit）対応・無料／Microsoft Store 版 配信準備中</p>
+        <p class="release-status">Windows 10 / 11（64bit）対応・無料／Microsoft Store で配信中</p>
 
         <div class="dl-panel">
-          <p class="dl-lead">zip を展開して <code>NicoKaraPrep.exe</code> を実行するだけ。インストール作業は不要です。</p>
-          <a class="primary-link" href="https://github.com/bee7813993/NicoKaraPrep/releases/latest" rel="noopener noreferrer">最新版をダウンロード（GitHub）</a>
-          <p class="dl-store"><strong>Microsoft Store 版は配信準備中です。</strong>公開までは上記の zip をご利用ください。</p>
-          <p class="dl-note">GitHub の Releases ページが開きます。「Assets」から zip を選んでください。<br>設定は <code>%APPDATA%\NicoKaraPrep\</code> に保存され、アプリのフォルダやレジストリは汚しません。</p>
+          <p class="dl-lead">Microsoft Store から入手できます。更新もストア経由で自動的に届きます。</p>
+          <a class="primary-link" href="https://apps.microsoft.com/detail/9nb4v45g33bp" rel="noopener noreferrer">Microsoft Store で入手</a>
+          <p class="dl-sub">インストールせずに使いたい場合は、<a href="https://github.com/bee7813993/NicoKaraPrep/releases/latest" rel="noopener noreferrer">GitHub Releases の zip</a> を展開して <code>NicoKaraPrep.exe</code> を実行しても同じように使えます。</p>
+          <p class="dl-note">設定は <code>%APPDATA%\NicoKaraPrep\</code> に保存され、アプリのフォルダやレジストリは汚しません。</p>
         </div>
       </div>
     </section>
@@ -278,8 +279,8 @@
             <dd>Windows 10（1809 以降）/ Windows 11、64bit</dd>
           </div>
           <div>
-            <dt>インストール</dt>
-            <dd>不要。zip を展開して <code>NicoKaraPrep.exe</code> を実行します（必要なランタイムは同梱）</dd>
+            <dt>入手方法</dt>
+            <dd>Microsoft Store（自動更新）。zip 版はインストール不要で、展開して <code>NicoKaraPrep.exe</code> を実行します（必要なランタイムは同梱）</dd>
           </div>
           <div>
             <dt>一緒に使うもの</dt>
@@ -307,7 +308,8 @@
         <h2 id="app-links">アプリ情報</h2>
         <ul class="link-list app-info-links">
           <li><a href="manual.html">使い方マニュアル</a></li>
-          <li><a href="https://github.com/bee7813993/NicoKaraPrep/releases/latest" rel="noopener noreferrer">ダウンロード（GitHub Releases）</a></li>
+          <li><a href="https://apps.microsoft.com/detail/9nb4v45g33bp" rel="noopener noreferrer">Microsoft Store で入手</a></li>
+          <li><a href="https://github.com/bee7813993/NicoKaraPrep/releases/latest" rel="noopener noreferrer">zip をダウンロード（GitHub Releases）</a></li>
           <li><a href="https://github.com/bee7813993/NicoKaraPrep" rel="noopener noreferrer">GitHubプロジェクト</a></li>
           <li><a href="privacy.html">プライバシーポリシー</a></li>
           <li><a href="../../contact.html">お問い合わせ</a></li>
