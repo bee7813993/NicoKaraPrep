@@ -1,4 +1,4 @@
-﻿using CommunityToolkit.Mvvm.ComponentModel;
+using CommunityToolkit.Mvvm.ComponentModel;
 using NicoKaraPrep.Core.Formats;
 using NicoKaraPrep.Core.Model;
 using NicoKaraPrep.Core.Validation;
@@ -89,6 +89,11 @@ public partial class LineViewModel : ObservableObject
     }
 
     public string ExportedMark => Model.Exported ? "✓" : "";
+
+    /// <summary>ニコカラメーカー用の手動指定（表示時刻・フォント設定）がある行の印。</summary>
+    public string OverrideMark => Model.HasN3Overrides ? "✎" : "";
+
+    public void RaiseOverrideMark() => OnPropertyChanged(nameof(OverrideMark));
 
     public double Opacity => Model.Exported ? 0.45 : 1.0;
 
@@ -272,6 +277,9 @@ public partial class LineViewModel : ObservableObject
     public void ReplaceModel(LyricsLine newModel)
     {
         newModel.Exported = Model.Exported;
+        newModel.ShowBeginCs = Model.ShowBeginCs;
+        newModel.ShowEndCs = Model.ShowEndCs;
+        newModel.FontSetName = Model.FontSetName;
         Model = newModel;
         RaiseAllChanged();
     }
@@ -284,6 +292,7 @@ public partial class LineViewModel : ObservableObject
         OnPropertyChanged(nameof(RawText));
         OnPropertyChanged(nameof(Exported));
         OnPropertyChanged(nameof(ExportedMark));
+        OnPropertyChanged(nameof(OverrideMark));
         OnPropertyChanged(nameof(Opacity));
         OnPropertyChanged(nameof(IndexText));
     }

@@ -1,4 +1,4 @@
-﻿using System.Text.Json;
+using System.Text.Json;
 using System.Text.Json.Serialization;
 using NicoKaraPrep.Core.Model;
 using NicoKaraPrep.Core.Validation;
@@ -65,6 +65,25 @@ public sealed class AppSettings
     /// 既定値・正規化はアプリ側（InsertViewKeyMap）が担当する。
     /// </summary>
     public Dictionary<string, string> InsertViewKeys { get; set; } = new();
+
+    // ---- ニコカラメーカー3 プロジェクト書き出し ----
+    /// <summary>ページ区切り／段落区切りの判定に使う「歌詞の表示間隔」（秒。ニコカラメーカーの IntervalTime）。</summary>
+    public double N3IntervalSeconds { get; set; } = 0.3;
+
+    /// <summary>
+    /// 前ページの行を短縮するとき、最終タグの後に最低限残す秒数
+    /// （0 = 自動: 表示前・表示後秒数の小さい方の半分。ニコカラメーカーの ProtectTime 相当）。
+    /// </summary>
+    public double N3ProtectSeconds { get; set; }
+
+    /// <summary>上段の行をページの最終行が消えるまで表示する（ニコカラメーカーの「上段歌詞を長めに表示する」相当）。</summary>
+    public bool N3TopLong { get; set; }
+
+    /// <summary>最後に使ったベース n3proj（曲ごとの指定が無いときの既定）。</summary>
+    public string N3LastBasePath { get; set; } = "";
+
+    /// <summary>NicoKaraPrep 側で定義するニコカラメーカー3 のフォント設定（テンプレートに含まれる）。</summary>
+    public List<N3FontSet> N3FontSets { get; set; } = new();
 
     // ---- メディア再生 ----
     /// <summary>Z / X（および Ctrl+←/→）でシークする秒数。</summary>
@@ -225,6 +244,10 @@ public sealed class AppSettings
         PlaceholderChar = other.PlaceholderChar;
         SeekSeconds = other.SeekSeconds;
         GlobalEmojiList = other.GlobalEmojiList.Select(e => e.Clone()).ToList();
+        N3IntervalSeconds = other.N3IntervalSeconds;
+        N3ProtectSeconds = other.N3ProtectSeconds;
+        N3TopLong = other.N3TopLong;
+        N3FontSets = other.N3FontSets.Select(f => f.Clone()).ToList();
     }
 
     public static AppSettings Load(string? path = null)

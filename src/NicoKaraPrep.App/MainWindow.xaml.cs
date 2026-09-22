@@ -1,4 +1,4 @@
-﻿using Microsoft.UI.Dispatching;
+using Microsoft.UI.Dispatching;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Input;
@@ -534,6 +534,7 @@ public sealed partial class MainWindow : Window
         ViewModel.SelectedLine = LineList.SelectedItem as LineViewModel;
         LineEditor.Text = ViewModel.SelectedLine?.RawText ?? "";
         RenderPreview();
+        RefreshN3LinePanel();
 
         // チェックボックス表示を ListView の選択と同期
         var selected = LineList.SelectedItems.Cast<LineViewModel>().ToHashSet();
@@ -583,6 +584,7 @@ public sealed partial class MainWindow : Window
             ViewModel.StatusText = "行を更新しました";
         });
         RenderPreview();
+        RefreshN3LinePanel();
         ScheduleValidation();
     }
 

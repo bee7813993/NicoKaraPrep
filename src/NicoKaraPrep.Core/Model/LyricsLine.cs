@@ -1,4 +1,4 @@
-﻿using System.Text;
+using System.Text;
 
 namespace NicoKaraPrep.Core.Model;
 
@@ -21,6 +21,20 @@ public sealed class LyricsLine
     /// （ページ区切りとの前後関係）へ戻すために使う。ファイル形式には保存しない。
     /// </summary>
     public int? SplitOrderKey { get; set; }
+
+    // ---- ニコカラメーカー3 プロジェクト書き出し用の行設定（歌詞ファイルには保存せず .tttproj に保存） ----
+
+    /// <summary>行の表示開始時刻の手動指定（10ms 単位）。null は自動計算（先頭タグ − 表示前秒数）。</summary>
+    public int? ShowBeginCs { get; set; }
+
+    /// <summary>行の表示終了時刻の手動指定（10ms 単位）。null は自動計算（最終タグ ＋ 表示後秒数）。</summary>
+    public int? ShowEndCs { get; set; }
+
+    /// <summary>行に適用するニコカラメーカーのフォント設定名の手動指定。null は自動（パート記号で判定）。</summary>
+    public string? FontSetName { get; set; }
+
+    /// <summary>ニコカラメーカー3 書き出し用の手動設定を 1 つでも持つか。</summary>
+    public bool HasN3Overrides => ShowBeginCs is not null || ShowEndCs is not null || FontSetName is not null;
 
     /// <summary>空行（ページ区切り）かどうか。</summary>
     public bool IsEmpty => Chars.Count == 0 && EndTimeCs is null;
@@ -68,7 +82,15 @@ public sealed class LyricsLine
 
     public LyricsLine Clone()
     {
-        var l = new LyricsLine { EndTimeCs = EndTimeCs, Exported = Exported, SplitOrderKey = SplitOrderKey };
+        var l = new LyricsLine
+        {
+            EndTimeCs = EndTimeCs,
+            Exported = Exported,
+            SplitOrderKey = SplitOrderKey,
+            ShowBeginCs = ShowBeginCs,
+            ShowEndCs = ShowEndCs,
+            FontSetName = FontSetName,
+        };
         foreach (var c in Chars) l.Chars.Add(c.Clone());
         return l;
     }

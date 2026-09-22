@@ -1,4 +1,4 @@
-﻿using System.Collections.ObjectModel;
+using System.Collections.ObjectModel;
 using System.Text;
 using CommunityToolkit.Mvvm.ComponentModel;
 using NicoKaraPrep.Core.Formats;
@@ -303,6 +303,8 @@ public partial class MainViewModel : ObservableObject
                 if (i >= 0 && i < Lines.Count) Lines[i].Exported = true;
             }
             ApplySavedSlotOrder(project.EmojiSlots);
+            N3ProjSettings = project.N3Proj ?? new N3ProjSongSettings();
+            LineExportSettings.Apply(Document, project.LineSettings);
 
             if (restoreTabs)
             {
@@ -310,6 +312,7 @@ public partial class MainViewModel : ObservableObject
                 {
                     var tabDoc = TextEditModeFormat.Parse(pt.Text);
                     ApplySavedLineKeys(tabDoc, pt.LineKeys);
+                    LineExportSettings.Apply(tabDoc, pt.LineSettings);
                     foreach (int i in pt.ExportedLines)
                     {
                         if (i >= 0 && i < tabDoc.Lines.Count) tabDoc.Lines[i].Exported = true;
@@ -387,6 +390,7 @@ public partial class MainViewModel : ObservableObject
     {
         // ファイルを開き直したらタブ構成もリセット（分離タブは .tttproj から復元される）
         Tabs.Clear();
+        N3ProjSettings = new N3ProjSongSettings();
         _activeTab = new TabState
         {
             IsMain = true,
@@ -638,6 +642,8 @@ public partial class MainViewModel : ObservableObject
                 .Where(x => x.Line.Exported)
                 .Select(x => x.Index)
                 .ToList(),
+            LineSettings = LineExportSettings.Collect(main.Document),
+            N3Proj = N3ProjSettings,
         };
         foreach (var e in main.Document.EmojiEntries)
         {
@@ -659,6 +665,7 @@ public partial class MainViewModel : ObservableObject
                     .Select(x => x.Index)
                     .ToList(),
                 LineKeys = tab.Document.Lines.Select(l => l.SplitOrderKey).ToList(),
+                LineSettings = LineExportSettings.Collect(tab.Document),
             });
         }
 
@@ -781,6 +788,11 @@ public partial class MainViewModel : ObservableObject
         cursor = SnapCursorOutsideToken(rawText, Math.Clamp(cursor, 0, rawText.Length));
         int charIndex = TextEditModeFormat.ParseLyricLine(rawText[..cursor]).Chars.Count;
 
+        // ニコカラメーカー用の手動指定（表示時刻・フォント）は分割前の行から引き継ぐ
+        var previous = Document.Lines[index];
+        line.ShowBeginCs = previous.ShowBeginCs;
+        line.ShowEndCs = previous.ShowEndCs;
+        line.FontSetName = previous.FontSetName;
         Document.Lines[index] = line;
         LineOperations.SplitLine(Document, index, charIndex);
         RebuildLinesPreservingMarks();
@@ -1529,28 +1541,39 @@ public partial class MainViewModel : ObservableObject
     }
 
     /// <summary>
-    /// n3proj の実表示区間をドキュメントの行に対応付ける。
-    /// 行の最初の実文字のタグ時刻（絵文字の先行タグ除く）が ±50ms で一致した行だけに適用する。
+    /// n3proj の実表示区間と行ごとの手動指定（表示終了）をドキュメントの行に対応付ける。
+    /// 実表示区間は、行の最初の実文字のタグ時刻（絵文字の先行タグ除く）が ±50ms で一致した行だけに適用する。
+    /// ニコカラメーカーの時刻はタイムタグと同じ基準の ms（@Offset は適用前）。
     /// </summary>
     private Dictionary<int, (int StartCs, int EndCs)>? BuildLineDisplayOverrides(Func<CharUnit, bool>? exclude)
     {
-        if (_n3projLineTimes is not { Count: > 0 } lineTimes) return null;
-
         var result = new Dictionary<int, (int, int)>();
-        for (int i = 0; i < Document.Lines.Count; i++)
+        if (_n3projLineTimes is { Count: > 0 } lineTimes)
         {
-            if (Document.Lines[i].GetFirstTimeCs(exclude) is not int firstCs) continue;
-
-            foreach (var lt in lineTimes)
+            for (int i = 0; i < Document.Lines.Count; i++)
             {
-                int firstCharCs = MediaSecondsToTagCs(lt.FirstCharBeginMs / 1000.0);
-                if (Math.Abs(firstCharCs - firstCs) <= 5) // ±50ms
+                if (Document.Lines[i].GetFirstTimeCs(exclude) is not int firstCs) continue;
+
+                foreach (var lt in lineTimes)
                 {
-                    result[i] = (MediaSecondsToTagCs(lt.ShowBeginMs / 1000.0),
-                                 MediaSecondsToTagCs(lt.ShowEndMs / 1000.0));
-                    break;
+                    int firstCharCs = lt.FirstCharBeginMs / 10;
+                    if (Math.Abs(firstCharCs - firstCs) <= 5) // ±50ms
+                    {
+                        result[i] = (lt.ShowBeginMs / 10, lt.ShowEndMs / 10);
+                        break;
+                    }
                 }
             }
+        }
+
+        // 行への手動指定（表示終了）は実表示区間より優先する
+        for (int i = 0; i < Document.Lines.Count; i++)
+        {
+            var line = Document.Lines[i];
+            if (line.ShowEndCs is not int endCs) continue;
+            int startCs = line.ShowBeginCs
+                ?? (result.TryGetValue(i, out var disp) ? disp.Item1 : (line.GetFirstTimeCs(exclude) ?? endCs));
+            result[i] = (startCs, endCs);
         }
         return result.Count > 0 ? result : null;
     }
@@ -1674,6 +1697,7 @@ public partial class MainViewModel : ObservableObject
         // n3proj 由来の実表示区間があれば推定値の代わりに使う
         var collisionSettings = Settings.ToCollisionSettings(exclude);
         collisionSettings.LineDisplayCs = BuildLineDisplayOverrides(exclude);
+        collisionSettings.LineShowBeginCs = BuildManualShowBegins();
         foreach (var issue in PageRowCollisionValidator.Validate(Document, collisionSettings))
         {
             Issues.Add(issue);
