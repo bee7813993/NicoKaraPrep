@@ -1,4 +1,4 @@
-using System.IO.Compression;
+﻿using System.IO.Compression;
 using System.Text;
 using System.Text.Json.Nodes;
 using NicoKaraPrep.Core.Model;
@@ -329,7 +329,7 @@ public static class N3ProjWriter
 
         int pendingBlank = 0;
         bool started = false;
-        int? prevLastCs = null;
+        int? prevLastMs = null;
         int lyricsSincePage = 0;
         lyricCount = 0;
 
@@ -348,7 +348,7 @@ public static class N3ProjWriter
             if (breakHere)
             {
                 int kind = 2; // ページ区切り
-                if (prevLastCs is int pl && line.GetFirstTimeCs() is int nf && show.IsParagraphGap(pl * 10, nf * 10))
+                if (prevLastMs is int pl && N3ShowTimePlanner.SingStartMs(line) is int nf && show.IsParagraphGap(pl, nf))
                 {
                     kind = 3; // 段落区切り（間奏など）
                 }
@@ -378,7 +378,7 @@ public static class N3ProjWriter
                 LrcFormat.WriteLyricLine(line),
                 ver));
             lyricCount++;
-            if (line.GetLastTimeCs() is int last) prevLastCs = last;
+            if (N3ShowTimePlanner.SingEndMs(line) is int last) prevLastMs = last;
         }
         // 末尾の空行（区切りは入らない）。lrc は最終行も改行で終わるため、ニコカラメーカーは
         // 最後の改行の後ろを空行 1 つとして数える（実プロジェクトとの照合で確認済み）。
@@ -424,6 +424,7 @@ public static class N3ProjWriter
     /// <summary>
     /// トークン列を LyricsCharInfos に変換する。同じタグ区間の文字グループは
     /// 先頭 (開始, -1)・中間 (-1, -1)・末尾 (-1, 終了)、1 文字なら (開始, 終了) とする（ニコカラメーカーと同じ）。
+    /// 行頭のタグの無いグループは開始・終了とも最初のタグの時刻、行末のタグの無いグループは終了なし (-1)。
     /// </summary>
     internal static JsonArray BuildCharInfos(List<Token> tokens, int[] fontByUnit, int? lineEndCs)
     {
@@ -456,6 +457,9 @@ public static class N3ProjWriter
         {
             if (t.TagCs is int tag)
             {
+                // 行頭のタグの無い文字（行頭の絵文字など）は、最初のタグの時刻に始まり同じ時刻に終わる
+                // （ニコカラメーカーと同じ。実プロジェクトで確認）
+                if (begin < 0) begin = tag * 10;
                 Flush(tag * 10);
                 begin = tag * 10;
             }
@@ -536,7 +540,6 @@ public static class N3ProjWriter
         TopLong = s.TopLong,
         AlignFromTop = s.AlignFromTop,
         SingleLinePromoteGapMs = s.SingleLinePromoteGapMs,
-        ExcludeChar = s.ExcludeChar,
     };
 
     // ------------------------------------------------------------ フォント選択（パート記号）

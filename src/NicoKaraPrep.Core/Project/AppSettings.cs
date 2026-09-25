@@ -1,4 +1,4 @@
-using System.Text.Json;
+﻿using System.Text.Json;
 using System.Text.Json.Serialization;
 using NicoKaraPrep.Core.Model;
 using NicoKaraPrep.Core.Validation;
@@ -78,6 +78,12 @@ public sealed class AppSettings
 
     /// <summary>上段の行をページの最終行が消えるまで表示する（ニコカラメーカーの「上段歌詞を長めに表示する」相当）。</summary>
     public bool N3TopLong { get; set; }
+
+    /// <summary>
+    /// 歌詞ファイルを開いたとき、同じフォルダに n3proj が 1 つだけあれば
+    /// 「字幕フォントと画面サイズ」「実際の表示区間」を自動で読み込む。
+    /// </summary>
+    public bool N3AutoImportNearby { get; set; } = true;
 
     /// <summary>最後に使ったベース n3proj（曲ごとの指定が無いときの既定）。</summary>
     public string N3LastBasePath { get; set; } = "";

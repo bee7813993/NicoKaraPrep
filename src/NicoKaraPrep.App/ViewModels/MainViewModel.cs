@@ -1,4 +1,4 @@
-using System.Collections.ObjectModel;
+﻿using System.Collections.ObjectModel;
 using System.Text;
 using CommunityToolkit.Mvvm.ComponentModel;
 using NicoKaraPrep.Core.Formats;
@@ -337,19 +337,8 @@ public partial class MainViewModel : ObservableObject
 
         StatusText = $"読み込みました: {Path.GetFileName(path)}（{Lines.Count} 行）";
 
-        // 同じフォルダに n3proj が 1 つだけあれば、フォント・画面幅設定を自動で取り込む
-        _n3projLineTimes = null;
-        if (N3ProjFormat.FindNear(path) is string n3proj)
-        {
-            try
-            {
-                ApplyN3ProjSettings(n3proj);
-            }
-            catch (Exception)
-            {
-                // n3proj が読めなくても歌詞の読み込みは成功扱い
-            }
-        }
+        // 同じフォルダに n3proj が 1 つだけあれば、字幕フォント・画面サイズと実際の表示区間を自動で読み込む
+        AutoImportNearbyN3Proj(path);
 
         if (tabRestoreNote is not null)
         {
@@ -1517,28 +1506,6 @@ public partial class MainViewModel : ObservableObject
 
     /// <summary>n3proj から取り込んだ行ごとの実表示区間（ページ衝突チェックで推定値の代わりに使う）。</summary>
     private List<N3ProjLineTime>? _n3projLineTimes;
-
-    /// <summary>n3proj から画面幅・フォント設定・実表示区間を取り込む。</summary>
-    public void ApplyN3ProjSettings(string path)
-    {
-        var s = N3ProjFormat.Read(path);
-        Settings.ScreenWidthPx = s.ScreenWidth;
-        if (s.MainFont is { } font)
-        {
-            Settings.FontFamily = font.FontName;
-            Settings.FontSizePx = Math.Round(font.SizePx, 1);
-            Settings.FontBold = font.IsBoldLike;
-            Settings.EdgeSizePx = Math.Round(font.EdgeSizePx, 1);
-        }
-        Settings.Save();
-        _n3projLineTimes = s.LineTimes.Count > 0 ? s.LineTimes : null;
-
-        string fontInfo = s.MainFont is { } f
-            ? $"{f.FontName} {Settings.FontSizePx}px / 画面 {s.ScreenWidth}px"
-            : $"画面 {s.ScreenWidth}px（フォント情報なし）";
-        string timeInfo = _n3projLineTimes is { Count: > 0 } lt ? $" / 実表示区間 {lt.Count} 行分" : "";
-        StatusText = $"ニコカラメーカーの設定を取り込みました: {fontInfo}{timeInfo}（{Path.GetFileName(path)}）";
-    }
 
     /// <summary>
     /// n3proj の実表示区間と行ごとの手動指定（表示終了）をドキュメントの行に対応付ける。

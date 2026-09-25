@@ -1,4 +1,4 @@
-using System.Text.Json;
+﻿using System.Text.Json;
 using NicoKaraPrep.Core.Model;
 
 namespace NicoKaraPrep.Core.Project;

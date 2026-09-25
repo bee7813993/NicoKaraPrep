@@ -1,4 +1,4 @@
-using CommunityToolkit.Mvvm.ComponentModel;
+﻿using CommunityToolkit.Mvvm.ComponentModel;
 using NicoKaraPrep.Core.Formats;
 using NicoKaraPrep.Core.Model;
 using NicoKaraPrep.Core.Validation;

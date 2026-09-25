@@ -1,4 +1,4 @@
-using System.Collections.ObjectModel;
+﻿using System.Collections.ObjectModel;
 using System.Globalization;
 using CommunityToolkit.Mvvm.ComponentModel;
 using Microsoft.UI.Xaml;
@@ -153,30 +153,17 @@ public sealed partial class N3FontSetDialog : ContentDialog
         RowList.SelectedItem = row;
     }
 
-    private async void OnImportClick(object sender, RoutedEventArgs e)
+    /// <summary>
+    /// 「n3proj から取り込み」が押された（編集内容を保存して閉じた）。呼び出し側がプロジェクトの読み込み確認画面を
+    /// フォント設定を選んだ状態で開き、読み込み後にこの画面を開き直す（ContentDialog は同時に 1 つしか開けないため）。
+    /// </summary>
+    public bool ImportRequested { get; private set; }
+
+    private void OnImportClick(object sender, RoutedEventArgs e)
     {
-        var picker = new FileOpenPicker();
-        WinRT.Interop.InitializeWithWindow.Initialize(picker, WinRT.Interop.WindowNative.GetWindowHandle(App.MainWindow));
-        picker.FileTypeFilter.Add(".n3proj");
-        StorageFile? file = await picker.PickSingleFileAsync();
-        if (file is null) return;
-        try
-        {
-            int added = 0;
-            foreach (var f in N3ProjFormat.ReadFontSets(file.Path))
-            {
-                if (f.Name.Length == 0) continue;
-                var existing = Rows.FirstOrDefault(r => r.Name == f.Name);
-                if (existing is not null) Rows.Remove(existing);
-                Rows.Add(N3FontRow.From(f, _fonts));
-                added++;
-            }
-            DetailCaption.Text = $"{Path.GetFileName(file.Path)} から {added} 件を取り込みました";
-        }
-        catch (Exception ex)
-        {
-            DetailCaption.Text = $"⚠ 取り込めませんでした: {ex.Message}";
-        }
+        Apply();
+        ImportRequested = true;
+        Hide();
     }
 
     private void OnDuplicateRowClick(object sender, RoutedEventArgs e)

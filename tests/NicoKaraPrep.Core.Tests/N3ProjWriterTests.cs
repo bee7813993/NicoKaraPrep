@@ -1,4 +1,4 @@
-using System.Text.Json.Nodes;
+﻿using System.Text.Json.Nodes;
 using NicoKaraPrep.Core.Formats;
 using NicoKaraPrep.Core.Model;
 
@@ -77,13 +77,19 @@ public class N3ProjWriterTests
     }
 
     [Fact]
-    public void 文字時刻_先頭タグなしと末尾タグなし()
+    public void 文字時刻_行頭のタグ無し文字は最初のタグの時刻で行末のタグ無し文字は終了なし()
     {
         var chars = Chars(Build(Doc("ab[00:01:00]c")), 0);
         Assert.Equal(3, chars.Count);
-        AssertChar(chars[0], "a", -1, -1);
+        AssertChar(chars[0], "a", 1000, -1);
         AssertChar(chars[1], "b", -1, 1000);
         AssertChar(chars[2], "c", 1000, -1);
+
+        // 行頭の絵文字 1 つ（実プロジェクト: " [01:04:60]Day..." / "(ニジガク虹)[01:21:12]ぐ..."）
+        var doc = Doc("@Emoji=（花帆）,a.png", "（花帆）[00:02:00]歌[00:03:00]");
+        var emoji = Chars(Build(doc), 0);
+        AssertChar(emoji[0], "（花帆）", 2000, 2000, kind: 1);
+        AssertChar(emoji[1], "歌", 2000, 3000);
     }
 
     [Fact]
@@ -182,7 +188,7 @@ public class N3ProjWriterTests
     }
 
     [Fact]
-    public void 表示時刻_前ページと重なると前行を短縮しそれでも重なれば次行を遅らせる()
+    public void 表示時刻_同じ段の前後の行は表示間隔ワイプ後ワイプ前の順に詰める()
     {
         // ページ1: A(上段) B(下段) / ページ2: C(上段) D(下段)
         var doc = Doc(
@@ -192,14 +198,15 @@ public class N3ProjWriterTests
             "[00:20:50]う[00:22:00]",
             "[00:21:00]え[00:25:00]");
         var plans = N3ShowTimePlanner.Plan(doc, new N3ShowTimeSettings());
-        // C の希望表示開始 = 20500 - 1500 = 19000。B の表示終了 20800 と衝突 → 20000 + 保護 400 = 20400 まで短縮
+        // B（下段）と D（下段）: 間の時間は 1000ms しかない（1500 + 800 + 300 に足りない）。
+        // 表示間隔を 75 まで → B のワイプ後を保護時間 400 まで → D のワイプ前を削る（525）
         Assert.Equal(20400, plans[1].EndMs);
         Assert.True(plans[1].Adjusted);
-        // D は B と同じ段（下段）。まだ重なるので D の表示開始を 20400 まで遅らせる（歌唱開始 21000 より前）
-        Assert.Equal(20400, plans[4].BeginMs);
+        Assert.Equal(20475, plans[4].BeginMs);
         Assert.True(plans[4].Adjusted);
-        // C は A（上段、12800 に消える）と重ならないので希望どおり
+        // C は A（上段、12800 に消える）と十分離れているので希望どおり
         Assert.Equal(19000, plans[3].BeginMs);
+        Assert.False(plans[3].Adjusted);
     }
 
     [Fact]

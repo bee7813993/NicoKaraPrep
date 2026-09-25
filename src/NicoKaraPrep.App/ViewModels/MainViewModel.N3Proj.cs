@@ -1,4 +1,4 @@
-using NicoKaraPrep.Core.Formats;
+﻿using NicoKaraPrep.Core.Formats;
 using NicoKaraPrep.Core.Model;
 using NicoKaraPrep.Core.Project;
 
@@ -13,17 +13,11 @@ public partial class MainViewModel
     /// <summary>このマシンにインストールされたニコカラメーカー3 の設定（起動時に検出。無ければ null）。</summary>
     public Nkm3Environment? Nkm3Env { get; } = Nkm3Environment.Detect();
 
-    /// <summary>ページ衝突チェックと同じ絵文字除外判定（絵文字が無ければ null）。</summary>
-    private Func<CharUnit, bool>? CreateEmojiExclude()
-    {
-        var matcher = CreateEmojiMatcher();
-        if (matcher.IsEmpty) return null;
-        var units = matcher.CollectUnits(Document);
-        return units.Count > 0 ? units.Contains : null;
-    }
-
-    /// <summary>アプリ設定から表示時刻計算の設定を作る。</summary>
-    public N3ShowTimeSettings CreateShowTimeSettings(Func<CharUnit, bool>? exclude) => new()
+    /// <summary>
+    /// アプリ設定から表示時刻計算の設定を作る。tabName を指定すると、そのタブの
+    /// 「上段の表示（短め／長め）」の個別指定（n3proj 書き出し設定）を反映する。
+    /// </summary>
+    public N3ShowTimeSettings CreateShowTimeSettings(string? tabName = null) => new()
     {
         PageMode = Settings.PageMode,
         FixedLineCount = Settings.FixedLineCount,
@@ -31,14 +25,13 @@ public partial class MainViewModel
         TailMs = (int)Math.Round(Settings.DisplayTailSeconds * 1000),
         IntervalMs = (int)Math.Round(Settings.N3IntervalSeconds * 1000),
         ProtectMs = Settings.N3ProtectSeconds > 0 ? (int)Math.Round(Settings.N3ProtectSeconds * 1000) : null,
-        TopLong = Settings.N3TopLong,
+        TopLong = tabName is not null && N3ProjSettings.TabTopLong.TryGetValue(tabName, out bool topLong) ? topLong : Settings.N3TopLong,
         AlignFromTop = Settings.CollisionAlignFromTop,
-        ExcludeChar = exclude,
     };
 
     /// <summary>表示中のドキュメントの行ごとの表示時刻（自動計算＋手動指定。ms）。</summary>
     public Dictionary<int, N3LinePlan> PlanShowTimes() =>
-        N3ShowTimePlanner.Plan(Document, CreateShowTimeSettings(CreateEmojiExclude()));
+        N3ShowTimePlanner.Plan(Document, CreateShowTimeSettings(_activeTab.Name));
 
     /// <summary>行の表示開始・終了の手動指定を設定する（null = 自動に戻す）。</summary>
     public bool SetLineShowTime(int index, int? beginCs, int? endCs)
@@ -179,7 +172,7 @@ public partial class MainViewModel
             MediaPath = MediaPath,
             ScreenWidth = width,
             ScreenHeight = width == 1920 ? 1080 : (int)Math.Round(width * 9.0 / 16),
-            ShowTime = CreateShowTimeSettings(CreateEmojiExclude()),
+            ShowTime = CreateShowTimeSettings(),
             EmojiEntries = GetEffectiveEmojiList(),
             FontSets = Settings.N3FontSets,
             MergeFontSets = settings.MergeFontSets,

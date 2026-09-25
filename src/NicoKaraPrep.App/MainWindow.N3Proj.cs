@@ -1,4 +1,4 @@
-using Microsoft.UI.Xaml;
+﻿using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Input;
 using NicoKaraPrep.App.Services;
@@ -46,13 +46,56 @@ public sealed partial class MainWindow
 
     private async void OnN3FontSetsClick(object sender, RoutedEventArgs e)
     {
-        var dialog = new N3FontSetDialog(ViewModel.Settings) { XamlRoot = Content.XamlRoot };
-        if (await dialog.ShowAsync() == ContentDialogResult.Primary)
+        while (true)
         {
-            _n3FontNamesKey = null;
-            ViewModel.StatusText = $"ニコカラメーカー3 のフォント設定を保存しました（{ViewModel.Settings.N3FontSets.Count} 件）";
-            RefreshN3LinePanel();
+            var dialog = new N3FontSetDialog(ViewModel.Settings) { XamlRoot = Content.XamlRoot };
+            var result = await dialog.ShowAsync();
+            if (dialog.ImportRequested)
+            {
+                // 取り込みは読み込み確認画面（フォント設定を選択した状態）で行い、終わったら編集画面へ戻る
+                await ImportN3ProjAsync(null, N3ProjImportFocus.FontSets);
+                continue;
+            }
+            if (result == ContentDialogResult.Primary)
+            {
+                _n3FontNamesKey = null;
+                ViewModel.StatusText = $"ニコカラメーカー3 のフォント設定を保存しました（{ViewModel.Settings.N3FontSets.Count} 件）";
+                RefreshN3LinePanel();
+            }
+            break;
         }
+    }
+
+    /// <summary>
+    /// ニコカラメーカー3 プロジェクトの読み込み（メニュー・ドラッグ＆ドロップ・フォント設定の取り込みの共通入口）。
+    /// 内容を調べて確認画面を出し、選んだ項目だけを取り込む。path が null ならファイルを選ばせる。
+    /// </summary>
+    private async Task ImportN3ProjAsync(string? path, N3ProjImportFocus focus = N3ProjImportFocus.Default)
+    {
+        if (path is null)
+        {
+            var picker = new Windows.Storage.Pickers.FileOpenPicker();
+            WinRT.Interop.InitializeWithWindow.Initialize(picker, Hwnd);
+            picker.FileTypeFilter.Add(".n3proj");
+            var file = await picker.PickSingleFileAsync();
+            if (file is null) return;
+            path = file.Path;
+        }
+
+        N3ProjImportPreview? preview = null;
+        TryRun(() => preview = ViewModel.PrepareN3ProjImport(path));
+        if (preview is null) return;
+
+        var dialog = new N3ProjImportDialog(ViewModel, preview, focus) { XamlRoot = Content.XamlRoot };
+        if (await dialog.ShowAsync() != ContentDialogResult.Primary) return;
+
+        TryRun(() => ViewModel.ApplyN3ProjImport(preview, dialog.Result));
+        foreach (var line in ViewModel.Lines) line.RaiseOverrideMark();
+        _n3FontNamesKey = null;
+        LoadQuickEmojiSettings();
+        RenderPreview();
+        RefreshN3LinePanel();
+        ScheduleValidation();
     }
 
     private void OnClearN3OverridesClick(object sender, RoutedEventArgs e)

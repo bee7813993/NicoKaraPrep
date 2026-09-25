@@ -1,4 +1,4 @@
-using Microsoft.UI.Dispatching;
+﻿using Microsoft.UI.Dispatching;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Input;
@@ -471,11 +471,10 @@ public sealed partial class MainWindow : Window
         var items = await e.DataView.GetStorageItemsAsync();
         if (items.FirstOrDefault(i => i is StorageFile) is not StorageFile file) return;
 
-        // n3proj は設定として、動画・音声ファイルはメディアとして、それ以外は歌詞として開く
+        // n3proj は読み込み確認画面へ、動画・音声ファイルはメディアとして、それ以外は歌詞として開く
         if (Path.GetExtension(file.Path).Equals(".n3proj", StringComparison.OrdinalIgnoreCase))
         {
-            TryRun(() => ViewModel.ApplyN3ProjSettings(file.Path));
-            ScheduleValidation();
+            await ImportN3ProjAsync(file.Path);
         }
         else if (MediaExtensions.Contains(Path.GetExtension(file.Path)))
         {
@@ -511,8 +510,7 @@ public sealed partial class MainWindow : Window
         string ext = Path.GetExtension(file.Path);
         if (ext.Equals(".n3proj", StringComparison.OrdinalIgnoreCase))
         {
-            TryRun(() => ViewModel.ApplyN3ProjSettings(file.Path));
-            ScheduleValidation();
+            await ImportN3ProjAsync(file.Path);
         }
         else if (ext.Equals(".rlf", StringComparison.OrdinalIgnoreCase) ||
             ext.Equals(".lrc", StringComparison.OrdinalIgnoreCase) ||
@@ -624,13 +622,7 @@ public sealed partial class MainWindow : Window
 
     private async void OnImportN3ProjClick(object sender, RoutedEventArgs e)
     {
-        var picker = new FileOpenPicker();
-        WinRT.Interop.InitializeWithWindow.Initialize(picker, Hwnd);
-        picker.FileTypeFilter.Add(".n3proj");
-        StorageFile? file = await picker.PickSingleFileAsync();
-        if (file is null) return;
-        TryRun(() => ViewModel.ApplyN3ProjSettings(file.Path));
-        ScheduleValidation();
+        await ImportN3ProjAsync(null);
     }
 
     private async void OnKeyBindingsClick(object sender, RoutedEventArgs e)

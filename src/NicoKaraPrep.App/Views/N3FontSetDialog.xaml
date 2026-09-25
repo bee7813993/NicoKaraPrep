@@ -1,4 +1,4 @@
-<ContentDialog
+﻿<ContentDialog
     x:Class="NicoKaraPrep.App.Views.N3FontSetDialog"
     xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
@@ -140,7 +140,7 @@
         <StackPanel Grid.Row="4" Orientation="Horizontal" Spacing="8">
             <Button Content="＋ 追加" Click="OnAddRowClick" />
             <Button Content="現在の字幕フォント設定から追加" Click="OnAddFromSettingsClick" ToolTipService.ToolTip="ファイル > 設定 の字幕フォント・サイズ・縁取りを「標準」として追加" />
-            <Button Content="n3proj から取り込み..." Click="OnImportClick" ToolTipService.ToolTip="既存プロジェクトのフォント設定（単色の配色・サイズ・文字飾り）を行として取り込む" />
+            <Button Content="n3proj から取り込み..." Click="OnImportClick" ToolTipService.ToolTip="編集中の内容を保存して、ニコカラメーカー3 プロジェクトの読み込み（フォント設定を選択した状態）を開きます。読み込み後にこの画面へ戻ります" />
         </StackPanel>
     </Grid>
 </ContentDialog>

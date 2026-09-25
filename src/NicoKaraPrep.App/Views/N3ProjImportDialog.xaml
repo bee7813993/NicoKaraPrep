@@ -1,0 +1,129 @@
+﻿<ContentDialog
+    x:Class="NicoKaraPrep.App.Views.N3ProjImportDialog"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:local="using:NicoKaraPrep.App.Views"
+    Title="ニコカラメーカー3 プロジェクトの読み込み"
+    PrimaryButtonText="読み込む"
+    CloseButtonText="キャンセル"
+    DefaultButton="Primary">
+
+    <ContentDialog.Resources>
+        <Style x:Key="SectionTitle" TargetType="TextBlock" BasedOn="{StaticResource BodyStrongTextBlockStyle}">
+            <Setter Property="Margin" Value="0,8,0,0" />
+        </Style>
+        <Style x:Key="ItemDetail" TargetType="TextBlock">
+            <Setter Property="FontSize" Value="12" />
+            <Setter Property="TextWrapping" Value="Wrap" />
+            <Setter Property="Foreground" Value="{ThemeResource TextFillColorSecondaryBrush}" />
+        </Style>
+    </ContentDialog.Resources>
+
+    <ScrollViewer MaxHeight="700" Padding="0,0,12,0">
+        <StackPanel Spacing="6" MinWidth="700">
+
+            <StackPanel Spacing="2">
+                <TextBlock x:Name="FileNameText" Style="{ThemeResource SubtitleTextBlockStyle}" TextWrapping="Wrap" />
+                <TextBlock x:Name="SummaryText" Style="{StaticResource ItemDetail}" />
+                <TextBlock x:Name="LyricsMatchText" Style="{StaticResource ItemDetail}" />
+            </StackPanel>
+
+            <!-- チェック・プレビュー -->
+            <TextBlock Text="チェック・プレビュー" Style="{StaticResource SectionTitle}" />
+            <CheckBox x:Name="CheckFontBox">
+                <StackPanel>
+                    <TextBlock Text="字幕フォントと画面サイズを、横幅チェックとプレビューに使う" TextWrapping="Wrap" />
+                    <TextBlock x:Name="CheckFontDetail" Style="{StaticResource ItemDetail}" />
+                </StackPanel>
+            </CheckBox>
+            <CheckBox x:Name="LineTimesBox">
+                <StackPanel>
+                    <TextBlock Text="ページ衝突チェックに、ニコカラメーカーが計算した実際の表示区間を使う" TextWrapping="Wrap" />
+                    <TextBlock x:Name="LineTimesDetail" Style="{StaticResource ItemDetail}" />
+                </StackPanel>
+            </CheckBox>
+
+            <!-- 表示時刻 -->
+            <TextBlock Text="表示時刻" Style="{StaticResource SectionTitle}" />
+            <CheckBox x:Name="TimingBox" Click="OnTimingClick">
+                <StackPanel>
+                    <TextBlock Text="表示時刻の設定値（ワイプ前・ワイプ後・表示間隔・上段の表示）を取り込む" TextWrapping="Wrap" />
+                    <TextBlock x:Name="TimingDetail" Style="{StaticResource ItemDetail}" />
+                </StackPanel>
+            </CheckBox>
+            <CheckBox x:Name="LineShowBox">
+                <StackPanel>
+                    <TextBlock Text="ニコカラメーカーで調整された表示時刻を、行ごとの手動指定として取り込む" TextWrapping="Wrap" />
+                    <TextBlock x:Name="LineShowDetail" Style="{StaticResource ItemDetail}" />
+                </StackPanel>
+            </CheckBox>
+
+            <!-- n3proj 書き出し -->
+            <TextBlock Text="n3proj 書き出し" Style="{StaticResource SectionTitle}" />
+            <CheckBox x:Name="BaseBox">
+                <StackPanel>
+                    <TextBlock Text="書き出しのベースにする" TextWrapping="Wrap" />
+                    <TextBlock x:Name="BaseDetail" Style="{StaticResource ItemDetail}" />
+                </StackPanel>
+            </CheckBox>
+
+            <!-- フォント設定 -->
+            <TextBlock Text="フォント設定" Style="{StaticResource SectionTitle}" />
+            <CheckBox x:Name="FontSetsBox" Click="OnFontSetsClick">
+                <StackPanel>
+                    <TextBlock x:Name="FontSetsTitle" Text="フォント設定を NicoKaraPrep に取り込む" TextWrapping="Wrap" />
+                    <TextBlock
+                        Style="{StaticResource ItemDetail}"
+                        Text="同じ名前の設定は置き換え、それ以外は追加します。取り込めるのは単色の配色・フォント・サイズ・縁取り・文字飾りです（グラデーションなどは書き出し時にベースの配色が残ります）。" />
+                </StackPanel>
+            </CheckBox>
+            <StackPanel x:Name="FontSetPanel" Margin="28,0,0,0" Spacing="4">
+                <StackPanel Orientation="Horizontal" Spacing="6">
+                    <Button Content="すべて選択" FontSize="12" Padding="8,3" Click="OnSelectAllFontsClick" />
+                    <Button Content="すべて解除" FontSize="12" Padding="8,3" Click="OnSelectNoFontsClick" />
+                </StackPanel>
+                <ListView
+                    x:Name="FontSetList"
+                    MaxHeight="230"
+                    SelectionMode="None"
+                    ItemsSource="{x:Bind FontRows}">
+                    <ListView.ItemTemplate>
+                        <DataTemplate x:DataType="local:N3ImportFontRow">
+                            <Grid ColumnSpacing="8" Padding="0,1">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="Auto" />
+                                    <ColumnDefinition Width="170" />
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="56" />
+                                    <ColumnDefinition Width="30" />
+                                    <ColumnDefinition Width="30" />
+                                    <ColumnDefinition Width="60" />
+                                </Grid.ColumnDefinitions>
+                                <CheckBox IsChecked="{x:Bind IsSelected, Mode=TwoWay}" MinWidth="0" Padding="0" />
+                                <TextBlock Grid.Column="1" Text="{x:Bind Name}" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" ToolTipService.ToolTip="{x:Bind Name}" />
+                                <TextBlock Grid.Column="2" Text="{x:Bind FontText}" FontSize="12" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+                                <TextBlock Grid.Column="3" Text="{x:Bind SizeText}" FontSize="12" VerticalAlignment="Center" Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+                                <Border Grid.Column="4" Width="26" Height="16" CornerRadius="2" BorderThickness="1" VerticalAlignment="Center"
+                                        BorderBrush="{ThemeResource ControlStrokeColorDefaultBrush}" Background="{x:Bind AfterBrush}"
+                                        ToolTipService.ToolTip="{x:Bind AfterTip}" />
+                                <Border Grid.Column="5" Width="26" Height="16" CornerRadius="2" BorderThickness="1" VerticalAlignment="Center"
+                                        BorderBrush="{ThemeResource ControlStrokeColorDefaultBrush}" Background="{x:Bind BeforeBrush}"
+                                        ToolTipService.ToolTip="{x:Bind BeforeTip}" />
+                                <TextBlock Grid.Column="6" Text="{x:Bind ActionText}" FontSize="12" VerticalAlignment="Center" Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+                            </Grid>
+                        </DataTemplate>
+                    </ListView.ItemTemplate>
+                </ListView>
+            </StackPanel>
+
+            <!-- 自動読み込み -->
+            <Border Margin="0,10,0,0" Padding="0,8,0,0" BorderThickness="0,1,0,0" BorderBrush="{ThemeResource DividerStrokeColorDefaultBrush}">
+                <CheckBox x:Name="AutoBox">
+                    <TextBlock
+                        TextWrapping="Wrap"
+                        Text="歌詞ファイルを開いたとき、同じフォルダにプロジェクトが 1 つだけあれば「字幕フォントと画面サイズ」「実際の表示区間」を自動で読み込む" />
+                </CheckBox>
+            </Border>
+        </StackPanel>
+    </ScrollViewer>
+</ContentDialog>
