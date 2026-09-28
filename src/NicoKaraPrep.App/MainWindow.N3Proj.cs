@@ -80,9 +80,21 @@ public sealed partial class MainWindow
                 WinRT.Interop.InitializeWithWindow.Initialize(picker, Hwnd);
                 picker.FileTypeFilter.Add(".n3proj");
                 var file = await picker.PickSingleFileAsync();
-                if (file is null) return;
+                if (file is null)
+                {
+                    // ファイルを選んだのに何も起きない場合と区別できるよう、選ばれなかったことを表示する
+                    ViewModel.StatusText = "ファイルが選ばれなかったため、ニコカラメーカー3 プロジェクトは読み込みませんでした";
+                    return;
+                }
+                if (string.IsNullOrEmpty(file.Path))
+                {
+                    await ShowMessageAsync("ニコカラメーカー3 プロジェクトを読み込めませんでした",
+                        $"{file.Name}\n\n選んだファイルの場所（パス）を取得できませんでした。エクスプローラーでファイルのあるフォルダを開き、画面へドラッグ＆ドロップしてください。");
+                    return;
+                }
                 path = file.Path;
             }
+            DebugLog($"n3proj の読み込み: {path}");
 
             N3ProjImportPreview preview;
             try
@@ -123,6 +135,8 @@ public sealed partial class MainWindow
         {
             DebugLog($"n3proj の読み込みで例外: {ex}");
             ViewModel.StatusText = $"エラー: {ex.Message}";
+            await ShowMessageAsync("ニコカラメーカー3 プロジェクトの読み込み中にエラーが発生しました",
+                $"{(path is null ? "" : Path.GetFileName(path) + "\n\n")}{ex.GetType().Name}: {ex.Message}");
         }
     }
 

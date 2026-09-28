@@ -229,7 +229,7 @@ public sealed partial class N3ProjImportDialog : ContentDialog
 
         // ---- 書き出しのベース ----
         string? currentBase = vm.N3ProjSettings.BasePath;
-        bool sameBase = currentBase is not null && string.Equals(Path.GetFullPath(currentBase), Path.GetFullPath(preview.Path), StringComparison.OrdinalIgnoreCase);
+        bool sameBase = currentBase is { Length: > 0 } && string.Equals(Path.GetFullPath(currentBase), Path.GetFullPath(preview.Path), StringComparison.OrdinalIgnoreCase);
         BaseDetail.Text = "このプロジェクトのフォント設定・レイアウト・タイトル・出力設定を、n3proj 書き出しで引き継ぎます" +
             (sameBase ? "（現在もこのプロジェクトがベースです）"
                 : currentBase is { Length: > 0 } ? $"（現在のベース: {Path.GetFileName(currentBase)}）" : "（現在のベース: なし）");
@@ -248,7 +248,7 @@ public sealed partial class N3ProjImportDialog : ContentDialog
         {
             CheckFontBox.IsChecked = true;
             LineTimesBox.IsChecked = s.LineTimes.Count > 0;
-            BaseBox.IsChecked = currentBase is null || sameBase;
+            BaseBox.IsChecked = currentBase is not { Length: > 0 } || sameBase;
             IconsBox.IsChecked = IconRows.Any(r => r.IsSelected);
             MediaBox.IsChecked = MediaBox.IsEnabled && !sameMedia && (currentMedia is not { Length: > 0 } || !File.Exists(currentMedia));
         }
