@@ -44,6 +44,70 @@ public sealed class PageCollisionSettings
     /// 　これより早い場合は空きがあれば早く出すだけの演出で、問題ではない）
     /// </summary>
     public IReadOnlyDictionary<int, (int StartCs, int EndCs)>? LineDisplayCs { get; set; }
+
+    /// <summary>
+    /// 行ごとの表示開始の手動指定（10ms 単位）。キー = 行インデックス。
+    /// n3proj 書き出し用に行へ指定した表示開始時刻。指定がある行は「希望表示開始」の代わりに使う。
+    /// </summary>
+    public IReadOnlyDictionary<int, int>? LineShowBeginCs { get; set; }
+}
+
+/// <summary>
+/// ページ内の行を画面位置（上から／下から k 行目）へ対応付ける（ニコカラメーカーの表示位置の推定）。
+/// ページ衝突チェックと n3proj 書き出しの表示時刻計算で共用する。
+/// </summary>
+public static class PageRowMap
+{
+    /// <summary>
+    /// ページ pageIdx の「画面位置 → 行インデックス」を返す。
+    /// 上から対応付け: 位置 = 上から k 行目 / 下から対応付け: 位置 = 下から k 行目。
+    /// 下から対応付けでは、1 行だけのページは次ページの上段（下から 2 行目）の表示開始まで
+    /// 十分時間があれば「下から 2 行目」に昇格して表示されるものとして扱う。
+    /// </summary>
+    /// <param name="displayEnd">行の表示終了時刻を返す関数（単位は呼び出し側で統一）。</param>
+    /// <param name="displayStart">行の表示開始時刻を返す関数。</param>
+    /// <param name="singleLinePromoteGap">昇格に必要な余裕（displayEnd/displayStart と同じ単位）。</param>
+    public static Dictionary<int, int> Build(
+        IReadOnlyList<List<int>> pages,
+        int pageIdx,
+        bool alignFromTop,
+        Func<int, int?> displayEnd,
+        Func<int, int?> displayStart,
+        int singleLinePromoteGap)
+    {
+        var page = pages[pageIdx];
+        var map = new Dictionary<int, int>();
+
+        if (alignFromTop)
+        {
+            for (int k = 1; k <= page.Count; k++) map[k] = page[k - 1];
+            return map;
+        }
+
+        if (page.Count == 1)
+        {
+            int line = page[0];
+            bool promoted = false;
+            if (pageIdx + 1 < pages.Count)
+            {
+                var next = pages[pageIdx + 1];
+                int candidate = next.Count >= 2 ? next[^2] : next[0];
+                if (displayEnd(line) is int end && displayStart(candidate) is int start)
+                {
+                    promoted = start - end >= singleLinePromoteGap;
+                }
+            }
+            else
+            {
+                promoted = true; // 最終ページの 1 行は上段に出るものとして扱う
+            }
+            map[promoted ? 2 : 1] = line;
+            return map;
+        }
+
+        for (int k = 1; k <= page.Count; k++) map[k] = page[^k];
+        return map;
+    }
 }
 
 /// <summary>
@@ -70,57 +134,21 @@ public static class PageRowCollisionValidator
             return null;
         }
 
-        // 行の希望表示開始（常に 先頭タグ − 表示前秒数。ニコカラメーカーの早出し/遅延調整は
-        // 演出であり、「この時刻までに出したい」に間に合うかを判定基準とする）
+        // 行の希望表示開始（手動指定があればそれ、無ければ 先頭タグ − 表示前秒数。
+        // ニコカラメーカーの早出し/遅延調整は演出であり、「この時刻までに出したい」に
+        // 間に合うかを判定基準とする）
         int? DisplayStart(int lineIdx)
         {
+            if (settings.LineShowBeginCs?.TryGetValue(lineIdx, out int manual) == true) return manual;
             if (doc.Lines[lineIdx].GetFirstTimeCs(exclude) is int first) return first - settings.DisplayLeadCs;
             return null;
         }
 
-        // ページごとの「画面位置 → 行インデックス」の対応を作る
-        // 上から対応付け: 位置 = 上から k 行目 / 下から対応付け: 位置 = 下から k 行目
-        Dictionary<int, int> BuildRowMap(int pageIdx)
-        {
-            var page = pages[pageIdx];
-            var map = new Dictionary<int, int>();
-
-            if (settings.AlignFromTop)
-            {
-                for (int k = 1; k <= page.Count; k++) map[k] = page[k - 1];
-                return map;
-            }
-
-            // 下から対応付け:
-            // 1 行だけのページは、次ページの上段（下から 2 行目）の表示開始まで
-            // 十分時間があれば「下から 2 行目」に昇格して表示される
-            if (page.Count == 1)
-            {
-                int line = page[0];
-                bool promoted = false;
-                if (pageIdx + 1 < pages.Count)
-                {
-                    var next = pages[pageIdx + 1];
-                    int candidate = next.Count >= 2 ? next[^2] : next[0];
-                    if (DisplayEnd(line) is int end && DisplayStart(candidate) is int start)
-                    {
-                        promoted = start - end >= settings.SingleLinePromoteGapCs;
-                    }
-                }
-                else
-                {
-                    promoted = true; // 最終ページの 1 行は上段に出るものとして扱う
-                }
-                map[promoted ? 2 : 1] = line;
-                return map;
-            }
-
-            for (int k = 1; k <= page.Count; k++) map[k] = page[^k];
-            return map;
-        }
-
         var rowMaps = new Dictionary<int, int>[pages.Count];
-        for (int i = 0; i < pages.Count; i++) rowMaps[i] = BuildRowMap(i);
+        for (int i = 0; i < pages.Count; i++)
+        {
+            rowMaps[i] = PageRowMap.Build(pages, i, settings.AlignFromTop, DisplayEnd, DisplayStart, settings.SingleLinePromoteGapCs);
+        }
 
         for (int p = 0; p + 1 < pages.Count; p++)
         {

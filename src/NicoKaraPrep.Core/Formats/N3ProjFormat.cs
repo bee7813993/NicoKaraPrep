@@ -1,16 +1,18 @@
 ﻿using System.IO.Compression;
 using System.Text;
 using System.Text.Json;
+using System.Text.Json.Nodes;
 using System.Text.RegularExpressions;
+using NicoKaraPrep.Core.Model;
 
 namespace NicoKaraPrep.Core.Formats;
 
-/// <summary>n3proj から取り出したフォント 1 件。</summary>
+/// <summary>n3proj から取り出したフォント 1 件（フォント設定タブの「歌詞／漢字」）。</summary>
 /// <param name="FontName">フォントファミリー名。</param>
 /// <param name="FaceName">フェイス名（"ﾍﾋﾞｰ" "太字" など）。</param>
 /// <param name="SizePx">画面高さ換算のフォントサイズ px。</param>
-/// <param name="Index">FontInfos 内のインデックス（歌詞文字の FontIndex が参照）。</param>
-/// <param name="SettingsName">ニコカラメーカー上の設定名（例: 歌詞／漢字）。</param>
+/// <param name="Index">LyricsFonts 内のインデックス（歌詞文字の FontIndex が参照）。</param>
+/// <param name="SettingsName">ニコカラメーカー上のフォント設定名（例: （花帆））。</param>
 /// <param name="EdgeSizePx">縁取りサイズ px（@Emoji の Zoom 基準「字幕サイズ縁取り込み」の計算に使用）。</param>
 public sealed record N3ProjFontInfo(string FontName, string? FaceName, double SizePx, int Index, string? SettingsName, double EdgeSizePx = 0)
 {
@@ -24,20 +26,39 @@ public sealed record N3ProjFontInfo(string FontName, string? FaceName, double Si
 }
 
 /// <summary>
-/// n3proj の字幕 1 行分の実表示区間（ニコカラメーカーが計算した値）。時刻はすべて ms。
+/// n3proj の字幕 1 行分の実表示区間（ニコカラメーカーが計算した値）。時刻はすべて ms（タイムタグ時刻と同じ基準）。
 /// </summary>
 /// <param name="FirstCharBeginMs">行の最初の文字のワイプ開始時刻（ドキュメント行とのマッチング用）。</param>
 /// <param name="ShowBeginMs">行の表示開始時刻。</param>
 /// <param name="ShowEndMs">行の表示終了時刻。</param>
 public sealed record N3ProjLineTime(int FirstCharBeginMs, int ShowBeginMs, int ShowEndMs);
 
+/// <summary>n3proj のレイアウト設定 1 件。</summary>
+/// <param name="Name">設定名。</param>
+/// <param name="Index">LyricsLayouts 内のインデックス。</param>
+/// <param name="LineCount">行数（HorizontalAlignments の数）。</param>
+public sealed record N3ProjLayoutInfo(string Name, int Index, int LineCount);
+
 /// <summary>n3proj から取り出した設定。</summary>
 /// <param name="ScreenWidth">動画の横幅 px。</param>
 /// <param name="ScreenHeight">動画の高さ px。</param>
 /// <param name="MainFont">歌詞で最も多く使われているフォント。</param>
-/// <param name="Fonts">定義されている全フォント。</param>
+/// <param name="Fonts">定義されている全フォント設定（各タブの「歌詞／漢字」）。</param>
 /// <param name="LineTimes">字幕行ごとの実表示区間。</param>
-public sealed record N3ProjSettings(int ScreenWidth, int ScreenHeight, N3ProjFontInfo? MainFont, List<N3ProjFontInfo> Fonts, List<N3ProjLineTime> LineTimes);
+/// <param name="Layouts">定義されているレイアウト設定。</param>
+/// <param name="AppVersion">最後に保存したニコカラメーカーのバージョン文字列（"Ver 13.79" など）。</param>
+public sealed record N3ProjSettings(
+    int ScreenWidth,
+    int ScreenHeight,
+    N3ProjFontInfo? MainFont,
+    List<N3ProjFontInfo> Fonts,
+    List<N3ProjLineTime> LineTimes,
+    List<N3ProjLayoutInfo> Layouts,
+    string? AppVersion)
+{
+    /// <summary>フォント設定名の一覧（LyricsFonts の順）。</summary>
+    public List<string> FontSetNames => Fonts.OrderBy(f => f.Index).Select(f => f.SettingsName ?? "").ToList();
+}
 
 /// <summary>
 /// ニコカラメーカー3 のプロジェクトファイル（.n3proj = ZIP に JSON 1 エントリ）から
@@ -45,58 +66,94 @@ public sealed record N3ProjSettings(int ScreenWidth, int ScreenHeight, N3ProjFon
 /// </summary>
 public static class N3ProjFormat
 {
+    /// <summary>ZIP 内の JSON エントリ名（ニコカラメーカーの JsonManager と同じ）。</summary>
+    public const string ZipEntryName = "0";
+
+    /// <summary>n3proj の JSON 文字列を取り出す。</summary>
+    public static string ReadJson(string path)
+    {
+        using var zip = ZipFile.OpenRead(path);
+        var entry = zip.GetEntry(ZipEntryName) ?? zip.Entries.FirstOrDefault()
+            ?? throw new InvalidDataException("n3proj にエントリがありません");
+        using var stream = entry.Open();
+        using var reader = new StreamReader(stream, Encoding.UTF8);
+        return reader.ReadToEnd();
+    }
+
+    /// <summary>n3proj の JSON をツリーとして読み込む（書き出し時のベースに使う）。</summary>
+    public static JsonObject ReadJsonObject(string path)
+    {
+        var node = JsonNode.Parse(ReadJson(path), documentOptions: new JsonDocumentOptions { CommentHandling = JsonCommentHandling.Skip });
+        return node as JsonObject ?? throw new InvalidDataException("n3proj の JSON がオブジェクトではありません");
+    }
+
     public static N3ProjSettings Read(string path)
     {
-        string json;
-        using (var zip = ZipFile.OpenRead(path))
-        {
-            var entry = zip.Entries.FirstOrDefault()
-                ?? throw new InvalidDataException("n3proj にエントリがありません");
-            using var stream = entry.Open();
-            using var reader = new StreamReader(stream, Encoding.UTF8);
-            json = reader.ReadToEnd();
-        }
+        string json = ReadJson(path);
 
         using var doc = JsonDocument.Parse(json);
         var root = doc.RootElement;
 
-        int width = root.TryGetProperty("BackgroundWidth", out var bw) && bw.TryGetInt32(out int w) ? w : 1920;
-        int height = root.TryGetProperty("BackgroundHeight", out var bh) && bh.TryGetInt32(out int h) ? h : 1080;
-
-        var fonts = new List<N3ProjFontInfo>();
-        if (FindProperty(root, "FontInfos") is { ValueKind: JsonValueKind.Array } fontInfos)
+        int width = 1920, height = 1080;
+        if (root.TryGetProperty("SourceInfo", out var si) && si.ValueKind == JsonValueKind.Object)
         {
-            foreach (var fi in fontInfos.EnumerateArray())
+            if (si.TryGetProperty("BackgroundWidth", out var bw) && bw.TryGetInt32(out int w)) width = w;
+            if (si.TryGetProperty("BackgroundHeight", out var bh) && bh.TryGetInt32(out int h)) height = h;
+        }
+        else
+        {
+            // 古い構造（ルート直下）にも対応
+            if (root.TryGetProperty("BackgroundWidth", out var bw) && bw.TryGetInt32(out int w)) width = w;
+            if (root.TryGetProperty("BackgroundHeight", out var bh) && bh.TryGetInt32(out int h)) height = h;
+        }
+
+        string? appVersion = root.TryGetProperty("ModifyAppVer", out var mv) && mv.ValueKind == JsonValueKind.String ? mv.GetString() : null;
+        if (string.IsNullOrEmpty(appVersion) && root.TryGetProperty("CreateAppVer", out var cv) && cv.ValueKind == JsonValueKind.String)
+        {
+            appVersion = cv.GetString();
+        }
+
+        // フォント設定タブ（LyricsFonts）ごとに「歌詞／漢字」のフォントを取り出す。
+        // 歌詞文字の FontIndex は LyricsFonts のインデックスを指す。
+        var fonts = new List<N3ProjFontInfo>();
+        if (root.TryGetProperty("LyricsFonts", out var lyricsFonts) && lyricsFonts.ValueKind == JsonValueKind.Array)
+        {
+            int setIndex = 0;
+            foreach (var set in lyricsFonts.EnumerateArray())
+            {
+                string? setName = set.TryGetProperty("SettingsName", out var sn) ? sn.GetString() : null;
+                string name = "";
+                string? face = null;
+                double sizePx = 0, edgePx = 0;
+                if (set.TryGetProperty("FontInfos", out var fontInfos) && fontInfos.ValueKind == JsonValueKind.Array)
+                {
+                    var main = fontInfos.EnumerateArray().FirstOrDefault();
+                    if (main.ValueKind == JsonValueKind.Object)
+                    {
+                        name = main.TryGetProperty("FontName", out var fn) ? fn.GetString() ?? "" : "";
+                        face = main.TryGetProperty("FontFaceName", out var ff) ? ff.GetString() : null;
+                        sizePx = ReadSizePx(main, "CharSize", height);
+                        edgePx = ReadSizePx(main, "EdgeSize", height);
+                    }
+                }
+                fonts.Add(new N3ProjFontInfo(name, face, sizePx, setIndex, setName, edgePx));
+                setIndex++;
+            }
+        }
+        else if (FindProperty(root, "FontInfos") is { ValueKind: JsonValueKind.Array } fontInfosLegacy)
+        {
+            foreach (var fi in fontInfosLegacy.EnumerateArray())
             {
                 string name = fi.TryGetProperty("FontName", out var fn) ? fn.GetString() ?? "" : "";
                 string? face = fi.TryGetProperty("FontFaceName", out var ff) ? ff.GetString() : null;
                 string? settingsName = fi.TryGetProperty("SettingsName", out var sn) ? sn.GetString() : null;
                 int index = fi.TryGetProperty("Index", out var ix) && ix.TryGetInt32(out int i) ? i : fonts.Count;
-
-                double sizePx = 0;
-                if (fi.TryGetProperty("CharSize", out var cs))
-                {
-                    double ratio = cs.TryGetProperty("Ratio", out var r) ? r.GetDouble() : 0;
-                    double size = cs.TryGetProperty("Size", out var sz) ? sz.GetDouble() : 0;
-                    double reference = cs.TryGetProperty("Reference", out var rf) ? rf.GetDouble() : height;
-                    sizePx = ratio > 0 ? ratio * height : (reference > 0 ? size * height / reference : size);
-                }
-
-                double edgePx = 0;
-                if (fi.TryGetProperty("EdgeSize", out var es))
-                {
-                    double ratio = es.TryGetProperty("Ratio", out var r2) ? r2.GetDouble() : 0;
-                    double size = es.TryGetProperty("Size", out var sz2) ? sz2.GetDouble() : 0;
-                    double reference = es.TryGetProperty("Reference", out var rf2) ? rf2.GetDouble() : height;
-                    edgePx = ratio > 0 ? ratio * height : (reference > 0 ? size * height / reference : size);
-                }
-
-                fonts.Add(new N3ProjFontInfo(name, face, sizePx, index, settingsName, edgePx));
+                fonts.Add(new N3ProjFontInfo(name, face, ReadSizePx(fi, "CharSize", height), index, settingsName, ReadSizePx(fi, "EdgeSize", height)));
             }
         }
 
         // 歌詞文字が最も多く参照している FontIndex を主フォントとする
-        N3ProjFontInfo? main = null;
+        N3ProjFontInfo? mainFont = null;
         var usage = new Dictionary<int, int>();
         foreach (Match m in Regex.Matches(json, "\"FontIndex\":(\\d+)"))
         {
@@ -105,16 +162,112 @@ public static class N3ProjFormat
         }
         foreach (int idx in usage.OrderByDescending(kv => kv.Value).Select(kv => kv.Key))
         {
-            main = fonts.FirstOrDefault(f => f.Index == idx && f.FontName.Length > 0 && f.SizePx > 0);
-            if (main is not null) break;
+            mainFont = fonts.FirstOrDefault(f => f.Index == idx && f.FontName.Length > 0 && f.SizePx > 0);
+            if (mainFont is not null) break;
         }
-        main ??= fonts.FirstOrDefault(f => f.FontName.Length > 0 && f.SizePx > 0);
+        mainFont ??= fonts.FirstOrDefault(f => f.FontName.Length > 0 && f.SizePx > 0);
+
+        // レイアウト設定（行数 = HorizontalAlignments の数）
+        var layouts = new List<N3ProjLayoutInfo>();
+        if (root.TryGetProperty("LyricsLayouts", out var lyricsLayouts) && lyricsLayouts.ValueKind == JsonValueKind.Array)
+        {
+            int li = 0;
+            foreach (var layout in lyricsLayouts.EnumerateArray())
+            {
+                string name = layout.TryGetProperty("SettingsName", out var ln) ? ln.GetString() ?? "" : "";
+                int count = layout.TryGetProperty("HorizontalAlignments", out var ha) && ha.ValueKind == JsonValueKind.Array
+                    ? ha.GetArrayLength()
+                    : 1;
+                layouts.Add(new N3ProjLayoutInfo(name, li, count));
+                li++;
+            }
+        }
 
         // 字幕行ごとの実表示区間（ShowBeginTime / ShowEndTime）を収集
         var lineTimes = new List<N3ProjLineTime>();
-        CollectLineTimes(root, lineTimes);
+        if (root.TryGetProperty("SourceLyricsInfos", out var sources) && sources.ValueKind == JsonValueKind.Array)
+        {
+            foreach (var source in sources.EnumerateArray()) CollectLineTimes(source, lineTimes);
+        }
+        else
+        {
+            CollectLineTimes(root, lineTimes);
+        }
 
-        return new N3ProjSettings(width, height, main, fonts, lineTimes);
+        return new N3ProjSettings(width, height, mainFont, fonts, lineTimes, layouts, appVersion);
+    }
+
+    /// <summary>
+    /// n3proj のフォント設定タブを NicoKaraPrep のフォント設定（<see cref="N3FontSet"/>）として取り出す
+    /// （単色の配色・歌詞／漢字とルビ／漢字のサイズ・文字飾りのみ。グラデーション等は変換しない）。
+    /// </summary>
+    public static List<N3FontSet> ReadFontSets(string path)
+    {
+        var result = new List<N3FontSet>();
+        var root = ReadJsonObject(path);
+        int height = root["SourceInfo"]?["BackgroundHeight"]?.GetValue<int>() ?? 1080;
+        if (root["LyricsFonts"] is not JsonArray sets) return result;
+
+        foreach (var node in sets)
+        {
+            if (node is not JsonObject set) continue;
+            var f = new N3FontSet { Name = set["SettingsName"]?.GetValue<string>() ?? "" };
+            if (set["FontInfos"] is JsonArray fis)
+            {
+                if (fis.Count > 0 && fis[0] is JsonObject main)
+                {
+                    f.FontFamily = main["FontName"]?.GetValue<string>() ?? "";
+                    f.FontFace = main["FontFaceName"]?.GetValue<string>() ?? "";
+                    f.SizePx = Math.Round(SizePx(main["CharSize"], height), 1);
+                    f.EdgePx = Math.Round(SizePx(main["EdgeSize"], height), 1);
+                    f.UseEdge2 = main["UseEdge2"] is JsonValue ue && ue.TryGetValue<bool>(out bool useEdge2) && useEdge2;
+                    f.Edge2Px = Math.Round(SizePx(main["EdgeSize2"], height), 1);
+                }
+                if (fis.Count > 3 && fis[3] is JsonObject ruby)
+                {
+                    f.RubySizePx = Math.Round(SizePx(ruby["CharSize"], height), 1);
+                    f.RubyEdgePx = Math.Round(SizePx(ruby["EdgeSize"], height), 1);
+                }
+            }
+            if (set["BrushInfos"] is JsonArray brushes)
+            {
+                string Color(int i) =>
+                    i < brushes.Count && brushes[i] is JsonObject b && (b["SelectedBrushTypeIndex"]?.GetValue<int>() ?? 0) == 0
+                        ? b["SolidColor"]?["Web16"]?.GetValue<string>() ?? ""
+                        : "";
+                f.TextColorAfter = Color(0);
+                f.EdgeColorAfter = Color(1);
+                f.Edge2ColorAfter = Color(2);
+                f.DecorColorAfter = Color(3);
+                f.TextColorBefore = Color(4);
+                f.EdgeColorBefore = Color(5);
+                f.Edge2ColorBefore = Color(6);
+                f.DecorColorBefore = Color(7);
+            }
+            f.DecorKind = set["DecorKind"]?.GetValue<int>() ?? 0;
+            f.DecorSizePx = Math.Round(SizePx(set["DecorSize"], height), 1);
+            f.BlurLevel = set["BlurLevel"]?.GetValue<int>() ?? 2;
+            result.Add(f);
+        }
+        return result;
+    }
+
+    private static double SizePx(JsonNode? sizeAndRatio, int height)
+    {
+        if (sizeAndRatio is not JsonObject o) return 0;
+        double ratio = o["Ratio"]?.GetValue<double>() ?? 0;
+        double size = o["Size"]?.GetValue<double>() ?? 0;
+        double reference = o["Reference"]?.GetValue<double>() ?? height;
+        return ratio > 0 ? ratio * height : (reference > 0 ? size * height / reference : size);
+    }
+
+    private static double ReadSizePx(JsonElement obj, string name, int height)
+    {
+        if (!obj.TryGetProperty(name, out var cs) || cs.ValueKind != JsonValueKind.Object) return 0;
+        double ratio = cs.TryGetProperty("Ratio", out var r) && r.ValueKind == JsonValueKind.Number ? r.GetDouble() : 0;
+        double size = cs.TryGetProperty("Size", out var sz) && sz.ValueKind == JsonValueKind.Number ? sz.GetDouble() : 0;
+        double reference = cs.TryGetProperty("Reference", out var rf) && rf.ValueKind == JsonValueKind.Number ? rf.GetDouble() : height;
+        return ratio > 0 ? ratio * height : (reference > 0 ? size * height / reference : size);
     }
 
     /// <summary>

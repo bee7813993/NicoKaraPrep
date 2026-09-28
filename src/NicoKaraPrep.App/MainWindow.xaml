@@ -29,6 +29,7 @@
                     </MenuFlyoutItem.KeyboardAccelerators>
                 </MenuFlyoutItem>
                 <MenuFlyoutSubItem x:Name="RecentFilesMenu" Text="最近使用したファイル" />
+                <MenuFlyoutItem Text="ニコカラメーカー3 プロジェクト(n3proj)を読み込み..." Click="OnImportN3ProjClick" />
                 <MenuFlyoutSeparator />
                 <MenuFlyoutItem Text="上書き保存（タブ含む全行）" Click="OnSaveClick">
                     <MenuFlyoutItem.KeyboardAccelerators>
@@ -115,6 +116,10 @@
                 <MenuFlyoutSeparator />
                 <MenuFlyoutItem Text="未エクスポート行をすべて選択" Click="OnSelectUnexportedClick" />
                 <MenuFlyoutItem Text="選択行の済マークを解除" Click="OnClearMarksClick" />
+                <MenuFlyoutSeparator />
+                <MenuFlyoutItem Text="ニコカラメーカー3 プロジェクト(n3proj)を書き出し..." Click="OnExportN3ProjClick" />
+                <MenuFlyoutItem Text="ニコカラメーカー3 のフォント設定を編集..." Click="OnN3FontSetsClick" />
+                <MenuFlyoutItem Text="選択行の表示時刻・フォント指定を解除" Click="OnClearN3OverridesClick" />
             </MenuBarItem>
             <MenuBarItem Title="再生(P)" AccessKey="P">
                 <MenuFlyoutItem Text="メディアを開く..." Click="OnOpenMediaClick" />
@@ -145,8 +150,6 @@
                         <KeyboardAccelerator Key="F5" />
                     </MenuFlyoutItem.KeyboardAccelerators>
                 </MenuFlyoutItem>
-                <MenuFlyoutSeparator />
-                <MenuFlyoutItem Text="ニコカラメーカーのプロジェクト(n3proj)から設定を読み込み..." Click="OnImportN3ProjClick" />
             </MenuBarItem>
             <MenuBarItem Title="テンプレート(T)" AccessKey="T">
                 <MenuFlyoutItem Text="テンプレートとして保存...（絵文字一式＋フォント設定）" Click="OnSaveTemplateClick" />
@@ -205,6 +208,7 @@
                 <Grid.RowDefinitions>
                     <RowDefinition Height="Auto" />
                     <RowDefinition Height="*" />
+                    <RowDefinition Height="Auto" />
                     <RowDefinition Height="Auto" />
                     <RowDefinition Height="Auto" />
                 </Grid.RowDefinitions>
@@ -286,6 +290,7 @@
                                     <ColumnDefinition Width="110" />
                                     <ColumnDefinition Width="36" />
                                     <ColumnDefinition Width="92" />
+                                    <ColumnDefinition Width="18" />
                                     <ColumnDefinition Width="*" />
                                 </Grid.ColumnDefinitions>
                                 <CheckBox Grid.Column="0" MinWidth="0" Padding="0" IsChecked="{x:Bind IsSelected, Mode=OneWay}" Click="OnRowCheckClick" Tag="{x:Bind}" ToolTipService.ToolTip="選択（複数選択してエクスポートなどに使用）" />
@@ -298,7 +303,8 @@
                                 <TextBlock Grid.Column="7" Text="{x:Bind FontText, Mode=OneWay}" FontSize="11" Foreground="{ThemeResource TextFillColorSecondaryBrush}" TextTrimming="CharacterEllipsis" VerticalAlignment="Center" ToolTipService.ToolTip="{x:Bind FontText, Mode=OneWay}" />
                                 <TextBlock Grid.Column="8" Text="{x:Bind FontSizeText, Mode=OneWay}" FontSize="11" Foreground="{ThemeResource TextFillColorSecondaryBrush}" VerticalAlignment="Center" ToolTipService.ToolTip="フォントサイズ px" />
                                 <TextBlock Grid.Column="9" Text="{x:Bind WidthText, Mode=OneWay}" FontSize="12" Foreground="{x:Bind WidthBrush, Mode=OneWay}" VerticalAlignment="Center" ToolTipService.ToolTip="横幅 px と有効幅（マージン除き）に対する使用率。90% 超はオレンジで予告" />
-                                <TextBlock Grid.Column="10" Text="{x:Bind DisplayText, Mode=OneWay}" TextTrimming="CharacterEllipsis" />
+                                <TextBlock Grid.Column="10" Text="{x:Bind OverrideMark, Mode=OneWay}" FontSize="12" VerticalAlignment="Center" Foreground="{ThemeResource AccentTextFillColorPrimaryBrush}" ToolTipService.ToolTip="ニコカラメーカー用の手動指定（表示時刻・フォント）あり" />
+                                <TextBlock Grid.Column="11" Text="{x:Bind DisplayText, Mode=OneWay}" TextTrimming="CharacterEllipsis" />
                             </Grid>
                         </DataTemplate>
                     </ListView.ItemTemplate>
@@ -321,9 +327,44 @@
                     <Button Grid.Column="1" Content="適用" Click="OnApplyLineClick" VerticalAlignment="Stretch" />
                 </Grid>
 
+                <!-- ニコカラメーカー用の行設定（表示開始・終了の手動指定、フォント設定名。n3proj 書き出しに反映） -->
+                <Grid
+                    Grid.Row="3"
+                    x:Name="N3LinePanel"
+                    Padding="8,4"
+                    ColumnSpacing="6"
+                    BorderThickness="0,1,0,0"
+                    BorderBrush="{ThemeResource DividerStrokeColorDefaultBrush}">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="Auto" />
+                        <ColumnDefinition Width="Auto" />
+                        <ColumnDefinition Width="104" />
+                        <ColumnDefinition Width="Auto" />
+                        <ColumnDefinition Width="104" />
+                        <ColumnDefinition Width="Auto" />
+                        <ColumnDefinition Width="Auto" />
+                        <ColumnDefinition Width="180" />
+                        <ColumnDefinition Width="*" />
+                    </Grid.ColumnDefinitions>
+                    <TextBlock Text="ニコカラメーカー用:" FontSize="12" VerticalAlignment="Center" Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                               ToolTipService.ToolTip="n3proj 書き出し時にこの行へ適用される表示開始・終了時刻とフォント設定。空欄は自動計算（薄字が自動値）。手動の表示時刻はページ衝突チェックにも反映されます" />
+                    <TextBlock Grid.Column="1" Text="表示開始" FontSize="12" VerticalAlignment="Center" />
+                    <TextBox Grid.Column="2" x:Name="ShowBeginBox" FontFamily="Consolas" FontSize="12" PlaceholderText="--:--:--"
+                             LostFocus="OnShowTimeBoxLostFocus" KeyDown="OnShowTimeBoxKeyDown" ToolTipService.ToolTip="mm:ss:cc 形式。空欄で自動計算" />
+                    <TextBlock Grid.Column="3" Text="表示終了" FontSize="12" VerticalAlignment="Center" />
+                    <TextBox Grid.Column="4" x:Name="ShowEndBox" FontFamily="Consolas" FontSize="12" PlaceholderText="--:--:--"
+                             LostFocus="OnShowTimeBoxLostFocus" KeyDown="OnShowTimeBoxKeyDown" ToolTipService.ToolTip="mm:ss:cc 形式。空欄で自動計算" />
+                    <Button Grid.Column="5" Content="自動に戻す" FontSize="12" Padding="8,3" Click="OnResetShowTimeClick" />
+                    <TextBlock Grid.Column="6" Text="フォント" FontSize="12" VerticalAlignment="Center" Margin="8,0,0,0" />
+                    <ComboBox Grid.Column="7" x:Name="LineFontBox" IsEditable="True" FontSize="12" HorizontalAlignment="Stretch" PlaceholderText="（自動）"
+                              SelectionChanged="OnLineFontChanged" TextSubmitted="OnLineFontSubmitted"
+                              ToolTipService.ToolTip="この行に適用するニコカラメーカーのフォント設定名（空欄はパート記号で自動判定）" />
+                    <TextBlock Grid.Column="8" x:Name="N3LineInfo" FontSize="12" VerticalAlignment="Center" Foreground="{ThemeResource TextFillColorSecondaryBrush}" TextTrimming="CharacterEllipsis" />
+                </Grid>
+
                 <!-- 行プレビュー（ルビ・絵文字画像） -->
                 <ScrollViewer
-                    Grid.Row="3"
+                    Grid.Row="4"
                     HorizontalScrollBarVisibility="Auto"
                     VerticalScrollBarVisibility="Disabled"
                     Padding="8,0"

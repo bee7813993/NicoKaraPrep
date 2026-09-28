@@ -72,9 +72,24 @@ public sealed partial class MainWindow : Window
             }
         };
 
-        // コマンドライン引数のファイルを開く
+        // コマンドライン引数のファイルを開く（n3proj は画面の準備ができてから読み込み確認画面へ）
         string[] args = Environment.GetCommandLineArgs();
-        if (args.Length > 1 && File.Exists(args[1]))
+        if (args.Length > 1 && File.Exists(args[1]) &&
+            Path.GetExtension(args[1]).Equals(".n3proj", StringComparison.OrdinalIgnoreCase))
+        {
+            string n3proj = args[1];
+            if (Content is FrameworkElement root)
+            {
+                RoutedEventHandler? onLoaded = null;
+                onLoaded = async (_, _) =>
+                {
+                    root.Loaded -= onLoaded;
+                    await ImportN3ProjAsync(n3proj);
+                };
+                root.Loaded += onLoaded;
+            }
+        }
+        else if (args.Length > 1 && File.Exists(args[1]))
         {
             TryRun(() => ViewModel.OpenFile(args[1]));
             AfterDocumentLoaded();
@@ -338,9 +353,17 @@ public sealed partial class MainWindow : Window
         picker.FileTypeFilter.Add(".lrc");
         picker.FileTypeFilter.Add(".kra");
         picker.FileTypeFilter.Add(".txt");
+        picker.FileTypeFilter.Add(".n3proj");
 
         StorageFile? file = await picker.PickSingleFileAsync();
         if (file is null) return;
+
+        // ニコカラメーカー3 のプロジェクトは歌詞としてではなく、読み込み確認画面で読み込む
+        if (Path.GetExtension(file.Path).Equals(".n3proj", StringComparison.OrdinalIgnoreCase))
+        {
+            await ImportN3ProjAsync(file.Path);
+            return;
+        }
         TryRun(() => ViewModel.OpenFile(file.Path));
         AfterDocumentLoaded();
     }
@@ -471,11 +494,10 @@ public sealed partial class MainWindow : Window
         var items = await e.DataView.GetStorageItemsAsync();
         if (items.FirstOrDefault(i => i is StorageFile) is not StorageFile file) return;
 
-        // n3proj は設定として、動画・音声ファイルはメディアとして、それ以外は歌詞として開く
+        // n3proj は読み込み確認画面へ、動画・音声ファイルはメディアとして、それ以外は歌詞として開く
         if (Path.GetExtension(file.Path).Equals(".n3proj", StringComparison.OrdinalIgnoreCase))
         {
-            TryRun(() => ViewModel.ApplyN3ProjSettings(file.Path));
-            ScheduleValidation();
+            await ImportN3ProjAsync(file.Path);
         }
         else if (MediaExtensions.Contains(Path.GetExtension(file.Path)))
         {
@@ -511,8 +533,7 @@ public sealed partial class MainWindow : Window
         string ext = Path.GetExtension(file.Path);
         if (ext.Equals(".n3proj", StringComparison.OrdinalIgnoreCase))
         {
-            TryRun(() => ViewModel.ApplyN3ProjSettings(file.Path));
-            ScheduleValidation();
+            await ImportN3ProjAsync(file.Path);
         }
         else if (ext.Equals(".rlf", StringComparison.OrdinalIgnoreCase) ||
             ext.Equals(".lrc", StringComparison.OrdinalIgnoreCase) ||
@@ -534,6 +555,7 @@ public sealed partial class MainWindow : Window
         ViewModel.SelectedLine = LineList.SelectedItem as LineViewModel;
         LineEditor.Text = ViewModel.SelectedLine?.RawText ?? "";
         RenderPreview();
+        RefreshN3LinePanel();
 
         // チェックボックス表示を ListView の選択と同期
         var selected = LineList.SelectedItems.Cast<LineViewModel>().ToHashSet();
@@ -583,6 +605,7 @@ public sealed partial class MainWindow : Window
             ViewModel.StatusText = "行を更新しました";
         });
         RenderPreview();
+        RefreshN3LinePanel();
         ScheduleValidation();
     }
 
@@ -622,13 +645,7 @@ public sealed partial class MainWindow : Window
 
     private async void OnImportN3ProjClick(object sender, RoutedEventArgs e)
     {
-        var picker = new FileOpenPicker();
-        WinRT.Interop.InitializeWithWindow.Initialize(picker, Hwnd);
-        picker.FileTypeFilter.Add(".n3proj");
-        StorageFile? file = await picker.PickSingleFileAsync();
-        if (file is null) return;
-        TryRun(() => ViewModel.ApplyN3ProjSettings(file.Path));
-        ScheduleValidation();
+        await ImportN3ProjAsync(null);
     }
 
     private async void OnKeyBindingsClick(object sender, RoutedEventArgs e)
