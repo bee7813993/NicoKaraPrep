@@ -3,6 +3,7 @@ using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Input;
 using NicoKaraPrep.App.Services;
 using NicoKaraPrep.App.Views;
+using NicoKaraPrep.Core;
 using NicoKaraPrep.Core.Formats;
 using NicoKaraPrep.Core.Model;
 
@@ -76,23 +77,9 @@ public sealed partial class MainWindow
         {
             if (path is null)
             {
-                var picker = new Windows.Storage.Pickers.FileOpenPicker();
-                WinRT.Interop.InitializeWithWindow.Initialize(picker, Hwnd);
-                picker.FileTypeFilter.Add(".n3proj");
-                var file = await picker.PickSingleFileAsync();
-                if (file is null)
-                {
-                    // ファイルを選んだのに何も起きない場合と区別できるよう、選ばれなかったことを表示する
-                    ViewModel.StatusText = "ファイルが選ばれなかったため、ニコカラメーカー3 プロジェクトは読み込みませんでした";
-                    return;
-                }
-                if (string.IsNullOrEmpty(file.Path))
-                {
-                    await ShowMessageAsync("ニコカラメーカー3 プロジェクトを読み込めませんでした",
-                        $"{file.Name}\n\n選んだファイルの場所（パス）を取得できませんでした。エクスプローラーでファイルのあるフォルダを開き、画面へドラッグ＆ドロップしてください。");
-                    return;
-                }
-                path = file.Path;
+                // ファイルを選んだのに何も起きない場合と区別できるよう、選ばれなかったことも表示する
+                path = await PickFileAsync([".n3proj"], "ファイルが選ばれなかったため、ニコカラメーカー3 プロジェクトは読み込みませんでした");
+                if (path is null) return;
             }
             DebugLog($"n3proj の読み込み: {path}");
 
@@ -104,8 +91,9 @@ public sealed partial class MainWindow
             catch (Exception ex)
             {
                 // 読めなかったときは何も起きないように見えないよう、画面で知らせる
-                ViewModel.StatusText = $"エラー: {ex.Message}";
-                await ShowMessageAsync("ニコカラメーカー3 プロジェクトを読み込めませんでした", $"{Path.GetFileName(path)}\n\n{ex.Message}");
+                string detail = ErrorText.Describe(ex);
+                ViewModel.StatusText = $"エラー: {detail}";
+                await ShowMessageAsync("ニコカラメーカー3 プロジェクトを読み込めませんでした", $"{Path.GetFileName(path)}\n\n{detail}");
                 return;
             }
 
@@ -134,10 +122,53 @@ public sealed partial class MainWindow
         catch (Exception ex)
         {
             DebugLog($"n3proj の読み込みで例外: {ex}");
-            ViewModel.StatusText = $"エラー: {ex.Message}";
+            string detail = ErrorText.Describe(ex);
+            ViewModel.StatusText = $"エラー: {detail}";
             await ShowMessageAsync("ニコカラメーカー3 プロジェクトの読み込み中にエラーが発生しました",
-                $"{(path is null ? "" : Path.GetFileName(path) + "\n\n")}{ex.GetType().Name}: {ex.Message}");
+                $"{(path is null ? "" : Path.GetFileName(path) + "\n\n")}{detail}");
         }
+    }
+
+    /// <summary>
+    /// ファイル選択画面で 1 つ選ばせ、そのパスを返す（選ばなかったときは null。cancelStatus があればステータスバーに出す）。
+    /// 選んだファイルを受け取れなかったときは、理由をメッセージで知らせて null を返す。
+    /// </summary>
+    private async Task<string?> PickFileAsync(IReadOnlyList<string> extensions, string? cancelStatus = null)
+    {
+        Windows.Storage.StorageFile? file;
+        try
+        {
+            var picker = new Windows.Storage.Pickers.FileOpenPicker();
+            WinRT.Interop.InitializeWithWindow.Initialize(picker, Hwnd);
+            foreach (string ext in extensions) picker.FileTypeFilter.Add(ext);
+            file = await picker.PickSingleFileAsync();
+        }
+        catch (Exception ex)
+        {
+            // 一時フォルダの中など一部のフォルダのファイルは、選んでも受け取れず COMException（メッセージなし）になる
+            DebugLog($"ファイル選択画面で例外: {ex}");
+            string detail = ErrorText.Describe(ex);
+            ViewModel.StatusText = $"エラー: 選んだファイルを受け取れませんでした。{detail}";
+            await ShowMessageAsync("選んだファイルを開けませんでした",
+                "ファイル選択画面から、選んだファイルを受け取れませんでした。\n" +
+                "一時フォルダ（Temp）の中など、一部のフォルダにあるファイルで起きることがあります。" +
+                "ファイルを別のフォルダ（ドキュメントなど）にコピーしてから開いてください。\n\n" +
+                $"詳細: {detail}");
+            return null;
+        }
+        if (file is null)
+        {
+            if (cancelStatus is not null) ViewModel.StatusText = cancelStatus;
+            return null;
+        }
+        if (string.IsNullOrEmpty(file.Path))
+        {
+            ViewModel.StatusText = $"エラー: {file.Name} の場所（パス）を取得できませんでした";
+            await ShowMessageAsync("選んだファイルを開けませんでした",
+                $"{file.Name}\n\n選んだファイルの場所（パス）を取得できませんでした。ファイルを別のフォルダ（ドキュメントなど）にコピーしてから開いてください。");
+            return null;
+        }
+        return file.Path;
     }
 
     /// <summary>OK だけのメッセージ画面を出す（出せない場合はステータスバーのみ）。</summary>
