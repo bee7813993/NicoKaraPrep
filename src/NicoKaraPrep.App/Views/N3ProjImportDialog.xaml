@@ -43,6 +43,59 @@
                 </StackPanel>
             </CheckBox>
 
+            <!-- アイコン・動画 -->
+            <TextBlock Text="アイコン・動画" Style="{StaticResource SectionTitle}" />
+            <CheckBox x:Name="IconsBox" Click="OnIconsClick">
+                <StackPanel>
+                    <TextBlock x:Name="IconsTitle" Text="アイコン（@Emoji）を取り込む" TextWrapping="Wrap" />
+                    <TextBlock
+                        Style="{StaticResource ItemDetail}"
+                        Text="プロジェクトに保存されているアイコンの定義（ワイプ前・後の画像と Zoom などのオプション）をパレットに取り込みます。同じ文字列のアイコンは置き換え、パレットの位置はそのままです。" />
+                </StackPanel>
+            </CheckBox>
+            <StackPanel x:Name="IconPanel" Margin="28,0,0,0" Spacing="4">
+                <StackPanel Orientation="Horizontal" Spacing="6">
+                    <ComboBox x:Name="IconTargetBox" MinWidth="260" SelectionChanged="OnIconTargetChanged">
+                        <ComboBoxItem Content="この曲専用（歌詞ファイルと一緒に保存）" />
+                        <ComboBoxItem Content="アプリ共通（全曲で使う）" />
+                    </ComboBox>
+                    <Button Content="すべて選択" FontSize="12" Padding="8,3" Click="OnSelectAllIconsClick" />
+                    <Button Content="すべて解除" FontSize="12" Padding="8,3" Click="OnSelectNoIconsClick" />
+                </StackPanel>
+                <ListView
+                    x:Name="IconList"
+                    MaxHeight="280"
+                    SelectionMode="None"
+                    ItemsSource="{x:Bind IconRows}">
+                    <ListView.ItemTemplate>
+                        <DataTemplate x:DataType="local:N3ImportIconRow">
+                            <Grid ColumnSpacing="8" Padding="0,1">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="Auto" />
+                                    <ColumnDefinition Width="36" />
+                                    <ColumnDefinition Width="190" />
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="170" />
+                                    <ColumnDefinition Width="100" />
+                                </Grid.ColumnDefinitions>
+                                <CheckBox IsChecked="{x:Bind IsSelected, Mode=TwoWay}" MinWidth="0" Padding="0" />
+                                <Image Grid.Column="1" Source="{x:Bind Thumb}" Width="32" Height="28" Stretch="Uniform" />
+                                <TextBlock Grid.Column="2" Text="{x:Bind Name}" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" ToolTipService.ToolTip="{x:Bind Name}" />
+                                <TextBlock Grid.Column="3" Text="{x:Bind FileText}" FontSize="12" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" Foreground="{ThemeResource TextFillColorSecondaryBrush}" ToolTipService.ToolTip="{x:Bind PathTip}" />
+                                <TextBlock Grid.Column="4" Text="{x:Bind OptionsText}" FontSize="12" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" Foreground="{ThemeResource TextFillColorSecondaryBrush}" ToolTipService.ToolTip="{x:Bind OptionsText}" />
+                                <TextBlock Grid.Column="5" Text="{x:Bind StatusText, Mode=OneWay}" FontSize="12" VerticalAlignment="Center" Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+                            </Grid>
+                        </DataTemplate>
+                    </ListView.ItemTemplate>
+                </ListView>
+            </StackPanel>
+            <CheckBox x:Name="MediaBox">
+                <StackPanel>
+                    <TextBlock Text="背景素材の動画をメディア再生に使う" TextWrapping="Wrap" />
+                    <TextBlock x:Name="MediaDetail" Style="{StaticResource ItemDetail}" />
+                </StackPanel>
+            </CheckBox>
+
             <!-- 表示時刻 -->
             <TextBlock Text="表示時刻" Style="{StaticResource SectionTitle}" />
             <CheckBox x:Name="TimingBox" Click="OnTimingClick">

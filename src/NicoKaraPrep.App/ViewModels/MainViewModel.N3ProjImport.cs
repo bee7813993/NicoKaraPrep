@@ -23,6 +23,15 @@ public sealed class N3ProjImportChoices
 
     /// <summary>NicoKaraPrep のフォント設定として取り込むフォント設定の名前（空 = 取り込まない）。</summary>
     public List<string> FontSetNames { get; set; } = new();
+
+    /// <summary>取り込むアイコン（@Emoji）の置き換え文字列（空 = 取り込まない）。</summary>
+    public List<string> IconNames { get; set; } = new();
+
+    /// <summary>アイコンをアプリ共通（全曲）に取り込む。false はこの曲専用。</summary>
+    public bool IconsGlobal { get; set; }
+
+    /// <summary>プロジェクトの背景素材（動画・音声）をメディア再生に使う。</summary>
+    public bool Media { get; set; }
 }
 
 /// <summary>ニコカラメーカー3 プロジェクト（n3proj）の読み込み。読み込みはすべてここを通る。</summary>
@@ -156,7 +165,24 @@ public partial class MainViewModel
             done.Add("書き出しのベース");
         }
 
-        // 6) フォント設定
+        // 6) アイコン（@Emoji）
+        if (choices.IconNames.Count > 0)
+        {
+            var names = new HashSet<string>(choices.IconNames, StringComparer.Ordinal);
+            var icons = preview.Icons.Where(i => names.Contains(i.Entry.ReplaceChar)).Select(i => i.Entry).ToList();
+            int n = ImportIcons(icons, choices.IconsGlobal);
+            if (choices.IconsGlobal) settingsChanged = true;
+            done.Add($"アイコン {n} 件（{(choices.IconsGlobal ? "アプリ共通" : "この曲専用")}）");
+        }
+
+        // 7) 動画（メディア再生）
+        if (choices.Media && preview.MediaExists)
+        {
+            MediaPath = preview.MediaPath;
+            done.Add($"動画 {Path.GetFileName(preview.MediaPath)}");
+        }
+
+        // 8) フォント設定
         if (choices.FontSetNames.Count > 0)
         {
             var names = new HashSet<string>(choices.FontSetNames);
@@ -178,6 +204,115 @@ public partial class MainViewModel
             ? "読み込む項目が選ばれていません"
             : $"ニコカラメーカー3 プロジェクトを読み込みました（{Path.GetFileName(preview.Path)}）: {string.Join(" / ", done)}";
     }
+
+    /// <summary>
+    /// アイコン（@Emoji）を取り込む。同じ置き換え文字列の定義は置き換え（パレットの位置は保つ）、それ以外は追加。
+    /// この曲専用ならすべてのタブの歌詞に入れ（歌詞ファイルの保存で保存される）、アプリ共通なら設定に入れる。
+    /// </summary>
+    public int ImportIcons(IReadOnlyList<EmojiEntry> icons, bool global)
+    {
+        if (icons.Count == 0) return 0;
+        if (global)
+        {
+            foreach (var icon in icons)
+            {
+                var e = icon.Clone();
+                int i = Settings.GlobalEmojiList.FindIndex(x => x.ReplaceChar == e.ReplaceChar);
+                if (i >= 0)
+                {
+                    e.Slot = Settings.GlobalEmojiList[i].Slot;
+                    Settings.GlobalEmojiList[i] = e;
+                }
+                else
+                {
+                    var used = new HashSet<int>(Settings.GlobalEmojiList.Where(x => x.Slot is >= 1 and <= 20).Select(x => x.Slot!.Value));
+                    int slot = Enumerable.Range(1, 20).FirstOrDefault(s => !used.Contains(s));
+                    e.Slot = slot == 0 ? null : slot;
+                    Settings.GlobalEmojiList.Add(e);
+                }
+            }
+            Settings.Save();
+        }
+        else
+        {
+            StoreActiveTab();
+            foreach (var tab in Tabs)
+            {
+                tab.UndoStack.Add(tab.Document.Clone());
+                tab.RedoStack.Clear();
+            }
+
+            // 表示中のタブ（パレットに出る）に入れてパレットの位置を割り当て、ほかのタブにも同じ位置で入れる
+            MergeSongIcons(Document, icons.Select(e => { var c = e.Clone(); c.Slot = null; return c; }));
+            AssignSlotsToSongEmoji();
+            var slots = new Dictionary<string, int?>();
+            foreach (var e in Document.EmojiEntries) slots.TryAdd(e.ReplaceChar, e.Slot);
+            foreach (var tab in Tabs.Where(t => t != _activeTab))
+            {
+                MergeSongIcons(tab.Document, icons.Select(e => { var c = e.Clone(); c.Slot = slots.GetValueOrDefault(e.ReplaceChar); return c; }));
+                tab.IsModified = true;
+            }
+            MarkModified();
+        }
+        RefreshEmojiSlots();
+        return icons.Count;
+    }
+
+    private static void MergeSongIcons(LyricsDocument doc, IEnumerable<EmojiEntry> icons)
+    {
+        foreach (var e in icons)
+        {
+            int i = doc.EmojiEntries.FindIndex(x => x.ReplaceChar == e.ReplaceChar);
+            if (i >= 0)
+            {
+                e.Slot = doc.EmojiEntries[i].Slot ?? e.Slot;
+                doc.EmojiEntries[i] = e;
+            }
+            else
+            {
+                doc.EmojiEntries.Add(e);
+            }
+        }
+    }
+
+    /// <summary>
+    /// アイコンを取り込んだときの扱い（読み込み確認画面の表示用）: 追加 / 置き換え / 同じ（取り込んでも変わらない）。
+    /// </summary>
+    public string DescribeIconImport(EmojiEntry icon, bool global)
+    {
+        string? baseDir = Tabs.FirstOrDefault(t => t.IsMain)?.FilePath is string mp ? Path.GetDirectoryName(mp) : null;
+        bool Same(EmojiEntry a) =>
+            SamePath(a.ImageBefore, icon.ImageBefore, baseDir) &&
+            SamePath(a.ImageAfter, icon.ImageAfter, baseDir) &&
+            NormalizeOptions(a.Options) == NormalizeOptions(icon.Options);
+
+        var inGlobal = Settings.GlobalEmojiList.FirstOrDefault(x => x.ReplaceChar == icon.ReplaceChar);
+        if (global)
+        {
+            return inGlobal is null ? "追加" : Same(inGlobal) ? "同じ" : "置き換え";
+        }
+        var inSong = Document.EmojiEntries.FirstOrDefault(x => x.ReplaceChar == icon.ReplaceChar);
+        if (inSong is not null) return Same(inSong) ? "同じ" : "置き換え";
+        return inGlobal is not null && Same(inGlobal) ? "同じ（アプリ共通にあり）" : "追加";
+    }
+
+    private static bool SamePath(string? a, string? b, string? baseDir)
+    {
+        if (string.IsNullOrEmpty(a) || string.IsNullOrEmpty(b)) return string.IsNullOrEmpty(a) == string.IsNullOrEmpty(b);
+        try
+        {
+            string fa = Path.IsPathRooted(a) || baseDir is null ? a : Path.GetFullPath(Path.Combine(baseDir, a));
+            string fb = Path.IsPathRooted(b) || baseDir is null ? b : Path.GetFullPath(Path.Combine(baseDir, b));
+            return string.Equals(Path.GetFullPath(fa), Path.GetFullPath(fb), StringComparison.OrdinalIgnoreCase);
+        }
+        catch (Exception)
+        {
+            return string.Equals(a, b, StringComparison.OrdinalIgnoreCase);
+        }
+    }
+
+    private static string NormalizeOptions(string? options) =>
+        string.Join(",", (options ?? "").Split(',').Select(o => o.Trim()).Where(o => o.Length > 0));
 
     /// <summary>n3proj の主フォント・縁取り・画面の横幅を、横幅チェックとプレビューの設定にする。</summary>
     private void ApplyN3ProjCheckFont(N3ProjSettings s)

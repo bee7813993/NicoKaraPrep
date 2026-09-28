@@ -5,6 +5,7 @@ using Microsoft.UI;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Media;
+using Microsoft.UI.Xaml.Media.Imaging;
 using NicoKaraPrep.App.ViewModels;
 using NicoKaraPrep.Core.Formats;
 using NicoKaraPrep.Core.Model;
@@ -65,6 +66,56 @@ public partial class N3ImportFontRow : ObservableObject
         N3FontSet.IsValidWeb16(web16) ? $"{label} #{web16.ToUpperInvariant()}" : $"{label}: 単色以外（取り込まれません）";
 }
 
+/// <summary>読み込み確認画面のアイコン 1 行分。</summary>
+public partial class N3ImportIconRow : ObservableObject
+{
+    /// <summary>置き換える文字列。</summary>
+    public string Name { get; set; } = "";
+
+    public string FileText { get; set; } = "";
+
+    public string PathTip { get; set; } = "";
+
+    public string OptionsText { get; set; } = "";
+
+    public ImageSource? Thumb { get; set; }
+
+    public bool ImageExists { get; set; }
+
+    public EmojiEntry Entry { get; set; } = new();
+
+    [ObservableProperty]
+    private string statusText = "";
+
+    [ObservableProperty]
+    private bool isSelected;
+
+    public static N3ImportIconRow From(N3ProjIcon icon)
+    {
+        var e = icon.Entry;
+        string before = Path.GetFileName(e.ImageBefore);
+        string after = string.IsNullOrEmpty(e.ImageAfter) ? "" : Path.GetFileName(e.ImageAfter);
+        ImageSource? thumb = null;
+        if (icon.ImageExists)
+        {
+            try { thumb = new BitmapImage(new Uri(e.ImageBefore)) { DecodePixelHeight = 56 }; }
+            catch (Exception) { thumb = null; }
+        }
+        return new N3ImportIconRow
+        {
+            Name = e.ReplaceChar,
+            FileText = icon.ImageExists
+                ? (after.Length > 0 ? $"{before} ／ {after}" : before)
+                : $"⚠ 画像が見つかりません: {before}",
+            PathTip = string.IsNullOrEmpty(e.ImageAfter) ? e.ImageBefore : $"{e.ImageBefore}\n{e.ImageAfter}",
+            OptionsText = e.Options ?? "",
+            Thumb = thumb,
+            ImageExists = icon.ImageExists,
+            Entry = e,
+        };
+    }
+}
+
 public sealed partial class N3ProjImportDialog : ContentDialog
 {
     private readonly MainViewModel _vm;
@@ -74,6 +125,8 @@ public sealed partial class N3ProjImportDialog : ContentDialog
     private readonly int _lineShowEstimated;
 
     public ObservableCollection<N3ImportFontRow> FontRows { get; } = new();
+
+    public ObservableCollection<N3ImportIconRow> IconRows { get; } = new();
 
     /// <summary>「読み込む」で確定した取り込み項目。</summary>
     public N3ProjImportChoices Result { get; private set; } = new();
@@ -89,6 +142,13 @@ public sealed partial class N3ProjImportDialog : ContentDialog
             var row = N3ImportFontRow.From(f, existing.Contains(f.Name));
             row.PropertyChanged += OnFontRowChanged;
             FontRows.Add(row);
+        }
+
+        foreach (var icon in preview.Icons)
+        {
+            var row = N3ImportIconRow.From(icon);
+            row.PropertyChanged += OnIconRowChanged;
+            IconRows.Add(row);
         }
 
         InitializeComponent();
@@ -119,6 +179,35 @@ public sealed partial class N3ProjImportDialog : ContentDialog
             ? $"{s.LineTimes.Count} 行分（この曲を開いている間だけ使います）"
             : "表示区間が設定された行がありません";
         LineTimesBox.IsEnabled = s.LineTimes.Count > 0;
+
+        // ---- アイコン・動画 ----
+        IconsBox.IsEnabled = IconRows.Count > 0;
+        IconTargetBox.SelectedIndex = 0;
+        UpdateIconStatuses();
+        foreach (var row in IconRows)
+        {
+            // 取り込むと何かが変わるもの（追加・置き換え）で、画像があるものを初期選択
+            row.IsSelected = row.ImageExists && row.StatusText is "追加" or "置き換え";
+        }
+
+        string? currentMedia = vm.MediaPath;
+        bool sameMedia = currentMedia is { Length: > 0 } && preview.MediaPath is { Length: > 0 } &&
+            string.Equals(Path.GetFullPath(currentMedia), Path.GetFullPath(preview.MediaPath), StringComparison.OrdinalIgnoreCase);
+        if (preview.MediaPath is not { Length: > 0 } media)
+        {
+            MediaDetail.Text = "背景素材の動画・音声が設定されていません";
+            MediaBox.IsEnabled = false;
+        }
+        else if (!preview.MediaExists)
+        {
+            MediaDetail.Text = $"⚠ ファイルが見つかりません: {media}";
+            MediaBox.IsEnabled = false;
+        }
+        else
+        {
+            MediaDetail.Text = media + (sameMedia ? "（現在も同じファイルです）"
+                : currentMedia is { Length: > 0 } ? $"（現在: {Path.GetFileName(currentMedia)}）" : "（現在: なし）");
+        }
 
         // ---- 表示時刻 ----
         string current = $"ワイプ前 {settings.DisplayLeadSeconds:0.###} 秒・ワイプ後 {settings.DisplayTailSeconds:0.###} 秒・表示間隔 {settings.N3IntervalSeconds:0.###} 秒・上段を{(settings.N3TopLong ? "長め" : "短め")}に";
@@ -160,10 +249,13 @@ public sealed partial class N3ProjImportDialog : ContentDialog
             CheckFontBox.IsChecked = true;
             LineTimesBox.IsChecked = s.LineTimes.Count > 0;
             BaseBox.IsChecked = currentBase is null || sameBase;
+            IconsBox.IsChecked = IconRows.Any(r => r.IsSelected);
+            MediaBox.IsChecked = MediaBox.IsEnabled && !sameMedia && (currentMedia is not { Length: > 0 } || !File.Exists(currentMedia));
         }
 
         UpdateLineShowDetail();
         UpdateFontSetsState();
+        UpdateIconsState();
         PrimaryButtonClick += (_, _) => Apply();
     }
 
@@ -200,6 +292,47 @@ public sealed partial class N3ProjImportDialog : ContentDialog
             : $"フォント設定を NicoKaraPrep に取り込む（{FontRows.Count} 件中 {selected} 件を選択）";
     }
 
+    private void UpdateIconStatuses()
+    {
+        bool global = IconTargetBox.SelectedIndex == 1;
+        foreach (var row in IconRows)
+        {
+            row.StatusText = _vm.DescribeIconImport(row.Entry, global);
+        }
+    }
+
+    private void UpdateIconsState()
+    {
+        bool on = IconsBox.IsChecked == true;
+        IconPanel.Visibility = on ? Visibility.Visible : Visibility.Collapsed;
+        int selected = IconRows.Count(r => r.IsSelected);
+        IconsTitle.Text = IconRows.Count == 0
+            ? "アイコン（@Emoji）を取り込む（このプロジェクトにはアイコンがありません）"
+            : $"アイコン（@Emoji）を取り込む（{IconRows.Count} 件中 {selected} 件を選択）";
+    }
+
+    private void OnIconsClick(object sender, RoutedEventArgs e) => UpdateIconsState();
+
+    private void OnIconTargetChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (IconRows.Count > 0 && IconsTitle is not null) UpdateIconStatuses();
+    }
+
+    private void OnIconRowChanged(object? sender, PropertyChangedEventArgs e)
+    {
+        if (e.PropertyName == nameof(N3ImportIconRow.IsSelected) && IconsTitle is not null) UpdateIconsState();
+    }
+
+    private void OnSelectAllIconsClick(object sender, RoutedEventArgs e)
+    {
+        foreach (var r in IconRows) r.IsSelected = true;
+    }
+
+    private void OnSelectNoIconsClick(object sender, RoutedEventArgs e)
+    {
+        foreach (var r in IconRows) r.IsSelected = false;
+    }
+
     private void OnTimingClick(object sender, RoutedEventArgs e) => UpdateLineShowDetail();
 
     private void OnFontSetsClick(object sender, RoutedEventArgs e) => UpdateFontSetsState();
@@ -231,6 +364,11 @@ public sealed partial class N3ProjImportDialog : ContentDialog
             FontSetNames = FontSetsBox.IsChecked == true
                 ? FontRows.Where(r => r.IsSelected).Select(r => r.Name).ToList()
                 : new List<string>(),
+            IconNames = IconsBox.IsChecked == true
+                ? IconRows.Where(r => r.IsSelected).Select(r => r.Name).ToList()
+                : new List<string>(),
+            IconsGlobal = IconTargetBox.SelectedIndex == 1,
+            Media = MediaBox.IsChecked == true && MediaBox.IsEnabled,
         };
         _vm.Settings.N3AutoImportNearby = AutoBox.IsChecked == true;
         _vm.Settings.Save();

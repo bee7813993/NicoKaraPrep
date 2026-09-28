@@ -72,30 +72,79 @@ public sealed partial class MainWindow
     /// </summary>
     private async Task ImportN3ProjAsync(string? path, N3ProjImportFocus focus = N3ProjImportFocus.Default)
     {
-        if (path is null)
+        try
         {
-            var picker = new Windows.Storage.Pickers.FileOpenPicker();
-            WinRT.Interop.InitializeWithWindow.Initialize(picker, Hwnd);
-            picker.FileTypeFilter.Add(".n3proj");
-            var file = await picker.PickSingleFileAsync();
-            if (file is null) return;
-            path = file.Path;
+            if (path is null)
+            {
+                var picker = new Windows.Storage.Pickers.FileOpenPicker();
+                WinRT.Interop.InitializeWithWindow.Initialize(picker, Hwnd);
+                picker.FileTypeFilter.Add(".n3proj");
+                var file = await picker.PickSingleFileAsync();
+                if (file is null) return;
+                path = file.Path;
+            }
+
+            N3ProjImportPreview preview;
+            try
+            {
+                preview = ViewModel.PrepareN3ProjImport(path);
+            }
+            catch (Exception ex)
+            {
+                // 読めなかったときは何も起きないように見えないよう、画面で知らせる
+                ViewModel.StatusText = $"エラー: {ex.Message}";
+                await ShowMessageAsync("ニコカラメーカー3 プロジェクトを読み込めませんでした", $"{Path.GetFileName(path)}\n\n{ex.Message}");
+                return;
+            }
+
+            var dialog = new N3ProjImportDialog(ViewModel, preview, focus) { XamlRoot = Content.XamlRoot };
+            if (await dialog.ShowAsync() != ContentDialogResult.Primary) return;
+
+            var choices = dialog.Result;
+            TryRun(() => ViewModel.ApplyN3ProjImport(preview, choices));
+            string summary = ViewModel.StatusText;
+            if (choices.Media && ViewModel.MediaPath is string media && File.Exists(media))
+            {
+                OpenMedia(media);
+            }
+            foreach (var line in ViewModel.Lines) line.RaiseOverrideMark();
+            _n3FontNamesKey = null;
+            LoadQuickEmojiSettings();
+            RenderPreview();
+            RefreshN3LinePanel();
+
+            // チェックはすぐに実行し、何を読み込んだかの表示がチェック結果で消えないよう、つなげて表示する
+            _validateTimer.Stop();
+            TryRun(ViewModel.RunValidation);
+            RefreshInsertGutter();
+            ViewModel.StatusText = $"{summary}　／　{ViewModel.StatusText}";
         }
+        catch (Exception ex)
+        {
+            DebugLog($"n3proj の読み込みで例外: {ex}");
+            ViewModel.StatusText = $"エラー: {ex.Message}";
+        }
+    }
 
-        N3ProjImportPreview? preview = null;
-        TryRun(() => preview = ViewModel.PrepareN3ProjImport(path));
-        if (preview is null) return;
-
-        var dialog = new N3ProjImportDialog(ViewModel, preview, focus) { XamlRoot = Content.XamlRoot };
-        if (await dialog.ShowAsync() != ContentDialogResult.Primary) return;
-
-        TryRun(() => ViewModel.ApplyN3ProjImport(preview, dialog.Result));
-        foreach (var line in ViewModel.Lines) line.RaiseOverrideMark();
-        _n3FontNamesKey = null;
-        LoadQuickEmojiSettings();
-        RenderPreview();
-        RefreshN3LinePanel();
-        ScheduleValidation();
+    /// <summary>OK だけのメッセージ画面を出す（出せない場合はステータスバーのみ）。</summary>
+    private async Task ShowMessageAsync(string title, string message)
+    {
+        try
+        {
+            var dialog = new ContentDialog
+            {
+                XamlRoot = Content.XamlRoot,
+                Title = title,
+                Content = new TextBlock { Text = message, TextWrapping = TextWrapping.Wrap },
+                CloseButtonText = "OK",
+                DefaultButton = ContentDialogButton.Close,
+            };
+            await dialog.ShowAsync();
+        }
+        catch (Exception)
+        {
+            // ほかのダイアログが開いているなど。ステータスバーの表示だけにする
+        }
     }
 
     private void OnClearN3OverridesClick(object sender, RoutedEventArgs e)

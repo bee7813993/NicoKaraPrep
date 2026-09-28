@@ -72,9 +72,24 @@ public sealed partial class MainWindow : Window
             }
         };
 
-        // コマンドライン引数のファイルを開く
+        // コマンドライン引数のファイルを開く（n3proj は画面の準備ができてから読み込み確認画面へ）
         string[] args = Environment.GetCommandLineArgs();
-        if (args.Length > 1 && File.Exists(args[1]))
+        if (args.Length > 1 && File.Exists(args[1]) &&
+            Path.GetExtension(args[1]).Equals(".n3proj", StringComparison.OrdinalIgnoreCase))
+        {
+            string n3proj = args[1];
+            if (Content is FrameworkElement root)
+            {
+                RoutedEventHandler? onLoaded = null;
+                onLoaded = async (_, _) =>
+                {
+                    root.Loaded -= onLoaded;
+                    await ImportN3ProjAsync(n3proj);
+                };
+                root.Loaded += onLoaded;
+            }
+        }
+        else if (args.Length > 1 && File.Exists(args[1]))
         {
             TryRun(() => ViewModel.OpenFile(args[1]));
             AfterDocumentLoaded();
@@ -338,9 +353,17 @@ public sealed partial class MainWindow : Window
         picker.FileTypeFilter.Add(".lrc");
         picker.FileTypeFilter.Add(".kra");
         picker.FileTypeFilter.Add(".txt");
+        picker.FileTypeFilter.Add(".n3proj");
 
         StorageFile? file = await picker.PickSingleFileAsync();
         if (file is null) return;
+
+        // ニコカラメーカー3 のプロジェクトは歌詞としてではなく、読み込み確認画面で読み込む
+        if (Path.GetExtension(file.Path).Equals(".n3proj", StringComparison.OrdinalIgnoreCase))
+        {
+            await ImportN3ProjAsync(file.Path);
+            return;
+        }
         TryRun(() => ViewModel.OpenFile(file.Path));
         AfterDocumentLoaded();
     }

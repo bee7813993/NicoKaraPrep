@@ -140,6 +140,85 @@ public class N3ProjImportTests : IDisposable
         Assert.Equal(6, matched.Count);
     }
 
+    [Fact]
+    public void アイコン_歌詞設定のEmojiタグを読み相対パスは歌詞ファイルのフォルダから解決する()
+    {
+        string lyricsDir = Path.Combine(_dir, "lyrics");
+        Directory.CreateDirectory(lyricsDir);
+        File.WriteAllBytes(Path.Combine(lyricsDir, "kaho.png"), new byte[] { 1 });
+
+        var root = new JsonObject
+        {
+            ["SourceLyricsInfos"] = new JsonArray(
+                new JsonObject
+                {
+                    ["SettingsName"] = "メイン",
+                    ["SourceLyricsPath"] = Path.Combine(lyricsDir, "song.lrc"),
+                    ["AtTagsForSave"] = "@Ruby1=漢,かん\n@Emoji=（花帆）,kaho.png,kaho_d.png,NoDecor,Zoom=150\n@emoji=★,D:\\icons\\star.png",
+                },
+                new JsonObject
+                {
+                    ["SettingsName"] = "コーラス1",
+                    ["SourceLyricsPath"] = null,
+                    ["AtTagsForSave"] = "@Emoji=（花帆）,other.png\n@Emoji=（梢）,kozue.png",
+                }),
+        };
+
+        var icons = N3ProjImport.ReadIcons(root, Path.Combine(_dir, "project.n3proj"));
+        Assert.Equal(new[] { "（花帆）", "★", "（梢）" }, icons.Select(i => i.Entry.ReplaceChar).ToArray());
+
+        var kaho = icons[0];
+        Assert.Equal(Path.Combine(lyricsDir, "kaho.png"), kaho.Entry.ImageBefore);
+        Assert.Equal(Path.Combine(lyricsDir, "kaho_d.png"), kaho.Entry.ImageAfter);
+        Assert.Equal("NoDecor,Zoom=150", kaho.Entry.Options);
+        Assert.True(kaho.ImageExists);
+        Assert.Equal("メイン", kaho.SourceTab);
+
+        Assert.Equal(@"D:\icons\star.png", icons[1].Entry.ImageBefore);
+        Assert.False(icons[1].ImageExists);
+
+        // 歌詞ファイルが未設定のタブはプロジェクトのフォルダから
+        Assert.Equal(Path.Combine(_dir, "kozue.png"), icons[2].Entry.ImageBefore);
+    }
+
+    [Fact]
+    public void 動画_絶対パスが無ければプロジェクトからの相対パスを使う()
+    {
+        File.WriteAllBytes(Path.Combine(_dir, "movie.mp4"), new byte[] { 1 });
+        var root = new JsonObject
+        {
+            ["SourceInfo"] = new JsonObject
+            {
+                ["MoviePath"] = @"Z:\moved\movie.mp4",
+                ["MovieRelativePath"] = "movie.mp4",
+                ["SoundTrackList"] = new JsonArray(),
+            },
+        };
+        Assert.Equal(Path.Combine(_dir, "movie.mp4"), N3ProjImport.ReadMediaPath(root, Path.Combine(_dir, "p.n3proj")));
+
+        var noMovie = new JsonObject
+        {
+            ["SourceInfo"] = new JsonObject
+            {
+                ["MoviePath"] = null,
+                ["MovieRelativePath"] = "",
+                ["SoundTrackList"] = new JsonArray(new JsonObject { ["Path"] = @"Z:\a\song.m4a", ["RelativePath"] = "" }),
+            },
+        };
+        Assert.Equal(@"Z:\a\song.m4a", N3ProjImport.ReadMediaPath(noMovie, Path.Combine(_dir, "p.n3proj")));
+    }
+
+    [Fact]
+    public void アイコン_書き出したプロジェクトから読み戻せる()
+    {
+        var doc = Song();
+        string path = ExportAndEdit(doc, new N3ShowTimeSettings());
+        var preview = N3ProjImport.Analyze(path);
+        var icon = Assert.Single(preview.Icons);
+        Assert.Equal("（花帆）", icon.Entry.ReplaceChar);
+        Assert.Equal(Path.Combine(_dir, "a.png"), icon.Entry.ImageBefore);
+    }
+
     /// <summary>
     /// 実プロジェクトの表示時刻を、推定した設定の自動計算がどれだけ再現できるか。
     /// 環境変数 TTT_N3PROJ_SAMPLE に n3proj を指定して実行する（手動調整された行があるため一致率で判定。

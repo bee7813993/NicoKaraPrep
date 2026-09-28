@@ -39,6 +39,12 @@ public sealed class N3ProjSourceTab
 /// <param name="Total">表示時刻が設定されている行数。</param>
 public sealed record N3TimingEstimate(int LeadMs, int TailMs, int IntervalMs, int Matched, int Total);
 
+/// <summary>n3proj の @Emoji（アイコン）1 件。画像のパスは絶対パスに直してある。</summary>
+/// <param name="Entry">アイコンの定義（置き換える文字列・ワイプ前後の画像・オプション）。</param>
+/// <param name="ImageExists">ワイプ前の画像ファイルが存在するか。</param>
+/// <param name="SourceTab">定義されていた歌詞設定タブの名前。</param>
+public sealed record N3ProjIcon(EmojiEntry Entry, bool ImageExists, string SourceTab);
+
 /// <summary>n3proj の読み込み内容（読み込み確認画面に表示し、選んだ項目だけを取り込む）。</summary>
 public sealed class N3ProjImportPreview
 {
@@ -55,6 +61,15 @@ public sealed class N3ProjImportPreview
 
     /// <summary>表示時刻の設定の推定（表示時刻が無ければ null）。</summary>
     public N3TimingEstimate? Timing { get; init; }
+
+    /// <summary>アイコン（@Emoji）の定義（置き換える文字列ごとに 1 件）。</summary>
+    public List<N3ProjIcon> Icons { get; init; } = new();
+
+    /// <summary>背景素材の動画（無ければ音声トラック）のパス。未設定なら null。</summary>
+    public string? MediaPath { get; init; }
+
+    /// <summary><see cref="MediaPath"/> のファイルが存在するか。</summary>
+    public bool MediaExists => MediaPath is { Length: > 0 } p && File.Exists(p);
 
     /// <summary>メインの歌詞設定が「上段歌詞を長めに表示する」か。</summary>
     public bool MainTopLong => Tabs.FirstOrDefault()?.TopLong ?? false;
@@ -77,7 +92,88 @@ public static class N3ProjImport
             FontSets = N3ProjFormat.ReadFontSets(path),
             Tabs = tabs,
             Timing = EstimateTiming(tabs, intervalHintMs),
+            Icons = ReadIcons(root, path),
+            MediaPath = ReadMediaPath(root, path),
         };
+    }
+
+    /// <summary>
+    /// 歌詞設定タブに保存されている @Emoji（アイコン）を読み出す（AtTagsForSave）。
+    /// 画像のパスが相対パスなら、ニコカラメーカーと同じく歌詞ファイルのフォルダ（不明ならプロジェクトのフォルダ）
+    /// からのパスとして絶対パスにする。同じ置き換え文字列は最初の定義を使う。
+    /// </summary>
+    public static List<N3ProjIcon> ReadIcons(JsonObject root, string projectPath)
+    {
+        var result = new List<N3ProjIcon>();
+        var seen = new HashSet<string>(StringComparer.Ordinal);
+        string projectDir = System.IO.Path.GetDirectoryName(System.IO.Path.GetFullPath(projectPath)) ?? "";
+        if (root["SourceLyricsInfos"] is not JsonArray infos) return result;
+
+        foreach (var node in infos)
+        {
+            if (node is not JsonObject info) continue;
+            string tabName = info["SettingsName"]?.GetValue<string>() ?? "";
+            string? lyricsPath = info["SourceLyricsPath"]?.GetValue<string>();
+            string baseDir = !string.IsNullOrEmpty(lyricsPath) && System.IO.Path.GetDirectoryName(lyricsPath) is { Length: > 0 } d ? d : projectDir;
+            string tags = info["AtTagsForSave"]?.GetValue<string>() ?? "";
+
+            foreach (string rawLine in tags.Split('\n'))
+            {
+                string line = rawLine.Trim();
+                if (!line.StartsWith("@Emoji=", StringComparison.OrdinalIgnoreCase)) continue;
+                var e = EmojiEntry.ParseTagValue(line["@Emoji=".Length..]);
+                if (e.ReplaceChar.Length == 0 || !seen.Add(e.ReplaceChar)) continue;
+                e.ImageBefore = ResolvePath(e.ImageBefore, baseDir);
+                if (!string.IsNullOrEmpty(e.ImageAfter)) e.ImageAfter = ResolvePath(e.ImageAfter, baseDir);
+                result.Add(new N3ProjIcon(e, e.ImageBefore.Length > 0 && File.Exists(e.ImageBefore), tabName));
+            }
+        }
+        return result;
+    }
+
+    /// <summary>背景素材の動画（なければ最初の音声トラック）のパス。相対パスも試す。</summary>
+    public static string? ReadMediaPath(JsonObject root, string projectPath)
+    {
+        if (root["SourceInfo"] is not JsonObject source) return null;
+        string projectDir = System.IO.Path.GetDirectoryName(System.IO.Path.GetFullPath(projectPath)) ?? "";
+
+        string? Pick(string? absolute, string? relative)
+        {
+            if (!string.IsNullOrEmpty(absolute) && File.Exists(absolute)) return absolute;
+            if (!string.IsNullOrEmpty(relative))
+            {
+                string candidate = ResolvePath(relative, projectDir);
+                if (File.Exists(candidate)) return candidate;
+            }
+            return string.IsNullOrEmpty(absolute) ? null : absolute;
+        }
+
+        var movie = Pick(source["MoviePath"]?.GetValue<string>(), source["MovieRelativePath"]?.GetValue<string>());
+        if (movie is not null) return movie;
+        if (source["SoundTrackList"] is JsonArray tracks)
+        {
+            foreach (var t in tracks)
+            {
+                if (t is JsonObject track && Pick(track["Path"]?.GetValue<string>(), track["RelativePath"]?.GetValue<string>()) is string sound)
+                {
+                    return sound;
+                }
+            }
+        }
+        return Pick(source["SoundPath"]?.GetValue<string>(), source["SoundRelativePath"]?.GetValue<string>());
+    }
+
+    private static string ResolvePath(string path, string baseDir)
+    {
+        if (string.IsNullOrWhiteSpace(path)) return path;
+        try
+        {
+            return System.IO.Path.IsPathRooted(path) ? path : System.IO.Path.GetFullPath(System.IO.Path.Combine(baseDir, path));
+        }
+        catch (Exception)
+        {
+            return path;
+        }
     }
 
     /// <summary>歌詞設定タブを読み出す（歌詞行の無いタブは除く）。</summary>
