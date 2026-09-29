@@ -165,6 +165,7 @@ public sealed partial class FontSettingsViewModel : ObservableObject
 
     partial void OnSelectedItemChanged(FontListItem? value)
     {
+        _coalesceKey = null; // 別のフォント設定の同じ欄の変更を、前のフォント設定の変更とまとめない
         LoadEditor();
         if (!IsRebuilding) RunAnalysis(); // 選択中のフォント設定の使用状況
     }
@@ -256,7 +257,7 @@ public sealed partial class FontSettingsViewModel : ObservableObject
     /// </summary>
     public void EditFont(N3FontSet font, string? key, Action<N3FontSet> change)
     {
-        PushUndo(key);
+        PushUndo(key is null ? null : $"{font.Id}:{key}"); // まとめるのは同じフォント設定の同じ欄だけ
         change(font);
         N3FontLibrary.MarkEdited(font);
         OnFontContentChanged(font);
