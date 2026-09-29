@@ -138,6 +138,34 @@ public class N3FontWriteTests
     }
 
     [Fact]
+    public void 書き出し_色が未指定で不透明度だけ指定した箇所は新規では既定色マージではベースの色にその不透明度を書く()
+    {
+        var f = new N3FontSet { Name = "（麻衣）（のりこ）" };
+        var edge2 = f.Detail.Brushes[2]; // 既定で色が空（ワイプ後の縁 2）
+        Assert.Equal("", edge2.Color);
+        edge2.AlphaPercent = 0;
+        Assert.False(edge2.IsUnset);
+        Assert.True(f.Detail.Brushes[3].IsUnset); // 色が空で不透明度 100% は未指定
+
+        var created = Export(null, f)[0]!["BrushInfos"]!.AsArray();
+        Assert.Equal("FFFFFF", created[2]!["SolidColor"]!["Web16"]!.GetValue<string>());
+        Assert.Equal(0f, created[2]!["SolidColor"]!["DxColor"]!["A"]!.GetValue<float>());
+
+        var mergedSet = Export(ProjectOf(NkmFont()), f)[0]!;
+        var merged = mergedSet["BrushInfos"]!.AsArray();
+        var sc = merged[2]!["SolidColor"]!;
+        Assert.Equal("000000", sc["Web16"]!.GetValue<string>());
+        Assert.Equal(0.0, sc["DxColor"]!["R"]!.GetValue<double>());
+        Assert.Equal(0f, sc["DxColor"]!["A"]!.GetValue<float>());
+        Assert.Equal("bec83c4f-e3c5-4e8d-9d68-042878d48165", sc["Guid"]!.GetValue<string>());
+        Assert.Equal(0.5, merged[3]!["SolidColor"]!["DxColor"]!["A"]!.GetValue<double>(), 3); // 未指定はベースのまま
+
+        // 読み戻すとベースの色で不透明度 0
+        var back = N3ProjFormat.ReadFontSets(ProjectOf((JsonObject)mergedSet.DeepClone())).Single();
+        Assert.Equal(("000000", 0), (back.Detail.Brushes[2].Color, back.Detail.Brushes[2].AlphaPercent));
+    }
+
+    [Fact]
     public void 書き出し_取り込んだGuidが既にあれば新しいGuidにして連動しない()
     {
         var a = new N3FontSet { Name = "a", NkmGuid = "0f8fad5b-d9cb-469f-a165-70867728950e", NkmSynchronize = true };

@@ -758,7 +758,7 @@ public static class N3ProjWriter
             for (int i = 0; i < N3FontDetail.BrushCount && i < brushes.Count; i++)
             {
                 if (d.Brushes[i].IsUnset || brushes[i] is not JsonObject b) continue;
-                if (MergeBrush(b, d.Brushes[i], ver)) Touch(b, ver);
+                if (MergeBrush(b, d.Brushes[i], DefaultBrushColors[i], ver)) Touch(b, ver);
             }
         }
         SetInt(existing, "DecorKind", d.DecorKind, 0);
@@ -809,16 +809,22 @@ public static class N3ProjWriter
     /// <summary>
     /// 配色 1 箇所をマージする（塗りの種類・単色・マーカー・画像を丸ごと）。変わった項目があれば true。
     /// 未指定の項目（単色の色が空、マーカーが空、塗りの種類が画像でない箇所の画像のパスが空）はベースのまま残す。
+    /// 単色の色が空で不透明度が 100% でなければ、ベースの色のまま不透明度だけを書く。
     /// ニコカラメーカーは塗りの種類を戻すと前のマーカー・画像を使うので、見えていないデータも消さない。
     /// </summary>
-    private static bool MergeBrush(JsonObject b, N3Brush src, string ver)
+    /// <param name="defaultColor">ベースに単色が無いときに使う色（新規の既定色）。</param>
+    private static bool MergeBrush(JsonObject b, N3Brush src, string defaultColor, string ver)
     {
         bool changed = SetInt(b, "SelectedBrushTypeIndex", src.Type, 0);
 
-        // 単色の色が未指定ならベースの単色（不透明度を含む）を残す
+        // 単色の色が未指定ならベースの単色を残す（不透明度だけ指定されていれば、それだけ書く）
         string color = N3FontSet.NormalizeWeb16(src.Color);
         int alpha = Math.Clamp(src.AlphaPercent, 0, 100);
-        if (color.Length > 0)
+        if (color.Length == 0)
+        {
+            if (alpha != 100) changed |= SetSolidAlpha(b, alpha, defaultColor, ver);
+        }
+        else
         {
             if (b["SolidColor"] is not JsonObject sc)
             {
@@ -849,6 +855,29 @@ public static class N3ProjWriter
             changed |= SetInt(b, "BitmapScale", src.BitmapScale, 100);
         }
         return changed;
+    }
+
+    /// <summary>単色の不透明度だけを書く（色はベースのまま。ベースに単色が無ければ <paramref name="defaultColor"/>）。書いたら true。</summary>
+    private static bool SetSolidAlpha(JsonObject b, int alpha, string defaultColor, string ver)
+    {
+        if (b["SolidColor"] is not JsonObject sc)
+        {
+            b["SolidColor"] = ColorBind(defaultColor, ver, alpha);
+            return true;
+        }
+        var (baseColor, baseAlpha) = N3FontJson.SolidColorOf(sc);
+        if (baseAlpha == alpha) return false;
+        if (sc["DxColor"] is JsonObject dx)
+        {
+            dx["A"] = alpha / 100f;
+        }
+        else
+        {
+            N3FontSet.TryParseWeb16(baseColor.Length > 0 ? baseColor : defaultColor, out byte r, out byte g, out byte bl);
+            sc["DxColor"] = Color4(r / 255f, g / 255f, bl / 255f, alpha / 100f);
+        }
+        Touch(sc, ver);
+        return true;
     }
 
     /// <summary>フォント設定タブ 1 つ分を新規に作る（配色 8 件・フォントフェース 6 件）。</summary>

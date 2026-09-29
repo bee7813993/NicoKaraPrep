@@ -156,10 +156,13 @@ public sealed class N3Brush
     /// <summary>画像の拡大率 %。</summary>
     public int BitmapScale { get; set; } = 100;
 
-    /// <summary>何も指定していない箇所か（書き出しのマージでベースの値を維持する）。色が 16 進 6 桁でなければ未指定とみなす。</summary>
+    /// <summary>
+    /// 何も指定していない箇所か（書き出しのマージでベースの値を維持する）。色が 16 進 6 桁でなければ未指定とみなす。
+    /// 色が未指定でも不透明度が 100% でなければ指定ありとする（マージではベースの色のまま不透明度を書く。新規では既定色にその不透明度）。
+    /// </summary>
     [JsonIgnore]
     public bool IsUnset =>
-        Type == TypeSolid && !N3FontSet.IsValidWeb16(Color) && Stops.Count == 0 && BitmapPath.Length == 0;
+        Type == TypeSolid && !N3FontSet.IsValidWeb16(Color) && AlphaPercent == 100 && Stops.Count == 0 && BitmapPath.Length == 0;
 
     /// <summary>ニコカラメーカーが新規の箇所に入れるマーカー（0 白 / 0.5 灰 / 1 灰）。</summary>
     public static List<N3GradientStop> DefaultStops() => new()
