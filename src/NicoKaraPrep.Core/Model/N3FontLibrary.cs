@@ -324,7 +324,8 @@ public static class N3FontLibrary
             }
             if (b.Type is N3Brush.TypeGradient or N3Brush.TypeMilleFeuille)
             {
-                if (b.Stops.Any(s => s.Position < 0 || s.Position > 1))
+                // NaN（比較が常に false）も範囲外として報告する（設定の保存で例外になるため）
+                if (b.Stops.Any(s => !(s.Position >= 0 && s.Position <= 1)))
                 {
                     Add(N3FontIssueKind.StopOutOfRange, IssueSeverity.Error, $"{label}のマーカーの位置が 0〜100% の範囲外です", i);
                 }

@@ -315,6 +315,19 @@ public class N3FontLibraryTests
         Assert.Contains(issues, i => i.Message.Contains("ワイプ後の文字の画像が指定されていません"));
     }
 
+    [Fact]
+    public void 検証_マーカーの位置が数値でなければ範囲外()
+    {
+        foreach (double position in new[] { double.NaN, double.PositiveInfinity })
+        {
+            var f = new N3FontSet { Name = "a" };
+            f.Detail.Brushes[1].Type = N3Brush.TypeGradient;
+            f.Detail.Brushes[1].Stops = new List<N3GradientStop> { new() { Position = 0 }, new() { Position = position } };
+            var issue = Assert.Single(N3FontLibrary.Validate(new[] { f }, Array.Empty<string>()));
+            Assert.Equal((N3FontIssueKind.StopOutOfRange, 1), (issue.Kind, issue.BrushIndex));
+        }
+    }
+
     // ------------------------------------------------------------ 配色の一括操作
 
     private static N3FontDetail Numbered()
