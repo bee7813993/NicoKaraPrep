@@ -195,6 +195,9 @@ public sealed partial class MainWindow : Window
             };
             timer.Start();
         }
+
+        // デバッグ用: フォントのプレビューを確かめる画面を開く（--debug-font-preview [n3proj のパス]）
+        StartFontPreviewDebugIfRequested(args);
     }
 
     private static void DebugLog(string message)
