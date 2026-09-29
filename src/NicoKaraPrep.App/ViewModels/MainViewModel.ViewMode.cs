@@ -18,7 +18,11 @@ public enum MainViewMode
 /// <summary>メイン画面のビューの状態（切り替えの処理は MainWindow.SwitchView）。</summary>
 public partial class MainViewModel
 {
-    /// <summary>今表示しているビュー。</summary>
+    /// <summary>
+    /// 今表示しているビュー。読み取り専用として扱い、変更は必ず MainWindow.SwitchView から行う
+    /// （ここを直接書き換えると切り替えの部品が追従するだけで、表示の入れ替えもビューの出入りの処理も行われず、
+    /// 見た目と状態が食い違う）。
+    /// </summary>
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(ViewModeLabel))]
     private MainViewMode viewMode = MainViewMode.Lines;
