@@ -40,6 +40,7 @@ public sealed partial class MainWindow : Window
 
         RestoreWindowBounds();
         Closed += (_, _) => SaveWindowBounds();
+        InitializeViewSwitching();
 
         _validateTimer = DispatcherQueue.GetForCurrentThread().CreateTimer();
         _validateTimer.Interval = TimeSpan.FromMilliseconds(400);
@@ -122,7 +123,7 @@ public sealed partial class MainWindow : Window
             timer.Tick += (_, _) =>
             {
                 DebugLog("絵文字挿入ビューを自動オープンします");
-                EmojiModeToggle.IsChecked = true;
+                SwitchView(MainViewMode.EmojiInsert);
             };
             timer.Start();
         }
@@ -152,13 +153,13 @@ public sealed partial class MainWindow : Window
                 switch (step)
                 {
                     case 1:
-                        EmojiModeToggle.IsChecked = true;
+                        SwitchView(MainViewMode.EmojiInsert);
                         break;
                     case 2:
                         InsertEmojiStringInView(ViewModel.Settings.PlaceholderChar);
                         break;
                     case 3:
-                        EmojiModeToggle.IsChecked = false;
+                        SwitchView(MainViewMode.Lines);
                         break;
                     case 4:
                         SelectLineAt(0);
@@ -294,7 +295,7 @@ public sealed partial class MainWindow : Window
             if (await dialog.ShowAsync() != ContentDialogResult.Primary) return;
         }
 
-        if (InsertViewActive) EmojiModeToggle.IsChecked = false;
+        if (InsertViewActive) SwitchView(MainViewMode.Lines);
         TryRun(ViewModel.NewDocument);
         CloseMedia();
         LineEditor.Text = "";
@@ -1103,7 +1104,7 @@ public sealed partial class MainWindow : Window
             Player.Source = Windows.Media.Core.MediaSource.CreateFromUri(new Uri(path));
             ViewModel.MediaPath = path;
             ViewModel.SaveProject();
-            MediaPanel.Visibility = Visibility.Visible;
+            if (ViewModel.ViewMode != MainViewMode.FontSettings) MediaPanel.Visibility = Visibility.Visible; // フォント設定ビューでは隠したまま
             MediaPanel.IsExpanded = true;
             ViewModel.StatusText = $"メディアを開きました: {Path.GetFileName(path)}（Ctrl+Space で再生/一時停止）";
 
@@ -1221,16 +1222,8 @@ public sealed partial class MainWindow : Window
 
     // ------------------------------------------------ 絵文字挿入ビュー
 
-    private bool InsertViewActive => InsertView.Visibility == Visibility.Visible;
-
     private bool _insertFollow;
     private int _lastInsertCaret = -1;
-
-    private void OnEmojiModeChanged(object sender, RoutedEventArgs e)
-    {
-        if (EmojiModeToggle.IsChecked == true) EnterInsertView();
-        else ExitInsertView();
-    }
 
     private bool _allowInsertViewTextChange;
     private string _insertViewText = "";
@@ -1271,11 +1264,10 @@ public sealed partial class MainWindow : Window
         }
     }
 
+    /// <summary>絵文字挿入ビューに入る（SwitchView から、表示を入れ替えたあとに呼ぶ）。</summary>
     private void EnterInsertView()
     {
         SetInsertEditorText(ViewModel.BuildInsertViewText());
-        NormalView.Visibility = Visibility.Collapsed;
-        InsertView.Visibility = Visibility.Visible;
 
         int caret = ViewModel.SelectedLine is { } sel ? ViewModel.GetInsertViewLineStart(sel.Index) : 0;
         InsertEditor.Focus(FocusState.Programmatic);
@@ -1285,22 +1277,18 @@ public sealed partial class MainWindow : Window
         ViewModel.StatusText = "絵文字挿入ビュー: 1–0 / Q–P で挿入。キー操作は上部の凡例参照（ファイル > キー割り当て で変更可）、Esc で終了";
     }
 
+    /// <summary>絵文字挿入ビューを抜ける（SwitchView から、表示を入れ替えたあとに呼ぶ）。</summary>
     private void ExitInsertView()
     {
-        if (!InsertViewActive) return;
-
         // カーソルのあった行を行リストの選択に引き継ぐ
         int caretLine = ViewModel.MapInsertViewOffset(InsertEditor.SelectionStart) is var (li, _) ? li : -1;
 
-        InsertView.Visibility = Visibility.Collapsed;
-        NormalView.Visibility = Visibility.Visible;
         _insertFollow = false;
         UpdateFollowIndicator();
         if (caretLine >= 0) SelectLineAt(caretLine);
         LineEditor.Text = ViewModel.SelectedLine?.RawText ?? "";
         RenderPreview();
         ScheduleValidation();
-        ViewModel.StatusText = "絵文字挿入ビューを終了しました";
     }
 
     // ------------------------------------------------ 挿入ビューのキー割り当て
@@ -1434,7 +1422,7 @@ public sealed partial class MainWindow : Window
         switch (e.Key)
         {
             case Windows.System.VirtualKey.Escape:
-                EmojiModeToggle.IsChecked = false;
+                SwitchView(MainViewMode.Lines);
                 e.Handled = true;
                 return;
             case Windows.System.VirtualKey.Back:

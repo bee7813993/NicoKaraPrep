@@ -1,0 +1,21 @@
+﻿<UserControl
+    x:Class="NicoKaraPrep.App.Views.FontSettingsView"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    KeyDown="OnKeyDown">
+
+    <!-- ニコカラメーカー3 のフォント設定ビュー（メインウィンドウのメディア再生・メイン・チェック結果の領域に重ねて表示） -->
+    <Grid Background="{ThemeResource ApplicationPageBackgroundThemeBrush}">
+        <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center" Spacing="16">
+            <TextBlock
+                Text="フォント設定ビュー（作成中）"
+                Style="{ThemeResource SubtitleTextBlockStyle}"
+                HorizontalAlignment="Center" />
+            <Button
+                x:Name="BackButton"
+                Content="行リストへ戻る (Esc)"
+                HorizontalAlignment="Center"
+                Click="OnBackClick" />
+        </StackPanel>
+    </Grid>
+</UserControl>
