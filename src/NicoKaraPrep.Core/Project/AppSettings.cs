@@ -105,6 +105,9 @@ public sealed class AppSettings
     /// <summary>メディアプレイヤーの表示高さ px（ドラッグハンドルで変更）。</summary>
     public double PlayerHeightPx { get; set; } = 260;
 
+    /// <summary>フォント設定ビューの左の一覧の幅 px（一覧と編集欄のあいだのつまみで変更）。</summary>
+    public double FontListWidthPx { get; set; } = 300;
+
     /// <summary>前回ファイルを保存（エクスポート）したフォルダ。</summary>
     public string LastSaveFolder { get; set; } = "";
 

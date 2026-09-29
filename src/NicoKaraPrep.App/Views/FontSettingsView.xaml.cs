@@ -48,9 +48,28 @@ public sealed partial class FontSettingsView : UserControl
     /// <summary>ツリーの中の一覧（選んだ節まで表示を送るのに使う）。</summary>
     private ListView? _treeList;
 
+    /// <summary>左の一覧の幅の既定・最小（px）。</summary>
+    private const double DefaultListWidth = 300;
+    private const double MinListWidth = 220;
+
+    /// <summary>編集欄に残す最小の幅と、右の列の幅（px。一覧を広げすぎないように）。</summary>
+    private const double MinEditorWidth = 360;
+    private const double RightColumnWidth = 300;
+
+    /// <summary>つまみのドラッグを始めたときの一覧の幅。</summary>
+    private double _listWidthAtDragStart;
+
     public FontSettingsView()
     {
         InitializeComponent();
+
+        // 一覧と編集欄のあいだのつまみ: ドラッグ中は幅だけ変え、離したら保存する
+        ListResizeGrip.DragStarted += (_, _) => _listWidthAtDragStart = ListColumn.Width.Value;
+        ListResizeGrip.Dragging += (_, dx) => SetListWidth(_listWidthAtDragStart + dx, save: false);
+        ListResizeGrip.DragCompleted += (_, _) => SetListWidth(ListColumn.Width.Value, save: true);
+        ListResizeGrip.Stepped += (_, dx) => SetListWidth(ListColumn.Width.Value + dx, save: true);
+        ListResizeGrip.ResetRequested += (_, _) => SetListWidth(DefaultListWidth, save: true);
+
         Loaded += (_, _) =>
         {
             // 画面に載る前に選んだ節は、ツリーの行ができてから選び直して見せる
@@ -103,6 +122,9 @@ public sealed partial class FontSettingsView : UserControl
         // 枠の高さは 220px なので、画面の高さ 1080 基準のままでは文字が小さすぎる。1/4（270）を基準にして見やすくする
         // フォントを選ぶ画面をすぐ開けるよう、システムのフォントの一覧を裏で読み込んでおく
         _ = NicoKaraPrep.App.Services.SystemFontCatalog.LoadAsync();
+
+        // 保存した一覧の幅（画面の広さに合わせた上限は、つまみを動かしたときにかける）
+        ListColumn.Width = new GridLength(Math.Clamp(ViewModel.ListWidth, MinListWidth, 1600));
 
         _preview = new FontPreviewControl { ReferenceHeight = 270 };
         PreviewHost.Child = _preview;
@@ -253,6 +275,22 @@ public sealed partial class FontSettingsView : UserControl
 
     private void OnRedoInvoked(KeyboardAccelerator sender, KeyboardAcceleratorInvokedEventArgs args) =>
         args.Handled = TryRedo();
+
+    // ------------------------------------------------------------ 一覧の幅
+
+    /// <summary>
+    /// 左の一覧の幅を変える（最小 220px。編集欄に 360px と右の列が残る幅まで）。save なら設定に保存する。
+    /// </summary>
+    private void SetListWidth(double width, bool save)
+    {
+        double available = RootGrid.ActualWidth - RootGrid.Padding.Left - RootGrid.Padding.Right
+            - RootGrid.ColumnDefinitions[1].Width.Value - RootGrid.ColumnDefinitions[3].Width.Value
+            - RightColumnWidth - MinEditorWidth;
+        double max = Math.Max(MinListWidth, available);
+        width = Math.Clamp(width, MinListWidth, max);
+        ListColumn.Width = new GridLength(width);
+        if (save) ViewModel?.SaveListWidth(width);
+    }
 
     // ------------------------------------------------------------ 一覧（ツリー）
 

@@ -68,7 +68,8 @@
         </Style>
         <!-- 左の一覧の階層の節 1 つ（フォント設定は 1 行に色見本・名前・印・使用文字数、フォルダ・まとまりは記号・名前・中の数） -->
         <DataTemplate x:Key="FontTreeItemTemplate" x:DataType="vm:FontTreeItem">
-            <Grid MinHeight="26">
+            <!-- 右の余白は縦のスクロールバーの分（数や印に重ならないように） -->
+            <Grid MinHeight="26" Margin="0,0,14,0">
                 <Grid ColumnSpacing="6" Visibility="{x:Bind IsFont}" ToolTipService.ToolTip="{x:Bind Font.ToolTip, Mode=OneWay}">
                     <Grid.ColumnDefinitions>
                         <ColumnDefinition Width="Auto" />
@@ -105,11 +106,13 @@
         </DataTemplate>
     </UserControl.Resources>
 
-    <!-- 3 列: 左 = 一覧 / 中央 = 編集 / 右 = プレビュー・使用状況・検証 -->
-    <Grid Background="{ThemeResource ApplicationPageBackgroundThemeBrush}" Padding="12,8,12,8" ColumnSpacing="12">
+    <!-- 3 列: 左 = 一覧 / 中央 = 編集 / 右 = プレビュー・使用状況・検証。一覧と編集のあいだのつまみで一覧の幅を変えられる -->
+    <Grid x:Name="RootGrid" Background="{ThemeResource ApplicationPageBackgroundThemeBrush}" Padding="12,8,12,8">
         <Grid.ColumnDefinitions>
-            <ColumnDefinition Width="300" />
+            <ColumnDefinition x:Name="ListColumn" Width="300" />
+            <ColumnDefinition Width="12" />
             <ColumnDefinition Width="*" />
+            <ColumnDefinition Width="12" />
             <ColumnDefinition Width="300" />
         </Grid.ColumnDefinitions>
 
@@ -263,11 +266,36 @@
                     </DropDownButton.Flyout>
                 </DropDownButton>
             </StackPanel>
-            <TextBlock x:Name="ListSummaryText" Grid.Row="7" Text="{x:Bind ViewModel.ListSummary, Mode=OneWay}" Style="{StaticResource Note}" />
+            <StackPanel Grid.Row="7" Spacing="2">
+                <TextBlock x:Name="ListSummaryText" Text="{x:Bind ViewModel.ListSummary, Mode=OneWay}" Style="{StaticResource Note}" />
+                <TextBlock
+                    x:Name="SaveNoteText"
+                    Text="{x:Bind ViewModel.SaveNote, Mode=OneWay}"
+                    Style="{StaticResource Note}"
+                    ToolTipService.ToolTip="{x:Bind ViewModel.SaveNoteToolTip}" />
+            </StackPanel>
         </Grid>
 
+        <!-- 一覧と編集欄のあいだのつまみ（左右にドラッグ・← → キーで一覧の幅を変える。ダブルクリックで元の幅） -->
+        <fs:ColumnResizeGrip
+            x:Name="ListResizeGrip"
+            Grid.Column="1"
+            AutomationProperties.Name="一覧の幅"
+            ToolTipService.ToolTip="ドラッグで一覧の幅を変えます（選んで ← → キーでも変えられます。ダブルクリックで元の幅に戻します）">
+            <Grid Background="Transparent">
+                <Rectangle
+                    Width="4"
+                    Height="48"
+                    RadiusX="2"
+                    RadiusY="2"
+                    HorizontalAlignment="Center"
+                    VerticalAlignment="Center"
+                    Fill="{ThemeResource ControlStrongFillColorDefaultBrush}" />
+            </Grid>
+        </fs:ColumnResizeGrip>
+
         <!-- ================= 中央: 編集 ================= -->
-        <Grid Grid.Column="1">
+        <Grid Grid.Column="2">
             <TextBlock
                 x:Name="NoFontText"
                 Visibility="{x:Bind ViewModel.HasNoSelection, Mode=OneWay}"
@@ -509,7 +537,7 @@
         </Grid>
 
         <!-- ================= 右: プレビュー・使用状況・検証 ================= -->
-        <Grid Grid.Column="2" RowSpacing="8">
+        <Grid Grid.Column="4" RowSpacing="8">
             <Grid.RowDefinitions>
                 <RowDefinition Height="Auto" />
                 <RowDefinition Height="Auto" />

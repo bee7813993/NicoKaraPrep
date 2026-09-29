@@ -50,6 +50,7 @@ public sealed partial class FontSettingsViewModel : ObservableObject
         _saveTimer.Tick += (_, _) => FlushPendingSave();
 
         N3FontLibrary.EnsureIds(_main.Settings.N3FontSets);
+        if (_main.Settings.LoadFailed) SaveNote = NotSavedNote;
         _main.DocumentReplacing += (_, _) => FlushPendingSave();
         _main.CommonFontSetsReplacing += (_, _) => OnCommonFontSetsReplacing();
         _main.CommonFontSetsReplaced += (_, _) => OnCommonFontSetsReplaced();
@@ -611,6 +612,30 @@ public sealed partial class FontSettingsViewModel : ObservableObject
 
     // ------------------------------------------------------------ 保存
 
+    /// <summary>設定ファイルを読み込めず、保存を止めているときの一覧の下の表示。</summary>
+    private const string NotSavedNote = "設定ファイルを読み込めなかったため、フォント設定は保存されません（起動したときのステータスバーの説明を見てください）";
+
+    /// <summary>一覧の下に出す保存の状態（アプリ共通のフォント設定とフォルダ分けは、変更するとすぐに自動で保存する）。</summary>
+    [ObservableProperty]
+    private string saveNote = "フォント設定とフォルダ分けは、変更するとすぐに自動で保存されます";
+
+    /// <summary>保存の状態の説明（ツールチップ）。</summary>
+    public string SaveNoteToolTip =>
+        "アプリ共通のフォント設定とフォルダ分け（階層・折りたたみ）は、変更するとすぐに設定ファイル（%APPDATA%\\NicoKaraPrep\\settings.json）へ自動で保存されます。" +
+        "保存の操作はいりません。歌詞ファイルを保存しなくても残ります。\n" +
+        "この曲専用のフォント設定は、歌詞ファイルの隣の .tttproj に保存されます（歌詞ファイルを保存していないあいだは保存されません）。";
+
+    /// <summary>左の一覧の幅（px。設定に保存したもの）。</summary>
+    public double ListWidth => _main.Settings.FontListWidthPx;
+
+    /// <summary>左の一覧の幅を設定に保存する（編集と同じく、まとめて保存する）。</summary>
+    public void SaveListWidth(double width)
+    {
+        if (Math.Abs(_main.Settings.FontListWidthPx - width) < 0.5) return;
+        _main.Settings.FontListWidthPx = width;
+        MarkDirty(song: false);
+    }
+
     /// <summary>保存を予約する（300ms 以内の変更はまとめて保存する）。</summary>
     private void MarkDirty(bool song)
     {
@@ -630,6 +655,9 @@ public sealed partial class FontSettingsViewModel : ObservableObject
             {
                 _commonDirty = false;
                 _main.Settings.Save();
+                SaveNote = _main.Settings.LoadFailed
+                    ? NotSavedNote
+                    : $"フォント設定とフォルダ分けを自動で保存しました（{DateTime.Now:HH:mm:ss}）";
             }
             if (_songDirty)
             {
