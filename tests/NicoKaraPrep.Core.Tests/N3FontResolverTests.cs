@@ -164,6 +164,19 @@ public class N3FontResolverTests
     }
 
     [Fact]
+    public void 集計_複数の文書ではフォントを使う行も前の文書のフォントを引き継いで返す()
+    {
+        var main = Doc("[00:01:00]（麻衣）あ[00:02:00]", "[00:03:00]（のりこ）い[00:04:00]");
+        var chorus = Doc("[00:05:00]う[00:06:00]", "", "[00:07:00]（麻衣）え[00:08:00]");
+        var docs = new[] { main, chorus };
+        Assert.Equal(new[] { (0, 1), (1, 0) }, N3FontResolver.LinesUsing(docs, Names, null, true, "（のりこ）"));
+        Assert.Equal(new[] { (0, 0), (1, 2) }, N3FontResolver.LinesUsing(docs, Names, null, true, "（麻衣）"));
+        Assert.Empty(N3FontResolver.LinesUsing(docs, Names, null, true, "標準"));
+        // 文書 1 つだけなら既定のフォントから始める
+        Assert.Equal(new[] { 0 }, N3FontResolver.LinesUsing(chorus, Names, null, true, "標準"));
+    }
+
+    [Fact]
     public void 集計_フォントを使う行の一覧()
     {
         var doc = Doc(

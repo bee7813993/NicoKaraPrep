@@ -104,9 +104,17 @@ public sealed class N3FontResolver
     }
 
     /// <summary>指定したフォント設定が 1 文字以上に適用される行の番号（doc.Lines の添字、昇順）。</summary>
-    public static IReadOnlyList<int> LinesUsing(LyricsDocument doc, IReadOnlyList<string> fontNames, string? defaultName, bool continueAcrossLines, string fontName)
+    public static IReadOnlyList<int> LinesUsing(LyricsDocument doc, IReadOnlyList<string> fontNames, string? defaultName, bool continueAcrossLines, string fontName) =>
+        LinesUsing(new[] { doc }, fontNames, defaultName, continueAcrossLines, fontName).Select(p => p.Line).ToList();
+
+    /// <summary>
+    /// 複数の文書（歌詞設定タブ）を順に通したときに、指定したフォント設定が 1 文字以上に適用される行
+    /// （文書の番号と doc.Lines の添字。文書順・行順）。n3proj の書き出しや複数の文書の <see cref="CountUsage(IEnumerable{LyricsDocument}, IReadOnlyList{string}, string?, bool)"/>
+    /// と同じく、前の文書の最後のフォントを次の文書へ引き継ぐ。
+    /// </summary>
+    public static IReadOnlyList<(int Document, int Line)> LinesUsing(IEnumerable<LyricsDocument> documents, IReadOnlyList<string> fontNames, string? defaultName, bool continueAcrossLines, string fontName)
     {
-        var result = new List<int>();
+        var result = new List<(int Document, int Line)>();
         int target = -1;
         for (int i = 0; i < fontNames.Count; i++)
         {
@@ -119,19 +127,24 @@ public sealed class N3FontResolver
         if (target < 0) return result;
 
         var resolver = new N3FontResolver(fontNames, defaultName, continueAcrossLines);
-        for (int li = 0; li < doc.Lines.Count; li++)
+        int di = 0;
+        foreach (var doc in documents)
         {
-            var line = doc.Lines[li];
-            if (line.IsEmpty) continue;
-            int[] fonts = resolver.Resolve(line);
-            for (int i = 0; i < fonts.Length; i++)
+            for (int li = 0; li < doc.Lines.Count; li++)
             {
-                if (fonts[i] == target && !line.Chars[i].IsSpacer)
+                var line = doc.Lines[li];
+                if (line.IsEmpty) continue;
+                int[] fonts = resolver.Resolve(line);
+                for (int i = 0; i < fonts.Length; i++)
                 {
-                    result.Add(li);
-                    break;
+                    if (fonts[i] == target && !line.Chars[i].IsSpacer)
+                    {
+                        result.Add((di, li));
+                        break;
+                    }
                 }
             }
+            di++;
         }
         return result;
     }
