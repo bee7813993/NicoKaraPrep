@@ -6,7 +6,7 @@
     xmlns:core="using:NicoKaraPrep.Core.Model"
     xmlns:val="using:NicoKaraPrep.Core.Validation">
 
-    <Grid>
+    <Grid KeyDown="OnRootKeyDown">
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto" />
             <RowDefinition Height="Auto" />
@@ -15,147 +15,202 @@
             <RowDefinition Height="Auto" />
         </Grid.RowDefinitions>
 
-        <!-- メニュー -->
-        <MenuBar Grid.Row="0">
-            <MenuBarItem Title="ファイル(F)" AccessKey="F">
-                <MenuFlyoutItem Text="新規作成（ファイルを閉じる）" Click="OnNewClick">
-                    <MenuFlyoutItem.KeyboardAccelerators>
-                        <KeyboardAccelerator Modifiers="Control" Key="N" />
-                    </MenuFlyoutItem.KeyboardAccelerators>
-                </MenuFlyoutItem>
-                <MenuFlyoutItem Text="開く..." Click="OnOpenClick">
-                    <MenuFlyoutItem.KeyboardAccelerators>
-                        <KeyboardAccelerator Modifiers="Control" Key="O" />
-                    </MenuFlyoutItem.KeyboardAccelerators>
-                </MenuFlyoutItem>
-                <MenuFlyoutSubItem x:Name="RecentFilesMenu" Text="最近使用したファイル" />
-                <MenuFlyoutItem Text="ニコカラメーカー3 プロジェクト(n3proj)を読み込み..." Click="OnImportN3ProjClick" />
-                <MenuFlyoutSeparator />
-                <MenuFlyoutItem Text="上書き保存（タブ含む全行）" Click="OnSaveClick">
-                    <MenuFlyoutItem.KeyboardAccelerators>
-                        <KeyboardAccelerator Modifiers="Control" Key="S" />
-                    </MenuFlyoutItem.KeyboardAccelerators>
-                </MenuFlyoutItem>
-                <MenuFlyoutItem Text="名前を付けて保存（タブ含む全行）..." Click="OnSaveAsClick" />
-                <MenuFlyoutSeparator />
-                <MenuFlyoutItem Text="表示中のタブを上書き保存" Click="OnSaveTabOverwriteClick">
-                    <MenuFlyoutItem.KeyboardAccelerators>
-                        <KeyboardAccelerator Modifiers="Control,Shift" Key="S" />
-                    </MenuFlyoutItem.KeyboardAccelerators>
-                </MenuFlyoutItem>
-                <MenuFlyoutItem Text="表示中のタブを別ファイルへ保存..." Click="OnSaveTabAsClick" />
-                <MenuFlyoutItem Text="表示中のタブへファイルを読み込み（差し替え）..." Click="OnReloadTabClick" />
-                <MenuFlyoutSeparator />
-                <MenuFlyoutItem Text="クリップボードから貼り付け" Click="OnPasteClick">
-                    <MenuFlyoutItem.KeyboardAccelerators>
-                        <KeyboardAccelerator Modifiers="Control,Shift" Key="V" />
-                    </MenuFlyoutItem.KeyboardAccelerators>
-                </MenuFlyoutItem>
-                <MenuFlyoutItem Text="テキスト編集モード形式でコピー" Click="OnCopyClick">
-                    <MenuFlyoutItem.KeyboardAccelerators>
-                        <KeyboardAccelerator Modifiers="Control,Shift" Key="C" />
-                    </MenuFlyoutItem.KeyboardAccelerators>
-                </MenuFlyoutItem>
-                <MenuFlyoutSeparator />
-                <MenuFlyoutItem Text="設定..." Click="OnSettingsClick" />
-                <MenuFlyoutItem Text="キー割り当て（挿入ビュー）..." Click="OnKeyBindingsClick" />
-            </MenuBarItem>
-            <MenuBarItem Title="編集(E)" AccessKey="E">
-                <MenuFlyoutItem Text="元に戻す" Click="OnUndoClick">
-                    <MenuFlyoutItem.KeyboardAccelerators>
-                        <KeyboardAccelerator Modifiers="Control" Key="Z" />
-                    </MenuFlyoutItem.KeyboardAccelerators>
-                </MenuFlyoutItem>
-                <MenuFlyoutItem Text="やり直し" Click="OnRedoClick">
-                    <MenuFlyoutItem.KeyboardAccelerators>
-                        <KeyboardAccelerator Modifiers="Control" Key="Y" />
-                    </MenuFlyoutItem.KeyboardAccelerators>
-                </MenuFlyoutItem>
-                <MenuFlyoutSeparator />
-                <MenuFlyoutItem Text="カーソル位置で行分割" Click="OnSplitLineClick">
-                    <MenuFlyoutItem.KeyboardAccelerators>
-                        <KeyboardAccelerator Modifiers="Control" Key="Enter" />
-                    </MenuFlyoutItem.KeyboardAccelerators>
-                </MenuFlyoutItem>
-                <MenuFlyoutItem Text="次の行と結合" Click="OnJoinLineClick">
-                    <MenuFlyoutItem.KeyboardAccelerators>
-                        <KeyboardAccelerator Modifiers="Control" Key="J" />
-                    </MenuFlyoutItem.KeyboardAccelerators>
-                </MenuFlyoutItem>
-                <MenuFlyoutItem Text="次の行と結合（スペースを挟む）" Click="OnJoinLineWithSpaceClick">
-                    <MenuFlyoutItem.KeyboardAccelerators>
-                        <KeyboardAccelerator Modifiers="Control,Shift" Key="J" />
-                    </MenuFlyoutItem.KeyboardAccelerators>
-                </MenuFlyoutItem>
-                <MenuFlyoutSeparator />
-                <MenuFlyoutItem Text="空行（ページ区切り）を下に挿入" Click="OnInsertEmptyLineClick">
-                    <MenuFlyoutItem.KeyboardAccelerators>
-                        <KeyboardAccelerator Modifiers="Control" Key="K" />
-                    </MenuFlyoutItem.KeyboardAccelerators>
-                </MenuFlyoutItem>
-                <MenuFlyoutItem Text="選択行を削除" Click="OnDeleteLinesClick">
-                    <MenuFlyoutItem.KeyboardAccelerators>
-                        <KeyboardAccelerator Modifiers="Control" Key="Delete" />
-                    </MenuFlyoutItem.KeyboardAccelerators>
-                </MenuFlyoutItem>
-            </MenuBarItem>
-            <MenuBarItem Title="エクスポート(X)" AccessKey="X">
-                <MenuFlyoutItem Text="選択行を新しいタブへ分離" Click="OnSplitToTabClick">
-                    <MenuFlyoutItem.KeyboardAccelerators>
-                        <KeyboardAccelerator Modifiers="Control" Key="T" />
-                    </MenuFlyoutItem.KeyboardAccelerators>
-                </MenuFlyoutItem>
-                <MenuFlyoutItem Text="タブ分離を解除（すべてメインへ戻す）" Click="OnResetTabsClick" />
-                <MenuFlyoutSeparator />
-                <MenuFlyoutItem Text="選択行をエクスポート..." Click="OnExportFileClick">
-                    <MenuFlyoutItem.KeyboardAccelerators>
-                        <KeyboardAccelerator Modifiers="Control" Key="E" />
-                    </MenuFlyoutItem.KeyboardAccelerators>
-                </MenuFlyoutItem>
-                <MenuFlyoutItem Text="選択行をクリップボードへエクスポート" Click="OnExportClipboardClick" />
-                <MenuFlyoutSeparator />
-                <MenuFlyoutItem Text="未エクスポート行をすべて選択" Click="OnSelectUnexportedClick" />
-                <MenuFlyoutItem Text="選択行の済マークを解除" Click="OnClearMarksClick" />
-                <MenuFlyoutSeparator />
-                <MenuFlyoutItem Text="ニコカラメーカー3 プロジェクト(n3proj)を書き出し..." Click="OnExportN3ProjClick" />
-                <MenuFlyoutItem Text="ニコカラメーカー3 のフォント設定を編集..." Click="OnN3FontSetsClick" />
-                <MenuFlyoutItem Text="選択行の表示時刻・フォント指定を解除" Click="OnClearN3OverridesClick" />
-            </MenuBarItem>
-            <MenuBarItem Title="再生(P)" AccessKey="P">
-                <MenuFlyoutItem Text="メディアを開く..." Click="OnOpenMediaClick" />
-                <MenuFlyoutItem Text="再生 / 一時停止" Click="OnPlayPauseClick">
-                    <MenuFlyoutItem.KeyboardAccelerators>
-                        <KeyboardAccelerator Modifiers="Control" Key="Space" />
-                    </MenuFlyoutItem.KeyboardAccelerators>
-                </MenuFlyoutItem>
-                <MenuFlyoutItem Text="5秒戻る" Click="OnSeekBackClick">
-                    <MenuFlyoutItem.KeyboardAccelerators>
-                        <KeyboardAccelerator Modifiers="Control" Key="Left" />
-                    </MenuFlyoutItem.KeyboardAccelerators>
-                </MenuFlyoutItem>
-                <MenuFlyoutItem Text="5秒進む" Click="OnSeekForwardClick">
-                    <MenuFlyoutItem.KeyboardAccelerators>
-                        <KeyboardAccelerator Modifiers="Control" Key="Right" />
-                    </MenuFlyoutItem.KeyboardAccelerators>
-                </MenuFlyoutItem>
-                <ToggleMenuFlyoutItem x:Name="FollowToggle" Text="再生位置に追従してハイライト" IsChecked="True" />
-            </MenuBarItem>
-            <MenuBarItem Title="絵文字(G)" AccessKey="G">
-                <MenuFlyoutItem Text="絵文字リスト編集..." Click="OnEmojiListClick" />
-                <MenuFlyoutItem Text="絵文字タイムタグ再計算" Click="OnEmojiRetagClick" />
-            </MenuBarItem>
-            <MenuBarItem Title="チェック(C)" AccessKey="C">
-                <MenuFlyoutItem Text="今すぐチェック" Click="OnValidateClick">
-                    <MenuFlyoutItem.KeyboardAccelerators>
-                        <KeyboardAccelerator Key="F5" />
-                    </MenuFlyoutItem.KeyboardAccelerators>
-                </MenuFlyoutItem>
-            </MenuBarItem>
-            <MenuBarItem Title="テンプレート(T)" AccessKey="T">
-                <MenuFlyoutItem Text="テンプレートとして保存...（絵文字一式＋字幕フォント・チェック設定）" Click="OnSaveTemplateClick" />
-                <MenuFlyoutItem Text="テンプレートを読み込み..." Click="OnLoadTemplateClick" />
-            </MenuBarItem>
-        </MenuBar>
+        <!-- メニューとビューの切り替え -->
+        <Grid Grid.Row="0">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="Auto" />
+            </Grid.ColumnDefinitions>
+
+            <!-- メニュー -->
+            <MenuBar Grid.Column="0">
+                <MenuBarItem Title="ファイル(F)" AccessKey="F">
+                    <MenuFlyoutItem Text="新規作成（ファイルを閉じる）" Click="OnNewClick">
+                        <MenuFlyoutItem.KeyboardAccelerators>
+                            <KeyboardAccelerator Modifiers="Control" Key="N" />
+                        </MenuFlyoutItem.KeyboardAccelerators>
+                    </MenuFlyoutItem>
+                    <MenuFlyoutItem Text="開く..." Click="OnOpenClick">
+                        <MenuFlyoutItem.KeyboardAccelerators>
+                            <KeyboardAccelerator Modifiers="Control" Key="O" />
+                        </MenuFlyoutItem.KeyboardAccelerators>
+                    </MenuFlyoutItem>
+                    <MenuFlyoutSubItem x:Name="RecentFilesMenu" Text="最近使用したファイル" />
+                    <MenuFlyoutItem Text="ニコカラメーカー3 プロジェクト(n3proj)を読み込み..." Click="OnImportN3ProjClick" />
+                    <MenuFlyoutSeparator />
+                    <MenuFlyoutItem Text="上書き保存（タブ含む全行）" Click="OnSaveClick">
+                        <MenuFlyoutItem.KeyboardAccelerators>
+                            <KeyboardAccelerator Modifiers="Control" Key="S" />
+                        </MenuFlyoutItem.KeyboardAccelerators>
+                    </MenuFlyoutItem>
+                    <MenuFlyoutItem Text="名前を付けて保存（タブ含む全行）..." Click="OnSaveAsClick" />
+                    <MenuFlyoutSeparator />
+                    <MenuFlyoutItem Text="表示中のタブを上書き保存" Click="OnSaveTabOverwriteClick">
+                        <MenuFlyoutItem.KeyboardAccelerators>
+                            <KeyboardAccelerator Modifiers="Control,Shift" Key="S" />
+                        </MenuFlyoutItem.KeyboardAccelerators>
+                    </MenuFlyoutItem>
+                    <MenuFlyoutItem Text="表示中のタブを別ファイルへ保存..." Click="OnSaveTabAsClick" />
+                    <MenuFlyoutItem Text="表示中のタブへファイルを読み込み（差し替え）..." Click="OnReloadTabClick" />
+                    <MenuFlyoutSeparator />
+                    <MenuFlyoutItem Text="クリップボードから貼り付け" Click="OnPasteClick">
+                        <MenuFlyoutItem.KeyboardAccelerators>
+                            <KeyboardAccelerator Modifiers="Control,Shift" Key="V" />
+                        </MenuFlyoutItem.KeyboardAccelerators>
+                    </MenuFlyoutItem>
+                    <MenuFlyoutItem Text="テキスト編集モード形式でコピー" Click="OnCopyClick">
+                        <MenuFlyoutItem.KeyboardAccelerators>
+                            <KeyboardAccelerator Modifiers="Control,Shift" Key="C" />
+                        </MenuFlyoutItem.KeyboardAccelerators>
+                    </MenuFlyoutItem>
+                    <MenuFlyoutSeparator />
+                    <MenuFlyoutItem Text="設定..." Click="OnSettingsClick" />
+                    <MenuFlyoutItem Text="キー割り当て（挿入ビュー）..." Click="OnKeyBindingsClick" />
+                </MenuBarItem>
+                <MenuBarItem Title="編集(E)" AccessKey="E">
+                    <MenuFlyoutItem Text="元に戻す" Click="OnUndoClick">
+                        <MenuFlyoutItem.KeyboardAccelerators>
+                            <KeyboardAccelerator Modifiers="Control" Key="Z" />
+                        </MenuFlyoutItem.KeyboardAccelerators>
+                    </MenuFlyoutItem>
+                    <MenuFlyoutItem Text="やり直し" Click="OnRedoClick">
+                        <MenuFlyoutItem.KeyboardAccelerators>
+                            <KeyboardAccelerator Modifiers="Control" Key="Y" />
+                        </MenuFlyoutItem.KeyboardAccelerators>
+                    </MenuFlyoutItem>
+                    <MenuFlyoutSeparator />
+                    <MenuFlyoutItem Text="カーソル位置で行分割" Click="OnSplitLineClick">
+                        <MenuFlyoutItem.KeyboardAccelerators>
+                            <KeyboardAccelerator Modifiers="Control" Key="Enter" />
+                        </MenuFlyoutItem.KeyboardAccelerators>
+                    </MenuFlyoutItem>
+                    <MenuFlyoutItem Text="次の行と結合" Click="OnJoinLineClick">
+                        <MenuFlyoutItem.KeyboardAccelerators>
+                            <KeyboardAccelerator Modifiers="Control" Key="J" />
+                        </MenuFlyoutItem.KeyboardAccelerators>
+                    </MenuFlyoutItem>
+                    <MenuFlyoutItem Text="次の行と結合（スペースを挟む）" Click="OnJoinLineWithSpaceClick">
+                        <MenuFlyoutItem.KeyboardAccelerators>
+                            <KeyboardAccelerator Modifiers="Control,Shift" Key="J" />
+                        </MenuFlyoutItem.KeyboardAccelerators>
+                    </MenuFlyoutItem>
+                    <MenuFlyoutSeparator />
+                    <MenuFlyoutItem Text="空行（ページ区切り）を下に挿入" Click="OnInsertEmptyLineClick">
+                        <MenuFlyoutItem.KeyboardAccelerators>
+                            <KeyboardAccelerator Modifiers="Control" Key="K" />
+                        </MenuFlyoutItem.KeyboardAccelerators>
+                    </MenuFlyoutItem>
+                    <MenuFlyoutItem Text="選択行を削除" Click="OnDeleteLinesClick">
+                        <MenuFlyoutItem.KeyboardAccelerators>
+                            <KeyboardAccelerator Modifiers="Control" Key="Delete" />
+                        </MenuFlyoutItem.KeyboardAccelerators>
+                    </MenuFlyoutItem>
+                </MenuBarItem>
+                <MenuBarItem Title="表示(V)" AccessKey="V">
+                    <RadioMenuFlyoutItem
+                        x:Name="LinesViewMenuItem"
+                        Text="行リスト"
+                        GroupName="MainViewMode"
+                        Click="OnViewMenuClick" />
+                    <RadioMenuFlyoutItem
+                        x:Name="EmojiViewMenuItem"
+                        Text="絵文字挿入ビュー"
+                        GroupName="MainViewMode"
+                        Click="OnViewMenuClick">
+                        <RadioMenuFlyoutItem.KeyboardAccelerators>
+                            <KeyboardAccelerator Key="F2" Invoked="OnViewAcceleratorInvoked" />
+                        </RadioMenuFlyoutItem.KeyboardAccelerators>
+                    </RadioMenuFlyoutItem>
+                    <RadioMenuFlyoutItem
+                        x:Name="FontViewMenuItem"
+                        Text="フォント設定ビュー"
+                        GroupName="MainViewMode"
+                        Click="OnViewMenuClick">
+                        <RadioMenuFlyoutItem.KeyboardAccelerators>
+                            <KeyboardAccelerator Key="F3" Invoked="OnViewAcceleratorInvoked" />
+                        </RadioMenuFlyoutItem.KeyboardAccelerators>
+                    </RadioMenuFlyoutItem>
+                    <MenuFlyoutSeparator />
+                    <!-- Esc で今のビューを閉じて戻る（絵文字挿入ビューは行リストへ、フォント設定ビューは直前のビューへ）。
+                         項目名は今のビューに合わせて変える（MainWindow.Views.cs の SyncViewSwitchers）。
+                         Esc は各ビューの中で受ける（フォント設定ビューでは中の部品が処理しなかったときだけ）ため、ここはキーの表示だけ -->
+                    <MenuFlyoutItem
+                        x:Name="BackViewMenuItem"
+                        Text="前のビューへ戻る"
+                        KeyboardAcceleratorTextOverride="Esc"
+                        IsEnabled="False"
+                        Click="OnBackViewMenuClick" />
+                </MenuBarItem>
+                <MenuBarItem Title="エクスポート(X)" AccessKey="X">
+                    <MenuFlyoutItem Text="選択行を新しいタブへ分離" Click="OnSplitToTabClick">
+                        <MenuFlyoutItem.KeyboardAccelerators>
+                            <KeyboardAccelerator Modifiers="Control" Key="T" />
+                        </MenuFlyoutItem.KeyboardAccelerators>
+                    </MenuFlyoutItem>
+                    <MenuFlyoutItem Text="タブ分離を解除（すべてメインへ戻す）" Click="OnResetTabsClick" />
+                    <MenuFlyoutSeparator />
+                    <MenuFlyoutItem Text="選択行をエクスポート..." Click="OnExportFileClick">
+                        <MenuFlyoutItem.KeyboardAccelerators>
+                            <KeyboardAccelerator Modifiers="Control" Key="E" />
+                        </MenuFlyoutItem.KeyboardAccelerators>
+                    </MenuFlyoutItem>
+                    <MenuFlyoutItem Text="選択行をクリップボードへエクスポート" Click="OnExportClipboardClick" />
+                    <MenuFlyoutSeparator />
+                    <MenuFlyoutItem Text="未エクスポート行をすべて選択" Click="OnSelectUnexportedClick" />
+                    <MenuFlyoutItem Text="選択行の済マークを解除" Click="OnClearMarksClick" />
+                    <MenuFlyoutSeparator />
+                    <MenuFlyoutItem Text="ニコカラメーカー3 プロジェクト(n3proj)を書き出し..." Click="OnExportN3ProjClick" />
+                    <MenuFlyoutItem Text="ニコカラメーカー3 のフォント設定を編集" KeyboardAcceleratorTextOverride="F3" Click="OnFontSettingsViewClick" />
+                    <MenuFlyoutItem Text="選択行の表示時刻・フォント指定を解除" Click="OnClearN3OverridesClick" />
+                </MenuBarItem>
+                <MenuBarItem Title="再生(P)" AccessKey="P">
+                    <MenuFlyoutItem Text="メディアを開く..." Click="OnOpenMediaClick" />
+                    <MenuFlyoutItem Text="再生 / 一時停止" Click="OnPlayPauseClick">
+                        <MenuFlyoutItem.KeyboardAccelerators>
+                            <KeyboardAccelerator Modifiers="Control" Key="Space" />
+                        </MenuFlyoutItem.KeyboardAccelerators>
+                    </MenuFlyoutItem>
+                    <MenuFlyoutItem Text="5秒戻る" Click="OnSeekBackClick">
+                        <MenuFlyoutItem.KeyboardAccelerators>
+                            <KeyboardAccelerator Modifiers="Control" Key="Left" />
+                        </MenuFlyoutItem.KeyboardAccelerators>
+                    </MenuFlyoutItem>
+                    <MenuFlyoutItem Text="5秒進む" Click="OnSeekForwardClick">
+                        <MenuFlyoutItem.KeyboardAccelerators>
+                            <KeyboardAccelerator Modifiers="Control" Key="Right" />
+                        </MenuFlyoutItem.KeyboardAccelerators>
+                    </MenuFlyoutItem>
+                    <ToggleMenuFlyoutItem x:Name="FollowToggle" Text="再生位置に追従してハイライト" IsChecked="True" />
+                </MenuBarItem>
+                <MenuBarItem Title="絵文字(G)" AccessKey="G">
+                    <MenuFlyoutItem Text="絵文字リスト編集..." Click="OnEmojiListClick" />
+                    <MenuFlyoutItem Text="絵文字タイムタグ再計算" Click="OnEmojiRetagClick" />
+                </MenuBarItem>
+                <MenuBarItem Title="チェック(C)" AccessKey="C">
+                    <MenuFlyoutItem Text="今すぐチェック" Click="OnValidateClick">
+                        <MenuFlyoutItem.KeyboardAccelerators>
+                            <KeyboardAccelerator Key="F5" />
+                        </MenuFlyoutItem.KeyboardAccelerators>
+                    </MenuFlyoutItem>
+                </MenuBarItem>
+                <MenuBarItem Title="テンプレート(T)" AccessKey="T">
+                    <MenuFlyoutItem Text="テンプレートとして保存...（絵文字一式＋字幕フォント・チェック設定）" Click="OnSaveTemplateClick" />
+                    <MenuFlyoutItem Text="テンプレートを読み込み..." Click="OnLoadTemplateClick" />
+                </MenuBarItem>
+            </MenuBar>
+
+            <!-- ビューの切り替え（表示メニュー・F2・F3 と同じ。選択は ViewModel.ViewMode に追従） -->
+            <SelectorBar
+                x:Name="ViewSelector"
+                Grid.Column="1"
+                VerticalAlignment="Center"
+                Margin="0,0,8,0"
+                SelectionChanged="OnViewSelectorChanged">
+                <SelectorBarItem x:Name="LinesViewTab" Text="行リスト" ToolTipService.ToolTip="行リスト（行ごとの編集）" />
+                <SelectorBarItem x:Name="EmojiViewTab" Text="絵文字挿入" ToolTipService.ToolTip="絵文字挿入ビュー (F2)" />
+                <SelectorBarItem x:Name="FontViewTab" Text="フォント設定" ToolTipService.ToolTip="ニコカラメーカー3 のフォント設定ビュー (F3)" />
+            </SelectorBar>
+        </Grid>
 
         <!-- メディア再生パネル -->
         <Expander
@@ -198,7 +253,7 @@
         </Expander>
 
         <!-- メイン -->
-        <Grid Grid.Row="2">
+        <Grid Grid.Row="2" x:Name="MainArea">
             <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="*" />
                 <ColumnDefinition Width="300" />
@@ -477,17 +532,14 @@
                     <RowDefinition Height="Auto" />
                 </Grid.RowDefinitions>
 
+                <!-- F2 のキーは 表示 メニューにある（右パネルを隠すフォント設定ビューでも効くように） -->
                 <ToggleButton
                     x:Name="EmojiModeToggle"
                     Grid.Row="0"
                     HorizontalAlignment="Stretch"
                     Content="絵文字挿入ビュー (F2)"
                     Checked="OnEmojiModeChanged"
-                    Unchecked="OnEmojiModeChanged">
-                    <ToggleButton.KeyboardAccelerators>
-                        <KeyboardAccelerator Key="F2" />
-                    </ToggleButton.KeyboardAccelerators>
-                </ToggleButton>
+                    Unchecked="OnEmojiModeChanged" />
                 <Button Grid.Row="1" HorizontalAlignment="Stretch" Content="リスト編集..." Click="OnEmojiListClick" />
 
                 <!-- 絵文字挿入設定のクイック調整（設定ダイアログと同じ項目を常時表示） -->
@@ -606,12 +658,33 @@
             </ListView>
         </Expander>
 
-        <!-- ステータスバー -->
+        <!-- フォント設定ビュー（F3。メディア再生・メイン・チェック結果の領域に重ねる）。
+             中身の FontSettingsView は初めて開くときにコードで作る（MainWindow.Views.cs の EnsureFontView。
+             ウィンドウの XAML では x:Load="False" の要素を FindName で作れず、x:Bind の x:Load はビルドできないため） -->
+        <Border
+            x:Name="FontViewHost"
+            Grid.Row="1"
+            Grid.RowSpan="3"
+            Visibility="Collapsed" />
+
+        <!-- ステータスバー（右端は今のビュー） -->
         <Border Grid.Row="4" Padding="8,4" BorderThickness="0,1,0,0" BorderBrush="{ThemeResource DividerStrokeColorDefaultBrush}">
             <StackPanel>
                 <!-- 設定ファイルを読み込めなかったときの警告。ほかの表示で上書きされないよう、起動中ずっと出しておく -->
                 <InfoBar x:Name="SettingsLoadFailedBar" Severity="Warning" IsClosable="False" Visibility="Collapsed" Margin="0,0,0,4" />
-                <TextBlock Text="{x:Bind ViewModel.StatusText, Mode=OneWay}" FontSize="12" />
+                <Grid ColumnSpacing="12">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+                    <TextBlock x:Name="StatusBarText" Text="{x:Bind ViewModel.StatusText, Mode=OneWay}" FontSize="12" />
+                    <TextBlock
+                        x:Name="ViewModeText"
+                        Grid.Column="1"
+                        Text="{x:Bind ViewModel.ViewModeLabel, Mode=OneWay}"
+                        FontSize="12"
+                        Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+                </Grid>
             </StackPanel>
         </Border>
     </Grid>

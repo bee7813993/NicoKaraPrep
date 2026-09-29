@@ -40,12 +40,16 @@ public sealed partial class MainWindow : Window
 
         RestoreWindowBounds();
         Closed += (_, _) => SaveWindowBounds();
+        InitializeViewSwitching();
 
         _validateTimer = DispatcherQueue.GetForCurrentThread().CreateTimer();
         _validateTimer.Interval = TimeSpan.FromMilliseconds(400);
         _validateTimer.IsRepeating = false;
         _validateTimer.Tick += (_, _) =>
         {
+            // フォント設定ビューでは行もチェック結果も見えないので、チェックしない（ステータスバーの案内をチェック結果で消さない）。
+            // 戻るときに ExitFontSettingsView がチェックを予約し直す
+            if (ViewModel.ViewMode == MainViewMode.FontSettings) return;
             TryRun(ViewModel.RunValidation);
             RefreshInsertGutter(); // 挿入ビュー表示中なら横幅などの再計算結果を行情報欄へ反映
         };
@@ -130,7 +134,7 @@ public sealed partial class MainWindow : Window
             timer.Tick += (_, _) =>
             {
                 DebugLog("絵文字挿入ビューを自動オープンします");
-                EmojiModeToggle.IsChecked = true;
+                SwitchView(MainViewMode.EmojiInsert);
             };
             timer.Start();
         }
@@ -160,13 +164,13 @@ public sealed partial class MainWindow : Window
                 switch (step)
                 {
                     case 1:
-                        EmojiModeToggle.IsChecked = true;
+                        SwitchView(MainViewMode.EmojiInsert);
                         break;
                     case 2:
                         InsertEmojiStringInView(ViewModel.Settings.PlaceholderChar);
                         break;
                     case 3:
-                        EmojiModeToggle.IsChecked = false;
+                        SwitchView(MainViewMode.Lines);
                         break;
                     case 4:
                         SelectLineAt(0);
@@ -302,7 +306,7 @@ public sealed partial class MainWindow : Window
             if (await dialog.ShowAsync() != ContentDialogResult.Primary) return;
         }
 
-        if (InsertViewActive) EmojiModeToggle.IsChecked = false;
+        if (InsertViewActive) SwitchView(MainViewMode.Lines);
         TryRun(ViewModel.NewDocument);
         CloseMedia();
         LineEditor.Text = "";
@@ -592,6 +596,7 @@ public sealed partial class MainWindow : Window
 
     private void OnApplyLineClick(object sender, RoutedEventArgs e)
     {
+        if (LineEditorOperationBlocked()) return;
         ApplyLineEditor();
     }
 
@@ -621,6 +626,7 @@ public sealed partial class MainWindow : Window
 
     private void OnValidateClick(object sender, RoutedEventArgs e)
     {
+        if (ValidationBlocked()) return;
         TryRun(ViewModel.RunValidation);
         IssuePanel.IsExpanded = ViewModel.Issues.Count > 0;
     }
@@ -772,6 +778,8 @@ public sealed partial class MainWindow : Window
 
     private void PerformUndo()
     {
+        // フォント設定ビューでは歌詞の変更を戻さない（見えない行が変わるため。ビューの中の操作はビュー側で扱う）
+        if (LyricsUndoRedoBlocked()) return;
         if (!DebounceUndoRedo()) return;
         if (!ViewModel.Undo()) return;
         AfterUndoRedo();
@@ -779,6 +787,7 @@ public sealed partial class MainWindow : Window
 
     private void PerformRedo()
     {
+        if (LyricsUndoRedoBlocked()) return; // PerformUndo と同じ
         if (!DebounceUndoRedo()) return;
         if (!ViewModel.Redo()) return;
         AfterUndoRedo();
@@ -853,6 +862,7 @@ public sealed partial class MainWindow : Window
 
     private void OnSplitToTabClick(object sender, RoutedEventArgs e)
     {
+        if (LineOperationBlocked()) return;
         var indexes = SelectedIndexes;
         if (indexes.Count == 0)
         {
@@ -903,6 +913,7 @@ public sealed partial class MainWindow : Window
 
     private void MoveSelectedToTab(ViewModels.TabState target)
     {
+        if (LineOperationBlocked()) return;
         var indexes = SelectedIndexes;
         if (indexes.Count == 0)
         {
@@ -979,7 +990,7 @@ public sealed partial class MainWindow : Window
 
     private void OnSplitLineClick(object sender, RoutedEventArgs e)
     {
-        if (InsertViewActive) return; // 挿入ビューでは Ctrl+Enter を PreviewKeyDown で処理
+        if (LineEditorOperationBlocked()) return; // 挿入ビューでは Ctrl+Enter を PreviewKeyDown で処理
         if (ViewModel.SelectedLine is null) return;
         TryRun(() =>
         {
@@ -995,7 +1006,7 @@ public sealed partial class MainWindow : Window
 
     private void JoinLineFromMenu(bool insertSpace)
     {
-        if (InsertViewActive) return; // 挿入ビューでは Ctrl+J / Ctrl+Shift+J を PreviewKeyDown で処理
+        if (LineEditorOperationBlocked()) return; // 挿入ビューでは Ctrl+J / Ctrl+Shift+J を PreviewKeyDown で処理
         if (ViewModel.SelectedLine is null) return;
         int index = ViewModel.SelectedLine.Index;
         TryRun(() =>
@@ -1007,12 +1018,14 @@ public sealed partial class MainWindow : Window
 
     private void OnInsertEmptyLineClick(object sender, RoutedEventArgs e)
     {
+        if (LineOperationBlocked()) return;
         TryRun(ViewModel.InsertEmptyLineBelowSelection);
         ScheduleValidation();
     }
 
     private void OnDeleteLinesClick(object sender, RoutedEventArgs e)
     {
+        if (LineOperationBlocked()) return;
         var indexes = SelectedIndexes;
         if (indexes.Count == 0) return;
         TryRun(() => ViewModel.DeleteLines(indexes));
@@ -1030,6 +1043,7 @@ public sealed partial class MainWindow : Window
 
     private void OnExportFileClick(object sender, RoutedEventArgs e)
     {
+        if (LineOperationBlocked()) return;
         var indexes = SelectedIndexes;
         if (indexes.Count == 0)
         {
@@ -1047,6 +1061,7 @@ public sealed partial class MainWindow : Window
 
     private void OnExportClipboardClick(object sender, RoutedEventArgs e)
     {
+        if (LineOperationBlocked()) return;
         var indexes = SelectedIndexes;
         if (indexes.Count == 0)
         {
@@ -1066,6 +1081,7 @@ public sealed partial class MainWindow : Window
 
     private void OnSelectUnexportedClick(object sender, RoutedEventArgs e)
     {
+        if (LineOperationBlocked()) return;
         LineList.SelectedItems.Clear();
         foreach (var line in ViewModel.Lines)
         {
@@ -1079,6 +1095,7 @@ public sealed partial class MainWindow : Window
 
     private void OnClearMarksClick(object sender, RoutedEventArgs e)
     {
+        if (LineOperationBlocked()) return;
         var indexes = SelectedIndexes;
         if (indexes.Count == 0) return;
         ViewModel.MarkExported(indexes, false);
@@ -1111,7 +1128,7 @@ public sealed partial class MainWindow : Window
             Player.Source = Windows.Media.Core.MediaSource.CreateFromUri(new Uri(path));
             ViewModel.MediaPath = path;
             ViewModel.SaveProject();
-            MediaPanel.Visibility = Visibility.Visible;
+            if (ViewModel.ViewMode != MainViewMode.FontSettings) MediaPanel.Visibility = Visibility.Visible; // フォント設定ビューでは隠したまま
             MediaPanel.IsExpanded = true;
             ViewModel.StatusText = $"メディアを開きました: {Path.GetFileName(path)}（Ctrl+Space で再生/一時停止）";
 
@@ -1229,16 +1246,8 @@ public sealed partial class MainWindow : Window
 
     // ------------------------------------------------ 絵文字挿入ビュー
 
-    private bool InsertViewActive => InsertView.Visibility == Visibility.Visible;
-
     private bool _insertFollow;
     private int _lastInsertCaret = -1;
-
-    private void OnEmojiModeChanged(object sender, RoutedEventArgs e)
-    {
-        if (EmojiModeToggle.IsChecked == true) EnterInsertView();
-        else ExitInsertView();
-    }
 
     private bool _allowInsertViewTextChange;
     private string _insertViewText = "";
@@ -1279,11 +1288,10 @@ public sealed partial class MainWindow : Window
         }
     }
 
+    /// <summary>絵文字挿入ビューに入る（SwitchView から、表示を入れ替えたあとに呼ぶ）。</summary>
     private void EnterInsertView()
     {
         SetInsertEditorText(ViewModel.BuildInsertViewText());
-        NormalView.Visibility = Visibility.Collapsed;
-        InsertView.Visibility = Visibility.Visible;
 
         int caret = ViewModel.SelectedLine is { } sel ? ViewModel.GetInsertViewLineStart(sel.Index) : 0;
         InsertEditor.Focus(FocusState.Programmatic);
@@ -1293,22 +1301,18 @@ public sealed partial class MainWindow : Window
         ViewModel.StatusText = "絵文字挿入ビュー: 1–0 / Q–P で挿入。キー操作は上部の凡例参照（ファイル > キー割り当て で変更可）、Esc で終了";
     }
 
+    /// <summary>絵文字挿入ビューを抜ける（SwitchView から、表示を入れ替えたあとに呼ぶ）。</summary>
     private void ExitInsertView()
     {
-        if (!InsertViewActive) return;
-
         // カーソルのあった行を行リストの選択に引き継ぐ
         int caretLine = ViewModel.MapInsertViewOffset(InsertEditor.SelectionStart) is var (li, _) ? li : -1;
 
-        InsertView.Visibility = Visibility.Collapsed;
-        NormalView.Visibility = Visibility.Visible;
         _insertFollow = false;
         UpdateFollowIndicator();
         if (caretLine >= 0) SelectLineAt(caretLine);
         LineEditor.Text = ViewModel.SelectedLine?.RawText ?? "";
         RenderPreview();
         ScheduleValidation();
-        ViewModel.StatusText = "絵文字挿入ビューを終了しました";
     }
 
     // ------------------------------------------------ 挿入ビューのキー割り当て
@@ -1442,7 +1446,7 @@ public sealed partial class MainWindow : Window
         switch (e.Key)
         {
             case Windows.System.VirtualKey.Escape:
-                EmojiModeToggle.IsChecked = false;
+                SwitchView(MainViewMode.Lines);
                 e.Handled = true;
                 return;
             case Windows.System.VirtualKey.Back:
@@ -2062,6 +2066,7 @@ public sealed partial class MainWindow : Window
 
     private void InsertEmojiSlot(int slot)
     {
+        if (LineEditorOperationBlocked()) return;
         if (ViewModel.GetSlotEmojiString(slot) is not string emoji)
         {
             ViewModel.StatusText = $"スロット {ViewModels.EmojiSlotViewModel.KeyLabels[slot - 1]} は未設定です（絵文字 > 絵文字リスト編集）";
@@ -2072,6 +2077,7 @@ public sealed partial class MainWindow : Window
 
     private void InsertEmojiStringIntoLineEditor(string emoji)
     {
+        if (LineEditorOperationBlocked()) return;
         if (ViewModel.SelectedLine is null)
         {
             ViewModel.StatusText = "行を選択してください";
