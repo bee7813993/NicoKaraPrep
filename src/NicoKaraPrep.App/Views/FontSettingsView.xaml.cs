@@ -80,7 +80,8 @@ public sealed partial class FontSettingsView : UserControl
         Bindings.Update();
 
         // プレビュー部品を差し込み口に置き、表示するフォント設定が変わるたび（選択・編集・元に戻す・サンプル文字）に描き直す
-        _preview = new FontPreviewControl();
+        // 枠の高さは 220px なので、画面の高さ 1080 基準のままでは文字が小さすぎる。1/4（270）を基準にして見やすくする
+        _preview = new FontPreviewControl { ReferenceHeight = 270 };
         PreviewHost.Child = _preview;
         ViewModel.PreviewTargetChanged += (_, font) => UpdatePreview(font);
     }
@@ -185,13 +186,20 @@ public sealed partial class FontSettingsView : UserControl
     private bool TryUndoRedo(bool redo)
     {
         if (ViewModel is not { } vm || IsTextInputFocused()) return false;
+
+        // 同じキーがアクセラレータとメニューの両方から続けて届いたときだけ 2 回目を捨てる
+        // （元に戻す → やり直し のように種類が違うものは、続けて来ても両方実行する）
         var now = DateTime.UtcNow;
-        if ((now - _lastUndoRedoUtc).TotalMilliseconds < 150) return true;
+        if (redo == _lastUndoRedoWasRedo && (now - _lastUndoRedoUtc).TotalMilliseconds < 150) return true;
         _lastUndoRedoUtc = now;
+        _lastUndoRedoWasRedo = redo;
         if (redo) vm.Redo();
         else vm.Undo();
         return true;
     }
+
+    /// <summary>直前に実行した操作がやり直しだったか（<see cref="TryUndoRedo"/> の二重実行防止に使う）。</summary>
+    private bool _lastUndoRedoWasRedo;
 
     private bool IsTextInputFocused() =>
         XamlRoot is not null && FocusManager.GetFocusedElement(XamlRoot) is TextBox or RichEditBox or PasswordBox or AutoSuggestBox;
