@@ -40,19 +40,33 @@ public static class N3FontTemplateReader
 
     /// <summary>
     /// フォルダ内のテンプレート（*.tpl）をすべて読む（名前の順）。読めなかったファイルは飛ばし、
-    /// <paramref name="errors"/> に「ファイル名: 理由」を追加する。
+    /// <paramref name="errors"/> に「ファイル名: 理由」を追加する（JSON のキーの重複など、1 ファイルの不備で一覧全体を止めない）。
+    /// フォルダの中を列挙できなければ空の一覧を返し、<paramref name="errors"/> に「フォルダ: 理由」を追加する。
     /// </summary>
     public static List<N3FontSet> ReadTemplateFolder(string folder, ICollection<string>? errors = null)
     {
         var result = new List<N3FontSet>();
         if (!Directory.Exists(folder)) return result;
-        foreach (string path in Directory.EnumerateFiles(folder, "*" + Extension).OrderBy(p => p, StringComparer.OrdinalIgnoreCase))
+
+        List<string> paths;
+        try
+        {
+            paths = Directory.EnumerateFiles(folder, "*" + Extension).OrderBy(p => p, StringComparer.OrdinalIgnoreCase).ToList();
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or System.Security.SecurityException)
+        {
+            errors?.Add($"{folder}: {ex.Message}");
+            return result;
+        }
+
+        foreach (string path in paths)
         {
             try
             {
                 result.Add(ReadTemplate(path));
             }
-            catch (Exception ex) when (ex is IOException or InvalidDataException or JsonException or UnauthorizedAccessException or InvalidOperationException or NotSupportedException)
+            catch (Exception ex) when (ex is IOException or InvalidDataException or JsonException or UnauthorizedAccessException
+                or InvalidOperationException or NotSupportedException or ArgumentException or FormatException)
             {
                 errors?.Add($"{Path.GetFileName(path)}: {ex.Message}");
             }

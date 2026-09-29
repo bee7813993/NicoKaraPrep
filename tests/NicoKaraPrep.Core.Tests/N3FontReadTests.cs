@@ -68,13 +68,15 @@ public class N3FontReadTests : IDisposable
 
     // ------------------------------------------------------------ テンプレート
 
-    private string WriteTemplate(string name, JsonObject font)
+    private string WriteTemplate(string name, JsonObject font) => WriteTemplate(name, font.ToJsonString());
+
+    private string WriteTemplate(string name, string json)
     {
         string path = Path.Combine(_dir, name);
         using var fs = File.Create(path);
         using var zip = new ZipArchive(fs, ZipArchiveMode.Create);
         using var writer = new StreamWriter(zip.CreateEntry("0").Open(), new UTF8Encoding(encoderShouldEmitUTF8Identifier: true));
-        writer.Write(font.ToJsonString());
+        writer.Write(json);
         return path;
     }
 
@@ -115,6 +117,20 @@ public class N3FontReadTests : IDisposable
         Assert.Single(errors);
         Assert.StartsWith("broken.tpl:", errors[0]);
         Assert.Empty(N3FontTemplateReader.ReadTemplateFolder(Path.Combine(_dir, "無いフォルダ")));
+    }
+
+    [Fact]
+    public void テンプレート_キーが重複したJSONのファイルも飛ばして残りを読む()
+    {
+        string json = NkmFont().ToJsonString();
+        Assert.Contains("\"DecorKind\":2", json);
+        WriteTemplate("dup.tpl", json.Replace("\"DecorKind\":2", "\"DecorKind\":2,\"DecorKind\":1"));
+        WriteTemplate("0f8fad5b-d9cb-469f-a165-70867728950e.tpl", NkmFont());
+
+        var errors = new List<string>();
+        var list = N3FontTemplateReader.ReadTemplateFolder(_dir, errors);
+        Assert.Equal("（麻衣）（のりこ）", Assert.Single(list).Name);
+        Assert.StartsWith("dup.tpl:", Assert.Single(errors));
     }
 
     [Fact]
