@@ -27,6 +27,9 @@ public sealed partial class FontSettingsView : UserControl
     /// <summary>キーボードのアクセラレータとメニューの 元に戻す が同じキーで続けて来たときに 2 回戻さないため。</summary>
     private DateTime _lastUndoRedoUtc = DateTime.MinValue;
 
+    /// <summary>右ペインのプレビュー（<see cref="PreviewHost"/> に置く。<see cref="Attach"/> で作る）。</summary>
+    private FontPreviewControl? _preview;
+
     public FontSettingsView()
     {
         InitializeComponent();
@@ -75,6 +78,21 @@ public sealed partial class FontSettingsView : UserControl
         BrushEditorPart.SetViewModel(ViewModel.Editor.BrushEditor);
         FaceTablePart.SetViewModel(ViewModel.Editor);
         Bindings.Update();
+
+        // プレビュー部品を差し込み口に置き、表示するフォント設定が変わるたび（選択・編集・元に戻す・サンプル文字）に描き直す
+        _preview = new FontPreviewControl();
+        PreviewHost.Child = _preview;
+        ViewModel.PreviewTargetChanged += (_, font) => UpdatePreview(font);
+    }
+
+    /// <summary>プレビューに表示するフォント設定とサンプル文字を渡して描き直す（同じ参照の内容を編集したときも描き直すため Invalidate する）。</summary>
+    private void UpdatePreview(N3FontSet? font)
+    {
+        if (_preview is null) return;
+        _preview.SampleText = PreviewSampleText;
+        _preview.RubyText = PreviewRubyText;
+        _preview.FontSet = font;
+        _preview.Invalidate();
     }
 
     /// <summary>
