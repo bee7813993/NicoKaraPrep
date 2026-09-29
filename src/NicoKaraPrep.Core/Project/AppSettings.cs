@@ -91,6 +91,13 @@ public sealed class AppSettings
     /// <summary>NicoKaraPrep 側で定義するニコカラメーカー3 のフォント設定（テンプレートには含めない。<see cref="CopyFrom"/> 参照）。</summary>
     public List<N3FontSet> N3FontSets { get; set; } = new();
 
+    /// <summary>
+    /// アプリ共通のフォント設定の階層（フォルダと並び。<see cref="N3FontTreeNode"/> の一覧 = 最上位）。
+    /// null はまだ作っていない（フォント設定ビューを開いたときに、全部を最上位に今の順で並べて作る）。
+    /// テンプレートには含めない（<see cref="CopyFrom"/> 参照）。
+    /// </summary>
+    public List<N3FontTreeNode>? N3FontHierarchy { get; set; }
+
     // ---- メディア再生 ----
     /// <summary>Z / X（および Ctrl+←/→）でシークする秒数。</summary>
     public double SeekSeconds { get; set; } = 3.0;
@@ -253,7 +260,7 @@ public sealed class AppSettings
         N3IntervalSeconds = other.N3IntervalSeconds;
         N3ProtectSeconds = other.N3ProtectSeconds;
         N3TopLong = other.N3TopLong;
-        // N3FontSets（ニコカラメーカー3 のフォント設定）はテンプレートとは独立したライブラリなので取り込まない
+        // N3FontSets（ニコカラメーカー3 のフォント設定）とその階層 N3FontHierarchy はテンプレートとは独立したライブラリなので取り込まない
         // （テンプレートの適用でライブラリが置き換わらないように。古いテンプレートに入っていても無視する）
     }
 

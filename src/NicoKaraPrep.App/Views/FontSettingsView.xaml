@@ -66,17 +66,54 @@
             <Setter Property="CornerRadius" Value="3" />
             <Setter Property="VerticalAlignment" Value="Center" />
         </Style>
+        <!-- 左の一覧の階層の節 1 つ（フォント設定は 1 行に色見本・名前・印・使用文字数、フォルダ・まとまりは記号・名前・中の数） -->
+        <DataTemplate x:Key="FontTreeItemTemplate" x:DataType="vm:FontTreeItem">
+            <Grid MinHeight="26">
+                <Grid ColumnSpacing="6" Visibility="{x:Bind IsFont}" ToolTipService.ToolTip="{x:Bind Font.ToolTip, Mode=OneWay}">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="Auto" />
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
+                        <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+                    <StackPanel Orientation="Horizontal" Spacing="2" VerticalAlignment="Center">
+                        <Border Width="10" Height="20" CornerRadius="2" BorderThickness="1" BorderBrush="{ThemeResource ControlStrokeColorDefaultBrush}" Background="{x:Bind Font.AfterBrush, Mode=OneWay}" />
+                        <Border Width="10" Height="20" CornerRadius="2" BorderThickness="1" BorderBrush="{ThemeResource ControlStrokeColorDefaultBrush}" Background="{x:Bind Font.BeforeBrush, Mode=OneWay}" />
+                    </StackPanel>
+                    <TextBlock Grid.Column="1" Text="{x:Bind Font.DisplayName, Mode=OneWay}" TextTrimming="CharacterEllipsis" VerticalAlignment="Center" />
+                    <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="2" VerticalAlignment="Center">
+                        <Border Style="{StaticResource Badge}" Background="{ThemeResource SystemFillColorSuccessBackgroundBrush}" BorderThickness="1" BorderBrush="{ThemeResource SystemFillColorSuccessBrush}" Visibility="{x:Bind Font.IsLinked, Mode=OneWay}">
+                            <TextBlock Text="連動" FontSize="10" />
+                        </Border>
+                        <Border Style="{StaticResource Badge}" BorderThickness="1" BorderBrush="{ThemeResource ControlStrokeColorDefaultBrush}" Visibility="{x:Bind Font.IsOverridden, Mode=OneWay}">
+                            <TextBlock Text="曲で上書き" FontSize="10" Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+                        </Border>
+                    </StackPanel>
+                    <TextBlock Grid.Column="3" Text="{x:Bind Font.UsageText, Mode=OneWay}" FontSize="11" VerticalAlignment="Center" Foreground="{ThemeResource TextFillColorSecondaryBrush}" Visibility="{x:Bind Font.HasUsage, Mode=OneWay}" />
+                </Grid>
+                <Grid ColumnSpacing="6" Visibility="{x:Bind IsGroup}" ToolTipService.ToolTip="{x:Bind GroupToolTip, Mode=OneWay}">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="Auto" />
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+                    <FontIcon Glyph="{x:Bind Glyph}" FontSize="14" VerticalAlignment="Center" Foreground="{ThemeResource AccentTextFillColorPrimaryBrush}" />
+                    <TextBlock Grid.Column="1" Text="{x:Bind Name, Mode=OneWay}" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" VerticalAlignment="Center" />
+                    <TextBlock Grid.Column="2" Text="{x:Bind CountText, Mode=OneWay}" FontSize="11" VerticalAlignment="Center" Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+                </Grid>
+            </Grid>
+        </DataTemplate>
     </UserControl.Resources>
 
     <!-- 3 列: 左 = 一覧 / 中央 = 編集 / 右 = プレビュー・使用状況・検証 -->
     <Grid Background="{ThemeResource ApplicationPageBackgroundThemeBrush}" Padding="12,8,12,8" ColumnSpacing="12">
         <Grid.ColumnDefinitions>
-            <ColumnDefinition Width="280" />
+            <ColumnDefinition Width="300" />
             <ColumnDefinition Width="*" />
             <ColumnDefinition Width="300" />
         </Grid.ColumnDefinitions>
 
-        <!-- ================= 左: 一覧 ================= -->
+        <!-- ================= 左: 一覧（階層のツリー。検索・絞り込みの間は当てはまるものを平らに並べる） ================= -->
         <Grid RowSpacing="8">
             <Grid.RowDefinitions>
                 <RowDefinition Height="Auto" />
@@ -84,6 +121,7 @@
                 <RowDefinition Height="Auto" />
                 <RowDefinition Height="Auto" />
                 <RowDefinition Height="*" />
+                <RowDefinition Height="Auto" />
                 <RowDefinition Height="Auto" />
                 <RowDefinition Height="Auto" />
             </Grid.RowDefinitions>
@@ -98,8 +136,9 @@
             <TextBox
                 x:Name="SearchBox"
                 Grid.Row="1"
-                PlaceholderText="名前で検索"
-                Text="{x:Bind ViewModel.SearchText, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
+                PlaceholderText="名前・フォルダ名で検索"
+                Text="{x:Bind ViewModel.SearchText, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                ToolTipService.ToolTip="名前か、上の階層（フォルダなど）の名前に含まれるものを平らに並べます。空にすると階層の表示に戻ります" />
             <ComboBox
                 x:Name="FilterBox"
                 Grid.Row="2"
@@ -113,10 +152,37 @@
                 IsClosable="False"
                 IsOpen="{x:Bind ViewModel.HasSongSaveNote, Mode=OneWay}"
                 Message="{x:Bind ViewModel.SongSaveNote, Mode=OneWay}" />
+            <TreeView
+                x:Name="FontTree"
+                Grid.Row="4"
+                SelectionMode="Single"
+                CanDragItems="True"
+                CanReorderItems="True"
+                AllowDrop="True"
+                AutomationProperties.Name="フォント設定の階層"
+                Visibility="{x:Bind ViewModel.IsTreeMode, Mode=OneWay}"
+                SelectionChanged="OnFontTreeSelectionChanged"
+                ItemInvoked="OnFontTreeItemInvoked"
+                Expanding="OnFontTreeExpanding"
+                Collapsed="OnFontTreeCollapsed"
+                DragItemsStarting="OnFontTreeDragItemsStarting"
+                DragItemsCompleted="OnFontTreeDragItemsCompleted">
+                <TreeView.ItemTemplate>
+                    <DataTemplate x:DataType="TreeViewNode">
+                        <ContentControl
+                            Content="{x:Bind Content}"
+                            ContentTemplate="{StaticResource FontTreeItemTemplate}"
+                            HorizontalAlignment="Stretch"
+                            HorizontalContentAlignment="Stretch"
+                            IsTabStop="False" />
+                    </DataTemplate>
+                </TreeView.ItemTemplate>
+            </TreeView>
             <ListView
                 x:Name="FontList"
                 Grid.Row="4"
                 SelectionMode="Single"
+                Visibility="{x:Bind ViewModel.IsFlatMode, Mode=OneWay}"
                 ItemsSource="{x:Bind ViewModel.Items}"
                 SelectedItem="{x:Bind ViewModel.SelectedItem, Mode=OneWay}"
                 SelectionChanged="OnFontListSelectionChanged">
@@ -134,7 +200,7 @@
                             </StackPanel>
                             <StackPanel Grid.Column="1" VerticalAlignment="Center">
                                 <StackPanel Orientation="Horizontal" Spacing="4">
-                                    <TextBlock Text="{x:Bind DisplayName, Mode=OneWay}" TextTrimming="CharacterEllipsis" MaxWidth="150" />
+                                    <TextBlock Text="{x:Bind DisplayName, Mode=OneWay}" TextTrimming="CharacterEllipsis" MaxWidth="160" />
                                     <Border Style="{StaticResource Badge}" Background="{ThemeResource AccentFillColorDefaultBrush}" Visibility="{x:Bind IsSong}">
                                         <TextBlock Text="曲" FontSize="11" Foreground="{ThemeResource TextOnAccentFillColorPrimaryBrush}" />
                                     </Border>
@@ -142,6 +208,7 @@
                                         <TextBlock Text="連動" FontSize="11" />
                                     </Border>
                                 </StackPanel>
+                                <TextBlock Text="{x:Bind PathText, Mode=OneWay}" FontSize="11" TextTrimming="CharacterEllipsis" Foreground="{ThemeResource AccentTextFillColorPrimaryBrush}" Visibility="{x:Bind HasPath, Mode=OneWay}" />
                                 <TextBlock Text="{x:Bind FaceText, Mode=OneWay}" FontSize="11" TextTrimming="CharacterEllipsis" Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
                                 <TextBlock Text="曲専用で上書き" FontSize="11" Foreground="{ThemeResource TextFillColorTertiaryBrush}" Visibility="{x:Bind IsOverridden, Mode=OneWay}" />
                             </StackPanel>
@@ -151,23 +218,40 @@
                 </ListView.ItemTemplate>
             </ListView>
             <StackPanel Grid.Row="5" Orientation="Horizontal" Spacing="4">
-                <Button x:Name="AddButton" Padding="8,4" Click="OnAddClick" ToolTipService.ToolTip="フォント設定を追加（絞り込みが「この曲専用」なら曲専用に）">
+                <Button x:Name="AddButton" Padding="8,4" Click="OnAddClick" ToolTipService.ToolTip="フォント設定を追加（選んでいるフォルダの中・選んでいるフォント設定のすぐ後。この曲専用を選んでいれば曲専用に）">
                     <StackPanel Orientation="Horizontal" Spacing="4">
                         <FontIcon Glyph="&#xE710;" FontSize="12" />
                         <TextBlock Text="追加" FontSize="12" />
                     </StackPanel>
                 </Button>
-                <Button x:Name="DuplicateButton" Padding="8,4" Click="OnDuplicateClick" IsEnabled="{x:Bind ViewModel.Editor.HasFont, Mode=OneWay}" ToolTipService.ToolTip="選んだフォント設定を複製">
+                <Button x:Name="AddFolderButton" Padding="8,4" Click="OnAddFolderClick" AutomationProperties.Name="フォルダを作る" ToolTipService.ToolTip="フォルダを作る（選んでいるフォルダの中・選んでいるフォント設定のすぐ後）。フォルダはにこぷれっぷの中での整理用で、書き出しには影響しません">
+                    <StackPanel Orientation="Horizontal" Spacing="4">
+                        <FontIcon Glyph="&#xE8F4;" FontSize="12" />
+                        <TextBlock Text="フォルダ" FontSize="12" />
+                    </StackPanel>
+                </Button>
+                <Button x:Name="DuplicateButton" Padding="8,4" Click="OnDuplicateClick" IsEnabled="{x:Bind ViewModel.CanDuplicate, Mode=OneWay}" ToolTipService.ToolTip="選んだフォント設定を複製">
                     <TextBlock Text="複製" FontSize="12" />
                 </Button>
-                <Button x:Name="DeleteButton" Padding="8,4" Click="OnDeleteClick" IsEnabled="{x:Bind ViewModel.Editor.HasFont, Mode=OneWay}" ToolTipService.ToolTip="選んだフォント設定を削除（Ctrl+Z で戻せます）">
+                <Button x:Name="DeleteButton" Padding="8,4" Click="OnDeleteClick" IsEnabled="{x:Bind ViewModel.CanDeleteSelection, Mode=OneWay}" AutomationProperties.Name="削除" ToolTipService.ToolTip="選んだフォント設定を削除（フォルダを選んでいれば、フォルダだけを削除して中身は 1 つ上の階層へ。Ctrl+Z で戻せます）">
                     <FontIcon Glyph="&#xE74D;" FontSize="12" />
                 </Button>
-                <Button x:Name="MoveUpButton" Padding="8,4" Click="OnMoveUpClick" IsEnabled="{x:Bind ViewModel.Editor.HasFont, Mode=OneWay}" ToolTipService.ToolTip="上へ（同じ範囲の中で）">
+            </StackPanel>
+            <StackPanel Grid.Row="6" Orientation="Horizontal" Spacing="4">
+                <Button x:Name="MoveUpButton" Padding="8,4" Click="OnMoveUpClick" IsEnabled="{x:Bind ViewModel.CanMoveUp, Mode=OneWay}" AutomationProperties.Name="上へ" ToolTipService.ToolTip="上へ（同じ階層の中で）">
                     <FontIcon Glyph="&#xE70E;" FontSize="12" />
                 </Button>
-                <Button x:Name="MoveDownButton" Padding="8,4" Click="OnMoveDownClick" IsEnabled="{x:Bind ViewModel.Editor.HasFont, Mode=OneWay}" ToolTipService.ToolTip="下へ（同じ範囲の中で）">
+                <Button x:Name="MoveDownButton" Padding="8,4" Click="OnMoveDownClick" IsEnabled="{x:Bind ViewModel.CanMoveDown, Mode=OneWay}" AutomationProperties.Name="下へ" ToolTipService.ToolTip="下へ（同じ階層の中で）">
                     <FontIcon Glyph="&#xE70D;" FontSize="12" />
+                </Button>
+                <Button x:Name="OutdentButton" Padding="8,4" Click="OnOutdentClick" IsEnabled="{x:Bind ViewModel.CanOutdent, Mode=OneWay}" AutomationProperties.Name="階層を上げる" ToolTipService.ToolTip="階層を上げる（入っているフォルダ・フォント設定の外へ出す）">
+                    <FontIcon Glyph="&#xE76B;" FontSize="12" />
+                </Button>
+                <Button x:Name="IndentButton" Padding="8,4" Click="OnIndentClick" IsEnabled="{x:Bind ViewModel.CanIndent, Mode=OneWay}" AutomationProperties.Name="階層を下げる" ToolTipService.ToolTip="階層を下げる（すぐ上のフォルダ・フォント設定の中へ入れる）">
+                    <FontIcon Glyph="&#xE76C;" FontSize="12" />
+                </Button>
+                <Button x:Name="MoveToButton" Padding="8,4" Click="OnMoveToClick" IsEnabled="{x:Bind ViewModel.CanMoveTo, Mode=OneWay}" ToolTipService.ToolTip="選んだフォント設定・フォルダを、別のフォルダやフォント設定の中へ移す（一覧の中のドラッグでも移せます）">
+                    <TextBlock Text="移動..." FontSize="12" />
                 </Button>
                 <DropDownButton x:Name="ImportButton" Padding="8,4">
                     <TextBlock Text="取り込み" FontSize="12" />
@@ -179,19 +263,80 @@
                     </DropDownButton.Flyout>
                 </DropDownButton>
             </StackPanel>
-            <TextBlock x:Name="ListSummaryText" Grid.Row="6" Text="{x:Bind ViewModel.ListSummary, Mode=OneWay}" Style="{StaticResource Note}" />
+            <TextBlock x:Name="ListSummaryText" Grid.Row="7" Text="{x:Bind ViewModel.ListSummary, Mode=OneWay}" Style="{StaticResource Note}" />
         </Grid>
 
         <!-- ================= 中央: 編集 ================= -->
         <Grid Grid.Column="1">
             <TextBlock
                 x:Name="NoFontText"
-                Visibility="{x:Bind ViewModel.Editor.NoFont, Mode=OneWay}"
+                Visibility="{x:Bind ViewModel.HasNoSelection, Mode=OneWay}"
                 HorizontalAlignment="Center"
                 VerticalAlignment="Center"
                 TextWrapping="Wrap"
                 Style="{StaticResource Note}"
-                Text="左の一覧でフォント設定を選ぶか、「追加」で作ってください" />
+                Text="左の一覧でフォント設定かフォルダを選ぶか、「追加」で作ってください" />
+
+            <!-- フォルダ・「この曲専用」のまとまりを選んだとき -->
+            <ScrollViewer x:Name="FolderScroll" Visibility="{x:Bind ViewModel.HasFolder, Mode=OneWay}">
+                <StackPanel Spacing="12" Padding="0,0,16,16">
+                    <Border Style="{StaticResource Card}">
+                        <StackPanel Spacing="8">
+                            <TextBlock Text="{x:Bind ViewModel.FolderTitle, Mode=OneWay}" Style="{StaticResource SectionTitle}" />
+                            <TextBox
+                                x:Name="FolderNameBox"
+                                Header="名前"
+                                Width="360"
+                                HorizontalAlignment="Left"
+                                Text="{x:Bind ViewModel.FolderNameText, Mode=OneWay}"
+                                IsEnabled="{x:Bind ViewModel.CanEditFolder, Mode=OneWay}"
+                                KeyDown="OnFolderNameKeyDown"
+                                LostFocus="OnFolderNameLostFocus"
+                                ToolTipService.ToolTip="フォルダの名前（にこぷれっぷの中での整理用で、書き出しには影響しません）。Enter で確定" />
+                            <TextBlock x:Name="FolderSummaryText" Text="{x:Bind ViewModel.FolderSummary, Mode=OneWay}" Style="{StaticResource Note}" />
+                            <StackPanel Orientation="Horizontal" Spacing="8">
+                                <Button x:Name="AddInFolderButton" Content="この中にフォント設定を追加" Click="OnAddClick" />
+                                <Button x:Name="AddSubFolderButton" Content="この中にフォルダを作る" Click="OnAddFolderClick" Visibility="{x:Bind ViewModel.CanEditFolder, Mode=OneWay}" />
+                            </StackPanel>
+                            <StackPanel Orientation="Horizontal" Spacing="8" Visibility="{x:Bind ViewModel.CanEditFolder, Mode=OneWay}">
+                                <Button x:Name="DeleteFolderButton" Content="フォルダを削除（中身は残す）" Click="OnDeleteFolderClick" ToolTipService.ToolTip="フォルダだけを削除し、中のフォント設定・フォルダは 1 つ上の階層へ移します（Ctrl+Z で戻せます）" />
+                                <Button x:Name="DeleteFolderAllButton" Content="中身ごと削除..." Click="OnDeleteFolderAllClick" ToolTipService.ToolTip="フォルダと、中のフォント設定をまとめて削除します（確認します。Ctrl+Z で戻せます）" />
+                            </StackPanel>
+                        </StackPanel>
+                    </Border>
+                    <Border Style="{StaticResource Card}">
+                        <StackPanel Spacing="8">
+                            <TextBlock Text="中のフォント設定" Style="{StaticResource SectionTitle}" />
+                            <TextBlock Text="下の階層のものも含めて、上から順に並べています。押すとそのフォント設定を開きます。" Style="{StaticResource Note}" />
+                            <GridView
+                                x:Name="FolderFontsGrid"
+                                ItemsSource="{x:Bind ViewModel.FolderFonts}"
+                                SelectionMode="None"
+                                IsItemClickEnabled="True"
+                                ItemClick="OnFolderFontClick">
+                                <GridView.ItemTemplate>
+                                    <DataTemplate x:DataType="vm:FontListItem">
+                                        <Grid Width="190" ColumnSpacing="6" Padding="2" ToolTipService.ToolTip="{x:Bind ToolTip, Mode=OneWay}">
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="Auto" />
+                                                <ColumnDefinition Width="*" />
+                                            </Grid.ColumnDefinitions>
+                                            <StackPanel Orientation="Horizontal" Spacing="2" VerticalAlignment="Center">
+                                                <Border Width="12" Height="30" CornerRadius="2" BorderThickness="1" BorderBrush="{ThemeResource ControlStrokeColorDefaultBrush}" Background="{x:Bind AfterBrush, Mode=OneWay}" />
+                                                <Border Width="12" Height="30" CornerRadius="2" BorderThickness="1" BorderBrush="{ThemeResource ControlStrokeColorDefaultBrush}" Background="{x:Bind BeforeBrush, Mode=OneWay}" />
+                                            </StackPanel>
+                                            <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                                                <TextBlock Text="{x:Bind DisplayName, Mode=OneWay}" TextTrimming="CharacterEllipsis" />
+                                                <TextBlock Text="{x:Bind UsageText, Mode=OneWay}" FontSize="11" Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+                                            </StackPanel>
+                                        </Grid>
+                                    </DataTemplate>
+                                </GridView.ItemTemplate>
+                            </GridView>
+                        </StackPanel>
+                    </Border>
+                </StackPanel>
+            </ScrollViewer>
             <ScrollViewer x:Name="EditorScroll" Visibility="{x:Bind ViewModel.Editor.HasFont, Mode=OneWay}">
                 <StackPanel Spacing="12" Padding="0,0,16,16">
 

@@ -1,6 +1,8 @@
-﻿using Microsoft.UI.Xaml;
+﻿using System.ComponentModel;
+using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Input;
+using Microsoft.UI.Xaml.Media;
 using NicoKaraPrep.App.ViewModels;
 using NicoKaraPrep.App.Views.FontSettings;
 using NicoKaraPrep.Core.Formats;
@@ -9,7 +11,8 @@ using NicoKaraPrep.Core.Model;
 namespace NicoKaraPrep.App.Views;
 
 /// <summary>
-/// ニコカラメーカー3 のフォント設定ビュー（F3）。左 = 一覧、中央 = 選択中のフォント設定の編集、右 = プレビュー・使用状況・検証。
+/// ニコカラメーカー3 のフォント設定ビュー（F3）。左 = 一覧（フォルダと親子の階層のツリー。検索・絞り込みの間は平らな一覧）、
+/// 中央 = 選択中のフォント設定の編集（フォルダを選んだときはフォルダの欄）、右 = プレビュー・使用状況・検証。
 /// メインウィンドウの中で表示を入れ替えるだけなので、閉じても行リストの選択・文書・再生状態はそのまま残る。
 /// 編集はすぐに保存する（300ms ごとにまとめる。アプリ共通は settings.json、曲専用は .tttproj）。
 /// </summary>
@@ -30,11 +33,28 @@ public sealed partial class FontSettingsView : UserControl
     /// <summary>右ペインのプレビュー（<see cref="PreviewHost"/> に置く。<see cref="Attach"/> で作る）。</summary>
     private FontPreviewControl? _preview;
 
+    /// <summary>ツリーの節（節の識別子 → 節）。一覧を作り直すたびに作り直す。</summary>
+    private readonly Dictionary<string, TreeViewNode> _treeNodes = new(StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>ツリーの節・選択・開閉をコードから変えている最中か（そのあいだのツリーのイベントは ViewModel へ返さない）。</summary>
+    private bool _syncingTree;
+
+    /// <summary>ドラッグしている節の識別子。</summary>
+    private string? _draggedKey;
+
+    /// <summary>ツリーで選ばれた節を ViewModel へ渡している最中か（その選択の変化はツリーへ写し返さない）。</summary>
+    private bool _selectingFromTree;
+
+    /// <summary>ツリーの中の一覧（選んだ節まで表示を送るのに使う）。</summary>
+    private ListView? _treeList;
+
     public FontSettingsView()
     {
         InitializeComponent();
         Loaded += (_, _) =>
         {
+            // 画面に載る前に選んだ節は、ツリーの行ができてから選び直して見せる
+            SyncTreeSelection(bringIntoView: true);
             if (!_focusOnLoaded) return;
             _focusOnLoaded = false;
             FocusInitial();
@@ -87,6 +107,11 @@ public sealed partial class FontSettingsView : UserControl
         _preview = new FontPreviewControl { ReferenceHeight = 270 };
         PreviewHost.Child = _preview;
         ViewModel.PreviewTargetChanged += (_, font) => UpdatePreview(font);
+
+        // 左の一覧のツリー（ViewModel を作ったときの一覧はもうできているので、ここで最初の節を作る）
+        ViewModel.TreeRebuilt += (_, _) => RebuildTreeNodes();
+        ViewModel.PropertyChanged += OnViewModelPropertyChanged;
+        RebuildTreeNodes();
     }
 
     /// <summary>プレビューに表示するフォント設定とサンプル文字を渡して描き直す（同じ参照の内容を編集したときも描き直すため Invalidate する）。</summary>
@@ -144,15 +169,27 @@ public sealed partial class FontSettingsView : UserControl
         vm.OnExit();
     }
 
-    /// <summary>一覧の選択行にフォーカスを置く（一覧が空なら戻るボタン）。</summary>
+    /// <summary>一覧の選択中の節（行）にフォーカスを置く（一覧が空なら戻るボタン）。</summary>
     private void FocusInitial()
     {
-        if (ViewModel?.SelectedItem is { } item && FontList.ContainerFromItem(item) is ListViewItem container
-            && container.Focus(FocusState.Programmatic))
+        if (ViewModel is { IsTreeMode: true } vm)
         {
-            return;
+            if (vm.SelectedKey is { } key && _treeNodes.TryGetValue(key, out var node)
+                && FontTree.ContainerFromNode(node) is TreeViewItem treeItem && treeItem.Focus(FocusState.Programmatic))
+            {
+                return;
+            }
+            if (FontTree.RootNodes.Count > 0 && FontTree.Focus(FocusState.Programmatic)) return;
         }
-        if (FontList.Items.Count > 0 && FontList.Focus(FocusState.Programmatic)) return;
+        else
+        {
+            if (ViewModel?.SelectedItem is { } item && FontList.ContainerFromItem(item) is ListViewItem container
+                && container.Focus(FocusState.Programmatic))
+            {
+                return;
+            }
+            if (FontList.Items.Count > 0 && FontList.Focus(FocusState.Programmatic)) return;
+        }
         BackButton.Focus(FocusState.Programmatic);
     }
 
@@ -167,10 +204,14 @@ public sealed partial class FontSettingsView : UserControl
     {
         if (e.Handled || e.Key != Windows.System.VirtualKey.Escape) return;
         e.Handled = true;
-        if (XamlRoot is not null && ReferenceEquals(FocusManager.GetFocusedElement(XamlRoot), NameBox)
-            && ViewModel?.Editor.Font is { } font && NameBox.Text != font.Name)
+        var focused = XamlRoot is null ? null : FocusManager.GetFocusedElement(XamlRoot);
+        if (ReferenceEquals(focused, NameBox) && ViewModel?.Editor.Font is { } font && NameBox.Text != font.Name)
         {
             NameBox.Text = font.Name;
+        }
+        if (ReferenceEquals(focused, FolderNameBox) && ViewModel?.SelectedFolder is { } folder && FolderNameBox.Text != folder.Name)
+        {
+            FolderNameBox.Text = folder.Name;
         }
         BackRequested?.Invoke(this, EventArgs.Empty);
     }
@@ -213,11 +254,215 @@ public sealed partial class FontSettingsView : UserControl
     private void OnRedoInvoked(KeyboardAccelerator sender, KeyboardAcceleratorInvokedEventArgs args) =>
         args.Handled = TryRedo();
 
-    // ------------------------------------------------------------ 一覧
+    // ------------------------------------------------------------ 一覧（ツリー）
+
+    /// <summary>ViewModel の一覧から、ツリーの節を作り直して今の選択を選ぶ。</summary>
+    private void RebuildTreeNodes()
+    {
+        if (ViewModel is not { } vm) return;
+        _syncingTree = true;
+        try
+        {
+            FontTree.RootNodes.Clear();
+            _treeNodes.Clear();
+            foreach (var item in vm.TreeRoots) FontTree.RootNodes.Add(CreateTreeNode(item, vm));
+        }
+        finally
+        {
+            _syncingTree = false;
+        }
+        SyncTreeSelection(bringIntoView: true);
+    }
+
+    private TreeViewNode CreateTreeNode(FontTreeItem item, FontSettingsViewModel vm)
+    {
+        var node = new TreeViewNode { Content = item };
+        _treeNodes[item.Key] = node;
+        foreach (var child in item.Children) node.Children.Add(CreateTreeNode(child, vm));
+        node.IsExpanded = item.Children.Count > 0 && vm.IsExpanded(item);
+        return node;
+    }
+
+    /// <summary>選択が変わったら（一覧の作り直しの最中はまとめて <see cref="RebuildTreeNodes"/> で）ツリーの選択を合わせる。</summary>
+    private void OnViewModelPropertyChanged(object? sender, PropertyChangedEventArgs e)
+    {
+        if (ViewModel is not { } vm || vm.IsRebuildingTree || _selectingFromTree) return;
+        switch (e.PropertyName)
+        {
+            case nameof(FontSettingsViewModel.SelectedItem):
+            case nameof(FontSettingsViewModel.SelectedFolder):
+                SyncTreeSelection(bringIntoView: true);
+                break;
+            case nameof(FontSettingsViewModel.IsTreeMode) when vm.IsTreeMode:
+                // 検索を空にして階層の表示に戻ったら、選んでいるものまで開いて見せる
+                SyncTreeSelection(bringIntoView: true);
+                break;
+        }
+    }
+
+    /// <summary>
+    /// ViewModel の選択をツリーの選択に写す（閉じた節の中なら上の階層を開く）。検索・絞り込みの結果を並べているあいだは写さず、
+    /// 階層の表示に戻ったときに、そのとき選んでいるものだけを開いて見せる。
+    /// </summary>
+    private void SyncTreeSelection(bool bringIntoView)
+    {
+        if (ViewModel is not { IsTreeMode: true } vm) return;
+        TreeViewNode? node = vm.SelectedKey is { } key && _treeNodes.TryGetValue(key, out var n) ? n : null;
+        _syncingTree = true;
+        try
+        {
+            for (var parent = node?.Parent; parent?.Content is FontTreeItem parentItem; parent = parent.Parent)
+            {
+                if (parent.IsExpanded) continue;
+                parent.IsExpanded = true;
+                vm.SetExpanded(parentItem.Key, true);
+            }
+            if (node is not null)
+            {
+                if (!ReferenceEquals(FontTree.SelectedNode, node)) FontTree.SelectedNode = node;
+            }
+            else if (FontTree.SelectedNodes.Count > 0)
+            {
+                FontTree.SelectedNodes.Clear();
+            }
+        }
+        finally
+        {
+            _syncingTree = false;
+        }
+        if (node is not null && bringIntoView && vm.IsTreeMode) BringIntoView(node);
+    }
+
+    /// <summary>節まで一覧の表示を送る（節の行ができてから）。</summary>
+    private void BringIntoView(TreeViewNode node)
+    {
+        DispatcherQueue.TryEnqueue(() =>
+        {
+            _treeList ??= FindDescendant<ListView>(FontTree);
+            try
+            {
+                _treeList?.ScrollIntoView(node);
+            }
+            catch (Exception)
+            {
+                // 作り直しの途中で節が一覧から外れていたら何もしない
+            }
+        });
+    }
+
+    private static T? FindDescendant<T>(DependencyObject root) where T : DependencyObject
+    {
+        int count = VisualTreeHelper.GetChildrenCount(root);
+        for (int i = 0; i < count; i++)
+        {
+            var child = VisualTreeHelper.GetChild(root, i);
+            if (child is T found) return found;
+            if (FindDescendant<T>(child) is { } deeper) return deeper;
+        }
+        return null;
+    }
+
+    /// <summary>
+    /// ツリーで選んだ節を ViewModel へ渡す。選択の変更の中でツリーの選択を変えると、ツリーの選択の処理が入れ子になって
+    /// 終わらなくなる（スタックオーバーフロー）ので、ここから始まった ViewModel の選択の変化はツリーへ写し返さず、
+    /// 選択が外れたときの選び直しも、選択の処理が終わってから行う。
+    /// </summary>
+    private void OnFontTreeSelectionChanged(TreeView sender, TreeViewSelectionChangedEventArgs args)
+    {
+        if (_syncingTree || ViewModel is not { } vm || vm.IsRebuildingTree) return;
+        if (sender.SelectedNode?.Content is FontTreeItem item)
+        {
+            SelectFromTree(vm, item);
+            return;
+        }
+
+        // 選択が外れた（Ctrl+クリックなど。別の節へ選び直す途中で一時的に空になることもある）:
+        // 落ち着いてからまだ空なら、編集中のものを選び直す（編集欄を空にしない）
+        DispatcherQueue.TryEnqueue(() =>
+        {
+            if (FontTree.SelectedNode is null && ViewModel?.SelectedKey is not null) SyncTreeSelection(bringIntoView: false);
+        });
+    }
+
+    /// <summary>節を押したとき（選択の変更が届かない押し直しでも、その節を選ぶ）。</summary>
+    private void OnFontTreeItemInvoked(TreeView sender, TreeViewItemInvokedEventArgs args)
+    {
+        if (_syncingTree || ViewModel is not { } vm) return;
+        var item = (args.InvokedItem as TreeViewNode)?.Content as FontTreeItem ?? args.InvokedItem as FontTreeItem;
+        if (item is not null) SelectFromTree(vm, item);
+    }
+
+    /// <summary>ツリーで選ばれた節を ViewModel で選ぶ（ツリーへは写し返さない）。</summary>
+    private void SelectFromTree(FontSettingsViewModel vm, FontTreeItem item)
+    {
+        if (string.Equals(vm.SelectedKey, item.Key, StringComparison.OrdinalIgnoreCase)) return;
+        _selectingFromTree = true;
+        try
+        {
+            vm.SelectNode(item.Key);
+        }
+        finally
+        {
+            _selectingFromTree = false;
+        }
+    }
+
+    private void OnFontTreeExpanding(TreeView sender, TreeViewExpandingEventArgs args)
+    {
+        if (_syncingTree || ViewModel is not { } vm) return;
+        if (args.Node?.Content is FontTreeItem item) vm.SetExpanded(item.Key, true);
+    }
+
+    private void OnFontTreeCollapsed(TreeView sender, TreeViewCollapsedEventArgs args)
+    {
+        if (_syncingTree || ViewModel is not { } vm) return;
+        if (args.Node?.Content is FontTreeItem item) vm.SetExpanded(item.Key, false);
+    }
+
+    private static FontTreeItem? DraggedItem(IEnumerable<object> items) =>
+        items.FirstOrDefault() switch
+        {
+            TreeViewNode node => node.Content as FontTreeItem,
+            FontTreeItem item => item,
+            _ => null,
+        };
+
+    /// <summary>ドラッグの開始。「この曲専用」のまとまりそのものは動かせない。</summary>
+    private void OnFontTreeDragItemsStarting(TreeView sender, TreeViewDragItemsStartingEventArgs args)
+    {
+        var item = DraggedItem(args.Items);
+        if (item is null || item.IsSongGroup)
+        {
+            args.Cancel = true;
+            return;
+        }
+        _draggedKey = item.Key;
+    }
+
+    /// <summary>
+    /// ドラッグで並べ替えたあと。ツリーが動かした節の並びを読み取り、ViewModel へ渡して階層に反映する
+    /// （ツリーの後始末が済んでから作り直すよう、少し遅らせる）。
+    /// </summary>
+    private void OnFontTreeDragItemsCompleted(TreeView sender, TreeViewDragItemsCompletedEventArgs args)
+    {
+        string? key = _draggedKey ?? DraggedItem(args.Items)?.Key;
+        _draggedKey = null;
+        if (ViewModel is not { } vm || args.DropResult == Windows.ApplicationModel.DataTransfer.DataPackageOperation.None) return;
+        var dropped = ReadTreeNodes(FontTree.RootNodes);
+        DispatcherQueue.TryEnqueue(() => vm.ApplyDroppedTree(dropped, key));
+    }
+
+    private static List<DroppedTreeNode> ReadTreeNodes(IList<TreeViewNode> nodes) =>
+        nodes
+            .Where(n => n.Content is FontTreeItem)
+            .Select(n => new DroppedTreeNode(((FontTreeItem)n.Content).Key, ReadTreeNodes(n.Children)))
+            .ToList();
+
+    // ------------------------------------------------------------ 一覧（検索・絞り込みの結果）
 
     private void OnFontListSelectionChanged(object sender, SelectionChangedEventArgs e)
     {
-        if (ViewModel is not { } vm || vm.IsRebuilding) return;
+        if (ViewModel is not { } vm || vm.IsRebuilding || !vm.IsFlatMode) return;
         var item = FontList.SelectedItem as FontListItem;
         if (item is null && vm.SelectedItem is { } current && vm.Items.Contains(current))
         {
@@ -225,8 +470,10 @@ public sealed partial class FontSettingsView : UserControl
             FontList.SelectedItem = current;
             return;
         }
-        vm.SelectedItem = item;
+        if (item is not null) vm.SelectedItem = item;
     }
+
+    // ------------------------------------------------------------ 一覧の下のボタン
 
     private void OnAddClick(object sender, RoutedEventArgs e)
     {
@@ -234,11 +481,28 @@ public sealed partial class FontSettingsView : UserControl
         FocusNameBox();
     }
 
+    private void OnAddFolderClick(object sender, RoutedEventArgs e)
+    {
+        ViewModel?.AddFolder();
+        DispatcherQueue.TryEnqueue(() =>
+        {
+            FolderNameBox.Focus(FocusState.Programmatic);
+            FolderNameBox.SelectAll();
+        });
+    }
+
     private void OnDuplicateClick(object sender, RoutedEventArgs e) => ViewModel?.DuplicateSelected();
 
     private async void OnDeleteClick(object sender, RoutedEventArgs e)
     {
-        if (ViewModel is not { SelectedItem: { } item } vm) return;
+        if (ViewModel is not { } vm) return;
+        if (vm.SelectedFolder is { IsFolder: true })
+        {
+            // フォルダだけを消す（中身は残るので確認しない。Ctrl+Z で戻せる）
+            vm.DeleteSelectedFolder(withFonts: false);
+            return;
+        }
+        if (vm.SelectedItem is not { } item) return;
         int lines = vm.CountLinesLosingFont(item);
         if (lines > 0)
         {
@@ -264,6 +528,71 @@ public sealed partial class FontSettingsView : UserControl
     private void OnMoveUpClick(object sender, RoutedEventArgs e) => ViewModel?.MoveSelected(-1);
 
     private void OnMoveDownClick(object sender, RoutedEventArgs e) => ViewModel?.MoveSelected(+1);
+
+    private void OnOutdentClick(object sender, RoutedEventArgs e) => ViewModel?.OutdentSelected();
+
+    private void OnIndentClick(object sender, RoutedEventArgs e) => ViewModel?.IndentSelected();
+
+    /// <summary>移動先を選ぶ画面を出し、選んだところの中の末尾へ移す。</summary>
+    private async void OnMoveToClick(object sender, RoutedEventArgs e)
+    {
+        if (ViewModel is not { CanMoveTo: true } vm) return;
+        string label = vm.SelectedItem?.Font.Name ?? vm.SelectedFolder?.Name ?? "";
+        var dialog = new FontMoveDialog(label, vm.MoveTargets());
+        await ShowDialogAsync(dialog);
+        if (dialog.SelectedTarget is { } target) vm.MoveSelectedInto(target.Key);
+    }
+
+    // ------------------------------------------------------------ フォルダの欄
+
+    private void OnFolderNameKeyDown(object sender, KeyRoutedEventArgs e)
+    {
+        if (e.Key != Windows.System.VirtualKey.Enter) return;
+        e.Handled = true;
+        CommitFolderName();
+    }
+
+    private void OnFolderNameLostFocus(object sender, RoutedEventArgs e) => CommitFolderName();
+
+    private void CommitFolderName()
+    {
+        if (ViewModel is not { SelectedFolder: { IsFolder: true } folder } vm || FolderNameBox.Text == folder.Name) return;
+        vm.RenameSelectedFolder(FolderNameBox.Text);
+    }
+
+    private void OnDeleteFolderClick(object sender, RoutedEventArgs e) => ViewModel?.DeleteSelectedFolder(withFonts: false);
+
+    /// <summary>フォルダと中のフォント設定をまとめて削除する（確認する）。</summary>
+    private async void OnDeleteFolderAllClick(object sender, RoutedEventArgs e)
+    {
+        if (ViewModel is not { SelectedFolder: { IsFolder: true } folder } vm) return;
+        var fonts = vm.FontsIn(folder);
+        int used = fonts.Count(f => vm.CountLinesLosingFont(f) > 0);
+        string usedText = used > 0
+            ? $"うち {used} 件は開いている歌詞で使われていて、削除すると書き出しではその行に既定のフォント設定が使われます。"
+            : "";
+        var dialog = new ContentDialog
+        {
+            XamlRoot = XamlRoot,
+            Title = "フォルダと中身の削除",
+            Content = new TextBlock
+            {
+                Text = $"フォルダ「{folder.Name}」と、中のフォント設定 {fonts.Count} 件（下の階層も含む）を削除しますか？\n{usedText}（Ctrl+Z で元に戻せます）",
+                TextWrapping = TextWrapping.Wrap,
+            },
+            PrimaryButtonText = "削除",
+            CloseButtonText = "キャンセル",
+            DefaultButton = ContentDialogButton.Close,
+        };
+        if (await ShowDialogAsync(dialog) != ContentDialogResult.Primary) return;
+        vm.DeleteSelectedFolder(withFonts: true);
+    }
+
+    /// <summary>フォルダの欄の「中のフォント設定」を押したとき: そのフォント設定を開く。</summary>
+    private void OnFolderFontClick(object sender, ItemClickEventArgs e)
+    {
+        if (ViewModel is { } vm && e.ClickedItem is FontListItem item) vm.Select(item.Id);
+    }
 
     private async void OnImportN3ProjClick(object sender, RoutedEventArgs e)
     {

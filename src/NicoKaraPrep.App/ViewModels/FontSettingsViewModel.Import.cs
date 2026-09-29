@@ -40,7 +40,8 @@ public sealed partial class FontSettingsViewModel
 
     /// <summary>
     /// 選択中の曲専用のフォント設定をアプリ共通へ移す。同じ名前のアプリ共通があるときは、replace が true なら
-    /// それを置き換え（位置はそのまま）、false なら何もしない（呼び出し側で確認してから true で呼ぶ）。
+    /// それを置き換え（階層の位置はそのまま）、false なら何もしない（呼び出し側で確認してから true で呼ぶ）。
+    /// 置き換えないときは、アプリ共通の階層の最上位の末尾に入れる。
     /// </summary>
     public bool MoveSelectedToCommon(bool replace)
     {
@@ -53,11 +54,13 @@ public sealed partial class FontSettingsViewModel
         Song.Remove(font);
         if (i >= 0)
         {
+            N3FontTree.ReplaceFontId(Tree, Common[i].Id, font.Id); // 置き換えたものと同じ場所に置く
             Common[i] = font;
         }
         else
         {
             Common.Add(font);
+            Tree.Add(N3FontTreeNode.ForFont(font.Id)); // 取り込み元ごとのフォルダへは振り分けない
         }
         N3FontLibrary.EnsureIds(Common);
         MarkDirty(song: true);
@@ -73,7 +76,8 @@ public sealed partial class FontSettingsViewModel
 
     /// <summary>
     /// ニコカラメーカー3 のテンプレートから読んだフォント設定をアプリ共通に追加する（同じ名前があれば末尾に 2, 3… を付ける。
-    /// テンプレートとの連動（NkmGuid・NkmSynchronize）はそのまま）。追加した数を返す。
+    /// テンプレートとの連動（NkmGuid・NkmSynchronize）はそのまま）。階層では最上位のフォルダ「ニコカラメーカー3 のテンプレート」
+    /// （無ければ作る）の末尾に入れる。追加した数を返す。
     /// </summary>
     public int AddTemplates(IReadOnlyList<N3FontSet> templates)
     {
@@ -81,19 +85,22 @@ public sealed partial class FontSettingsViewModel
         PushUndo(null);
         string? firstId = null;
         var renamed = new List<string>();
+        var folder = N3FontTree.EnsureRootFolder(Tree, N3FontTree.TemplateFolderName);
+        folder.Collapsed = false;
         foreach (var t in templates)
         {
             var copy = t.Clone();
             copy.Id = Guid.NewGuid().ToString();
             string original = copy.Name;
             N3FontLibrary.Add(Common, copy);
+            folder.Children.Add(N3FontTreeNode.ForFont(copy.Id));
             if (copy.Name != original) renamed.Add($"{original}→{copy.Name}");
             firstId ??= copy.Id;
         }
         MarkDirty(song: false);
         ClearFilterFor(firstId!);
         string note = renamed.Count > 0 ? $"（同じ名前があったため名前を変えたもの: {string.Join("、", renamed.Take(5))}{(renamed.Count > 5 ? " ほか" : "")}）" : "";
-        SetStatus($"ニコカラメーカー3 のテンプレートから {templates.Count} 件のフォント設定をアプリ共通に追加しました{note}");
+        SetStatus($"ニコカラメーカー3 のテンプレートから {templates.Count} 件のフォント設定を、アプリ共通のフォルダ「{N3FontTree.TemplateFolderName}」に追加しました{note}");
         return templates.Count;
     }
 
