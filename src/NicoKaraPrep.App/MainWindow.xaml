@@ -608,7 +608,11 @@
 
         <!-- ステータスバー -->
         <Border Grid.Row="4" Padding="8,4" BorderThickness="0,1,0,0" BorderBrush="{ThemeResource DividerStrokeColorDefaultBrush}">
-            <TextBlock Text="{x:Bind ViewModel.StatusText, Mode=OneWay}" FontSize="12" />
+            <StackPanel>
+                <!-- 設定ファイルを読み込めなかったときの警告。ほかの表示で上書きされないよう、起動中ずっと出しておく -->
+                <InfoBar x:Name="SettingsLoadFailedBar" Severity="Warning" IsClosable="False" Visibility="Collapsed" Margin="0,0,0,4" />
+                <TextBlock Text="{x:Bind ViewModel.StatusText, Mode=OneWay}" FontSize="12" />
+            </StackPanel>
         </Border>
     </Grid>
 </Window>

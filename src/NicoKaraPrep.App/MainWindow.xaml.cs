@@ -97,7 +97,14 @@ public sealed partial class MainWindow : Window
         RefreshRecentFilesMenu();
         LoadQuickEmojiSettings();
         RebuildInsertKeyBindings();
-        if (ViewModel.Settings.LoadFailureMessage is string settingsError) ViewModel.StatusText = settingsError;
+        if (ViewModel.Settings.LoadFailureMessage is string settingsError)
+        {
+            // 引数で開いたファイルの読み込みやチェックがステータスの 1 行を上書きしても見えるように、消えない警告で出す
+            // （この間は絵文字リストの編集・設定・テンプレートの適用などが保存されない）
+            SettingsLoadFailedBar.Message = settingsError;
+            SettingsLoadFailedBar.IsOpen = true;
+            SettingsLoadFailedBar.Visibility = Visibility.Visible;
+        }
 
         // デバッグ用: 起動直後に絵文字リスト編集を自動で開く
         if (args.Contains("--debug-emoji-dialog"))

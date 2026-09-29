@@ -1496,6 +1496,7 @@ public partial class MainViewModel : ObservableObject
     /// <summary>
     /// テンプレートを読み込んでアプリ設定（グローバル）に適用する。
     /// 読み込めないときは例外を投げ、設定を変えない（既定値で上書きしない）。
+    /// 起動時に設定ファイルを読み込めなかったときは、適用しても保存されない（<see cref="AppSettings.LoadFailed"/>）ので、そう表示する。
     /// </summary>
     public void LoadTemplate(string path)
     {
@@ -1503,7 +1504,8 @@ public partial class MainViewModel : ObservableObject
         Settings.CopyFrom(template);
         Settings.Save();
         RefreshEmojiSlots();
-        StatusText = $"テンプレートを適用しました: {Path.GetFileName(path)}（絵文字 {Settings.GlobalEmojiList.Count} 件、{Settings.FontFamily} {Settings.FontSizePx:F0}px）";
+        string notSaved = Settings.LoadFailed ? "（設定ファイルを読み込めなかったため保存されません）" : "";
+        StatusText = $"テンプレートを適用しました: {Path.GetFileName(path)}（絵文字 {Settings.GlobalEmojiList.Count} 件、{Settings.FontFamily} {Settings.FontSizePx:F0}px）{notSaved}";
     }
 
     // -------------------------------------------------- ニコカラメーカー連携
