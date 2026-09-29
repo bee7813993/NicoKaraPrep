@@ -33,6 +33,32 @@ public partial class MainViewModel
     /// </summary>
     public event EventHandler? DocumentReplacing;
 
+    /// <summary>
+    /// アプリ共通のフォント設定を、フォント設定ビューの外（n3proj の読み込み）で入れ替える直前に発生する。
+    /// フォント設定ビューは、保存待ちの編集をここで保存し、元に戻す のために今の一覧を記録する。
+    /// </summary>
+    public event EventHandler? CommonFontSetsReplacing;
+
+    /// <summary>
+    /// アプリ共通のフォント設定を入れ替えたあと（<see cref="CommonFontSetsReplacing"/> と対で必ず発生する）。
+    /// 入れ替えたフォント設定は別のオブジェクトになるので、フォント設定ビューはここで一覧を作り直す。
+    /// </summary>
+    public event EventHandler? CommonFontSetsReplaced;
+
+    /// <summary>アプリ共通のフォント設定を入れ替える（前後に <see cref="CommonFontSetsReplacing"/>・<see cref="CommonFontSetsReplaced"/> を出す）。</summary>
+    private void ReplaceCommonFontSets(Action replace)
+    {
+        CommonFontSetsReplacing?.Invoke(this, EventArgs.Empty);
+        try
+        {
+            replace();
+        }
+        finally
+        {
+            CommonFontSetsReplaced?.Invoke(this, EventArgs.Empty);
+        }
+    }
+
     /// <summary>n3proj の書き出しに使うフォント設定（アプリ共通を曲専用で置き換えたもの）。</summary>
     public List<N3FontSet> ExportFontSets => N3FontLibrary.ResolveForExport(Settings.N3FontSets, SongFontSets);
 

@@ -187,24 +187,27 @@ public partial class MainViewModel
         {
             var names = new HashSet<string>(choices.FontSetNames);
             int added = 0, replaced = 0;
-            foreach (var f in preview.FontSets.Where(f => names.Contains(f.Name)))
+            ReplaceCommonFontSets(() =>
             {
-                var copy = f.Clone();
-                int i = Settings.N3FontSets.FindIndex(x => x.Name == f.Name);
-                if (i >= 0)
+                foreach (var f in preview.FontSets.Where(f => names.Contains(f.Name)))
                 {
-                    // フォント設定ビューで選んでいたものが置き換わっても選択が外れないよう、識別子は引き継ぐ
-                    copy.Id = Settings.N3FontSets[i].Id;
-                    Settings.N3FontSets[i] = copy;
-                    replaced++;
+                    var copy = f.Clone();
+                    int i = Settings.N3FontSets.FindIndex(x => x.Name == f.Name);
+                    if (i >= 0)
+                    {
+                        // フォント設定ビューで選んでいたものが置き換わっても選択が外れないよう、識別子は引き継ぐ
+                        copy.Id = Settings.N3FontSets[i].Id;
+                        Settings.N3FontSets[i] = copy;
+                        replaced++;
+                    }
+                    else
+                    {
+                        Settings.N3FontSets.Add(copy);
+                        added++;
+                    }
                 }
-                else
-                {
-                    Settings.N3FontSets.Add(copy);
-                    added++;
-                }
-            }
-            N3FontLibrary.EnsureIds(Settings.N3FontSets);
+                N3FontLibrary.EnsureIds(Settings.N3FontSets);
+            });
             settingsChanged = true;
             done.Add($"フォント設定 {added + replaced} 件（追加 {added}・置き換え {replaced}）");
         }

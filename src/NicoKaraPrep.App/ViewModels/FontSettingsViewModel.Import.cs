@@ -99,24 +99,52 @@ public sealed partial class FontSettingsViewModel
 
     /// <summary>
     /// n3proj の読み込み確認画面（フォント設定を選んだ状態）でアプリ共通へ取り込む。取り込みの処理は <paramref name="import"/>（メイン画面）に任せ、
-    /// 終わったら一覧を作り直す。取り込んだときは 元に戻す で取り込み前に戻せる。
+    /// 終わったら一覧を作り直す（取り込んだ行の指定で使用状況も変わるため）。フォント設定の入れ替えと 元に戻す の記録は、
+    /// メニューからの読み込みと同じく <see cref="OnCommonFontSetsReplacing"/>・<see cref="OnCommonFontSetsReplaced"/> で行う。
     /// </summary>
     public async Task ImportN3ProjAsync(Func<Task> import)
     {
         FlushPendingSave();
-        var before = Snapshot();
-        string beforeJson = Signature();
         await import();
+        Rebuild(null);
+    }
 
-        if (Signature() != beforeJson)
+    /// <summary>外での入れ替えの前の一覧（元に戻す の記録）と、その内容。入れ替えの最中だけ値がある。</summary>
+    private (UndoEntry Entry, string Signature)? _externalBefore;
+
+    /// <summary>
+    /// アプリ共通のフォント設定が外（n3proj の読み込み。ビューの「取り込み」もメニューも同じ）で入れ替わる直前。
+    /// 保存待ちの編集を保存し、元に戻す のために今の一覧を記録する。
+    /// </summary>
+    private void OnCommonFontSetsReplacing()
+    {
+        FlushPendingSave();
+        _externalBefore = (Snapshot(), Signature());
+    }
+
+    /// <summary>
+    /// アプリ共通のフォント設定が外で入れ替わったあと。入れ替わったフォント設定は別のオブジェクトになり、
+    /// 一覧と編集欄が外れた古いオブジェクトを指したままだと編集が保存されないので、一覧を作り直す。
+    /// 変わっていれば、元に戻す で入れ替えの前に戻せるよう記録する。
+    /// </summary>
+    private void OnCommonFontSetsReplaced()
+    {
+        var before = _externalBefore;
+        _externalBefore = null;
+        N3FontLibrary.EnsureIds(Common);
+        string now = Signature();
+        if (before is { } b && b.Signature != now)
         {
-            _undo.Add(before);
+            _undo.Add(b.Entry);
             if (_undo.Count > MaxUndo) _undo.RemoveAt(0);
             _redo.Clear();
-            _coalesceKey = null;
             UpdateUndoState();
+
+            // ビューの外での読み込みなら、戻ってきたときに「外で変わった」として履歴を捨てないよう、抜けたときの内容を今の内容にする
+            // （抜けたあとにほかの変更もあったときは、そのまま捨てる）
+            if (_exitSignature == b.Signature) _exitSignature = now;
         }
-        N3FontLibrary.EnsureIds(Common);
+        _coalesceKey = null;
         Rebuild(null);
     }
 

@@ -43,6 +43,8 @@ public sealed partial class FontSettingsViewModel : ObservableObject
 
         N3FontLibrary.EnsureIds(_main.Settings.N3FontSets);
         _main.DocumentReplacing += (_, _) => FlushPendingSave();
+        _main.CommonFontSetsReplacing += (_, _) => OnCommonFontSetsReplacing();
+        _main.CommonFontSetsReplaced += (_, _) => OnCommonFontSetsReplaced();
         _main.PropertyChanged += OnMainPropertyChanged;
         Rebuild(null);
     }
