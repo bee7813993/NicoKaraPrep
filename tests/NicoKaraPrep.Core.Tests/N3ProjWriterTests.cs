@@ -394,7 +394,7 @@ public class N3ProjWriterTests
     }
 
     /// <summary>
-    /// ニコカラメーカー3 が保存した実プロジェクトと同じ行構造・文字時刻を生成できることを確認する。
+    /// ニコカラメーカー3 が保存した実プロジェクトと同じ行構造・文字時刻・文字ごとのフォントを生成できることを確認する。
     /// 環境変数 TTT_N3PROJ_SAMPLE に n3proj のパス（歌詞ファイルが同じ場所にあること）を設定して実行する。
     /// </summary>
     [Fact]
@@ -411,9 +411,9 @@ public class N3ProjWriterTests
 
         foreach (var info in infos)
         {
-            string? lyricsPath = info!["SourceLyricsPath"]?.GetValue<string>();
-            if (string.IsNullOrEmpty(lyricsPath) || !File.Exists(lyricsPath)) continue;
-            var expected = info["LineInfos"]!.AsArray();
+            string? lyricsPath = LyricsPathOf(info!, sample);
+            if (lyricsPath is null) continue;
+            var expected = info!["LineInfos"]!.AsArray();
             if (expected.Count == 0) continue;
 
             var doc = LrcFormat.Parse(EncodingDetector.ReadAllText(lyricsPath, out _));
@@ -437,6 +437,14 @@ public class N3ProjWriterTests
                 if (Fmt(ec) != Fmt(ac))
                 {
                     mismatches.Add($"{Path.GetFileName(lyricsPath)} 行{i}: {expected[i]!["Raw"]}\n  期待 {Fmt(ec)}\n  実際 {Fmt(ac)}");
+                }
+                // 文字ごとのフォント（パート記号による自動設定）。ニコカラメーカー3 の「コーラス自動色分け」
+                // （括弧で括られた部分をコーラス用フォントにする。NicoKaraPrep には無い）が効いている
+                // 可能性のある行は、食い違っても失敗にしない
+                string FmtFont(JsonArray a) => string.Join(" ", a.Select(c => $"{c!["Char"]}:{c["FontIndex"]}"));
+                if (FmtFont(ec) != FmtFont(ac) && !MayUseAutoChorus(ec, fontNames))
+                {
+                    mismatches.Add($"{Path.GetFileName(lyricsPath)} 行{i} フォント: {expected[i]!["Raw"]}\n  期待 {FmtFont(ec)}\n  実際 {FmtFont(ac)}");
                 }
                 if (mismatches.Count > 12) break;
             }
@@ -468,10 +476,10 @@ public class N3ProjWriterTests
 
         foreach (var info in sourceInfos)
         {
-            string? lyricsPath = info!["SourceLyricsPath"]?.GetValue<string>();
-            if (string.IsNullOrEmpty(lyricsPath) || !File.Exists(lyricsPath)) continue;
+            string? lyricsPath = LyricsPathOf(info!, sample);
+            if (lyricsPath is null) continue;
             var doc = LrcFormat.Parse(EncodingDetector.ReadAllText(lyricsPath, out _));
-            string name = info["SettingsName"]?.GetValue<string>() ?? $"タブ{tabs.Count + 1}";
+            string name = info!["SettingsName"]?.GetValue<string>() ?? $"タブ{tabs.Count + 1}";
             tabs.Add(new N3ProjExportTab
             {
                 Name = name,
@@ -514,6 +522,34 @@ public class N3ProjWriterTests
         {
             if (string.IsNullOrEmpty(outEnv)) Directory.Delete(outDir, recursive: true);
         }
+    }
+
+    /// <summary>
+    /// ニコカラメーカー3 の「歌詞のコーラス部分を自動色分けする」の対象になりうる行か
+    /// （フォント設定名に含まれる括弧を除いて、コーラス開始文字の既定「（ ( [」を含む）。
+    /// </summary>
+    private static bool MayUseAutoChorus(JsonArray chars, IReadOnlyList<string> fontNames)
+    {
+        string text = string.Concat(chars.Select(c => c!["Char"]!.GetValue<string>()));
+        foreach (string name in fontNames.Where(n => n.Length > 0).OrderByDescending(n => n.Length))
+        {
+            text = text.Replace(name, "");
+        }
+        return text.IndexOfAny(new[] { '（', '(', '[' }) >= 0;
+    }
+
+    /// <summary>
+    /// 歌詞設定タブの歌詞ファイル。記録された絶対パスに無ければ、n3proj と同じフォルダから相対パスで探す
+    /// （サンプルを別の場所へ複製したとき用）。どちらにも無ければ null。
+    /// </summary>
+    private static string? LyricsPathOf(JsonNode info, string projectPath)
+    {
+        string? path = info["SourceLyricsPath"]?.GetValue<string>();
+        if (!string.IsNullOrEmpty(path) && File.Exists(path)) return path;
+        string? relative = info["SourceLyricsRelativePath"]?.GetValue<string>();
+        if (string.IsNullOrEmpty(relative)) return null;
+        string near = Path.Combine(Path.GetDirectoryName(Path.GetFullPath(projectPath))!, relative);
+        return File.Exists(near) ? near : null;
     }
 
     private static void CollectPaths(JsonNode? node, string path, SortedSet<string> result)
