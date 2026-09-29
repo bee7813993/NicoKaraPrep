@@ -123,10 +123,13 @@ public sealed class N3Brush
     /// <summary>単色の不透明度 %（0–100。ニコカラメーカーの DxColor.A = AlphaPercent / 100）。</summary>
     public int AlphaPercent { get; set; } = 100;
 
-    /// <summary>グラデーション・ミルフィーユのマーカー（位置 0 が上端、1 が下端）。空なら書き出し時にニコカラメーカーの既定 3 点を書く。</summary>
+    /// <summary>
+    /// グラデーション・ミルフィーユのマーカー（位置 0 が上端、1 が下端）。
+    /// 空は未指定（書き出し時: マージならベースを維持、新規ならニコカラメーカーの既定 3 点）。
+    /// </summary>
     public List<N3GradientStop> Stops { get; set; } = new();
 
-    /// <summary>画像ファイルのパス。</summary>
+    /// <summary>画像ファイルのパス。空は未指定（塗りの種類が画像でなければ、マージではベースの画像の設定を維持）。</summary>
     public string BitmapPath { get; set; } = "";
 
     /// <summary>画像の拡大率 %。</summary>

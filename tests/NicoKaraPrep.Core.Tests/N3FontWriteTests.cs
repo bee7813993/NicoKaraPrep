@@ -202,6 +202,39 @@ public class N3FontWriteTests
     }
 
     [Fact]
+    public void マージ_マーカーと画像が未指定なら単色へ切り替えてもベースのまま残す()
+    {
+        var baseFont = NkmFont();
+        baseFont["BrushInfos"]![1]!["BitmapPath"] = @"C:\img\base.png";
+        baseFont["BrushInfos"]![1]!["BitmapScale"] = 120;
+        var f = new N3FontSet { Name = "（麻衣）（のりこ）", EdgeColorAfter = "000000" }; // ベースはミルフィーユ
+
+        var brush = Export(ProjectOf(baseFont), f)[0]!["BrushInfos"]![1]!;
+        Assert.Equal(0, brush["SelectedBrushTypeIndex"]!.GetValue<int>());
+        Assert.Equal("000000", brush["SolidColor"]!["Web16"]!.GetValue<string>());
+        var stops = brush["GradientStops"]!.AsArray();
+        Assert.Equal(3, stops.Count);
+        Assert.Equal(0.68235296, stops[1]!["Color"]!["R"]!.GetValue<double>(), 6); // 既定 3 点ではなくベースのマーカー
+        Assert.Equal(@"C:\img\base.png", brush["BitmapPath"]!.GetValue<string>());
+        Assert.Equal(120, brush["BitmapScale"]!.GetValue<int>());
+    }
+
+    [Fact]
+    public void マージ_塗りの種類が画像なら空のパスでも画像の設定を書く()
+    {
+        var baseFont = NkmFont();
+        baseFont["BrushInfos"]![2]!["BitmapPath"] = @"C:\img\base.png";
+        var f = N3ProjFormat.ReadFontSets(ProjectOf(NkmFont())).Single();
+        f.Detail.Brushes[2].Type = N3Brush.TypeBitmap;
+        f.Detail.Brushes[2].BitmapScale = 80;
+
+        var brush = Export(ProjectOf(baseFont), f)[0]!["BrushInfos"]![2]!;
+        Assert.Equal(N3Brush.TypeBitmap, brush["SelectedBrushTypeIndex"]!.GetValue<int>());
+        Assert.Equal("", brush["BitmapPath"]!.GetValue<string>());
+        Assert.Equal(80, brush["BitmapScale"]!.GetValue<int>());
+    }
+
+    [Fact]
     public void マージ_未指定の配色と継承のかな英数はベースのまま残す()
     {
         var f = new N3FontSet { Name = "（麻衣）（のりこ）", FontFamily = "游ゴシック", TextColorAfter = "FF0000", EdgeColorAfter = "", TextColorBefore = "", EdgeColorBefore = "" };

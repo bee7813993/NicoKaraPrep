@@ -804,7 +804,11 @@ public static class N3ProjWriter
         return changed;
     }
 
-    /// <summary>配色 1 箇所をマージする（塗りの種類・単色・マーカー・画像を丸ごと）。変わった項目があれば true。</summary>
+    /// <summary>
+    /// 配色 1 箇所をマージする（塗りの種類・単色・マーカー・画像を丸ごと）。変わった項目があれば true。
+    /// 未指定の項目（単色の色が空、マーカーが空、塗りの種類が画像でない箇所の画像のパスが空）はベースのまま残す。
+    /// ニコカラメーカーは塗りの種類を戻すと前のマーカー・画像を使うので、見えていないデータも消さない。
+    /// </summary>
     private static bool MergeBrush(JsonObject b, N3Brush src, string ver)
     {
         bool changed = SetInt(b, "SelectedBrushTypeIndex", src.Type, 0);
@@ -829,14 +833,19 @@ public static class N3ProjWriter
             }
         }
 
-        var stops = StopsForExport(src);
-        if (!SameStops(N3FontJson.ParseStops(b["GradientStops"]), stops))
+        // マーカーが空（未指定）ならベースのマーカーを残す（既定 3 点を書くのは新規だけ）
+        if (src.Stops.Count > 0 && !SameStops(N3FontJson.ParseStops(b["GradientStops"]), src.Stops))
         {
-            b["GradientStops"] = GradientStops(stops);
+            b["GradientStops"] = GradientStops(src.Stops);
             changed = true;
         }
-        changed |= SetString(b, "BitmapPath", src.BitmapPath ?? "");
-        changed |= SetInt(b, "BitmapScale", src.BitmapScale, 100);
+
+        // 画像のパスが空で塗りの種類も画像でなければ、画像の設定（パス・拡大率）はベースのまま残す
+        if (!string.IsNullOrEmpty(src.BitmapPath) || src.Type == N3Brush.TypeBitmap)
+        {
+            changed |= SetString(b, "BitmapPath", src.BitmapPath ?? "");
+            changed |= SetInt(b, "BitmapScale", src.BitmapScale, 100);
+        }
         return changed;
     }
 

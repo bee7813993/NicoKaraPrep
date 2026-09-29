@@ -132,16 +132,23 @@ public class N3FontGoldenTests
         for (int f = 0; f < fonts.Count; f++)
         {
             var set = fonts[f]!.AsObject();
-            foreach (var node in set["BrushInfos"]!.AsArray())
+            var brushes = set["BrushInfos"]!.AsArray();
+            for (int i = 0; i < brushes.Count; i++)
             {
-                var b = node!.AsObject();
+                var model = models[f].Detail.Brushes[i];
+                var b = brushes[i]!.AsObject();
                 Replace(b, "SelectedBrushTypeIndex", (b["SelectedBrushTypeIndex"]!.GetValue<int>() + 1) % 4);
                 var sc = b["SolidColor"]!.AsObject();
                 Replace(sc, "DxColor", new JsonObject { ["R"] = 0.1f, ["G"] = 0.2f, ["B"] = 0.3f, ["A"] = 0.5f, ["SumRGB"] = 0.6f, ["Average"] = 0.2f, ["Luma"] = 0.2f });
                 Replace(sc, "Web16", "1A334D");
                 Replace(b, "GradientStops", new JsonArray());
-                Replace(b, "BitmapPath", "壊した.png");
-                Replace(b, "BitmapScale", 55);
+
+                // 画像のパスが空で塗りの種類も画像でない箇所は、マージで画像の設定をベースのまま残すので壊さない
+                if (model.BitmapPath.Length > 0 || model.Type == N3Brush.TypeBitmap)
+                {
+                    Replace(b, "BitmapPath", "壊した.png");
+                    Replace(b, "BitmapScale", 55);
+                }
             }
             var faces = set["FontInfos"]!.AsArray();
             for (int i = 0; i < faces.Count; i++)
