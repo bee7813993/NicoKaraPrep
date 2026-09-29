@@ -585,6 +585,7 @@ public sealed partial class MainWindow : Window
 
     private void OnApplyLineClick(object sender, RoutedEventArgs e)
     {
+        if (LineEditorOperationBlocked()) return;
         ApplyLineEditor();
     }
 
@@ -765,6 +766,8 @@ public sealed partial class MainWindow : Window
 
     private void PerformUndo()
     {
+        // フォント設定ビューでは歌詞の変更を戻さない（見えない行が変わるため。ビューの中の操作はビュー側で扱う）
+        if (ViewModel.ViewMode == MainViewMode.FontSettings) return;
         if (!DebounceUndoRedo()) return;
         if (!ViewModel.Undo()) return;
         AfterUndoRedo();
@@ -772,6 +775,7 @@ public sealed partial class MainWindow : Window
 
     private void PerformRedo()
     {
+        if (ViewModel.ViewMode == MainViewMode.FontSettings) return; // PerformUndo と同じ
         if (!DebounceUndoRedo()) return;
         if (!ViewModel.Redo()) return;
         AfterUndoRedo();
@@ -846,6 +850,7 @@ public sealed partial class MainWindow : Window
 
     private void OnSplitToTabClick(object sender, RoutedEventArgs e)
     {
+        if (LineOperationBlocked()) return;
         var indexes = SelectedIndexes;
         if (indexes.Count == 0)
         {
@@ -896,6 +901,7 @@ public sealed partial class MainWindow : Window
 
     private void MoveSelectedToTab(ViewModels.TabState target)
     {
+        if (LineOperationBlocked()) return;
         var indexes = SelectedIndexes;
         if (indexes.Count == 0)
         {
@@ -972,7 +978,7 @@ public sealed partial class MainWindow : Window
 
     private void OnSplitLineClick(object sender, RoutedEventArgs e)
     {
-        if (InsertViewActive) return; // 挿入ビューでは Ctrl+Enter を PreviewKeyDown で処理
+        if (LineEditorOperationBlocked()) return; // 挿入ビューでは Ctrl+Enter を PreviewKeyDown で処理
         if (ViewModel.SelectedLine is null) return;
         TryRun(() =>
         {
@@ -988,7 +994,7 @@ public sealed partial class MainWindow : Window
 
     private void JoinLineFromMenu(bool insertSpace)
     {
-        if (InsertViewActive) return; // 挿入ビューでは Ctrl+J / Ctrl+Shift+J を PreviewKeyDown で処理
+        if (LineEditorOperationBlocked()) return; // 挿入ビューでは Ctrl+J / Ctrl+Shift+J を PreviewKeyDown で処理
         if (ViewModel.SelectedLine is null) return;
         int index = ViewModel.SelectedLine.Index;
         TryRun(() =>
@@ -1000,12 +1006,14 @@ public sealed partial class MainWindow : Window
 
     private void OnInsertEmptyLineClick(object sender, RoutedEventArgs e)
     {
+        if (LineOperationBlocked()) return;
         TryRun(ViewModel.InsertEmptyLineBelowSelection);
         ScheduleValidation();
     }
 
     private void OnDeleteLinesClick(object sender, RoutedEventArgs e)
     {
+        if (LineOperationBlocked()) return;
         var indexes = SelectedIndexes;
         if (indexes.Count == 0) return;
         TryRun(() => ViewModel.DeleteLines(indexes));
@@ -1023,6 +1031,7 @@ public sealed partial class MainWindow : Window
 
     private void OnExportFileClick(object sender, RoutedEventArgs e)
     {
+        if (LineOperationBlocked()) return;
         var indexes = SelectedIndexes;
         if (indexes.Count == 0)
         {
@@ -1040,6 +1049,7 @@ public sealed partial class MainWindow : Window
 
     private void OnExportClipboardClick(object sender, RoutedEventArgs e)
     {
+        if (LineOperationBlocked()) return;
         var indexes = SelectedIndexes;
         if (indexes.Count == 0)
         {
@@ -1059,6 +1069,7 @@ public sealed partial class MainWindow : Window
 
     private void OnSelectUnexportedClick(object sender, RoutedEventArgs e)
     {
+        if (LineOperationBlocked()) return;
         LineList.SelectedItems.Clear();
         foreach (var line in ViewModel.Lines)
         {
@@ -1072,6 +1083,7 @@ public sealed partial class MainWindow : Window
 
     private void OnClearMarksClick(object sender, RoutedEventArgs e)
     {
+        if (LineOperationBlocked()) return;
         var indexes = SelectedIndexes;
         if (indexes.Count == 0) return;
         ViewModel.MarkExported(indexes, false);
@@ -2042,6 +2054,7 @@ public sealed partial class MainWindow : Window
 
     private void InsertEmojiSlot(int slot)
     {
+        if (LineEditorOperationBlocked()) return;
         if (ViewModel.GetSlotEmojiString(slot) is not string emoji)
         {
             ViewModel.StatusText = $"スロット {ViewModels.EmojiSlotViewModel.KeyLabels[slot - 1]} は未設定です（絵文字 > 絵文字リスト編集）";
@@ -2052,6 +2065,7 @@ public sealed partial class MainWindow : Window
 
     private void InsertEmojiStringIntoLineEditor(string emoji)
     {
+        if (LineEditorOperationBlocked()) return;
         if (ViewModel.SelectedLine is null)
         {
             ViewModel.StatusText = "行を選択してください";

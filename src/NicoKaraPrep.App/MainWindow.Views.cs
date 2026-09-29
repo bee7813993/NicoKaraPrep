@@ -244,4 +244,31 @@ public sealed partial class MainWindow
         e.Handled = true;
         ReturnFromFontSettings();
     }
+
+    // ------------------------------------------------------------ ビューごとに使えない操作
+
+    /// <summary>
+    /// 行エディタを対象にする操作（行分割・結合・適用・絵文字挿入）を止めるか。行リスト以外のビューでは止める
+    /// （絵文字挿入ビューでは同じキーをエディタの PreviewKeyDown で処理する）。
+    /// </summary>
+    private bool LineEditorOperationBlocked()
+    {
+        if (ViewModel.ViewMode == MainViewMode.Lines) return false;
+        if (ViewModel.ViewMode == MainViewMode.FontSettings) ShowLineOperationBlocked();
+        return true;
+    }
+
+    /// <summary>
+    /// 選択行を対象にする操作（行削除・空行挿入・タブ分離・エクスポート・済マークなど）を止めるか。
+    /// 行が見えないフォント設定ビューでだけ止める（絵文字挿入ビューでは行情報欄で選んだ行に使える）。
+    /// </summary>
+    private bool LineOperationBlocked()
+    {
+        if (ViewModel.ViewMode != MainViewMode.FontSettings) return false;
+        ShowLineOperationBlocked();
+        return true;
+    }
+
+    private void ShowLineOperationBlocked() =>
+        ViewModel.StatusText = $"フォント設定ビューでは行の操作は使えません（Esc で{MainViewModel.ViewModeName(_previousViewMode)}へ戻ります）";
 }

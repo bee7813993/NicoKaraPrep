@@ -194,6 +194,7 @@ public sealed partial class MainWindow
 
     private void OnClearN3OverridesClick(object sender, RoutedEventArgs e)
     {
+        if (LineOperationBlocked()) return;
         var indexes = SelectedIndexes;
         if (indexes.Count == 0)
         {
