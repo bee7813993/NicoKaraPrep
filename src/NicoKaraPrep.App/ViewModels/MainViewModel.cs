@@ -1492,10 +1492,13 @@ public partial class MainViewModel : ObservableObject
         StatusText = $"テンプレートを保存しました: {Path.GetFileName(path)}（絵文字 {snapshot.GlobalEmojiList.Count} 件＋フォント・チェック設定）";
     }
 
-    /// <summary>テンプレートを読み込んでアプリ設定（グローバル）に適用する。</summary>
+    /// <summary>
+    /// テンプレートを読み込んでアプリ設定（グローバル）に適用する。
+    /// 読み込めないときは例外を投げ、設定を変えない（既定値で上書きしない）。
+    /// </summary>
     public void LoadTemplate(string path)
     {
-        var template = AppSettings.Load(path);
+        var template = AppSettings.LoadStrict(path);
         Settings.CopyFrom(template);
         Settings.Save();
         RefreshEmojiSlots();

@@ -256,22 +256,113 @@ public sealed class AppSettings
         N3FontSets = other.N3FontSets.Select(f => f.Clone()).ToList();
     }
 
+    /// <summary>
+    /// 設定ファイルを読み込めなかった（壊れていた）ため、既定値で動いている。
+    /// このときは <see cref="Save"/> で上書きしない（元のファイルをそのまま残す）。
+    /// </summary>
+    [JsonIgnore]
+    public bool LoadFailed { get; private set; }
+
+    /// <summary>読み込めなかった設定ファイルを残した写しのパス（写しを作れなかったときは null）。</summary>
+    [JsonIgnore]
+    public string? BrokenCopyPath { get; private set; }
+
+    /// <summary>読み込めなかった理由（例外のメッセージ）。</summary>
+    [JsonIgnore]
+    public string LoadError { get; private set; } = "";
+
+    /// <summary>設定ファイルを読み込めなかったときにステータスバーへ出す説明。読み込めていれば null。</summary>
+    [JsonIgnore]
+    public string? LoadFailureMessage => !LoadFailed
+        ? null
+        : BrokenCopyPath is string copy
+            ? $"設定ファイルを読み込めなかったため、設定は保存されません（{copy} を確認してください）"
+            : $"設定ファイルを読み込めなかったため、設定は保存されません（{LoadError}）";
+
+    /// <summary>
+    /// 設定を読み込む。ファイルが無ければ既定値を返す。
+    /// 壊れていて読めないときも既定値を返すが、<see cref="LoadFailed"/> を立てて保存を止め、
+    /// 元のファイルの写しを「settings.json.broken-日時」として残す（全設定が既定値で上書きされて消えるのを防ぐ）。
+    /// </summary>
     public static AppSettings Load(string? path = null)
     {
         path ??= DefaultPath;
         try
         {
             MigrateLegacySettings(path);
-            if (File.Exists(path))
-            {
-                return JsonSerializer.Deserialize<AppSettings>(File.ReadAllText(path), JsonOptions) ?? new AppSettings();
-            }
         }
         catch (Exception)
         {
-            // 壊れた設定ファイルはデフォルトで起動する
+            // 旧設定を引き継げなくても、新しい設定で起動する
         }
-        return new AppSettings();
+        if (!File.Exists(path)) return new AppSettings();
+
+        try
+        {
+            return LoadStrict(path);
+        }
+        catch (Exception ex)
+        {
+            return new AppSettings
+            {
+                LoadFailed = true,
+                LoadError = ex.Message,
+                BrokenCopyPath = KeepBrokenCopy(path),
+            };
+        }
+    }
+
+    /// <summary>
+    /// 設定（テンプレート）を読み込む。既定値に置き換えずに例外を投げるので、「ファイルが無い」と「壊れている」を区別できる。
+    /// ファイルが無いときは <see cref="FileNotFoundException"/>、形式が正しくないときは <see cref="InvalidDataException"/>、
+    /// 読み取れないときは <see cref="IOException"/> などをそのまま投げる。
+    /// </summary>
+    public static AppSettings LoadStrict(string path)
+    {
+        if (!File.Exists(path)) throw new FileNotFoundException($"ファイルが見つかりません: {path}", path);
+        string json = File.ReadAllText(path);
+        AppSettings? settings;
+        try
+        {
+            settings = JsonSerializer.Deserialize<AppSettings>(json, JsonOptions);
+        }
+        catch (JsonException ex)
+        {
+            throw new InvalidDataException($"ファイルの形式が正しくありません: {Path.GetFileName(path)}（{ex.Message}）", ex);
+        }
+        return settings ?? throw new InvalidDataException($"ファイルに設定が入っていません: {Path.GetFileName(path)}");
+    }
+
+    /// <summary>
+    /// 読み込めなかった設定ファイルの写しを、同じフォルダに「元の名前.broken-yyyyMMdd-HHmmss」で残す。
+    /// 同じ内容の写しが既にあればそれを返す（起動のたびに写しを増やさない）。写しを作れなければ null。
+    /// </summary>
+    private static string? KeepBrokenCopy(string path)
+    {
+        try
+        {
+            string full = Path.GetFullPath(path);
+            string dir = Path.GetDirectoryName(full)!;
+            string name = Path.GetFileName(full);
+            byte[] content = File.ReadAllBytes(full);
+            foreach (string existing in Directory.GetFiles(dir, name + ".broken-*").OrderByDescending(p => p, StringComparer.Ordinal))
+            {
+                if (File.ReadAllBytes(existing).AsSpan().SequenceEqual(content)) return existing;
+            }
+
+            string stem = Path.Combine(dir, $"{name}.broken-{DateTime.Now.ToString("yyyyMMdd-HHmmss", System.Globalization.CultureInfo.InvariantCulture)}");
+            string copy = stem;
+            for (int n = 2; File.Exists(copy); n++)
+            {
+                copy = $"{stem}-{n}";
+            }
+            File.WriteAllBytes(copy, content);
+            return copy;
+        }
+        catch (Exception)
+        {
+            return null;
+        }
     }
 
     /// <summary>旧称（TimeTagTool）時代の設定フォルダから設定を引き継ぐ。</summary>
@@ -285,8 +376,13 @@ public sealed class AppSettings
         File.Copy(legacy, newPath);
     }
 
+    /// <summary>
+    /// 設定を保存する。読み込みに失敗した設定（<see cref="LoadFailed"/>）は何もしない
+    /// （壊れた元のファイルを既定値で上書きしない）。
+    /// </summary>
     public void Save(string? path = null)
     {
+        if (LoadFailed) return;
         path ??= DefaultPath;
         Directory.CreateDirectory(Path.GetDirectoryName(path)!);
         File.WriteAllText(path, JsonSerializer.Serialize(this, JsonOptions));

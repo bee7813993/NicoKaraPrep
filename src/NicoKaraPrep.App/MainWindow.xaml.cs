@@ -97,6 +97,7 @@ public sealed partial class MainWindow : Window
         RefreshRecentFilesMenu();
         LoadQuickEmojiSettings();
         RebuildInsertKeyBindings();
+        if (ViewModel.Settings.LoadFailureMessage is string settingsError) ViewModel.StatusText = settingsError;
 
         // デバッグ用: 起動直後に絵文字リスト編集を自動で開く
         if (args.Contains("--debug-emoji-dialog"))
