@@ -44,7 +44,7 @@ public sealed partial class FontListItem : ObservableObject
     private int usage;
 
     [ObservableProperty]
-    private string usageText = "";
+    private string usageText = "未使用";
 
     [ObservableProperty]
     private Brush afterBrush = N3BrushPreview.Transparent();

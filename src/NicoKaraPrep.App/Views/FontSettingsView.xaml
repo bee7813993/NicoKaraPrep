@@ -325,12 +325,13 @@
                     <Border Style="{StaticResource Card}">
                         <StackPanel Spacing="8">
                             <TextBlock Text="文字飾り" Style="{StaticResource SectionTitle}" />
+                            <RadioButtons x:Name="DecorKindButtons" Header="種類" MaxColumns="3" SelectedIndex="{x:Bind ViewModel.Editor.DecorKind, Mode=TwoWay}">
+                                <x:String>なし</x:String>
+                                <x:String>影</x:String>
+                                <x:String>ブラー</x:String>
+                            </RadioButtons>
+                            <!-- 狭い画面でも欄がはみ出さないよう、種類の下に並べる -->
                             <StackPanel Orientation="Horizontal" Spacing="24">
-                                <RadioButtons x:Name="DecorKindButtons" Header="種類" MaxColumns="3" SelectedIndex="{x:Bind ViewModel.Editor.DecorKind, Mode=TwoWay}">
-                                    <x:String>なし</x:String>
-                                    <x:String>影</x:String>
-                                    <x:String>ブラー</x:String>
-                                </RadioButtons>
                                 <NumberBox
                                     x:Name="DecorSizeBox"
                                     Header="サイズ px"
