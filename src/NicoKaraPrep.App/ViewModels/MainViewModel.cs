@@ -1482,6 +1482,7 @@ public partial class MainViewModel : ObservableObject
 
     /// <summary>
     /// 現在の設定＋実効絵文字リスト（曲内 @Emoji 含む）をテンプレートとして保存する。
+    /// ニコカラメーカー3 のフォント設定は含めない（CopyFrom が取り込まないので写しの N3FontSets は空）。
     /// </summary>
     public void SaveTemplate(string path)
     {

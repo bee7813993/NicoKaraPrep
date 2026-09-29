@@ -131,4 +131,48 @@ public class AppSettingsTests
             Assert.Equal(3, AppSettings.LoadStrict(ok).FixedLineCount);
         });
     }
+
+    // ------------------------------------------------------------ テンプレート
+
+    [Fact]
+    public void テンプレート_取り込みはフォント設定を変えない()
+    {
+        var settings = new AppSettings();
+        settings.N3FontSets.Add(new N3FontSet { Name = "（花帆）", SizePx = 72 });
+        var fonts = settings.N3FontSets;
+
+        var template = new AppSettings { FixedLineCount = 3, FontSizePx = 60 };
+        template.N3FontSets.Add(new N3FontSet { Name = "テンプレートのフォント" });
+        settings.CopyFrom(template);
+
+        Assert.Equal(3, settings.FixedLineCount);
+        Assert.Equal(60, settings.FontSizePx);
+        Assert.Same(fonts, settings.N3FontSets);
+        Assert.Equal("（花帆）", Assert.Single(settings.N3FontSets).Name);
+    }
+
+    [Fact]
+    public void テンプレート_写しにはフォント設定が入らず古いテンプレートのフォント設定は無視される()
+    {
+        InTempDir(dir =>
+        {
+            var settings = new AppSettings { FixedLineCount = 3 };
+            settings.N3FontSets.Add(new N3FontSet { Name = "（花帆）" });
+
+            // テンプレートの保存と同じ手順（新しい設定へ取り込む）で作った写しにはフォント設定が入らない
+            var snapshot = new AppSettings();
+            snapshot.CopyFrom(settings);
+            Assert.Equal(3, snapshot.FixedLineCount);
+            Assert.Empty(snapshot.N3FontSets);
+
+            // フォント設定を含む古いテンプレートを適用しても、ライブラリは置き換わらない
+            string path = Path.Combine(dir, "古い.tttpl");
+            var old = new AppSettings { FixedLineCount = 4 };
+            old.N3FontSets.Add(new N3FontSet { Name = "古いフォント" });
+            old.Save(path);
+            settings.CopyFrom(AppSettings.LoadStrict(path));
+            Assert.Equal(4, settings.FixedLineCount);
+            Assert.Equal("（花帆）", Assert.Single(settings.N3FontSets).Name);
+        });
+    }
 }

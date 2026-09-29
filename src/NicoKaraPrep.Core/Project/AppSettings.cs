@@ -88,7 +88,7 @@ public sealed class AppSettings
     /// <summary>最後に使ったベース n3proj（曲ごとの指定が無いときの既定）。</summary>
     public string N3LastBasePath { get; set; } = "";
 
-    /// <summary>NicoKaraPrep 側で定義するニコカラメーカー3 のフォント設定（テンプレートに含まれる）。</summary>
+    /// <summary>NicoKaraPrep 側で定義するニコカラメーカー3 のフォント設定（テンプレートには含めない。<see cref="CopyFrom"/> 参照）。</summary>
     public List<N3FontSet> N3FontSets { get; set; } = new();
 
     // ---- メディア再生 ----
@@ -228,7 +228,7 @@ public sealed class AppSettings
     public static string DefaultPath =>
         Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "NicoKaraPrep", "settings.json");
 
-    /// <summary>別の設定（テンプレート）の内容をこのインスタンスへ取り込む。</summary>
+    /// <summary>別の設定（テンプレート）の内容をこのインスタンスへ取り込む（ニコカラメーカー3 のフォント設定は除く）。</summary>
     public void CopyFrom(AppSettings other)
     {
         PageMode = other.PageMode;
@@ -253,7 +253,8 @@ public sealed class AppSettings
         N3IntervalSeconds = other.N3IntervalSeconds;
         N3ProtectSeconds = other.N3ProtectSeconds;
         N3TopLong = other.N3TopLong;
-        N3FontSets = other.N3FontSets.Select(f => f.Clone()).ToList();
+        // N3FontSets（ニコカラメーカー3 のフォント設定）はテンプレートとは独立したライブラリなので取り込まない
+        // （テンプレートの適用でライブラリが置き換わらないように。古いテンプレートに入っていても無視する）
     }
 
     /// <summary>
