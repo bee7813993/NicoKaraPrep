@@ -219,7 +219,7 @@ public sealed partial class MainWindow
 
     private void EnterFontSettingsView()
     {
-        string back = MainViewModel.ViewModeName(_previousViewMode);
+        string back = MainViewModel.ViewModeName(FontSettingsReturnTarget);
         EnsureFontView().Enter(back);
         ViewModel.StatusText = $"フォント設定ビュー: Esc（または F3）で{back}へ戻ります";
     }
@@ -343,5 +343,17 @@ public sealed partial class MainWindow
     }
 
     private void ShowLineOperationBlocked() =>
-        ViewModel.StatusText = $"フォント設定ビューでは行の操作は使えません（Esc で{MainViewModel.ViewModeName(_previousViewMode)}へ戻ります）";
+        ViewModel.StatusText = $"フォント設定ビューでは行の操作は使えません（Esc で{MainViewModel.ViewModeName(FontSettingsReturnTarget)}へ戻ります）";
+
+    /// <summary>
+    /// 歌詞の 元に戻す・やり直し を止めるか。行が見えないフォント設定ビューでは止め、
+    /// 押しても何も起きないように見えないよう、ステータスバーで知らせる。
+    /// </summary>
+    private bool LyricsUndoRedoBlocked()
+    {
+        if (ViewModel.ViewMode != MainViewMode.FontSettings) return false;
+        ViewModel.StatusText =
+            $"フォント設定ビューでは歌詞の元に戻す・やり直しは使えません（Esc で{MainViewModel.ViewModeName(FontSettingsReturnTarget)}へ戻ります）";
+        return true;
+    }
 }

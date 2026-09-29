@@ -47,6 +47,9 @@ public sealed partial class MainWindow : Window
         _validateTimer.IsRepeating = false;
         _validateTimer.Tick += (_, _) =>
         {
+            // フォント設定ビューでは行もチェック結果も見えないので、チェックしない（ステータスバーの案内をチェック結果で消さない）。
+            // 戻るときに ExitFontSettingsView がチェックを予約し直す
+            if (ViewModel.ViewMode == MainViewMode.FontSettings) return;
             TryRun(ViewModel.RunValidation);
             RefreshInsertGutter(); // 挿入ビュー表示中なら横幅などの再計算結果を行情報欄へ反映
         };
@@ -767,7 +770,7 @@ public sealed partial class MainWindow : Window
     private void PerformUndo()
     {
         // フォント設定ビューでは歌詞の変更を戻さない（見えない行が変わるため。ビューの中の操作はビュー側で扱う）
-        if (ViewModel.ViewMode == MainViewMode.FontSettings) return;
+        if (LyricsUndoRedoBlocked()) return;
         if (!DebounceUndoRedo()) return;
         if (!ViewModel.Undo()) return;
         AfterUndoRedo();
@@ -775,7 +778,7 @@ public sealed partial class MainWindow : Window
 
     private void PerformRedo()
     {
-        if (ViewModel.ViewMode == MainViewMode.FontSettings) return; // PerformUndo と同じ
+        if (LyricsUndoRedoBlocked()) return; // PerformUndo と同じ
         if (!DebounceUndoRedo()) return;
         if (!ViewModel.Redo()) return;
         AfterUndoRedo();
