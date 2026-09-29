@@ -22,7 +22,8 @@ public class N3FontGoldenTests
     /// <summary>
     /// n3proj のフォント設定を読み、同じ n3proj をベースにしてマージ書き出しすると、LyricsFonts が元と一致する
     /// （LastModified・ModifyAppVer を除く。数値は 1e-6 の許容）。値を壊したベースへマージしても同じになることも確かめる。
-    /// あわせて、ベース無しで新規に書き出した LyricsFonts も、識別用の項目（下位の Guid・日時・版）を除いて元と一致することを確かめる。
+    /// あわせて、ベース無しで新規に書き出した LyricsFonts も、識別用の項目（下位の Guid・日時・版と、配色・文字種別フォントの設定名・番号）を除いて
+    /// 元と一致することを確かめる。
     /// 環境変数 TTT_N3PROJ_SAMPLE に n3proj のパスを設定して実行する。
     /// </summary>
     [Fact]
@@ -186,8 +187,15 @@ public class N3FontGoldenTests
     private static readonly HashSet<string> IdentityKeys = new(StringComparer.Ordinal) { "Guid", "CreateAppVer", "SynchronizedTime", "LastModified", "ModifyAppVer" };
 
     /// <summary>
+    /// 配色・文字種別フォント 1 件の識別用の項目。設定名は表示用のラベルで、ニコカラメーカーの「ワイプ前後の配色を交換」では
+    /// 配色と一緒に入れ替わる（新規の書き出しは添字どおりのラベルで書く）。
+    /// </summary>
+    private static readonly HashSet<string> SubItemIdentityKeys = new(IdentityKeys.Concat(new[] { "SettingsName", "Index" }), StringComparer.Ordinal);
+
+    /// <summary>
     /// JSON を比べる。strict = true はキーの並びまで比べ、LastModified・ModifyAppVer だけを除く。
-    /// strict = false は識別用の項目を除き、キーの並びは問わず、XScale の欠落は 0、Size と Ratio が 0 のサイズは同じ（継承）とみなす。
+    /// strict = false は識別用の項目（配色・文字種別フォントでは設定名と番号も）を除き、キーの並びは問わず、
+    /// XScale の欠落は 0、Size と Ratio が 0 のサイズは同じ（継承）とみなす。
     /// </summary>
     private static void Compare(JsonNode? expected, JsonNode? actual, string path, List<string> diffs, bool strict)
     {
@@ -204,7 +212,7 @@ public class N3FontGoldenTests
                     return;
                 }
                 if (!strict && IsBlankSize(eo) && IsBlankSize(ao)) return;
-                var ignored = strict ? AlwaysIgnored : IdentityKeys;
+                var ignored = strict ? AlwaysIgnored : IsSubItem(path) ? SubItemIdentityKeys : IdentityKeys;
                 var ek = eo.Select(kv => kv.Key).Where(k => !ignored.Contains(k)).ToList();
                 var ak = ao.Select(kv => kv.Key).Where(k => !ignored.Contains(k)).ToList();
                 if (!strict)
@@ -242,6 +250,13 @@ public class N3FontGoldenTests
                 if (expected.ToJsonString() != av.ToJsonString()) diffs.Add($"{path}: {expected.ToJsonString()} ≠ {av.ToJsonString()}");
                 return;
         }
+    }
+
+    /// <summary>配色（BrushInfos の要素）か文字種別フォント（FontInfos の要素）のパスか。</summary>
+    private static bool IsSubItem(string path)
+    {
+        string last = path[(path.LastIndexOf('/') + 1)..];
+        return last.StartsWith("BrushInfos[", StringComparison.Ordinal) || last.StartsWith("FontInfos[", StringComparison.Ordinal);
     }
 
     private static bool IsBlankSize(JsonObject o) =>
