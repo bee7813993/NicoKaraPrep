@@ -198,68 +198,38 @@ public static class N3ProjFormat
     }
 
     /// <summary>
-    /// n3proj のフォント設定タブを NicoKaraPrep のフォント設定（<see cref="N3FontSet"/>）として取り出す
-    /// （単色の配色・歌詞／漢字とルビ／漢字のサイズ・文字飾りのみ。グラデーション等は変換しない）。
+    /// n3proj のフォント設定タブを NicoKaraPrep のフォント設定（<see cref="N3FontSet"/>）として全項目取り出す
+    /// （配色 8 箇所の塗りの種類・単色・不透明度・マーカー・画像、文字種別フォント 6 種、文字飾り、Guid と連動の状態）。
     /// </summary>
     public static List<N3FontSet> ReadFontSets(string path)
     {
+        var result = ReadFontSets(ReadJsonObject(path));
+        string full = Path.GetFullPath(path);
+        foreach (var f in result) f.ImportedFrom = full;
+        return result;
+    }
+
+    /// <summary>読み込み済みの n3proj の JSON からフォント設定を取り出す。</summary>
+    public static List<N3FontSet> ReadFontSets(JsonObject root)
+    {
         var result = new List<N3FontSet>();
-        var root = ReadJsonObject(path);
-        int height = root["SourceInfo"]?["BackgroundHeight"]?.GetValue<int>() ?? 1080;
+        int height = N3FontJson.Int(root["SourceInfo"]?["BackgroundHeight"]) ?? 1080;
+        if (height <= 0) height = 1080;
         if (root["LyricsFonts"] is not JsonArray sets) return result;
 
         foreach (var node in sets)
         {
-            if (node is not JsonObject set) continue;
-            var f = new N3FontSet { Name = set["SettingsName"]?.GetValue<string>() ?? "" };
-            if (set["FontInfos"] is JsonArray fis)
-            {
-                if (fis.Count > 0 && fis[0] is JsonObject main)
-                {
-                    f.FontFamily = main["FontName"]?.GetValue<string>() ?? "";
-                    f.FontFace = main["FontFaceName"]?.GetValue<string>() ?? "";
-                    f.SizePx = Math.Round(SizePx(main["CharSize"], height), 1);
-                    f.EdgePx = Math.Round(SizePx(main["EdgeSize"], height), 1);
-                    f.UseEdge2 = main["UseEdge2"] is JsonValue ue && ue.TryGetValue<bool>(out bool useEdge2) && useEdge2;
-                    f.Edge2Px = Math.Round(SizePx(main["EdgeSize2"], height), 1);
-                }
-                if (fis.Count > 3 && fis[3] is JsonObject ruby)
-                {
-                    f.RubySizePx = Math.Round(SizePx(ruby["CharSize"], height), 1);
-                    f.RubyEdgePx = Math.Round(SizePx(ruby["EdgeSize"], height), 1);
-                }
-            }
-            if (set["BrushInfos"] is JsonArray brushes)
-            {
-                string Color(int i) =>
-                    i < brushes.Count && brushes[i] is JsonObject b && (b["SelectedBrushTypeIndex"]?.GetValue<int>() ?? 0) == 0
-                        ? b["SolidColor"]?["Web16"]?.GetValue<string>() ?? ""
-                        : "";
-                f.TextColorAfter = Color(0);
-                f.EdgeColorAfter = Color(1);
-                f.Edge2ColorAfter = Color(2);
-                f.DecorColorAfter = Color(3);
-                f.TextColorBefore = Color(4);
-                f.EdgeColorBefore = Color(5);
-                f.Edge2ColorBefore = Color(6);
-                f.DecorColorBefore = Color(7);
-            }
-            f.DecorKind = set["DecorKind"]?.GetValue<int>() ?? 0;
-            f.DecorSizePx = Math.Round(SizePx(set["DecorSize"], height), 1);
-            f.BlurLevel = set["BlurLevel"]?.GetValue<int>() ?? 2;
-            result.Add(f);
+            if (node is JsonObject set) result.Add(ParseFontSet(set, height));
         }
         return result;
     }
 
-    private static double SizePx(JsonNode? sizeAndRatio, int height)
-    {
-        if (sizeAndRatio is not JsonObject o) return 0;
-        double ratio = o["Ratio"]?.GetValue<double>() ?? 0;
-        double size = o["Size"]?.GetValue<double>() ?? 0;
-        double reference = o["Reference"]?.GetValue<double>() ?? height;
-        return ratio > 0 ? ratio * height : (reference > 0 ? size * height / reference : size);
-    }
+    /// <summary>
+    /// ニコカラメーカー3 のフォント設定（LyricsFontModel）1 件を読み取る。
+    /// サイズは画面高さ <paramref name="height"/> 換算の px。Guid は <see cref="N3FontSet.NkmGuid"/>、
+    /// テンプレート連動は <see cref="N3FontSet.NkmSynchronize"/> に入る。
+    /// </summary>
+    public static N3FontSet ParseFontSet(JsonObject set, int height) => N3FontJson.ParseFontSet(set, height);
 
     private static double ReadSizePx(JsonElement obj, string name, int height)
     {
