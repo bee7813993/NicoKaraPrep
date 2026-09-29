@@ -68,6 +68,9 @@ public sealed partial class MainWindow
             if (e.PropertyName == nameof(MainViewModel.ViewMode)) SyncViewSwitchers();
         };
         SyncViewSwitchers();
+
+        // 閉じるときに、フォント設定ビューで保存を待っている編集を保存する（300ms ごとにまとめて保存しているため）
+        Closed += (_, _) => _fontView?.FlushPendingSave();
     }
 
     /// <summary>ビューを切り替える。ビューの出入りはすべてここを通す。</summary>

@@ -192,7 +192,7 @@ public sealed partial class BrushEditorViewModel : ObservableObject
 
     private void SetColorFields(string web16, int alphaPercent, bool showHex)
     {
-        PickerColor = N3BrushPreview.ToColor(web16, alphaPercent, Colors.White);
+        SetPickerColor(N3BrushPreview.ToColor(web16, alphaPercent, Colors.White));
         HexText = showHex ? N3FontSet.NormalizeWeb16(web16) : "";
         AlphaValue = alphaPercent;
     }
@@ -247,9 +247,19 @@ public sealed partial class BrushEditorViewModel : ObservableObject
         Load(Index);
     }
 
+    /// <summary>ColorPicker に最後に設定した色（ColorPicker がその色を返してきたときは、操作ではないので編集として扱わない）。</summary>
+    private Color? _pickerColorSet;
+
+    private void SetPickerColor(Color color)
+    {
+        _pickerColorSet = color;
+        PickerColor = color;
+    }
+
     partial void OnPickerColorChanged(Color value)
     {
-        if (_loading) return;
+        if (_loading || value == _pickerColorSet) return;
+        _pickerColorSet = null;
         string hex = N3BrushPreview.ToWeb16(value);
         int alpha = N3BrushPreview.AlphaPercent(value.A);
         ApplyColor(hex, alpha, ColorSource.Picker);
@@ -312,7 +322,7 @@ public sealed partial class BrushEditorViewModel : ObservableObject
         try
         {
             // 変えた欄には書き戻さない（ColorPicker は色相などが丸めで動き、16 進の欄は入力中の文字が置き換わるため）
-            if (source != ColorSource.Picker) PickerColor = N3BrushPreview.ToColor(web16, alphaPercent, Colors.White);
+            if (source != ColorSource.Picker) SetPickerColor(N3BrushPreview.ToColor(web16, alphaPercent, Colors.White));
             if (source != ColorSource.Hex) HexText = N3FontSet.NormalizeWeb16(web16);
             if (source != ColorSource.Alpha) AlphaValue = alphaPercent;
         }
@@ -489,6 +499,8 @@ public sealed partial class GradientStopViewModel : ObservableObject
     public bool CanDelete { get; }
 
     public string DeleteToolTip => CanDelete ? "このマーカーを削除" : "両端のマーカーは削除できません";
+
+    public override string ToString() => $"マーカー {Index + 1}: {Model.Position * 100:0.#}% #{N3FontSet.NormalizeWeb16(Model.Color)} {Model.AlphaPercent}%";
 
     [ObservableProperty]
     private double positionValue;

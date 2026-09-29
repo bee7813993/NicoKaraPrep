@@ -66,6 +66,9 @@ public sealed partial class FontListItem : ObservableObject
         UpdateToolTip();
     }
 
+    /// <summary>読み上げ・UI オートメーションでの名前（一覧の行の名前になる）。</summary>
+    public override string ToString() => $"{DisplayName}（{ScopeText}{(IsLinked ? "・連動" : "")}）";
+
     partial void OnUsageChanged(int value) => UsageText = value > 0 ? $"{value} 文字" : "未使用";
 
     partial void OnIsOverriddenChanged(bool value) => UpdateToolTip();
@@ -133,7 +136,10 @@ public sealed partial class BrushCellViewModel : ObservableObject
 
 /// <summary>フォント設定を使っている行 1 つ（使用状況の一覧）。</summary>
 /// <param name="Text">表示（タブ名・行番号・行の先頭）。</param>
-public sealed record FontUsageLine(string Text);
+public sealed record FontUsageLine(string Text)
+{
+    public override string ToString() => Text;
+}
 
 /// <summary>フォント設定の検証結果 1 件（右ペインの一覧）。</summary>
 public sealed class FontIssueItem
@@ -170,4 +176,6 @@ public sealed class FontIssueItem
         IssueSeverity.Warning => "警告",
         _ => "情報",
     };
+
+    public override string ToString() => $"{SeverityText}: {Message}";
 }

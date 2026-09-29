@@ -178,7 +178,7 @@
                     </DropDownButton.Flyout>
                 </DropDownButton>
             </StackPanel>
-            <TextBlock Grid.Row="6" Text="{x:Bind ViewModel.ListSummary, Mode=OneWay}" Style="{StaticResource Note}" />
+            <TextBlock x:Name="ListSummaryText" Grid.Row="6" Text="{x:Bind ViewModel.ListSummary, Mode=OneWay}" Style="{StaticResource Note}" />
         </Grid>
 
         <!-- ================= 中央: 編集 ================= -->

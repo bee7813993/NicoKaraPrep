@@ -28,6 +28,7 @@ public sealed partial class FontSettingsViewModel : ObservableObject
     private bool _songDirty;
     private string? _coalesceKey;
     private DateTime _lastEditUtc;
+    private bool _rebuildQueued;
 
     public FontSettingsViewModel(MainViewModel main)
     {
@@ -230,7 +231,18 @@ public sealed partial class FontSettingsViewModel : ObservableObject
         _redo.Clear();
         _coalesceKey = null;
         UpdateUndoState();
-        Rebuild(null);
+
+        // 一覧の作り直しと使用状況の計算は、ファイルを開く処理（タブ・行の指定の復元）が終わってから行う
+        _lineSelection = Array.Empty<int>();
+        if (!_rebuildQueued)
+        {
+            _rebuildQueued = true;
+            DispatcherQueue.GetForCurrentThread().TryEnqueue(() =>
+            {
+                _rebuildQueued = false;
+                Rebuild(null);
+            });
+        }
     }
 
     // ------------------------------------------------------------ 編集
@@ -315,9 +327,13 @@ public sealed partial class FontSettingsViewModel : ObservableObject
     public void DuplicateSelected()
     {
         if (SelectedItem is not { } item) return;
-        PushUndo(null);
+        var entry = PushUndo(null);
         var copy = N3FontLibrary.Duplicate(ListOf(item), item.Id);
-        if (copy is null) return;
+        if (copy is null)
+        {
+            DropLastUndo(entry);
+            return;
+        }
         MarkDirty(item.IsSong);
         ClearFilterFor(copy.Id);
         SetStatus($"フォント設定「{item.Font.Name}」を複製して「{copy.Name}」を作りました");
@@ -343,8 +359,12 @@ public sealed partial class FontSettingsViewModel : ObservableObject
     {
         var list = ListOf(item);
         int index = _all.IndexOf(item);
-        PushUndo(null);
-        if (!N3FontLibrary.Remove(list, item.Id)) return;
+        var entry = PushUndo(null);
+        if (!N3FontLibrary.Remove(list, item.Id))
+        {
+            DropLastUndo(entry);
+            return;
+        }
         MarkDirty(item.IsSong);
 
         // 削除した次の行（無ければ前の行）を選ぶ

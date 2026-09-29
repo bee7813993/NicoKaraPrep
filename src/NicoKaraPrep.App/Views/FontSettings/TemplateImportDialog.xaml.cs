@@ -45,6 +45,8 @@ public sealed partial class TemplateRow : ObservableObject
 
     [ObservableProperty]
     private bool isSelected;
+
+    public override string ToString() => $"{Name}（{Note}）";
 }
 
 /// <summary>

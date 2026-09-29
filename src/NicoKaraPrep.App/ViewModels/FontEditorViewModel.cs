@@ -173,7 +173,7 @@ public sealed partial class FontEditorViewModel : ObservableObject
         LinkText = f.NkmSynchronize
             ? "ニコカラメーカー3 のテンプレートと連動しています。編集すると、書き出し時にこのフォントの連動が外れます"
             : f.NkmGuid is not null
-                ? "ニコカラメーカー3 のテンプレートとの連動: なし（NicoKaraPrep で編集したため、書き出し時に連動を外します）"
+                ? "ニコカラメーカー3 のテンプレートとは連動していません（取り込んだときに連動していなかったか、NicoKaraPrep で編集して連動を外しました）"
                 : "";
         HasLinkNote = !f.NkmSynchronize && LinkText.Length > 0;
         ImportedFromText = f.ImportedFrom is { Length: > 0 } from
