@@ -217,6 +217,9 @@ public sealed partial class FontEditorViewModel : ObservableObject
 
     // ------------------------------------------------------------ 編集
 
+    /// <summary>フォント設定（アプリ共通・この曲専用）で使っているフォント名（フォントを選ぶ画面の先頭に出す）。</summary>
+    public IReadOnlyCollection<string> UsedFontNames() => _owner.UsedFontNames();
+
     /// <summary>編集中のフォント設定を変える（読み込み中は何もしない）。</summary>
     internal void Edit(string? key, Action<N3FontSet> change)
     {

@@ -1,16 +1,19 @@
 ﻿using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
+using Microsoft.UI.Xaml.Media;
 using NicoKaraPrep.App.ViewModels;
 
 namespace NicoKaraPrep.App.Views.FontSettings;
 
 /// <summary>
 /// フォント設定ビューのフォントフェースの表（文字種別フォント 6 行）。
-/// フォント名・フェイス名は、一覧から選ぶことも一覧に無い名前（ほかの PC のフォントなど）を入れることもできるよう、
-/// 候補の一覧つきの入力欄（AutoSuggestBox）にする。Enter・候補の選択・欄を離れたときに確定する。
+/// フォント名とフェイス名は 1 つのボタンに出し、押すとフォントを選ぶ画面（見本つきの一覧）を開く。
 /// </summary>
 public sealed partial class FaceTable : UserControl
 {
+    /// <summary>表の最小の幅（種別 60 + フォント 120 + 数値 60 × 4 + 縁 2 32 + 間隔 4 × 6）。これより狭いと横にスクロールする。</summary>
+    private const double TableMinWidth = 60 + 120 + 60 * 4 + 32 + 4 * 6;
+
     public FaceTable()
     {
         InitializeComponent();
@@ -26,56 +29,73 @@ public sealed partial class FaceTable : UserControl
         Bindings.Update();
     }
 
-    private static FaceRowViewModel? RowOf(object sender) => (sender as FrameworkElement)?.DataContext as FaceRowViewModel;
+    /// <summary>
+    /// 横にスクロールできる表は中身の幅が決まらないため、表示できる幅（狭いときは最小の幅）に合わせる。
+    /// これで 6 行ともフォントの列が同じ幅になる。
+    /// </summary>
+    private void OnTableScrollSizeChanged(object sender, SizeChangedEventArgs e) =>
+        TableRoot.Width = Math.Max(TableMinWidth, e.NewSize.Width);
 
-    private static bool IsFontBox(AutoSuggestBox box) => (box.Tag as string) == "font";
-
-    /// <summary>入力した文字を含む候補（先頭は「継承に戻す」）。</summary>
-    private static List<string> Suggestions(FaceRowViewModel row, AutoSuggestBox box)
+    /// <summary>
+    /// 数値の欄（幅 60px）では、入力中に出る消去ボタン（×）が数字を隠すので、幅を 0 にして出さない
+    /// （表示・非表示は入力欄の状態で切り替わるため、幅で消す）。
+    /// </summary>
+    private void OnNumberBoxLoaded(object sender, RoutedEventArgs e)
     {
-        var choices = IsFontBox(box) ? row.FontChoices : row.FaceChoices;
-        string q = box.Text.Trim();
-        if (q.Length == 0) return choices.ToList();
-        return choices.Where(c => c == FaceRowViewModel.InheritChoice || c.Contains(q, StringComparison.OrdinalIgnoreCase)).ToList();
-    }
-
-    /// <summary>欄の文字を確定し、欄をフォント設定の値に合わせる（「継承に戻す」や空は継承＝空欄）。</summary>
-    private static void Commit(AutoSuggestBox box, string? text)
-    {
-        if (RowOf(box) is not { } row) return;
-        if (IsFontBox(box))
+        if (sender is DependencyObject box && FindDescendant(box, "DeleteButton") is Button delete)
         {
-            row.CommitFontName(text);
-            if (box.Text != row.FontNameText) box.Text = row.FontNameText;
-        }
-        else
-        {
-            row.CommitFaceName(text);
-            if (box.Text != row.FaceNameText) box.Text = row.FaceNameText;
+            delete.Width = 0;
+            delete.MinWidth = 0;
+            delete.Padding = new Thickness(0);
+            delete.Margin = new Thickness(0);
         }
     }
 
-    /// <summary>欄に入ったら候補をすべて出す。</summary>
-    private void OnNameGotFocus(object sender, RoutedEventArgs e)
+    private static FrameworkElement? FindDescendant(DependencyObject root, string name)
     {
-        if (sender is not AutoSuggestBox box || RowOf(box) is not { } row) return;
-        box.ItemsSource = Suggestions(row, box);
-        box.IsSuggestionListOpen = true;
+        int count = VisualTreeHelper.GetChildrenCount(root);
+        for (int i = 0; i < count; i++)
+        {
+            var child = VisualTreeHelper.GetChild(root, i);
+            if (child is FrameworkElement fe && fe.Name == name) return fe;
+            if (FindDescendant(child, name) is { } found) return found;
+        }
+        return null;
     }
 
-    private void OnNameLostFocus(object sender, RoutedEventArgs e)
+    /// <summary>フォントのボタン: フォントを選ぶ画面を開き、選んだフォント（または継承）をその行に設定する。</summary>
+    private async void OnFontButtonClick(object sender, RoutedEventArgs e)
     {
-        if (sender is AutoSuggestBox box) Commit(box, box.Text);
-    }
+        if ((sender as FrameworkElement)?.DataContext is not FaceRowViewModel row || ViewModel?.Font is not { } font) return;
 
-    /// <summary>入力に合わせて候補を絞る（候補を選んだときの文字の変化では絞らない）。</summary>
-    private void OnNameTextChanged(AutoSuggestBox sender, AutoSuggestBoxTextChangedEventArgs args)
-    {
-        if (args.Reason != AutoSuggestionBoxTextChangeReason.UserInput || RowOf(sender) is not { } row) return;
-        sender.ItemsSource = Suggestions(row, sender);
-    }
+        var own = font.Detail.Faces[row.Index];
+        var (inheritedFont, inheritedFace) = row.InheritedFont(font);
+        var dialog = new FontPickerDialog(
+            row.Label, own.FontName, own.FaceName, inheritedFont, inheritedFace,
+            ViewModel.UsedFontNames(), japaneseOnly: !row.IsAlphanumeric)
+        {
+            XamlRoot = XamlRoot,
+        };
+        try
+        {
+            await dialog.ShowAsync();
+        }
+        catch (Exception)
+        {
+            // ほかの画面（ダイアログ）が開いているなど。何も変えない
+            return;
+        }
 
-    /// <summary>Enter か候補の選択で確定する。</summary>
-    private void OnNameQuerySubmitted(AutoSuggestBox sender, AutoSuggestBoxQuerySubmittedEventArgs args) =>
-        Commit(sender, args.ChosenSuggestion as string ?? args.QueryText);
+        // 画面を開いている間に別のフォント設定を選ぶことはできないが、念のため同じフォント設定のときだけ書き込む
+        if (!ReferenceEquals(ViewModel.Font, font)) return;
+        switch (dialog.Result.Kind)
+        {
+            case FontPickerResultKind.Select:
+                row.CommitFont(dialog.Result.FontName, dialog.Result.FaceName);
+                break;
+            case FontPickerResultKind.Inherit:
+                row.CommitFont("", "");
+                break;
+        }
+    }
 }

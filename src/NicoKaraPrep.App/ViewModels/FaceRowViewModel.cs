@@ -1,33 +1,16 @@
 ﻿using System.Globalization;
 using CommunityToolkit.Mvvm.ComponentModel;
-using NicoKaraPrep.App.Services;
 using NicoKaraPrep.Core.Model;
 
 namespace NicoKaraPrep.App.ViewModels;
 
 /// <summary>
 /// 文字種別フォント 1 行（フォントフェースの表。歌詞／漢字・かな・英数、ルビ／漢字・かな・英数）。
-/// 空・0・継承の欄は値を空にし、PlaceholderText に継承した値（実効値）を薄く出す。
+/// フォント名とフェイス名はボタンに出し、押すとフォントを選ぶ画面を開く（<see cref="CommitFont"/> で確定）。
+/// 数値の欄は空・0 が継承で、PlaceholderText に継承した値（実効値）を薄く出す。縁 2 は 3 状態（付ける／付けない／継承）。
 /// </summary>
 public sealed partial class FaceRowViewModel : ObservableObject
 {
-    /// <summary>フォント名・フェイス名の選択肢の先頭（選ぶと継承に戻す）。</summary>
-    public const string InheritChoice = "（継承に戻す）";
-
-    private static readonly Lazy<IReadOnlyList<string>> SystemFonts = new(() =>
-    {
-        var fonts = new List<string> { InheritChoice };
-        try
-        {
-            fonts.AddRange(DirectWriteTextMeasurer.GetSystemFontFamilies().Distinct().OrderBy(f => f, StringComparer.CurrentCulture));
-        }
-        catch (Exception)
-        {
-            // フォントの一覧が取れなくても、名前の直接入力はできる
-        }
-        return fonts;
-    });
-
     private readonly FontEditorViewModel _editor;
     private bool _loading;
 
@@ -47,9 +30,7 @@ public sealed partial class FaceRowViewModel : ObservableObject
     /// <summary>読み上げ・UI オートメーションでの欄の名前（「歌詞／漢字 サイズ」など）。</summary>
     public string NameOf(string column) => $"{Label} {column}";
 
-    public string FontNameLabel => NameOf("フォント名");
-
-    public string FaceNameLabel => NameOf("フェイス");
+    public string FontLabel => NameOf("フォント");
 
     public string SizeLabel => NameOf("サイズ");
 
@@ -64,26 +45,23 @@ public sealed partial class FaceRowViewModel : ObservableObject
     /// <summary>ルビ／漢字の行か（サイズ・縁・縁 2 の 0 は「歌詞の半分」）。</summary>
     public bool IsRubyKanji => Index == 3;
 
-    /// <summary>フォント名の選択肢（先頭は「継承に戻す」、以降はシステムのフォント）。初めて使うときに 1 回だけ取得する。</summary>
-    public IReadOnlyList<string> FontChoices => SystemFonts.Value;
+    /// <summary>英数の行か（フォントを選ぶ画面で「日本語のあるフォントだけ」を最初は外す）。</summary>
+    public bool IsAlphanumeric => Index is 2 or 5;
 
-    /// <summary>フェイス名の選択肢。</summary>
-    public IReadOnlyList<string> FaceChoices { get; } = new[] { InheritChoice, "Bold", "ﾍﾋﾞｰ", "ｴｸｽﾄﾗﾎﾞｰﾙﾄﾞ", "Regular", "Italic" };
+    /// <summary>フォントのボタンの 1 行目（フォント名。継承なら「継承: …」）。</summary>
+    [ObservableProperty]
+    private string fontLine = "";
 
-    /// <summary>縁 2 の選択肢（添字 0 付ける / 1 付けない / 2 継承に戻す）。</summary>
-    public IReadOnlyList<string> Edge2Choices { get; } = new[] { "付ける", "付けない", InheritChoice };
+    /// <summary>フォントのボタンの 2 行目（フェイス名。継承なら「継承: …」）。</summary>
+    [ObservableProperty]
+    private string faceLine = "";
+
+    /// <summary>フォント名が継承のときはボタンの 1 行目を薄くする。</summary>
+    [ObservableProperty]
+    private double fontLineOpacity = 1;
 
     [ObservableProperty]
-    private string fontNameText = "";
-
-    [ObservableProperty]
-    private string fontNamePlaceholder = "";
-
-    [ObservableProperty]
-    private string faceNameText = "";
-
-    [ObservableProperty]
-    private string faceNamePlaceholder = "";
+    private string fontToolTip = "";
 
     [ObservableProperty]
     private double sizeValue = double.NaN;
@@ -92,10 +70,16 @@ public sealed partial class FaceRowViewModel : ObservableObject
     private string sizePlaceholder = "";
 
     [ObservableProperty]
+    private string sizeToolTip = "";
+
+    [ObservableProperty]
     private double xScaleValue = double.NaN;
 
     [ObservableProperty]
     private string xScalePlaceholder = "";
+
+    [ObservableProperty]
+    private string xScaleToolTip = "";
 
     [ObservableProperty]
     private double edgeValue = double.NaN;
@@ -103,18 +87,24 @@ public sealed partial class FaceRowViewModel : ObservableObject
     [ObservableProperty]
     private string edgePlaceholder = "";
 
-    /// <summary>縁 2（-1 継承 / 0 付ける / 1 付けない）。</summary>
     [ObservableProperty]
-    private int edge2Index = -1;
+    private string edgeToolTip = "";
+
+    /// <summary>縁 2（true 付ける / false 付けない / null 継承）。</summary>
+    [ObservableProperty]
+    private bool? edge2State;
 
     [ObservableProperty]
-    private string edge2Placeholder = "";
+    private string edge2ToolTip = "";
 
     [ObservableProperty]
     private double edge2Value = double.NaN;
 
     [ObservableProperty]
     private string edge2WidthPlaceholder = "";
+
+    [ObservableProperty]
+    private string edge2WidthToolTip = "";
 
     /// <summary>フォント設定から値を読む。</summary>
     public void Load(N3FontSet font)
@@ -123,12 +113,10 @@ public sealed partial class FaceRowViewModel : ObservableObject
         try
         {
             var face = font.Detail.Faces[Index];
-            FontNameText = face.FontName;
-            FaceNameText = face.FaceName;
             SizeValue = face.SizePx > 0 ? face.SizePx : double.NaN;
             XScaleValue = face.XScale > 0 ? face.XScale : double.NaN;
             EdgeValue = face.EdgePx > 0 ? face.EdgePx : double.NaN;
-            Edge2Index = face.UseEdge2 switch { true => 0, false => 1, null => -1 };
+            Edge2State = face.UseEdge2;
             Edge2Value = face.Edge2Px > 0 ? face.Edge2Px : double.NaN;
             RefreshPlaceholders(font);
         }
@@ -138,19 +126,48 @@ public sealed partial class FaceRowViewModel : ObservableObject
         }
     }
 
-    /// <summary>継承の欄に出す実効値を読み直す（ほかの行を変えると変わる）。</summary>
+    /// <summary>フォントのボタンの表示と、継承の欄に出す実効値を読み直す（ほかの行を変えると変わる）。</summary>
     public void RefreshPlaceholders(N3FontSet font)
     {
+        var own = font.Detail.Faces[Index];
         var eff = N3FontLibrary.EffectiveFace(font, Index);
-        string inherit = IsRubyKanji ? "半分" : "継承";
-        FontNamePlaceholder = eff.FontName.Length > 0 ? $"継承: {eff.FontName}" : "継承: （既定のフォント）";
-        FaceNamePlaceholder = eff.FaceName.Length > 0 ? $"継承: {eff.FaceName}" : "継承: （標準）";
-        SizePlaceholder = $"{inherit}: {Num(eff.SizePx)}";
-        XScalePlaceholder = $"継承: {eff.XScale}";
-        EdgePlaceholder = $"{inherit}: {Num(eff.EdgePx)}";
-        Edge2Placeholder = $"継承: {(eff.UseEdge2 == true ? "付ける" : "付けない")}";
-        Edge2WidthPlaceholder = $"{inherit}: {Num(eff.Edge2Px)}";
+        var (inheritedFont, inheritedFace) = InheritedFont(font);
+
+        FontLine = own.FontName.Length > 0 ? own.FontName : $"継承: {DescribeFont(inheritedFont)}";
+        FaceLine = own.FaceName.Length > 0 ? own.FaceName
+            : eff.FaceName.Length > 0 ? $"継承: {eff.FaceName}"
+            : "（標準）";
+        FontLineOpacity = own.FontName.Length > 0 ? 1 : 0.6;
+        FontToolTip =
+            $"{Label} のフォント: {DescribeFont(eff.FontName)}（{(eff.FaceName.Length > 0 ? eff.FaceName : "標準")}）\n" +
+            $"押すと、見本を見ながらフォントを選べます（継承に戻すと {DescribeFont(inheritedFont)}{(inheritedFace.Length > 0 ? $"（{inheritedFace}）" : "")}）";
+
+        string blank = IsRubyKanji ? "歌詞の半分" : "継承";
+        SizePlaceholder = Num(eff.SizePx);
+        SizeToolTip = $"{Label} の文字サイズ（px、画面の高さ 1080 基準）。空欄は{blank}: {Num(eff.SizePx)}";
+        XScalePlaceholder = eff.XScale.ToString(CultureInfo.InvariantCulture);
+        XScaleToolTip = $"{Label} の横倍率（%）。空欄は継承: {eff.XScale}";
+        EdgePlaceholder = Num(eff.EdgePx);
+        EdgeToolTip = $"{Label} の縁の幅（px）。空欄は{blank}: {Num(eff.EdgePx)}";
+        Edge2ToolTip =
+            $"{Label} の縁 2: {(own.UseEdge2 switch { true => "付ける", false => "付けない", null => $"継承（{(eff.UseEdge2 == true ? "付ける" : "付けない")}）" })}\n" +
+            "押すたびに 付けない（空欄）→ 付ける（✓）→ 継承（━）の順に変わります";
+        Edge2WidthPlaceholder = Num(eff.Edge2Px);
+        Edge2WidthToolTip = $"{Label} の縁 2 の幅（px）。空欄は{blank}: {Num(eff.Edge2Px)}";
     }
+
+    /// <summary>
+    /// フォント名・フェイス名を継承に戻したときに使われるフォント（歌詞／漢字はニコカラメーカー3 の既定のフォント = 空、
+    /// 歌詞／かな・英数とルビ／漢字は歌詞／漢字、ルビ／かな・英数はルビ／漢字）。
+    /// </summary>
+    public (string FontName, string FaceName) InheritedFont(N3FontSet font)
+    {
+        if (Index == 0) return ("", "");
+        var parent = N3FontLibrary.EffectiveFace(font, Index is 4 or 5 ? 3 : 0);
+        return (parent.FontName, parent.FaceName);
+    }
+
+    private static string DescribeFont(string name) => name.Length > 0 ? name : "既定のフォント";
 
     private static string Num(double v) => v.ToString("0.#", CultureInfo.InvariantCulture);
 
@@ -161,28 +178,19 @@ public sealed partial class FaceRowViewModel : ObservableObject
         _editor.Edit($"face{index}.{what}", f => change(f.Detail.Faces[index]));
     }
 
-    /// <summary>フォント名を確定する（選択肢の「継承に戻す」と空は継承）。</summary>
-    public void CommitFontName(string? text)
+    /// <summary>フォントを選ぶ画面の結果でフォント名とフェイス名を確定する（両方とも空なら継承。1 回の編集として元に戻せる）。</summary>
+    public void CommitFont(string fontName, string faceName)
     {
-        string name = NormalizeChoice(text);
-        if (_editor.Font is not { } font || font.Detail.Faces[Index].FontName == name) return;
-        Edit("font", face => face.FontName = name);
-        SetWithoutEdit(() => FontNameText = name);
-    }
-
-    /// <summary>フェイス名を確定する（選択肢の「継承に戻す」と空は継承）。</summary>
-    public void CommitFaceName(string? text)
-    {
-        string name = NormalizeChoice(text);
-        if (_editor.Font is not { } font || font.Detail.Faces[Index].FaceName == name) return;
-        Edit("faceName", face => face.FaceName = name);
-        SetWithoutEdit(() => FaceNameText = name);
-    }
-
-    private static string NormalizeChoice(string? text)
-    {
-        string t = (text ?? "").Trim();
-        return t == InheritChoice ? "" : t;
+        string name = (fontName ?? "").Trim();
+        string face = (faceName ?? "").Trim();
+        if (_editor.Font is not { } font) return;
+        var current = font.Detail.Faces[Index];
+        if (current.FontName == name && current.FaceName == face) return;
+        Edit("font", f =>
+        {
+            f.FontName = name;
+            f.FaceName = face;
+        });
     }
 
     private void SetWithoutEdit(Action set)
@@ -231,20 +239,9 @@ public sealed partial class FaceRowViewModel : ObservableObject
     partial void OnEdge2ValueChanged(double value) =>
         EditNumber("edge2", value, face => face.Edge2Px, (face, v) => face.Edge2Px = v, () => Edge2Value = double.NaN);
 
-    partial void OnEdge2IndexChanged(int value)
+    partial void OnEdge2StateChanged(bool? value)
     {
-        if (_loading || value < 0) return;
-        bool? use = value switch { 0 => true, 1 => false, _ => null };
-        var font = _editor.Font;
-        if (font is not null && font.Detail.Faces[Index].UseEdge2 != use) Edit("useEdge2", face => face.UseEdge2 = use);
-        if (use is null)
-        {
-            // 「継承に戻す」を選んだら、選択を外して PlaceholderText（継承した値）を見せる。
-            // ComboBox の選択の処理の途中で選択を変えないよう、処理が終わってから外す（それまでに別のフォント設定を選んでいたら何もしない）
-            Microsoft.UI.Dispatching.DispatcherQueue.GetForCurrentThread()?.TryEnqueue(() =>
-            {
-                if (ReferenceEquals(_editor.Font, font)) SetWithoutEdit(() => Edge2Index = -1);
-            });
-        }
+        if (_loading || _editor.Font is not { } font || font.Detail.Faces[Index].UseEdge2 == value) return;
+        Edit("useEdge2", face => face.UseEdge2 = value);
     }
 }

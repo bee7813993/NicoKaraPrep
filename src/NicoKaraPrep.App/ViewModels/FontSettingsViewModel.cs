@@ -99,6 +99,15 @@ public sealed partial class FontSettingsViewModel : ObservableObject
 
     private List<N3FontSet> Song => _main.SongFontSets;
 
+    /// <summary>フォント設定（アプリ共通・この曲専用）の文字種別フォントで使っているフォント名（重複なし）。</summary>
+    public IReadOnlyCollection<string> UsedFontNames() =>
+        Common.Concat(Song)
+            .SelectMany(f => f.Detail.Faces)
+            .Select(face => face.FontName)
+            .Where(name => name.Length > 0)
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToList();
+
     private void SetStatus(string text) => _main.StatusText = text;
 
     // ------------------------------------------------------------ 一覧

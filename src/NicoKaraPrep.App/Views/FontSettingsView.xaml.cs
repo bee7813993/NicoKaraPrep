@@ -81,6 +81,9 @@ public sealed partial class FontSettingsView : UserControl
 
         // プレビュー部品を差し込み口に置き、表示するフォント設定が変わるたび（選択・編集・元に戻す・サンプル文字）に描き直す
         // 枠の高さは 220px なので、画面の高さ 1080 基準のままでは文字が小さすぎる。1/4（270）を基準にして見やすくする
+        // フォントを選ぶ画面をすぐ開けるよう、システムのフォントの一覧を裏で読み込んでおく
+        _ = NicoKaraPrep.App.Services.SystemFontCatalog.LoadAsync();
+
         _preview = new FontPreviewControl { ReferenceHeight = 270 };
         PreviewHost.Child = _preview;
         ViewModel.PreviewTargetChanged += (_, font) => UpdatePreview(font);
