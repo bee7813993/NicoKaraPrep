@@ -202,7 +202,8 @@ public sealed partial class FaceRowViewModel : ObservableObject
 
     /// <summary>
     /// 数値の欄を確定したときの処理。0 以下は継承（0）として書き込み、欄を空に戻して PlaceholderText（継承した値）を見せる
-    /// （NumberBox の確定の処理の途中で値を変えないよう、処理が終わってから空にする）。
+    /// （NumberBox の確定の処理の途中で値を変えないよう、処理が終わってから空にする。
+    /// それまでに別のフォント設定を選んでいたら、そのフォント設定の値を消さないよう何もしない）。
     /// </summary>
     private void EditNumber(string what, double value, Func<N3FontFace, double> get, Action<N3FontFace, double> set, Action clear)
     {
@@ -211,7 +212,10 @@ public sealed partial class FaceRowViewModel : ObservableObject
         if (get(font.Detail.Faces[Index]) != v) Edit(what, face => set(face, v));
         if (v == 0 && !double.IsNaN(value))
         {
-            Microsoft.UI.Dispatching.DispatcherQueue.GetForCurrentThread()?.TryEnqueue(() => SetWithoutEdit(clear));
+            Microsoft.UI.Dispatching.DispatcherQueue.GetForCurrentThread()?.TryEnqueue(() =>
+            {
+                if (ReferenceEquals(_editor.Font, font)) SetWithoutEdit(clear);
+            });
         }
     }
 
@@ -231,12 +235,16 @@ public sealed partial class FaceRowViewModel : ObservableObject
     {
         if (_loading || value < 0) return;
         bool? use = value switch { 0 => true, 1 => false, _ => null };
-        if (_editor.Font is { } font && font.Detail.Faces[Index].UseEdge2 != use) Edit("useEdge2", face => face.UseEdge2 = use);
+        var font = _editor.Font;
+        if (font is not null && font.Detail.Faces[Index].UseEdge2 != use) Edit("useEdge2", face => face.UseEdge2 = use);
         if (use is null)
         {
             // 「継承に戻す」を選んだら、選択を外して PlaceholderText（継承した値）を見せる。
-            // ComboBox の選択の処理の途中で選択を変えないよう、処理が終わってから外す
-            Microsoft.UI.Dispatching.DispatcherQueue.GetForCurrentThread()?.TryEnqueue(() => SetWithoutEdit(() => Edge2Index = -1));
+            // ComboBox の選択の処理の途中で選択を変えないよう、処理が終わってから外す（それまでに別のフォント設定を選んでいたら何もしない）
+            Microsoft.UI.Dispatching.DispatcherQueue.GetForCurrentThread()?.TryEnqueue(() =>
+            {
+                if (ReferenceEquals(_editor.Font, font)) SetWithoutEdit(() => Edge2Index = -1);
+            });
         }
     }
 }
