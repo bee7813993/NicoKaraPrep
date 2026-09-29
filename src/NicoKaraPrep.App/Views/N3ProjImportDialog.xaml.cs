@@ -6,6 +6,7 @@ using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Media;
 using Microsoft.UI.Xaml.Media.Imaging;
+using NicoKaraPrep.App.Services;
 using NicoKaraPrep.App.ViewModels;
 using NicoKaraPrep.Core.Formats;
 using NicoKaraPrep.Core.Model;
@@ -18,7 +19,7 @@ public enum N3ProjImportFocus
     /// <summary>チェック用の設定と書き出しのベース（従来の「設定を読み込み」と同じ）。</summary>
     Default,
 
-    /// <summary>フォント設定だけ（フォント設定の編集画面の「n3proj から取り込み」から）。</summary>
+    /// <summary>フォント設定だけ（フォント設定ビューの「取り込み > n3proj から...」から）。</summary>
     FontSets,
 }
 
@@ -50,20 +51,13 @@ public partial class N3ImportFontRow : ObservableObject
         Name = f.Name,
         FontText = f.FontFamily.Length > 0 ? $"{f.FontFamily}{(f.FontFace.Length > 0 ? $"（{f.FontFace}）" : "")}" : "（フォント指定なし）",
         SizeText = f.SizePx > 0 ? $"{f.SizePx:0.#}px" : "",
-        AfterBrush = ToBrush(f.TextColorAfter),
-        BeforeBrush = ToBrush(f.TextColorBefore),
-        AfterTip = ColorTip("ワイプ後の文字色", f.TextColorAfter),
-        BeforeTip = ColorTip("ワイプ前の文字色", f.TextColorBefore),
+        AfterBrush = N3BrushPreview.Create(f.Detail.Brushes[0]),
+        BeforeBrush = N3BrushPreview.Create(f.Detail.Brushes[N3FontDetail.BeforeOffset]),
+        AfterTip = N3BrushPreview.Describe("ワイプ後の文字", f.Detail.Brushes[0]),
+        BeforeTip = N3BrushPreview.Describe("ワイプ前の文字", f.Detail.Brushes[N3FontDetail.BeforeOffset]),
         ActionText = exists ? "置き換え" : "追加",
     };
 
-    private static Brush ToBrush(string web16) =>
-        N3FontSet.TryParseWeb16(web16, out byte r, out byte g, out byte b)
-            ? new SolidColorBrush(Windows.UI.Color.FromArgb(255, r, g, b))
-            : new SolidColorBrush(Colors.Transparent);
-
-    private static string ColorTip(string label, string web16) =>
-        N3FontSet.IsValidWeb16(web16) ? $"{label} #{web16.ToUpperInvariant()}" : $"{label}: 単色以外（取り込まれません）";
 }
 
 /// <summary>読み込み確認画面のアイコン 1 行分。</summary>

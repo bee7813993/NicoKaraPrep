@@ -45,30 +45,8 @@ public sealed partial class MainWindow
         RefreshN3LinePanel();
     }
 
-    private async void OnN3FontSetsClick(object sender, RoutedEventArgs e)
-    {
-        while (true)
-        {
-            var dialog = new N3FontSetDialog(ViewModel.Settings) { XamlRoot = Content.XamlRoot };
-            var result = await dialog.ShowAsync();
-            if (dialog.ImportRequested)
-            {
-                // 取り込みは読み込み確認画面（フォント設定を選択した状態）で行い、終わったら編集画面へ戻る
-                await ImportN3ProjAsync(null, N3ProjImportFocus.FontSets);
-                continue;
-            }
-            if (result == ContentDialogResult.Primary)
-            {
-                _n3FontNamesKey = null;
-                ViewModel.StatusText = $"ニコカラメーカー3 のフォント設定を保存しました（{ViewModel.Settings.N3FontSets.Count} 件）";
-                RefreshN3LinePanel();
-            }
-            break;
-        }
-    }
-
     /// <summary>
-    /// ニコカラメーカー3 プロジェクトの読み込み（メニュー・ドラッグ＆ドロップ・フォント設定の取り込みの共通入口）。
+    /// ニコカラメーカー3 プロジェクトの読み込み（メニュー・ドラッグ＆ドロップ・フォント設定ビューの取り込みの共通入口）。
     /// 内容を調べて確認画面を出し、選んだ項目だけを取り込む。path が null ならファイルを選ばせる。
     /// </summary>
     private async Task ImportN3ProjAsync(string? path, N3ProjImportFocus focus = N3ProjImportFocus.Default)
@@ -266,11 +244,12 @@ public sealed partial class MainWindow
 
     private static string FmtCs(int cs) => TimeTag.Format(cs).Trim('[', ']');
 
-    /// <summary>フォント設定名の候補（ベース n3proj のフォント設定 ＋ NicoKaraPrep のフォント設定）を作る。</summary>
+    /// <summary>フォント設定名の候補（ベース n3proj のフォント設定 ＋ NicoKaraPrep のフォント設定（アプリ共通・この曲専用））を作る。</summary>
     private void EnsureN3FontNames()
     {
         string? basePath = ViewModel.SuggestN3ProjBasePath();
-        string key = (basePath ?? "") + "|" + string.Join(",", ViewModel.Settings.N3FontSets.Select(f => f.Name));
+        var own = ViewModel.ExportFontSets;
+        string key = (basePath ?? "") + "|" + string.Join(",", own.Select(f => f.Name));
         if (_n3FontNamesKey == key) return;
         _n3FontNamesKey = key;
 
@@ -286,7 +265,7 @@ public sealed partial class MainWindow
                 // ベースが読めなくても候補無しで続行
             }
         }
-        names.AddRange(ViewModel.Settings.N3FontSets.Select(f => f.Name));
+        names.AddRange(own.Select(f => f.Name));
 
         string text = LineFontBox.Text;
         LineFontBox.Items.Clear();

@@ -781,6 +781,8 @@ public sealed partial class MainWindow : Window
 
     private void PerformUndo()
     {
+        // フォント設定ビューでは、ビューの中の操作（フォント設定の編集）を戻す
+        if (FontViewUndoRedo(redo: false)) return;
         // フォント設定ビューでは歌詞の変更を戻さない（見えない行が変わるため。ビューの中の操作はビュー側で扱う）
         if (LyricsUndoRedoBlocked()) return;
         if (!DebounceUndoRedo()) return;
@@ -790,7 +792,8 @@ public sealed partial class MainWindow : Window
 
     private void PerformRedo()
     {
-        if (LyricsUndoRedoBlocked()) return; // PerformUndo と同じ
+        if (FontViewUndoRedo(redo: true)) return; // PerformUndo と同じ
+        if (LyricsUndoRedoBlocked()) return;
         if (!DebounceUndoRedo()) return;
         if (!ViewModel.Redo()) return;
         AfterUndoRedo();
