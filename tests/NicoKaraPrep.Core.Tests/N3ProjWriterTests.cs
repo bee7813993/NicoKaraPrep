@@ -8,8 +8,7 @@ public class N3ProjWriterTests
 {
     private static LyricsDocument Doc(params string[] lines) => LrcFormat.Parse(string.Join("\r\n", lines) + "\r\n");
 
-    private static N3ProjWriter.FontResolver Fonts(params string[] names) =>
-        new(names.Select((n, i) => (n, i)), null, true);
+    private static N3FontResolver Fonts(params string[] names) => new(names, null, true);
 
     private static N3ProjWriter.LayoutResolver Layouts(params (string Name, int Count)[] layouts) =>
         new(layouts.Select((l, i) => new N3ProjLayoutInfo(l.Name, i, l.Count)).ToList(), null, null, null, new List<string>(), "t");
@@ -17,7 +16,7 @@ public class N3ProjWriterTests
     private static (string, JsonObject) Action() =>
         ("SHINTA.CharFadeInFadeOut", new JsonObject { ["$type"] = "CharFadeInFadeOutSettingsModel", ["FadeInTime"] = 250 });
 
-    private static JsonArray Build(LyricsDocument doc, N3ShowTimeSettings? show = null, N3ProjWriter.FontResolver? fonts = null, N3ProjWriter.LayoutResolver? layouts = null)
+    private static JsonArray Build(LyricsDocument doc, N3ShowTimeSettings? show = null, N3FontResolver? fonts = null, N3ProjWriter.LayoutResolver? layouts = null)
     {
         return N3ProjWriter.BuildLineInfos(
             doc,
@@ -406,7 +405,7 @@ public class N3ProjWriterTests
 
         var baseRoot = N3ProjFormat.ReadJsonObject(sample);
         var infos = baseRoot["SourceLyricsInfos"]!.AsArray();
-        var fontNames = baseRoot["LyricsFonts"]!.AsArray().Select((n, i) => (n!["SettingsName"]!.GetValue<string>(), i)).ToList();
+        var fontNames = baseRoot["LyricsFonts"]!.AsArray().Select(n => n!["SettingsName"]!.GetValue<string>()).ToList();
         var mismatches = new List<string>();
         int compared = 0;
 
@@ -418,7 +417,7 @@ public class N3ProjWriterTests
             if (expected.Count == 0) continue;
 
             var doc = LrcFormat.Parse(EncodingDetector.ReadAllText(lyricsPath, out _));
-            var fonts = new N3ProjWriter.FontResolver(fontNames, null, true);
+            var fonts = new N3FontResolver(fontNames, null, true);
             var lines = N3ProjWriter.BuildLineInfos(doc, new N3ShowTimeSettings(), doc.EmojiEntries, fonts, Layouts(("下寄せ2行", 2)), Action(), "Ver 13.79", out _);
 
             var expectedKinds = Kinds(expected);

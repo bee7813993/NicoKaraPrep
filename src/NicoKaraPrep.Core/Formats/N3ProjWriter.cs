@@ -220,7 +220,8 @@ public static class N3ProjWriter
         // ---- 歌詞設定 ----
         var infos = new JsonArray();
         lineCount = 0;
-        var fontResolver = new FontResolver(fontNames, options.DefaultFontSetName, options.ContinueFontAcrossLines);
+        // 全タブで 1 つを共有する（前のタブの最後のフォントを次のタブへ引き継ぐ。ニコカラメーカー3 の動作は未確認）
+        var fontResolver = new N3FontResolver(fontNames.Select(f => f.Name).ToList(), options.DefaultFontSetName, options.ContinueFontAcrossLines);
         var action = ResolveSubtitleAction(baseRoot, options.CharFadeSettings, ver);
         for (int t = 0; t < sources.Count; t++)
         {
@@ -310,7 +311,7 @@ public static class N3ProjWriter
         LyricsDocument doc,
         N3ShowTimeSettings show,
         IReadOnlyList<EmojiEntry> emoji,
-        FontResolver fonts,
+        N3FontResolver fonts,
         LayoutResolver layouts,
         (string Id, JsonObject Settings) action,
         string ver,
@@ -541,61 +542,6 @@ public static class N3ProjWriter
         AlignFromTop = s.AlignFromTop,
         SingleLinePromoteGapMs = s.SingleLinePromoteGapMs,
     };
-
-    // ------------------------------------------------------------ フォント選択（パート記号）
-
-    /// <summary>
-    /// ニコカラメーカーの「パート別にフォントを設定（歌詞の文字と同じ名称のフォント設定を適用する）」相当。
-    /// 行内にフォント設定名と同じ文字列（絵文字の置き換え文字列など）が現れると、そこから先の文字に
-    /// そのフォント設定を適用する。行ごとの手動指定（FontSetName）があればその行はそれで統一する。
-    /// </summary>
-    internal sealed class FontResolver
-    {
-        private readonly Dictionary<string, int> _byName = new(StringComparer.Ordinal);
-        private readonly EmojiMatcher _matcher;
-        private readonly int _default;
-        private readonly bool _continue;
-        private int _current;
-
-        public FontResolver(IEnumerable<(string Name, int Index)> names, string? defaultName, bool continueAcrossLines)
-        {
-            foreach (var (n, i) in names)
-            {
-                if (n.Length > 0 && !_byName.ContainsKey(n)) _byName[n] = i;
-            }
-            _matcher = new EmojiMatcher(_byName.Keys);
-            _default = defaultName is not null && _byName.TryGetValue(defaultName, out int d) ? d : 0;
-            _current = _default;
-            _continue = continueAcrossLines;
-        }
-
-        /// <summary>行の各 CharUnit に適用するフォント設定のインデックス。</summary>
-        public int[] Resolve(LyricsLine line)
-        {
-            var result = new int[line.Chars.Count];
-            if (!_continue) _current = _default;
-
-            var changes = new Dictionary<int, int>();
-            if (!_matcher.IsEmpty)
-            {
-                foreach (var occ in _matcher.FindOccurrences(line.Chars))
-                {
-                    changes[occ.Start] = _byName[occ.Value];
-                }
-            }
-            for (int i = 0; i < result.Length; i++)
-            {
-                if (changes.TryGetValue(i, out int idx)) _current = idx;
-                result[i] = _current;
-            }
-
-            if (line.FontSetName is string manual && _byName.TryGetValue(manual, out int m))
-            {
-                Array.Fill(result, m);
-            }
-            return result;
-        }
-    }
 
     // ------------------------------------------------------------ レイアウト選択（行数）
 
