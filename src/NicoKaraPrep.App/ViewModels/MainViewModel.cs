@@ -1490,7 +1490,7 @@ public partial class MainViewModel : ObservableObject
         snapshot.CopyFrom(Settings);
         snapshot.GlobalEmojiList = GetEffectiveEmojiList().Select(e => e.Clone()).ToList();
         snapshot.Save(path);
-        StatusText = $"テンプレートを保存しました: {Path.GetFileName(path)}（絵文字 {snapshot.GlobalEmojiList.Count} 件＋フォント・チェック設定）";
+        StatusText = $"テンプレートを保存しました: {Path.GetFileName(path)}（絵文字 {snapshot.GlobalEmojiList.Count} 件＋字幕フォント・チェック設定）";
     }
 
     /// <summary>

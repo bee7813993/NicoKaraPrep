@@ -152,7 +152,7 @@
                 </MenuFlyoutItem>
             </MenuBarItem>
             <MenuBarItem Title="テンプレート(T)" AccessKey="T">
-                <MenuFlyoutItem Text="テンプレートとして保存...（絵文字一式＋フォント設定）" Click="OnSaveTemplateClick" />
+                <MenuFlyoutItem Text="テンプレートとして保存...（絵文字一式＋字幕フォント・チェック設定）" Click="OnSaveTemplateClick" />
                 <MenuFlyoutItem Text="テンプレートを読み込み..." Click="OnLoadTemplateClick" />
             </MenuBarItem>
         </MenuBar>
