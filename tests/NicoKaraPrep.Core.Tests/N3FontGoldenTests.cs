@@ -146,15 +146,21 @@ public class N3FontGoldenTests
             var faces = set["FontInfos"]!.AsArray();
             for (int i = 0; i < faces.Count; i++)
             {
-                if (i != 0 && i != 3 && models[f].Detail.Faces[i].IsInherited) continue;
+                var model = models[f].Detail.Faces[i];
+                bool kanaOrAlnum = i != 0 && i != 3;
+                if (kanaOrAlnum && model.IsInherited) continue;
+
+                // 歌詞／漢字・ルビ／漢字の従来の項目以外は、継承ならマージでベースのまま残すので壊さない
+                bool lyric = i == 0;
+                bool Breaks(bool legacy, bool inherited) => kanaOrAlnum || legacy || !inherited;
                 var face = faces[i]!.AsObject();
-                Replace(face, "FontName", "壊したフォント");
-                Replace(face, "FontFaceName", "壊したフェイス");
+                if (Breaks(lyric, model.FontName.Length == 0)) Replace(face, "FontName", "壊したフォント");
+                if (Breaks(lyric, model.FaceName.Length == 0)) Replace(face, "FontFaceName", "壊したフェイス");
                 Replace(face, "CharSize", Size(1));
-                Replace(face, "XScale", 7);
+                if (Breaks(false, model.XScale == 0)) Replace(face, "XScale", 7);
                 Replace(face, "EdgeSize", Size(2));
-                Replace(face, "UseEdge2", face["UseEdge2"] is null ? true : null);
-                Replace(face, "EdgeSize2", Size(3));
+                if (Breaks(lyric, model.UseEdge2 is null)) Replace(face, "UseEdge2", face["UseEdge2"] is null ? true : null);
+                if (Breaks(lyric, model.Edge2Px <= 0)) Replace(face, "EdgeSize2", Size(3));
             }
             Replace(set, "DecorKind", (set["DecorKind"]!.GetValue<int>() + 1) % 3);
             Replace(set, "DecorSize", Size(4));

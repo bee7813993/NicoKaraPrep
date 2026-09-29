@@ -255,13 +255,78 @@ public class N3FontWriteTests
     }
 
     [Fact]
-    public void マージ_ルビの0は歌詞の半分で上書きする()
+    public void マージ_ルビのサイズと縁の0は歌詞の半分で上書きし縁2はベースのまま残す()
     {
-        var f = new N3FontSet { Name = "（麻衣）（のりこ）", SizePx = 60, EdgePx = 10, Edge2Px = 6 };
+        var f = new N3FontSet { Name = "（麻衣）（のりこ）", SizePx = 60, EdgePx = 10, Edge2Px = 10 };
         var ruby = Export(ProjectOf(NkmFont()), f)[0]!["FontInfos"]![3]!;
         Assert.Equal(30, ruby["CharSize"]!["Size"]!.GetValue<int>());
         Assert.Equal(5, ruby["EdgeSize"]!["Size"]!.GetValue<int>());
-        Assert.Equal(3, ruby["EdgeSize2"]!["Size"]!.GetValue<int>());
-        Assert.Null(ruby["UseEdge2"]);
+        Assert.Equal(3, ruby["EdgeSize2"]!["Size"]!.GetValue<int>()); // 歌詞の半分（5）ではなくベースの 3
+        Assert.False(ruby["UseEdge2"]!.GetValue<bool>()); // 継承（null）で消さない
+    }
+
+    /// <summary>ルビのフォント名・フェイス・横倍率・縁 2 と歌詞の横倍率を設定したベース。</summary>
+    private static JsonObject BaseWithRubyFont()
+    {
+        var baseFont = NkmFont();
+        var faces = baseFont["FontInfos"]!.AsArray();
+        faces[0]!["XScale"] = 90;
+        faces[3]!["FontName"] = "ルビ用";
+        faces[3]!["FontFaceName"] = "Bold";
+        faces[3]!["XScale"] = 80;
+        faces[3]!["UseEdge2"] = true;
+        faces[3]!["EdgeSize2"] = new JsonObject { ["Size"] = 6, ["Reference"] = 1080, ["Ratio"] = 6 / 1080.0 };
+        return baseFont;
+    }
+
+    [Fact]
+    public void マージ_従来の項目だけのフォントはルビのフォント名や横倍率をベースのまま残す()
+    {
+        // 旧版の settings.json（詳細なし）と、旧項目だけを設定して作ったフォント（フォント設定ダイアログと同じ作り方）
+        var fromOldJson = JsonSerializer.Deserialize<N3FontSet>(
+            """{"Name":"（麻衣）（のりこ）","FontFamily":"メイリオ","FontFace":"Bold","SizePx":60,"EdgePx":10,"UseEdge2":false,"Edge2Px":4}""")!;
+        var fromFlat = new N3FontSet { Name = "（麻衣）（のりこ）", FontFamily = "メイリオ", FontFace = "Bold", SizePx = 60, EdgePx = 10, UseEdge2 = false, Edge2Px = 4 };
+
+        foreach (var f in new[] { fromOldJson, fromFlat })
+        {
+            var faces = Export(ProjectOf(BaseWithRubyFont()), f)[0]!["FontInfos"]!.AsArray();
+
+            // 従来の項目は上書きする
+            Assert.Equal("メイリオ", faces[0]!["FontName"]!.GetValue<string>());
+            Assert.Equal(60, faces[0]!["CharSize"]!["Size"]!.GetValue<int>());
+            Assert.False(faces[0]!["UseEdge2"]!.GetValue<bool>());
+            Assert.Equal(4, faces[0]!["EdgeSize2"]!["Size"]!.GetValue<int>());
+            Assert.Equal(30, faces[3]!["CharSize"]!["Size"]!.GetValue<int>());
+            Assert.Equal(5, faces[3]!["EdgeSize"]!["Size"]!.GetValue<int>());
+
+            // 旧項目に無い項目はベースのまま
+            Assert.Equal(90, faces[0]!["XScale"]!.GetValue<int>());
+            Assert.Equal("ルビ用", faces[3]!["FontName"]!.GetValue<string>());
+            Assert.Equal("Bold", faces[3]!["FontFaceName"]!.GetValue<string>());
+            Assert.Equal(80, faces[3]!["XScale"]!.GetValue<int>());
+            Assert.True(faces[3]!["UseEdge2"]!.GetValue<bool>());
+            Assert.Equal(6, faces[3]!["EdgeSize2"]!["Size"]!.GetValue<int>());
+        }
+    }
+
+    [Fact]
+    public void マージ_ルビと歌詞の継承でない項目は上書きする()
+    {
+        var f = N3ProjFormat.ReadFontSets(ProjectOf(BaseWithRubyFont())).Single();
+        f.Detail.Faces[0].XScale = 95;
+        var ruby = f.Detail.Faces[3];
+        ruby.FontName = "別のルビ";
+        ruby.FaceName = "ﾍﾋﾞｰ";
+        ruby.XScale = 70;
+        ruby.UseEdge2 = false;
+        ruby.Edge2Px = 2;
+
+        var faces = Export(ProjectOf(BaseWithRubyFont()), f)[0]!["FontInfos"]!.AsArray();
+        Assert.Equal(95, faces[0]!["XScale"]!.GetValue<int>());
+        Assert.Equal("別のルビ", faces[3]!["FontName"]!.GetValue<string>());
+        Assert.Equal("ﾍﾋﾞｰ", faces[3]!["FontFaceName"]!.GetValue<string>());
+        Assert.Equal(70, faces[3]!["XScale"]!.GetValue<int>());
+        Assert.False(faces[3]!["UseEdge2"]!.GetValue<bool>());
+        Assert.Equal(2, faces[3]!["EdgeSize2"]!["Size"]!.GetValue<int>());
     }
 }
