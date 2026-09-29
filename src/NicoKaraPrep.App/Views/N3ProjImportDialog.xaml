@@ -127,7 +127,7 @@
                     <TextBlock x:Name="FontSetsTitle" Text="フォント設定を NicoKaraPrep に取り込む" TextWrapping="Wrap" />
                     <TextBlock
                         Style="{StaticResource ItemDetail}"
-                        Text="同じ名前の設定は置き換え、それ以外は追加します。取り込めるのは単色の配色・フォント・サイズ・縁取り・文字飾りです（グラデーションなどは書き出し時にベースの配色が残ります）。" />
+                        Text="アプリ共通のフォント設定に取り込みます（同じ名前の設定は置き換え、それ以外は追加）。配色（単色・グラデーション・ミルフィーユ・画像と不透明度）・6 種類の文字のフォント・縁取り・文字飾り・テンプレートとの連動をすべて取り込みます。取り込んだあとはフォント設定ビュー（F3）で編集できます。" />
                 </StackPanel>
             </CheckBox>
             <StackPanel x:Name="FontSetPanel" Margin="28,0,0,0" Spacing="4">
