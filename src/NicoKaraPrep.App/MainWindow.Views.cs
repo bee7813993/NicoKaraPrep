@@ -43,6 +43,9 @@ public sealed partial class MainWindow
     /// <summary>フォント設定ビュー（初めて開くときに作る。以後は閉じても残し、表示だけを切り替える）。</summary>
     private FontSettingsView? _fontView;
 
+    /// <summary>次にフォント設定ビューに入ったときに選ぶフォント設定の名前（行設定の「編集...」）。</summary>
+    private string? _fontViewSelectName;
+
     /// <summary>フォント設定ビューを返す。まだ無ければ作って FontViewHost に置く。</summary>
     private FontSettingsView EnsureFontView()
     {
@@ -50,6 +53,8 @@ public sealed partial class MainWindow
         {
             _fontView = new FontSettingsView();
             _fontView.BackRequested += OnFontViewBackRequested;
+            // n3proj からのフォント設定の取り込みは、メニューと同じ読み込み確認画面（フォント設定を選んだ状態）で行う
+            _fontView.Attach(ViewModel, () => ImportN3ProjAsync(null, N3ProjImportFocus.FontSets));
             FontViewHost.Child = _fontView;
         }
         return _fontView;
@@ -244,13 +249,21 @@ public sealed partial class MainWindow
     private void EnterFontSettingsView()
     {
         string back = MainViewModel.ViewModeName(FontSettingsReturnTarget);
-        EnsureFontView().Enter(back);
+        var view = EnsureFontView();
+
+        // 選ぶフォント設定: 行設定の「編集...」で選んだ名前 → 選択行のフォント指定（無ければ前回の選択のまま）
+        string? name = _fontViewSelectName ?? ViewModel.SelectedLine?.Model.FontSetName;
+        _fontViewSelectName = null;
+        view.SetLineContext(SelectedIndexes, name);
+        view.Enter(back);
         ViewModel.StatusText = $"フォント設定ビュー: Esc（または F3）で{back}へ戻ります";
     }
 
     /// <summary>フォント設定ビューを抜けたあと、行リスト側の表示（フォント設定名の候補・手動指定の印・チェック）を作り直す。</summary>
     private void ExitFontSettingsView()
     {
+        // 保存待ちのフォント設定の編集を、行リスト側の表示を作り直す前に保存する
+        _fontView?.FlushPendingSave();
         _n3FontNamesKey = null;
         RefreshN3LinePanel();
         foreach (var line in ViewModel.Lines) line.RaiseOverrideMark();
@@ -365,6 +378,25 @@ public sealed partial class MainWindow
 
     /// <summary>エクスポート > ニコカラメーカー3 のフォント設定を編集。</summary>
     private void OnFontSettingsViewClick(object sender, RoutedEventArgs e) => SwitchView(MainViewMode.FontSettings);
+
+    /// <summary>行設定のフォントの「編集...」: フォント設定ビューを開き、欄のフォント設定を選ぶ。</summary>
+    private void OnEditLineFontClick(object sender, RoutedEventArgs e)
+    {
+        _fontViewSelectName = LineFontBox.Text is { Length: > 0 } text ? text : null;
+        SwitchView(MainViewMode.FontSettings);
+    }
+
+    /// <summary>
+    /// フォント設定ビューでは、元に戻す・やり直し（メニューと Ctrl+Z / Ctrl+Y）をビューの中の操作に使う。
+    /// フォント設定ビューなら true（処理済み。文字の入力欄にフォーカスがあるときは何もしない）。
+    /// </summary>
+    private bool FontViewUndoRedo(bool redo)
+    {
+        if (ViewModel.ViewMode != MainViewMode.FontSettings || _fontView is null) return false;
+        if (redo) _fontView.TryRedo();
+        else _fontView.TryUndo();
+        return true;
+    }
 
     private void OnFontViewBackRequested(object? sender, EventArgs e) => ReturnFromFontSettings();
 

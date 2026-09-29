@@ -399,6 +399,7 @@
                         <ColumnDefinition Width="Auto" />
                         <ColumnDefinition Width="Auto" />
                         <ColumnDefinition Width="180" />
+                        <ColumnDefinition Width="Auto" />
                         <ColumnDefinition Width="*" />
                     </Grid.ColumnDefinitions>
                     <TextBlock Text="ニコカラメーカー用:" FontSize="12" VerticalAlignment="Center" Foreground="{ThemeResource TextFillColorSecondaryBrush}"
@@ -414,7 +415,9 @@
                     <ComboBox Grid.Column="7" x:Name="LineFontBox" IsEditable="True" FontSize="12" HorizontalAlignment="Stretch" PlaceholderText="（自動）"
                               SelectionChanged="OnLineFontChanged" TextSubmitted="OnLineFontSubmitted"
                               ToolTipService.ToolTip="この行に適用するニコカラメーカーのフォント設定名（空欄はパート記号で自動判定）" />
-                    <TextBlock Grid.Column="8" x:Name="N3LineInfo" FontSize="12" VerticalAlignment="Center" Foreground="{ThemeResource TextFillColorSecondaryBrush}" TextTrimming="CharacterEllipsis" />
+                    <Button Grid.Column="8" x:Name="EditLineFontButton" Content="編集..." FontSize="12" Padding="8,3" Click="OnEditLineFontClick"
+                            ToolTipService.ToolTip="フォント設定ビュー（F3）を開いて、このフォント設定を編集します" />
+                    <TextBlock Grid.Column="9" x:Name="N3LineInfo" FontSize="12" VerticalAlignment="Center" Foreground="{ThemeResource TextFillColorSecondaryBrush}" TextTrimming="CharacterEllipsis" />
                 </Grid>
 
                 <!-- 行プレビュー（ルビ・絵文字画像） -->
