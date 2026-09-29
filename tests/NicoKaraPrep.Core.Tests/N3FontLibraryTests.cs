@@ -133,6 +133,41 @@ public class N3FontLibraryTests
     }
 
     [Fact]
+    public void 書き出し用_同じ名前が重なっても曲専用は1件にし重なる曲専用は後のものを使う()
+    {
+        // 置き換える共通が 2 件あっても曲専用は最初の位置に 1 件だけ入る
+        var library = Library("（花帆）", "標準", "（花帆）");
+        var song = Library("（花帆）");
+        var result = N3FontLibrary.ResolveForExport(library, song);
+        Assert.Equal(new[] { "（花帆）", "標準" }, Names(result));
+        Assert.Same(song[0], result[0]);
+
+        // 同じ名前の曲専用が 2 件あれば後のものを 1 件だけ使う（置き換えでも末尾でも）
+        var dupSong = Library("（花帆）", "（曲だけ）", "（花帆）", "（曲だけ）");
+        var resolved = N3FontLibrary.ResolveForExport(Library("標準", "（花帆）"), dupSong);
+        Assert.Equal(new[] { "標準", "（花帆）", "（曲だけ）" }, Names(resolved));
+        Assert.Same(dupSong[2], resolved[1]);
+        Assert.Same(dupSong[3], resolved[2]);
+
+        // 置き換えない共通どうしの重複はそのまま（一覧の検証で報告する）
+        Assert.Equal(new[] { "標準", "標準" }, Names(N3FontLibrary.ResolveForExport(Library("標準", "標準"), new List<N3FontSet>())));
+    }
+
+    [Fact]
+    public void 書き出し用_一覧や要素や名前がnullでも落ちない()
+    {
+        var library = Library("標準");
+        Assert.Equal(new[] { "標準" }, Names(N3FontLibrary.ResolveForExport(library, null)));
+        Assert.Equal(new[] { "標準" }, Names(N3FontLibrary.ResolveForExport(null, library)));
+        Assert.Empty(N3FontLibrary.ResolveForExport(null, null));
+
+        var withNull = new List<N3FontSet> { null!, new() { Name = null! }, new() { Name = "標準" } };
+        var result = N3FontLibrary.ResolveForExport(withNull, new List<N3FontSet> { null! });
+        Assert.Equal(2, result.Count);
+        Assert.Same(withNull[1], result[0]);
+    }
+
+    [Fact]
     public void 曲専用_旧形式の曲プロジェクトは曲専用フォントが空で読め保存すると残る()
     {
         string dir = Path.Combine(Path.GetTempPath(), "NicoKaraPrepTests", Guid.NewGuid().ToString("N"));
@@ -155,6 +190,14 @@ public class N3FontLibraryTests
             Assert.Equal("F8B500", f.EdgeColorAfter);
             Assert.Equal(N3Brush.TypeMilleFeuille, f.Detail.Brushes[4].Type);
             Assert.Equal("（花帆）", back.N3Proj.DefaultFontSetName);
+
+            // 手で編集して null にしたファイルも空の一覧として読み、書き出し用の一覧を作れる
+            File.WriteAllText(SongProject.PathFor(song), """{"MediaPath":"a.mp4","FontSets":null}""");
+            var nulled = SongProject.TryLoad(song)!;
+            Assert.Empty(nulled.FontSets);
+            Assert.Single(N3FontLibrary.ResolveForExport(Library("標準"), nulled.FontSets));
+            File.WriteAllText(SongProject.PathFor(song), """{"MediaPath":"a.mp4","FontSets":[null,{"Name":"（花帆）"}]}""");
+            Assert.Equal(new[] { "（花帆）" }, Names(SongProject.TryLoad(song)!.FontSets));
         }
         finally
         {

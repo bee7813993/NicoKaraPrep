@@ -180,31 +180,43 @@ public static class N3FontLibrary
     }
 
     /// <summary>
-    /// 書き出しに使うフォント設定。曲専用のフォントは同じ名前のアプリ共通のフォントを置き換え（位置は共通の位置）、
-    /// 曲専用にしか無い名前は末尾に足す。要素は複製しない。
+    /// 書き出しに使うフォント設定。曲専用のフォントは同じ名前のアプリ共通のフォントを置き換え（位置は共通の最初の位置。
+    /// 同じ名前の共通が複数あっても 1 件にする）、曲専用にしか無い名前は末尾に足す。
+    /// 同じ名前の曲専用が複数あれば後のものを使う（書き出しで後のものが前のものを上書きするのと同じ。重複は <see cref="Validate"/> で報告する）。
+    /// 置き換えない共通どうしの重複はそのまま残す。要素は複製しない。一覧の null は空として、一覧の中の null は無いものとして扱う。
     /// </summary>
-    public static List<N3FontSet> ResolveForExport(IReadOnlyList<N3FontSet> library, IReadOnlyList<N3FontSet> songFonts)
+    public static List<N3FontSet> ResolveForExport(IReadOnlyList<N3FontSet>? library, IReadOnlyList<N3FontSet>? songFonts)
     {
+        var commons = (library ?? Array.Empty<N3FontSet>()).Where(f => f is not null).ToList();
+        var songs = (songFonts ?? Array.Empty<N3FontSet>()).Where(s => s is not null).ToList();
+
         var songByName = new Dictionary<string, N3FontSet>(StringComparer.Ordinal);
-        foreach (var s in songFonts)
+        var songNames = new List<string>();
+        foreach (var s in songs)
         {
-            songByName.TryAdd(s.Name, s);
+            string name = s.Name ?? "";
+            if (!songByName.ContainsKey(name)) songNames.Add(name);
+            songByName[name] = s;
         }
-        var used = new HashSet<N3FontSet>(ReferenceEqualityComparer.Instance);
-        var result = new List<N3FontSet>(library.Count + songFonts.Count);
-        foreach (var f in library)
+
+        var placed = new HashSet<string>(StringComparer.Ordinal);
+        var result = new List<N3FontSet>(commons.Count + songNames.Count);
+        foreach (var f in commons)
         {
-            if (songByName.TryGetValue(f.Name, out var song))
-            {
-                result.Add(song);
-                used.Add(song);
-            }
-            else
+            string name = f.Name ?? "";
+            if (!songByName.TryGetValue(name, out var song))
             {
                 result.Add(f);
             }
+            else if (placed.Add(name))
+            {
+                result.Add(song);
+            }
         }
-        result.AddRange(songFonts.Where(s => !used.Contains(s)));
+        foreach (string name in songNames)
+        {
+            if (placed.Add(name)) result.Add(songByName[name]);
+        }
         return result;
     }
 
