@@ -178,7 +178,7 @@ public sealed partial class FontEditorViewModel : ObservableObject
         HasLinkNote = !f.NkmSynchronize && LinkText.Length > 0;
         ImportedFromText = f.ImportedFrom is { Length: > 0 } from
             ? $"{from}{(f.ImportedUtc is DateTime at ? $"（{at.ToLocalTime():yyyy/MM/dd HH:mm} に取り込み）" : "")}"
-            : "（NicoKaraPrep で作成）";
+            : f.NkmGuid is not null ? "（記録なし）" : "（NicoKaraPrep で作成）";
         ScopeNote = IsSong
             ? "この曲専用のフォント設定は .tttproj（歌詞ファイルの隣）に保存され、書き出しでは同じ名前のアプリ共通より優先されます"
             : Item is { IsOverridden: true }
