@@ -77,12 +77,12 @@ public static class N3FontLibrary
 
     /// <summary>
     /// 一覧の中で重ならない名前を返す（ニコカラメーカーの AdjustSettingName と同じ規則）。
-    /// 空なら「新規」、重なるなら末尾の半角数字を外して 2, 3… を付ける。<paramref name="except"/> は比較から外す。
+    /// 空（空白だけも含む。書き出されないため）なら「新規」、重なるなら末尾の半角数字を外して 2, 3… を付ける。<paramref name="except"/> は比較から外す。
+    /// 前後の空白は消さない（ニコカラメーカーも消さず、書き出しのマージは名前の完全一致で同じフォント設定を探すため）。
     /// </summary>
     public static string UniqueName(IEnumerable<N3FontSet> list, string? name, N3FontSet? except = null)
     {
-        name = (name ?? "").Trim();
-        if (name.Length == 0) name = NewFontName;
+        if (string.IsNullOrWhiteSpace(name)) name = NewFontName;
         var names = new HashSet<string>(list.Where(f => !ReferenceEquals(f, except)).Select(f => f.Name), StringComparer.Ordinal);
         if (!names.Contains(name)) return name;
 

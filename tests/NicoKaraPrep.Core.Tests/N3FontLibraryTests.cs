@@ -26,6 +26,20 @@ public class N3FontLibraryTests
     }
 
     [Fact]
+    public void 追加と名前変更_前後の空白は消さない()
+    {
+        // ニコカラメーカー側の名前（" X" など）とマージで一致させるため
+        var list = Library("B");
+        Assert.Equal(" B ", N3FontLibrary.Add(list, new N3FontSet { Name = " B " }).Name);
+        Assert.Equal(" B 2", N3FontLibrary.Add(list, new N3FontSet { Name = " B " }).Name);
+        Assert.Equal("B", N3FontLibrary.Rename(list, list[0].Id, " X"));
+        Assert.Equal(new[] { " X", " B ", " B 2" }, Names(list));
+
+        // 空白だけの名前は書き出されないので「新規」にする
+        Assert.Equal("新規", N3FontLibrary.Add(list, new N3FontSet { Name = " \t" }).Name);
+    }
+
+    [Fact]
     public void 追加_Idが重なれば新しいIdにする()
     {
         var list = Library("a");
@@ -93,7 +107,7 @@ public class N3FontLibraryTests
         list[0].NkmSynchronize = true;
         list[1].NkmSynchronize = true;
 
-        Assert.Equal("（花帆）", N3FontLibrary.Rename(list, list[0].Id, " （花帆・小） "));
+        Assert.Equal("（花帆）", N3FontLibrary.Rename(list, list[0].Id, "（花帆・小）"));
         Assert.Equal("（花帆・小）", list[0].Name);
         Assert.False(list[0].NkmSynchronize);
 
