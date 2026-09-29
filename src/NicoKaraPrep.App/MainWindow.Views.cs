@@ -1,6 +1,7 @@
 ﻿using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Input;
+using Microsoft.UI.Xaml.Media;
 using NicoKaraPrep.App.ViewModels;
 using NicoKaraPrep.App.Views;
 
@@ -15,6 +16,9 @@ public sealed partial class MainWindow
 {
     /// <summary>直前のビュー（フォント設定ビューから戻る先）。</summary>
     private MainViewMode _previousViewMode = MainViewMode.Lines;
+
+    /// <summary>行リストを抜けたときにフォーカスがあった要素（行リストへ戻ったときにそこへ戻す）。</summary>
+    private UIElement? _linesViewFocus;
 
     private bool _switchingView;
 
@@ -62,6 +66,12 @@ public sealed partial class MainWindow
         _switchingView = true;
         try
         {
+            // 行リストを隠す前に、フォーカスのある場所を覚えておく（隠すとフォーカスはメニューなどへ移ってしまう）
+            if (current == MainViewMode.Lines)
+            {
+                _linesViewFocus = FocusManager.GetFocusedElement(Content.XamlRoot) as UIElement;
+            }
+
             _previousViewMode = current;
             ViewModel.ViewMode = mode;
             ApplyViewVisibility(mode);
@@ -87,6 +97,7 @@ public sealed partial class MainWindow
                     EnterFontSettingsView();
                     break;
                 default:
+                    RestoreLinesViewFocus();
                     ViewModel.StatusText = $"{MainViewModel.ViewModeName(current)}を終了し、行リストへ戻りました";
                     break;
             }
@@ -117,11 +128,73 @@ public sealed partial class MainWindow
         }
     }
 
+    /// <summary>フォント設定ビューから戻る先（直前のビュー）。</summary>
+    private MainViewMode FontSettingsReturnTarget =>
+        _previousViewMode == MainViewMode.FontSettings ? MainViewMode.Lines : _previousViewMode;
+
     /// <summary>フォント設定ビューから直前のビューへ戻る。</summary>
     private void ReturnFromFontSettings()
     {
         if (ViewModel.ViewMode != MainViewMode.FontSettings) return;
-        SwitchView(_previousViewMode == MainViewMode.FontSettings ? MainViewMode.Lines : _previousViewMode);
+        SwitchView(FontSettingsReturnTarget);
+    }
+
+    /// <summary>
+    /// 今のビューを閉じて戻る（表示メニューの「…へ戻る (Esc)」）。Esc と同じく、
+    /// 絵文字挿入ビューは行リストへ、フォント設定ビューは直前のビューへ戻る。
+    /// </summary>
+    private void ReturnFromCurrentView()
+    {
+        switch (ViewModel.ViewMode)
+        {
+            case MainViewMode.EmojiInsert:
+                SwitchView(MainViewMode.Lines);
+                break;
+            case MainViewMode.FontSettings:
+                ReturnFromFontSettings();
+                break;
+        }
+    }
+
+    /// <summary>
+    /// 行リストへ戻ったとき、行リストを抜ける前にフォーカスがあった場所へフォーカスを戻す
+    /// （F2・F3・Esc で行き来したあとも、↓ や Enter がそのまま行の操作になるように）。
+    /// </summary>
+    private void RestoreLinesViewFocus()
+    {
+        UIElement? saved = _linesViewFocus;
+        _linesViewFocus = null;
+
+        // 行リストの外（行エディタ・行設定の欄・チェック結果など）にあったなら、そこへ戻す
+        if (saved is FrameworkElement { IsLoaded: true } element && IsInLinesView(element) && !IsWithin(element, LineList)
+            && element.Focus(FocusState.Programmatic))
+        {
+            return;
+        }
+
+        // 行リストの中にあったとき・記録が無いとき・戻せなかったときは選択行に置く。行の入れ物は使い回されるうえ、
+        // 絵文字挿入ビューから戻ると選択はカーソルのあった行に変わるので、記録した入れ物ではなく今の選択行の入れ物を使う
+        if (ViewModel.SelectedLine is { } line && LineList.ContainerFromItem(line) is ListViewItem item
+            && item.Focus(FocusState.Programmatic))
+        {
+            return;
+        }
+        LineList.Focus(FocusState.Programmatic);
+    }
+
+    /// <summary>行リストのビューで見えている領域（メディア再生・メイン（絵文字挿入ビューを除く）・チェック結果）の中か。</summary>
+    private bool IsInLinesView(DependencyObject element) =>
+        (IsWithin(element, MediaPanel) || IsWithin(element, MainArea) || IsWithin(element, IssuePanel))
+        && !IsWithin(element, InsertView);
+
+    /// <summary>element が ancestor 自身か、その中（ビジュアルツリーの子孫）にあるか。</summary>
+    private static bool IsWithin(DependencyObject? element, DependencyObject ancestor)
+    {
+        for (DependencyObject? e = element; e is not null; e = VisualTreeHelper.GetParent(e))
+        {
+            if (ReferenceEquals(e, ancestor)) return true;
+        }
+        return false;
     }
 
     /// <summary>ビューに合わせて領域の表示を入れ替える（行リストなどはコントロールごと残る）。</summary>
