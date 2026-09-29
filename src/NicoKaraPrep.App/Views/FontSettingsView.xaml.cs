@@ -139,11 +139,17 @@ public sealed partial class FontSettingsView : UserControl
     /// <summary>
     /// Esc で前のビューへ戻る。ComboBox のドロップダウンやフライアウトを閉じる Esc は
     /// そちらで処理済み（Handled）になり、ここへは届かない。
+    /// 名前の欄で確定前の入力があれば、それは取り消してから戻る（戻ったあとの LostFocus で名前が変わらないように）。
     /// </summary>
     private void OnKeyDown(object sender, KeyRoutedEventArgs e)
     {
         if (e.Handled || e.Key != Windows.System.VirtualKey.Escape) return;
         e.Handled = true;
+        if (XamlRoot is not null && ReferenceEquals(FocusManager.GetFocusedElement(XamlRoot), NameBox)
+            && ViewModel?.Editor.Font is { } font && NameBox.Text != font.Name)
+        {
+            NameBox.Text = font.Name;
+        }
         BackRequested?.Invoke(this, EventArgs.Empty);
     }
 

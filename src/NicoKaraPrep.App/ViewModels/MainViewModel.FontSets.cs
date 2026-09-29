@@ -114,7 +114,9 @@ public partial class MainViewModel
 
     /// <summary>
     /// フォント設定名の変更に合わせて、行（全タブ）の手動指定と n3proj 書き出し設定の既定フォントの参照を新しい名前にする。
-    /// 変わった行の数を返す（既定フォントだけが変わったときは 0）。
+    /// 歌詞の 元に戻す・やり直し の履歴の中の行も新しい名前にする（名前の変更は歌詞の編集ではないので、
+    /// 行リストで Ctrl+Z をしても、もう無い古い名前に戻って参照が切れることが無いように）。
+    /// 変わった行の数を返す（既定フォントだけが変わったときは 0。履歴の中の行は数えない）。
     /// </summary>
     public int RenameFontReferences(string oldName, string newName)
     {
@@ -122,13 +124,8 @@ public partial class MainViewModel
         int count = 0;
         foreach (var tab in GetAllTabs())
         {
-            int changed = 0;
-            foreach (var line in tab.Document.Lines)
-            {
-                if (line.FontSetName != oldName) continue;
-                line.FontSetName = newName.Length > 0 ? newName : null;
-                changed++;
-            }
+            foreach (var doc in tab.UndoStack.Concat(tab.RedoStack)) RenameFontReferences(doc, oldName, newName);
+            int changed = RenameFontReferences(tab.Document, oldName, newName);
             if (changed == 0) continue;
             tab.IsModified = true;
             if (tab == _activeTab) MarkModified();
@@ -139,6 +136,19 @@ public partial class MainViewModel
         if (defaultChanged) N3ProjSettings.DefaultFontSetName = newName;
         if (count > 0 || defaultChanged) SaveProject();
         return count;
+    }
+
+    /// <summary>1 つの文書の行の手動指定を新しい名前にし、変わった行の数を返す。</summary>
+    private static int RenameFontReferences(LyricsDocument doc, string oldName, string newName)
+    {
+        int changed = 0;
+        foreach (var line in doc.Lines)
+        {
+            if (line.FontSetName != oldName) continue;
+            line.FontSetName = newName.Length > 0 ? newName : null;
+            changed++;
+        }
+        return changed;
     }
 
     /// <summary>文書の入れ替えを知らせ、曲専用のフォント設定を空にする（LoadDocument の最初に呼ぶ）。</summary>
