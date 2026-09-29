@@ -439,10 +439,10 @@ public class N3ProjWriterTests
                     mismatches.Add($"{Path.GetFileName(lyricsPath)} 行{i}: {expected[i]!["Raw"]}\n  期待 {Fmt(ec)}\n  実際 {Fmt(ac)}");
                 }
                 // 文字ごとのフォント（パート記号による自動設定）。ニコカラメーカー3 の「コーラス自動色分け」
-                // （括弧で括られた部分をコーラス用フォントにする。NicoKaraPrep には無い）が効いている
-                // 可能性のある行は、食い違っても失敗にしない
+                // （括弧で括られた部分をコーラス用フォントにする。NicoKaraPrep には無い）で説明できる文字の
+                // 食い違いだけは失敗にしない（同じ行でも、それ以外の文字は比べる）
                 string FmtFont(JsonArray a) => string.Join(" ", a.Select(c => $"{c!["Char"]}:{c["FontIndex"]}"));
-                if (FmtFont(ec) != FmtFont(ac) && !MayUseAutoChorus(ec, fontNames))
+                if (FmtFont(ec) != FmtFont(ac) && !OnlyAutoChorusDiffers(ec, ac, fontNames))
                 {
                     mismatches.Add($"{Path.GetFileName(lyricsPath)} 行{i} フォント: {expected[i]!["Raw"]}\n  期待 {FmtFont(ec)}\n  実際 {FmtFont(ac)}");
                 }
@@ -524,18 +524,64 @@ public class N3ProjWriterTests
         }
     }
 
+    /// <summary>コーラス自動色分けのコーラス開始文字・終了文字（ニコカラメーカー3 の既定）。</summary>
+    private static readonly char[] ChorusBeginChars = { '（', '(', '[' };
+    private static readonly char[] ChorusEndChars = { '）', ')', ']' };
+
     /// <summary>
-    /// ニコカラメーカー3 の「歌詞のコーラス部分を自動色分けする」の対象になりうる行か
-    /// （フォント設定名に含まれる括弧を除いて、コーラス開始文字の既定「（ ( [」を含む）。
+    /// 文字ごとのフォントの食い違いが、ニコカラメーカー3 の「歌詞のコーラス部分を自動色分けする」で説明できる文字だけにあるか。
+    /// 説明できるのは次の文字だけ:
+    /// ・括弧（コーラス開始文字から対応する終了文字まで。行内で閉じなければ行末まで）の中。ただし期待のフォントが
+    ///   括弧全体で 1 種類（コーラス用フォント）のときだけ
+    /// ・その括弧の前にある、コーラス用フォントと同じ名前のパート記号から括弧の手前まで
+    ///   （NicoKaraPrep はパート記号から切り替えるが、ニコカラメーカー3 は括弧から切り替えている）
+    /// フォント設定名と同じ文字（パート記号の絵文字）は括弧に数えない。
     /// </summary>
-    private static bool MayUseAutoChorus(JsonArray chars, IReadOnlyList<string> fontNames)
+    private static bool OnlyAutoChorusDiffers(JsonArray expected, JsonArray actual, IReadOnlyList<string> fontNames)
     {
-        string text = string.Concat(chars.Select(c => c!["Char"]!.GetValue<string>()));
-        foreach (string name in fontNames.Where(n => n.Length > 0).OrderByDescending(n => n.Length))
+        if (expected.Count != actual.Count) return false;
+        string CharAt(int i) => expected[i]!["Char"]!.GetValue<string>();
+        int ExpectedFont(int i) => expected[i]!["FontIndex"]!.GetValue<int>();
+        int FontIndexOfName(string name)
         {
-            text = text.Replace(name, "");
+            for (int n = 0; n < fontNames.Count; n++)
+            {
+                if (fontNames[n] == name) return n;
+            }
+            return -1;
         }
-        return text.IndexOfAny(new[] { '（', '(', '[' }) >= 0;
+
+        var allowed = new bool[expected.Count];
+        int marker = -1; // 直前のパート記号の位置
+        for (int i = 0; i < expected.Count; i++)
+        {
+            string c = CharAt(i);
+            if (FontIndexOfName(c) >= 0)
+            {
+                marker = i;
+                continue;
+            }
+            if (c.IndexOfAny(ChorusBeginChars) < 0) continue;
+
+            int end = i;
+            while (end + 1 < expected.Count && CharAt(end).IndexOfAny(ChorusEndChars) < 0) end++;
+            int chorus = ExpectedFont(i);
+            bool uniform = true;
+            for (int k = i; k <= end; k++) uniform &= ExpectedFont(k) == chorus;
+            if (uniform)
+            {
+                int from = marker >= 0 && FontIndexOfName(CharAt(marker)) == chorus ? marker : i;
+                for (int k = from; k <= end; k++) allowed[k] = true;
+            }
+            marker = -1;
+            i = end;
+        }
+
+        for (int i = 0; i < expected.Count; i++)
+        {
+            if (ExpectedFont(i) != actual[i]!["FontIndex"]!.GetValue<int>() && !allowed[i]) return false;
+        }
+        return true;
     }
 
     /// <summary>
