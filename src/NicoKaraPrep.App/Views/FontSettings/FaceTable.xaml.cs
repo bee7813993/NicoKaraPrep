@@ -4,12 +4,13 @@ using NicoKaraPrep.App.ViewModels;
 
 namespace NicoKaraPrep.App.Views.FontSettings;
 
-/// <summary>フォント設定ビューのフォントフェースの表（文字種別フォント 6 行）。</summary>
+/// <summary>
+/// フォント設定ビューのフォントフェースの表（文字種別フォント 6 行）。
+/// フォント名・フェイス名は、一覧から選ぶことも一覧に無い名前（ほかの PC のフォントなど）を入れることもできるよう、
+/// 候補の一覧つきの入力欄（AutoSuggestBox）にする。Enter・候補の選択・欄を離れたときに確定する。
+/// </summary>
 public sealed partial class FaceTable : UserControl
 {
-    /// <summary>選択を外している最中か（そのときの SelectionChanged は確定として扱わない）。</summary>
-    private bool _resetting;
-
     public FaceTable()
     {
         InitializeComponent();
@@ -27,77 +28,54 @@ public sealed partial class FaceTable : UserControl
 
     private static FaceRowViewModel? RowOf(object sender) => (sender as FrameworkElement)?.DataContext as FaceRowViewModel;
 
-    /// <summary>
-    /// フォント名・フェイス名の欄（編集できる ComboBox）の文字を、行の値に合わせ続ける。
-    /// 編集できる ComboBox の Text は、表示の準備ができる前に設定しても出ないため、x:Bind ではなくここで設定する。
-    /// </summary>
-    private void OnNameComboLoaded(object sender, RoutedEventArgs e)
+    private static bool IsFontBox(AutoSuggestBox box) => (box.Tag as string) == "font";
+
+    /// <summary>入力した文字を含む候補（先頭は「継承に戻す」）。</summary>
+    private static List<string> Suggestions(FaceRowViewModel row, AutoSuggestBox box)
     {
-        if (sender is not ComboBox combo || RowOf(sender) is not { } row) return;
-        bool font = (string)combo.Tag == "font";
-        string Current() => font ? row.FontNameText : row.FaceNameText;
-        combo.Text = Current();
-        if (_syncedCombos.Add(combo))
+        var choices = IsFontBox(box) ? row.FontChoices : row.FaceChoices;
+        string q = box.Text.Trim();
+        if (q.Length == 0) return choices.ToList();
+        return choices.Where(c => c == FaceRowViewModel.InheritChoice || c.Contains(q, StringComparison.OrdinalIgnoreCase)).ToList();
+    }
+
+    /// <summary>欄の文字を確定し、欄をフォント設定の値に合わせる（「継承に戻す」や空は継承＝空欄）。</summary>
+    private static void Commit(AutoSuggestBox box, string? text)
+    {
+        if (RowOf(box) is not { } row) return;
+        if (IsFontBox(box))
         {
-            string property = font ? nameof(FaceRowViewModel.FontNameText) : nameof(FaceRowViewModel.FaceNameText);
-            row.PropertyChanged += (_, args) =>
-            {
-                if (args.PropertyName == property && combo.Text != Current()) combo.Text = Current();
-            };
+            row.CommitFontName(text);
+            if (box.Text != row.FontNameText) box.Text = row.FontNameText;
+        }
+        else
+        {
+            row.CommitFaceName(text);
+            if (box.Text != row.FaceNameText) box.Text = row.FaceNameText;
         }
     }
 
-    /// <summary>行の値の変化を受け取るようにした ComboBox（行も ComboBox もビューと同じだけ残るので、登録は 1 回だけ）。</summary>
-    private readonly HashSet<ComboBox> _syncedCombos = new();
-
-    private void OnFontSelectionChanged(object sender, SelectionChangedEventArgs e)
+    /// <summary>欄に入ったら候補をすべて出す。</summary>
+    private void OnNameGotFocus(object sender, RoutedEventArgs e)
     {
-        if (_resetting || sender is not ComboBox combo || combo.SelectedItem is not string name || RowOf(sender) is not { } row) return;
-        row.CommitFontName(name);
-        ResetSelection(combo, () => row.FontNameText);
+        if (sender is not AutoSuggestBox box || RowOf(box) is not { } row) return;
+        box.ItemsSource = Suggestions(row, box);
+        box.IsSuggestionListOpen = true;
     }
 
-    private void OnFontTextSubmitted(ComboBox sender, ComboBoxTextSubmittedEventArgs args)
+    private void OnNameLostFocus(object sender, RoutedEventArgs e)
     {
-        if (RowOf(sender) is not { } row) return;
-        args.Handled = true; // 一覧に無い名前（ほかの PC のフォントなど）もそのまま使う
-        row.CommitFontName(args.Text);
-        ResetSelection(sender, () => row.FontNameText);
+        if (sender is AutoSuggestBox box) Commit(box, box.Text);
     }
 
-    private void OnFaceSelectionChanged(object sender, SelectionChangedEventArgs e)
+    /// <summary>入力に合わせて候補を絞る（候補を選んだときの文字の変化では絞らない）。</summary>
+    private void OnNameTextChanged(AutoSuggestBox sender, AutoSuggestBoxTextChangedEventArgs args)
     {
-        if (_resetting || sender is not ComboBox combo || combo.SelectedItem is not string name || RowOf(sender) is not { } row) return;
-        row.CommitFaceName(name);
-        ResetSelection(combo, () => row.FaceNameText);
+        if (args.Reason != AutoSuggestionBoxTextChangeReason.UserInput || RowOf(sender) is not { } row) return;
+        sender.ItemsSource = Suggestions(row, sender);
     }
 
-    private void OnFaceTextSubmitted(ComboBox sender, ComboBoxTextSubmittedEventArgs args)
-    {
-        if (RowOf(sender) is not { } row) return;
-        args.Handled = true;
-        row.CommitFaceName(args.Text);
-        ResetSelection(sender, () => row.FaceNameText);
-    }
-
-    /// <summary>
-    /// 選んだ項目の選択を外し、欄の文字をフォント設定の値に合わせる（継承なら空にして PlaceholderText を見せる）。
-    /// 選択を残すと、元に戻す で値が変わったあとに同じ項目を選び直せないため。ComboBox の処理が終わってから行う。
-    /// </summary>
-    private void ResetSelection(ComboBox combo, Func<string> text)
-    {
-        DispatcherQueue.TryEnqueue(() =>
-        {
-            _resetting = true;
-            try
-            {
-                combo.SelectedIndex = -1;
-                combo.Text = text();
-            }
-            finally
-            {
-                _resetting = false;
-            }
-        });
-    }
+    /// <summary>Enter か候補の選択で確定する。</summary>
+    private void OnNameQuerySubmitted(AutoSuggestBox sender, AutoSuggestBoxQuerySubmittedEventArgs args) =>
+        Commit(sender, args.ChosenSuggestion as string ?? args.QueryText);
 }

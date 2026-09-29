@@ -97,10 +97,9 @@ public sealed partial class FontSettingsView : UserControl
         if (ViewModel is { } vm)
         {
             vm.OnEnter();
-            if (_pendingSelectName is { } name && !vm.SelectByName(name))
-            {
-                vm.Main.StatusText = $"フォント設定「{name}」はありません（行の指定を確かめてください）";
-            }
+
+            // 名前が NicoKaraPrep のフォント設定に無いとき（書き出しのベースの n3proj にだけある名前など）は、前回の選択のまま
+            if (_pendingSelectName is { } name) vm.SelectByName(name);
             _pendingSelectName = null;
             vm.RunAnalysis();
         }
@@ -333,7 +332,7 @@ public sealed partial class FontSettingsView : UserControl
     /// <summary>配色の 1 箇所のボタン: その箇所を下の編集欄で編集する。</summary>
     private void OnBrushCellClick(object sender, RoutedEventArgs e)
     {
-        if (ViewModel is { } vm && (sender as FrameworkElement)?.DataContext is BrushCellViewModel cell) vm.Editor.SelectedBrushIndex = cell.Index;
+        if (ViewModel is { } vm && (sender as FrameworkElement)?.Tag is int index) vm.Editor.SelectedBrushIndex = index;
     }
 
     private void OnSwapClick(object sender, RoutedEventArgs e) => ViewModel?.Editor.SwapBeforeAfter();

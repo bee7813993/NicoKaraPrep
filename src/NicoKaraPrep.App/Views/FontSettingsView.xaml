@@ -38,6 +38,7 @@
                 HorizontalContentAlignment="Stretch"
                 VerticalContentAlignment="Stretch"
                 Padding="3"
+                Tag="{x:Bind Index}"
                 AutomationProperties.Name="{x:Bind ToolTip, Mode=OneWay}"
                 ToolTipService.ToolTip="{x:Bind ToolTip, Mode=OneWay}"
                 Click="OnBrushCellClick">

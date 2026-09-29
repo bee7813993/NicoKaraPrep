@@ -366,12 +366,17 @@ public sealed partial class BrushEditorViewModel : ObservableObject
         });
         if (reorder)
         {
-            LoadStops(keep: target);
+            // 並びが変わったら一覧を作り直す。位置の欄（NumberBox）の確定の処理の途中でその行を消さないよう、処理が終わってから行う
+            int index = Index;
+            Microsoft.UI.Dispatching.DispatcherQueue.GetForCurrentThread()?.TryEnqueue(() =>
+            {
+                if (Index != index || Model is not { } current || !current.Stops.Contains(target)) return;
+                LoadStops(keep: target);
+                LoadColorTarget();
+            });
+            return;
         }
-        else
-        {
-            stop.Refresh();
-        }
+        stop.Refresh();
         if (ReferenceEquals(SelectedStop?.Model, target)) LoadColorTarget();
     }
 

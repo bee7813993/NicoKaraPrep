@@ -50,39 +50,40 @@
                                 <ColumnDefinition Width="88" />
                             </Grid.ColumnDefinitions>
                             <TextBlock Text="{x:Bind Label}" FontSize="12" VerticalAlignment="Center" />
-                            <ComboBox
+                            <AutoSuggestBox
                                 Grid.Column="1"
-                                IsEditable="True"
-                                HorizontalAlignment="Stretch"
                                 FontSize="12"
-                                ItemsSource="{x:Bind FontChoices}"
                                 Tag="font"
-                                Loaded="OnNameComboLoaded"
+                                AutomationProperties.Name="{x:Bind FontNameLabel}"
+                                Text="{x:Bind FontNameText, Mode=OneWay}"
                                 PlaceholderText="{x:Bind FontNamePlaceholder, Mode=OneWay}"
-                                SelectionChanged="OnFontSelectionChanged"
-                                TextSubmitted="OnFontTextSubmitted" />
-                            <ComboBox
+                                GotFocus="OnNameGotFocus"
+                                LostFocus="OnNameLostFocus"
+                                TextChanged="OnNameTextChanged"
+                                QuerySubmitted="OnNameQuerySubmitted" />
+                            <AutoSuggestBox
                                 Grid.Column="2"
-                                IsEditable="True"
-                                HorizontalAlignment="Stretch"
                                 FontSize="12"
-                                ItemsSource="{x:Bind FaceChoices}"
                                 Tag="face"
-                                Loaded="OnNameComboLoaded"
+                                AutomationProperties.Name="{x:Bind FaceNameLabel}"
+                                Text="{x:Bind FaceNameText, Mode=OneWay}"
                                 PlaceholderText="{x:Bind FaceNamePlaceholder, Mode=OneWay}"
-                                SelectionChanged="OnFaceSelectionChanged"
-                                TextSubmitted="OnFaceTextSubmitted" />
-                            <NumberBox Grid.Column="3" FontSize="12" SpinButtonPlacementMode="Hidden" Value="{x:Bind SizeValue, Mode=TwoWay}" PlaceholderText="{x:Bind SizePlaceholder, Mode=OneWay}" />
-                            <NumberBox Grid.Column="4" FontSize="12" SpinButtonPlacementMode="Hidden" Value="{x:Bind XScaleValue, Mode=TwoWay}" PlaceholderText="{x:Bind XScalePlaceholder, Mode=OneWay}" />
-                            <NumberBox Grid.Column="5" FontSize="12" SpinButtonPlacementMode="Hidden" Value="{x:Bind EdgeValue, Mode=TwoWay}" PlaceholderText="{x:Bind EdgePlaceholder, Mode=OneWay}" />
+                                GotFocus="OnNameGotFocus"
+                                LostFocus="OnNameLostFocus"
+                                TextChanged="OnNameTextChanged"
+                                QuerySubmitted="OnNameQuerySubmitted" />
+                            <NumberBox Grid.Column="3" AutomationProperties.Name="{x:Bind SizeLabel}" FontSize="12" SpinButtonPlacementMode="Hidden" Value="{x:Bind SizeValue, Mode=TwoWay}" PlaceholderText="{x:Bind SizePlaceholder, Mode=OneWay}" />
+                            <NumberBox Grid.Column="4" AutomationProperties.Name="{x:Bind XScaleLabel}" FontSize="12" SpinButtonPlacementMode="Hidden" Value="{x:Bind XScaleValue, Mode=TwoWay}" PlaceholderText="{x:Bind XScalePlaceholder, Mode=OneWay}" />
+                            <NumberBox Grid.Column="5" AutomationProperties.Name="{x:Bind EdgeLabel}" FontSize="12" SpinButtonPlacementMode="Hidden" Value="{x:Bind EdgeValue, Mode=TwoWay}" PlaceholderText="{x:Bind EdgePlaceholder, Mode=OneWay}" />
                             <ComboBox
                                 Grid.Column="6"
                                 HorizontalAlignment="Stretch"
                                 FontSize="12"
                                 ItemsSource="{x:Bind Edge2Choices}"
+                                AutomationProperties.Name="{x:Bind Edge2Label}"
                                 SelectedIndex="{x:Bind Edge2Index, Mode=TwoWay}"
                                 PlaceholderText="{x:Bind Edge2Placeholder, Mode=OneWay}" />
-                            <NumberBox Grid.Column="7" FontSize="12" SpinButtonPlacementMode="Hidden" Value="{x:Bind Edge2Value, Mode=TwoWay}" PlaceholderText="{x:Bind Edge2WidthPlaceholder, Mode=OneWay}" />
+                            <NumberBox Grid.Column="7" AutomationProperties.Name="{x:Bind Edge2WidthLabel}" FontSize="12" SpinButtonPlacementMode="Hidden" Value="{x:Bind Edge2Value, Mode=TwoWay}" PlaceholderText="{x:Bind Edge2WidthPlaceholder, Mode=OneWay}" />
                         </Grid>
                     </DataTemplate>
                 </ItemsControl.ItemTemplate>

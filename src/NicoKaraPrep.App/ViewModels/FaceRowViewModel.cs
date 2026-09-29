@@ -44,6 +44,23 @@ public sealed partial class FaceRowViewModel : ObservableObject
     /// <summary>種別の表示（歌詞／漢字 など）。</summary>
     public string Label { get; }
 
+    /// <summary>読み上げ・UI オートメーションでの欄の名前（「歌詞／漢字 サイズ」など）。</summary>
+    public string NameOf(string column) => $"{Label} {column}";
+
+    public string FontNameLabel => NameOf("フォント名");
+
+    public string FaceNameLabel => NameOf("フェイス");
+
+    public string SizeLabel => NameOf("サイズ");
+
+    public string XScaleLabel => NameOf("横倍率");
+
+    public string EdgeLabel => NameOf("縁");
+
+    public string Edge2Label => NameOf("縁 2");
+
+    public string Edge2WidthLabel => NameOf("縁 2 幅");
+
     /// <summary>ルビ／漢字の行か（サイズ・縁・縁 2 の 0 は「歌詞の半分」）。</summary>
     public bool IsRubyKanji => Index == 3;
 
