@@ -841,9 +841,9 @@ public static class N3ProjWriter
         }
 
         // 画像のパスが空で塗りの種類も画像でなければ、画像の設定（パス・拡大率）はベースのまま残す
-        if (!string.IsNullOrEmpty(src.BitmapPath) || src.Type == N3Brush.TypeBitmap)
+        if (src.BitmapPath.Length > 0 || src.Type == N3Brush.TypeBitmap)
         {
-            changed |= SetString(b, "BitmapPath", src.BitmapPath ?? "");
+            changed |= SetString(b, "BitmapPath", src.BitmapPath);
             changed |= SetInt(b, "BitmapScale", src.BitmapScale, 100);
         }
         return changed;
@@ -864,7 +864,7 @@ public static class N3ProjWriter
                 ["SelectedBrushTypeIndex"] = src.Type,
                 ["SolidColor"] = ColorBind(color.Length > 0 ? color : DefaultBrushColors[i], ver, Math.Clamp(src.AlphaPercent, 0, 100)),
                 ["GradientStops"] = GradientStops(StopsForExport(src)),
-                ["BitmapPath"] = src.BitmapPath ?? "",
+                ["BitmapPath"] = src.BitmapPath,
                 ["BitmapScale"] = src.BitmapScale,
             };
             AddSettingsName(b, BrushNames[i], 0);

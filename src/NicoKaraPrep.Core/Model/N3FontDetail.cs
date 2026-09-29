@@ -114,11 +114,19 @@ public sealed class N3Brush
     /// <summary>画像。</summary>
     public const int TypeBitmap = 3;
 
+    private string _color = "";
+    private List<N3GradientStop> _stops = new();
+    private string _bitmapPath = "";
+
     /// <summary>塗りの種類（ニコカラメーカーの SelectedBrushTypeIndex。0 単色 / 1 グラデーション / 2 ミルフィーユ / 3 画像）。</summary>
     public int Type { get; set; }
 
     /// <summary>単色の色 "RRGGBB"。空は未指定（書き出し時: マージならベースを維持、新規なら既定色）。単色以外の箇所でも前の単色が残る。</summary>
-    public string Color { get; set; } = "";
+    public string Color
+    {
+        get => _color;
+        set => _color = value ?? "";
+    }
 
     /// <summary>単色の不透明度 %（0–100。ニコカラメーカーの DxColor.A = AlphaPercent / 100）。</summary>
     public int AlphaPercent { get; set; } = 100;
@@ -126,11 +134,24 @@ public sealed class N3Brush
     /// <summary>
     /// グラデーション・ミルフィーユのマーカー（位置 0 が上端、1 が下端）。
     /// 空は未指定（書き出し時: マージならベースを維持、新規ならニコカラメーカーの既定 3 点）。
+    /// null は空の一覧に、一覧の中の null は取り除く（手で編集した JSON など）。
     /// </summary>
-    public List<N3GradientStop> Stops { get; set; } = new();
+    public List<N3GradientStop> Stops
+    {
+        get => _stops;
+        set
+        {
+            _stops = value ?? new();
+            _stops.RemoveAll(s => s is null);
+        }
+    }
 
     /// <summary>画像ファイルのパス。空は未指定（塗りの種類が画像でなければ、マージではベースの画像の設定を維持）。</summary>
-    public string BitmapPath { get; set; } = "";
+    public string BitmapPath
+    {
+        get => _bitmapPath;
+        set => _bitmapPath = value ?? "";
+    }
 
     /// <summary>画像の拡大率 %。</summary>
     public int BitmapScale { get; set; } = 100;
@@ -138,7 +159,7 @@ public sealed class N3Brush
     /// <summary>何も指定していない箇所か（書き出しのマージでベースの値を維持する）。色が 16 進 6 桁でなければ未指定とみなす。</summary>
     [JsonIgnore]
     public bool IsUnset =>
-        Type == TypeSolid && !N3FontSet.IsValidWeb16(Color) && Stops.Count == 0 && string.IsNullOrEmpty(BitmapPath);
+        Type == TypeSolid && !N3FontSet.IsValidWeb16(Color) && Stops.Count == 0 && BitmapPath.Length == 0;
 
     /// <summary>ニコカラメーカーが新規の箇所に入れるマーカー（0 白 / 0.5 灰 / 1 灰）。</summary>
     public static List<N3GradientStop> DefaultStops() => new()
@@ -163,8 +184,14 @@ public sealed class N3GradientStop
     /// <summary>位置（0–1。0 が上端）。</summary>
     public double Position { get; set; }
 
+    private string _color = "FFFFFF";
+
     /// <summary>色 "RRGGBB"。</summary>
-    public string Color { get; set; } = "FFFFFF";
+    public string Color
+    {
+        get => _color;
+        set => _color = value ?? "";
+    }
 
     /// <summary>不透明度 %（0–100）。</summary>
     public int AlphaPercent { get; set; } = 100;
@@ -181,11 +208,22 @@ public sealed class N3GradientStop
 /// </summary>
 public sealed class N3FontFace
 {
+    private string _fontName = "";
+    private string _faceName = "";
+
     /// <summary>フォントファミリー名（空 = 継承）。</summary>
-    public string FontName { get; set; } = "";
+    public string FontName
+    {
+        get => _fontName;
+        set => _fontName = value ?? "";
+    }
 
     /// <summary>フェイス名（"Bold" "ﾍﾋﾞｰ" など。空 = 継承）。</summary>
-    public string FaceName { get; set; } = "";
+    public string FaceName
+    {
+        get => _faceName;
+        set => _faceName = value ?? "";
+    }
 
     /// <summary>文字サイズ px（0 = 継承）。</summary>
     public double SizePx { get; set; }

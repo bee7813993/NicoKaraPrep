@@ -155,6 +155,27 @@ public class N3FontWriteTests
         Assert.False(single[0]!["Synchronize"]!.GetValue<bool>());
     }
 
+    [Fact]
+    public void 書き出し_詳細の文字列やマーカーがnullのJSONも空として読み新規でもマージでも書ける()
+    {
+        var f = JsonSerializer.Deserialize<N3FontSet>(
+            """{"Name":"（麻衣）（のりこ）","Detail":{"Brushes":[{"Color":null,"Stops":null,"BitmapPath":null},{"Type":1,"Color":"112233","Stops":[null,{"Position":0.5,"Color":null}]}],"Faces":[{"FontName":null,"FaceName":null,"SizePx":60},{"FontName":null},null,{"FontName":null,"FaceName":null}]}}""")!;
+        var b0 = f.Detail.Brushes[0];
+        Assert.Equal("", b0.Color);
+        Assert.Empty(b0.Stops);
+        Assert.Equal("", b0.BitmapPath);
+        Assert.True(b0.IsUnset);
+        Assert.Equal("", Assert.Single(f.Detail.Brushes[1].Stops).Color);
+        Assert.Equal("", f.FontFamily);
+        Assert.True(f.Detail.Faces[1].IsInherited);
+        Assert.True(f.Detail.Faces[3].IsInherited);
+
+        var created = Export(null, f);
+        Assert.Equal(N3FontDetail.BrushCount, created[0]!["BrushInfos"]!.AsArray().Count);
+        var merged = Export(ProjectOf(NkmFont()), f);
+        Assert.Equal("112233", merged[0]!["BrushInfos"]![1]!["SolidColor"]!["Web16"]!.GetValue<string>());
+    }
+
     // ------------------------------------------------------------ 書き出し（マージ）
 
     [Fact]
