@@ -1,4 +1,5 @@
-﻿using NicoKaraPrep.Core.Model;
+﻿using NicoKaraPrep.Core.Formats;
+using NicoKaraPrep.Core.Model;
 
 namespace NicoKaraPrep.App.ViewModels;
 
@@ -58,6 +59,31 @@ public partial class MainViewModel
         }
         if (N3ProjSettings.DefaultFontSetName is { Length: > 0 } d) names.Add(d);
         return names;
+    }
+
+    private (string Path, DateTime Stamp, HashSet<string> Names)? _baseFontNamesCache;
+
+    /// <summary>
+    /// 書き出しのベースにする n3proj（<see cref="SuggestN3ProjBasePath"/>）にあるフォント設定名。ベースが無い・読めなければ空。
+    /// 行の手動指定はベースのフォント設定名も選べるので、参照切れの検証ではこれも「ある名前」として扱う。
+    /// ファイルのパスと更新日時が同じあいだは読み直さない。
+    /// </summary>
+    public IReadOnlySet<string> GetBaseFontNames()
+    {
+        string? path = SuggestN3ProjBasePath();
+        if (path is null) return new HashSet<string>();
+        try
+        {
+            var stamp = File.GetLastWriteTimeUtc(path);
+            if (_baseFontNamesCache is { } c && c.Path == path && c.Stamp == stamp) return c.Names;
+            var names = new HashSet<string>(N3ProjFormat.Read(path).FontSetNames, StringComparer.Ordinal);
+            _baseFontNamesCache = (path, stamp, names);
+            return names;
+        }
+        catch (Exception)
+        {
+            return new HashSet<string>(); // ベースが読めなくても検証は続ける
+        }
     }
 
     /// <summary>

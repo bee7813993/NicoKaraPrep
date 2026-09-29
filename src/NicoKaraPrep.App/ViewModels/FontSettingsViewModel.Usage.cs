@@ -155,7 +155,11 @@ public sealed partial class FontSettingsViewModel
     private void UpdateIssues(List<N3FontSet> export)
     {
         Issues.Clear();
-        var issues = N3FontLibrary.Validate(export, _main.CollectReferencedFontNames());
+
+        // 行の手動指定は書き出しのベースの n3proj にあるフォント設定名も使えるので、それは参照切れにしない
+        var referenced = _main.CollectReferencedFontNames();
+        referenced.ExceptWith(_main.GetBaseFontNames());
+        var issues = N3FontLibrary.Validate(export, referenced);
         foreach (var issue in issues.OrderByDescending(i => i.Severity)) Issues.Add(new FontIssueItem(issue));
         IssueSummary = issues.Count == 0 ? "問題は見つかりませんでした" : $"{issues.Count} 件";
     }
