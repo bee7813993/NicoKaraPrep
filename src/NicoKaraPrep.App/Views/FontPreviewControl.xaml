@@ -1,0 +1,12 @@
+﻿<UserControl
+    x:Class="NicoKaraPrep.App.Views.FontPreviewControl"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    AutomationProperties.Name="フォントのプレビュー">
+
+    <!--
+        Win2D の CanvasControl はコードで作ってここへ入れる。
+        Unloaded で RemoveFromVisualTree してリソースを解放したあと、再び表示されたときに作り直せるようにするため
+    -->
+    <Grid x:Name="CanvasHost" />
+</UserControl>
