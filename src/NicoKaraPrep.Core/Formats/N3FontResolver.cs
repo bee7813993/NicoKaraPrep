@@ -5,7 +5,7 @@ namespace NicoKaraPrep.Core.Formats;
 /// <summary>
 /// ニコカラメーカー3 の「パート別にフォントを設定（歌詞の文字と同じ名称のフォント設定を適用する）」相当。
 /// 行内にフォント設定名と同じ文字列（絵文字の置き換え文字列など）が現れると、そこから先の文字に
-/// そのフォント設定を適用する。長い名前を優先して照合する。行ごとの手動指定（FontSetName）があれば
+/// そのフォント設定を適用する。長い名前を優先し、2 連タグ用スペーサーを飛ばして照合する。行ごとの手動指定（FontSetName）があれば
 /// その行はそれで統一する。行を順に渡すと、前の行のフォントを引き継ぐ（行が変わっても維持する場合）。
 /// </summary>
 public sealed class N3FontResolver
@@ -41,9 +41,20 @@ public sealed class N3FontResolver
         var changes = new Dictionary<int, int>();
         if (!_matcher.IsEmpty)
         {
-            foreach (var occ in _matcher.FindOccurrences(line.Chars))
+            // 2 連タグ用スペーサーを除いた文字の並びで照合し、出現の先頭を元の位置へ戻す
+            // （ニコカラメーカー3 と同じく、「（麻衣）<SP>（のりこ）」も「（麻衣）（のりこ）」に当たる。
+            //   EmojiMatcher 自体はスペーサーをまたがないので、ここだけで飛ばす）
+            var positions = new List<int>(line.Chars.Count);
+            var compact = new List<CharUnit>(line.Chars.Count);
+            for (int i = 0; i < line.Chars.Count; i++)
             {
-                changes[occ.Start] = _byName[occ.Value];
+                if (line.Chars[i].IsSpacer) continue;
+                positions.Add(i);
+                compact.Add(line.Chars[i]);
+            }
+            foreach (var occ in _matcher.FindOccurrences(compact))
+            {
+                changes[positions[occ.Start]] = _byName[occ.Value];
             }
         }
         for (int i = 0; i < result.Length; i++)

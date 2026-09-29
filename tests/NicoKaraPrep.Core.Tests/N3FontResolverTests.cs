@@ -1,4 +1,5 @@
-﻿using NicoKaraPrep.Core.Formats;
+﻿using System.Text.Json.Nodes;
+using NicoKaraPrep.Core.Formats;
 using NicoKaraPrep.Core.Model;
 
 namespace NicoKaraPrep.Core.Tests;
@@ -36,6 +37,54 @@ public class N3FontResolverTests
             "[00:01:00]（麻衣）（のりこ）踊[00:02:00]",
             "[00:03:00]（麻衣）歌（のりこ）[00:04:00]");
         Assert.Equal(new[] { "3333333333", "1111122222" }, ResolveAll(doc));
+    }
+
+    [Fact]
+    public void 照合_スペーサーを挟んだ結合名が当たる()
+    {
+        // 絵文字を続けて挿入したときの 2 連タグ（ニコカラメーカー3 はタイムタグを飛ばして照合する）
+        var doc = Doc("[00:01:00]（麻衣）[00:02:00][00:01:00]（のりこ）[00:02:00]踊[00:03:00]");
+        Assert.Contains(doc.Lines[0].Chars, c => c.IsSpacer);
+        Assert.Equal(new[] { "3333_333333" }, ResolveAll(doc));
+    }
+
+    [Fact]
+    public void 書き出し_スペーサーを挟んだ連続絵文字はどちらも結合名のフォントになる()
+    {
+        var doc = Doc("@Emoji=（麻衣）,a.png", "@Emoji=（のりこ）,b.png",
+            "[00:01:00]（麻衣）[00:02:00][00:01:00]（のりこ）[00:02:00]踊[00:03:00]");
+        var layouts = new N3ProjWriter.LayoutResolver(new List<N3ProjLayoutInfo> { new("下寄せ2行", 0, 2) }, null, null, null, new List<string>(), "t");
+        var action = ("SHINTA.CharFadeInFadeOut", new JsonObject { ["$type"] = "CharFadeInFadeOutSettingsModel" });
+        var lines = N3ProjWriter.BuildLineInfos(doc, new N3ShowTimeSettings(), doc.EmojiEntries, new N3FontResolver(Names, null, true), layouts, action, "Ver 13.79", out _);
+
+        var chars = lines[0]!["LyricsCharInfos"]!.AsArray();
+        Assert.Equal(new[] { "（麻衣）:3", "（のりこ）:3", "踊:3" }, chars.Select(c => $"{c!["Char"]}:{c["FontIndex"]}"));
+    }
+
+    [Fact]
+    public void 照合_スペーサーを挟んでも結合名が無ければそれぞれの名前が当たる()
+    {
+        var doc = Doc("[00:01:00]（麻衣）[00:02:00][00:01:00]（のりこ）[00:02:00]踊[00:03:00]");
+        Assert.Equal(new[] { "1111_222222" }, ResolveAll(doc, new[] { "標準", "（麻衣）", "（のりこ）" }));
+    }
+
+    [Fact]
+    public void 照合_名前の途中や行頭のスペーサーも飛ばす()
+    {
+        var doc = Doc(
+            "[00:01:00]（麻[00:01:20][00:01:30]衣）歌[00:02:00]",
+            "[00:02:50][00:03:00]（のりこ）え[00:04:00]");
+        Assert.Equal(new[] { "11_111", "_222222" }, ResolveAll(doc));
+    }
+
+    [Fact]
+    public void 集計_スペーサーを挟んだ結合名も数える()
+    {
+        var doc = Doc("[00:01:00]（麻衣）[00:02:00][00:01:00]（のりこ）[00:02:00]踊[00:03:00]");
+        var usage = N3FontResolver.CountUsage(doc, Names, null, true);
+        Assert.Equal(10, usage["（麻衣）（のりこ）"]);
+        Assert.Equal(0, usage["（麻衣）"]);
+        Assert.Equal(new[] { 0 }, N3FontResolver.LinesUsing(doc, Names, null, true, "（麻衣）（のりこ）"));
     }
 
     [Fact]
