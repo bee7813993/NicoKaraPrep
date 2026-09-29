@@ -304,6 +304,7 @@ public partial class MainViewModel : ObservableObject
             }
             ApplySavedSlotOrder(project.EmojiSlots);
             N3ProjSettings = project.N3Proj ?? new N3ProjSongSettings();
+            SongFontSets = project.FontSets;
             LineExportSettings.Apply(Document, project.LineSettings);
 
             if (restoreTabs)
@@ -377,6 +378,9 @@ public partial class MainViewModel : ObservableObject
 
     public void LoadDocument(LyricsDocument doc, string? path, DocumentFormat format)
     {
+        // 曲専用のフォント設定は曲ごとに持つので空にする（ファイルを開いたときは .tttproj から読み込み直す）
+        ResetSongFontSets();
+
         // ファイルを開き直したらタブ構成もリセット（分離タブは .tttproj から復元される）
         Tabs.Clear();
         N3ProjSettings = new N3ProjSongSettings();
@@ -616,7 +620,7 @@ public partial class MainViewModel : ObservableObject
         }
     }
 
-    /// <summary>曲プロジェクト（.tttproj）を保存する（済マーク・メディアパス・分離タブ）。</summary>
+    /// <summary>曲プロジェクト（.tttproj）を保存する（済マーク・メディアパス・分離タブ・曲専用のフォント設定）。</summary>
     public void SaveProject()
     {
         StoreActiveTab();
@@ -633,6 +637,7 @@ public partial class MainViewModel : ObservableObject
                 .ToList(),
             LineSettings = LineExportSettings.Collect(main.Document),
             N3Proj = N3ProjSettings,
+            FontSets = SongFontSets,
         };
         foreach (var e in main.Document.EmojiEntries)
         {

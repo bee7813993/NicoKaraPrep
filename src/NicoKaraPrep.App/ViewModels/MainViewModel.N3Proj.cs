@@ -61,6 +61,24 @@ public partial class MainViewModel
         return true;
     }
 
+    /// <summary>
+    /// 複数の行に適用するフォント設定名の手動指定をまとめて設定する（null / 空 = 自動）。元に戻す（Ctrl+Z）は 1 回で全部戻る。
+    /// 空行と、すでにその指定になっている行は変えない。変えた行の数を返す。
+    /// </summary>
+    public int SetLinesFontSet(IReadOnlyList<int> indexes, string? name)
+    {
+        string? value = string.IsNullOrWhiteSpace(name) ? null : name;
+        var targets = indexes.Distinct()
+            .Where(i => i >= 0 && i < Document.Lines.Count && !Document.Lines[i].IsEmpty && Document.Lines[i].FontSetName != value)
+            .ToList();
+        if (targets.Count == 0) return 0;
+        PushUndo();
+        foreach (int i in targets) Document.Lines[i].FontSetName = value;
+        MarkModified();
+        SaveProject();
+        return targets.Count;
+    }
+
     /// <summary>選択行の手動指定（表示時刻・フォント）をすべて解除する。</summary>
     public int ClearLineOverrides(IReadOnlyList<int> indexes)
     {
@@ -174,7 +192,7 @@ public partial class MainViewModel
             ScreenHeight = width == 1920 ? 1080 : (int)Math.Round(width * 9.0 / 16),
             ShowTime = CreateShowTimeSettings(),
             EmojiEntries = GetEffectiveEmojiList(),
-            FontSets = Settings.N3FontSets,
+            FontSets = ExportFontSets,
             MergeFontSets = settings.MergeFontSets,
             DefaultFont = new N3FontSet
             {
