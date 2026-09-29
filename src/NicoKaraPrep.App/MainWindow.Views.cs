@@ -256,6 +256,15 @@ public sealed partial class MainWindow
             };
             item.IsChecked = true;
 
+            // Esc の行き先（フォント設定ビューは行リストとは限らない）を項目名で示す
+            BackViewMenuItem.Text = mode switch
+            {
+                MainViewMode.EmojiInsert => "行リストへ戻る",
+                MainViewMode.FontSettings => $"{MainViewModel.ViewModeName(FontSettingsReturnTarget)}へ戻る",
+                _ => "前のビューへ戻る",
+            };
+            BackViewMenuItem.IsEnabled = mode != MainViewMode.Lines;
+
             EmojiModeToggle.IsChecked = mode == MainViewMode.EmojiInsert;
         }
         finally
@@ -286,6 +295,9 @@ public sealed partial class MainWindow
             : ReferenceEquals(sender, FontViewMenuItem) ? MainViewMode.FontSettings
             : MainViewMode.Lines);
     }
+
+    /// <summary>表示メニューの「…へ戻る (Esc)」。</summary>
+    private void OnBackViewMenuClick(object sender, RoutedEventArgs e) => ReturnFromCurrentView();
 
     /// <summary>F2・F3（表示メニューのアクセラレータ）。開いているビューのキーなら戻る。</summary>
     private void OnViewAcceleratorInvoked(KeyboardAccelerator sender, KeyboardAcceleratorInvokedEventArgs args)

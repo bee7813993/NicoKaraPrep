@@ -6,7 +6,7 @@
     xmlns:core="using:NicoKaraPrep.Core.Model"
     xmlns:val="using:NicoKaraPrep.Core.Validation">
 
-    <Grid x:Name="RootGrid" KeyDown="OnRootKeyDown">
+    <Grid KeyDown="OnRootKeyDown">
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto" />
             <RowDefinition Height="Auto" />
@@ -107,12 +107,10 @@
                     </MenuFlyoutItem>
                 </MenuBarItem>
                 <MenuBarItem Title="表示(V)" AccessKey="V">
-                    <!-- 行リストへ戻る Esc は各ビューの中で受ける（フォント設定ビューでは中の部品が処理しなかったときだけ）ため、ここはキーの表示だけ -->
                     <RadioMenuFlyoutItem
                         x:Name="LinesViewMenuItem"
                         Text="行リスト"
                         GroupName="MainViewMode"
-                        KeyboardAcceleratorTextOverride="Esc"
                         Click="OnViewMenuClick" />
                     <RadioMenuFlyoutItem
                         x:Name="EmojiViewMenuItem"
@@ -132,6 +130,16 @@
                             <KeyboardAccelerator Key="F3" Invoked="OnViewAcceleratorInvoked" />
                         </RadioMenuFlyoutItem.KeyboardAccelerators>
                     </RadioMenuFlyoutItem>
+                    <MenuFlyoutSeparator />
+                    <!-- Esc で今のビューを閉じて戻る（絵文字挿入ビューは行リストへ、フォント設定ビューは直前のビューへ）。
+                         項目名は今のビューに合わせて変える（MainWindow.Views.cs の SyncViewSwitchers）。
+                         Esc は各ビューの中で受ける（フォント設定ビューでは中の部品が処理しなかったときだけ）ため、ここはキーの表示だけ -->
+                    <MenuFlyoutItem
+                        x:Name="BackViewMenuItem"
+                        Text="前のビューへ戻る"
+                        KeyboardAcceleratorTextOverride="Esc"
+                        IsEnabled="False"
+                        Click="OnBackViewMenuClick" />
                 </MenuBarItem>
                 <MenuBarItem Title="エクスポート(X)" AccessKey="X">
                     <MenuFlyoutItem Text="選択行を新しいタブへ分離" Click="OnSplitToTabClick">
@@ -511,7 +519,6 @@
 
             <!-- 右パネル: @Emoji パレット -->
             <Grid
-                x:Name="PalettePanel"
                 Grid.Column="1"
                 BorderThickness="1,0,0,0"
                 BorderBrush="{ThemeResource DividerStrokeColorDefaultBrush}"
