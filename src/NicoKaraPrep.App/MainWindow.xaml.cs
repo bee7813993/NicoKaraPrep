@@ -618,6 +618,7 @@ public sealed partial class MainWindow : Window
 
     private void OnValidateClick(object sender, RoutedEventArgs e)
     {
+        if (ValidationBlocked()) return;
         TryRun(ViewModel.RunValidation);
         IssuePanel.IsExpanded = ViewModel.Issues.Count > 0;
     }

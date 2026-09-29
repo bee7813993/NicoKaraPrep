@@ -418,4 +418,17 @@ public sealed partial class MainWindow
             $"フォント設定ビューでは歌詞の元に戻す・やり直しは使えません（Esc で{MainViewModel.ViewModeName(FontSettingsReturnTarget)}へ戻ります）";
         return true;
     }
+
+    /// <summary>
+    /// 今すぐチェック（F5）を止めるか。行もチェック結果も見えないフォント設定ビューでは止め、
+    /// ステータスバーの案内をチェック結果で消したり、隠れているチェック結果の開閉を変えたりしない
+    /// （戻るときに ExitFontSettingsView がチェックを予約し直す）。
+    /// </summary>
+    private bool ValidationBlocked()
+    {
+        if (ViewModel.ViewMode != MainViewMode.FontSettings) return false;
+        ViewModel.StatusText =
+            $"フォント設定ビューではチェックは使えません（Esc で{MainViewModel.ViewModeName(FontSettingsReturnTarget)}へ戻ると、チェックし直します）";
+        return true;
+    }
 }
