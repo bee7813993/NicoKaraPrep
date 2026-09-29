@@ -4,6 +4,7 @@ using Microsoft.UI.Xaml.Input;
 using Microsoft.UI.Xaml.Media;
 using NicoKaraPrep.App.ViewModels;
 using NicoKaraPrep.App.Views;
+using NicoKaraPrep.Core.Model;
 
 namespace NicoKaraPrep.App;
 
@@ -26,6 +27,18 @@ public sealed partial class MainWindow
     private bool _syncingViewSwitchers;
 
     private bool InsertViewActive => ViewModel.ViewMode == MainViewMode.EmojiInsert;
+
+    /// <summary>
+    /// 絵文字挿入ビューの状態（カーソルのあった行・その行の中の表示文字位置・再生追従カーソル）。
+    /// LineIndex が -1 のときはカーソル位置を持たない（文書が空だったとき）。
+    /// </summary>
+    private sealed record InsertViewState(LyricsDocument Document, int LineIndex, int CharOffset, bool Follow);
+
+    /// <summary>
+    /// 絵文字挿入ビューからフォント設定ビューへ移ったときに覚えた挿入ビューの状態。
+    /// フォント設定ビューから絵文字挿入ビューへ戻ったら元に戻し、フォント設定ビューを抜けたら（戻り先がどこでも）捨てる。
+    /// </summary>
+    private InsertViewState? _suspendedInsertView;
 
     /// <summary>フォント設定ビュー（初めて開くときに作る。以後は閉じても残し、表示だけを切り替える）。</summary>
     private FontSettingsView? _fontView;
@@ -72,11 +85,19 @@ public sealed partial class MainWindow
                 _linesViewFocus = FocusManager.GetFocusedElement(Content.XamlRoot) as UIElement;
             }
 
+            // 絵文字挿入ビューからフォント設定ビューへ移るときは、戻ったときに続きから使えるよう
+            // 挿入ビューの状態を覚えておく（ExitInsertView が再生追従カーソルを OFF にするので、その前に）
+            if (current == MainViewMode.EmojiInsert && mode == MainViewMode.FontSettings)
+            {
+                _suspendedInsertView = CaptureInsertViewState();
+            }
+
             _previousViewMode = current;
             ViewModel.ViewMode = mode;
             ApplyViewVisibility(mode);
 
             // 今までのビューを抜ける
+            InsertViewState? resumeInsertView = null;
             switch (current)
             {
                 case MainViewMode.EmojiInsert:
@@ -84,6 +105,8 @@ public sealed partial class MainWindow
                     break;
                 case MainViewMode.FontSettings:
                     ExitFontSettingsView();
+                    resumeInsertView = _suspendedInsertView;
+                    _suspendedInsertView = null;
                     break;
             }
 
@@ -92,6 +115,7 @@ public sealed partial class MainWindow
             {
                 case MainViewMode.EmojiInsert:
                     EnterInsertView();
+                    if (resumeInsertView is not null) RestoreInsertViewState(resumeInsertView);
                     break;
                 case MainViewMode.FontSettings:
                     EnterFontSettingsView();
@@ -231,6 +255,32 @@ public sealed partial class MainWindow
         RefreshN3LinePanel();
         foreach (var line in ViewModel.Lines) line.RaiseOverrideMark();
         ScheduleValidation();
+    }
+
+    /// <summary>今の絵文字挿入ビューの状態（カーソル位置と再生追従カーソル）を読み取る。</summary>
+    private InsertViewState CaptureInsertViewState() =>
+        ViewModel.MapInsertViewOffset(InsertEditor.SelectionStart) is var (lineIndex, charOffset)
+            ? new InsertViewState(ViewModel.Document, lineIndex, charOffset, _insertFollow)
+            : new InsertViewState(ViewModel.Document, -1, 0, _insertFollow);
+
+    /// <summary>
+    /// 覚えておいた絵文字挿入ビューの状態を戻す（EnterInsertView のあとに呼ぶ）。
+    /// 文書が同じで行も残っていれば、カーソルをその行の元の位置へ戻す（行が短くなって位置が行に収まらなければ行頭）。
+    /// 別の文書に替わっていたとき（ファイルを開いた・タブを切り替えたなど）は、EnterInsertView が置いた選択行の先頭のままにする。
+    /// </summary>
+    private void RestoreInsertViewState(InsertViewState state)
+    {
+        var lines = ViewModel.Document.Lines;
+        if (ReferenceEquals(state.Document, ViewModel.Document) && state.LineIndex >= 0 && state.LineIndex < lines.Count)
+        {
+            int lineLength = lines[state.LineIndex].GetDisplayText().Length;
+            int column = state.CharOffset <= lineLength ? state.CharOffset : 0;
+            int caret = ViewModel.GetInsertViewLineStart(state.LineIndex) + column;
+            InsertEditor.SelectionStart = Math.Min(caret, InsertEditor.Text.Length);
+        }
+
+        _insertFollow = state.Follow;
+        UpdateFollowIndicator();
     }
 
     /// <summary>切り替えの部品（SelectorBar・表示メニュー・右パネルのトグル）を今のビューに合わせる。</summary>
