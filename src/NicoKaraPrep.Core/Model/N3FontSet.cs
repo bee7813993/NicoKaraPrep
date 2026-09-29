@@ -130,6 +130,15 @@ public sealed class N3FontSet
     /// <summary>取り込み元のファイル（n3proj・.tpl）。</summary>
     public string? ImportedFrom { get; set; }
 
+    /// <summary>
+    /// 全項目（<see cref="Detail"/>）が NicoKaraPrep 側で決めた値か。n3proj・テンプレート（.tpl）から取り込んだときと、
+    /// NicoKaraPrep で編集したとき（<see cref="N3FontLibrary.MarkEdited"/>）に true にする。
+    /// false のフォント（旧版の設定・従来の項目だけで作ったもの）は、同名のフォント設定があるベースへのマージで、
+    /// 歌詞／漢字の横倍率とルビ／漢字のフォント名・フェイス・横倍率・縁 2 の有無・縁 2 の幅が継承ならベースの値を残す。
+    /// true のフォントはそれらも継承として書き出す（継承に戻す編集を反映する）。
+    /// </summary>
+    public bool HasFullDetail { get; set; }
+
     /// <summary>全項目（常に non-null）。JSON では既存の項目の後に書く。</summary>
     [JsonPropertyOrder(1)]
     public N3FontDetail Detail

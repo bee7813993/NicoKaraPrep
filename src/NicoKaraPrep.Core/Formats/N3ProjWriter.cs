@@ -729,7 +729,8 @@ public static class N3ProjWriter
     /// 同名のフォント設定があれば NicoKaraPrep 側の値で上書きし、無ければ追加する。
     /// 上書きは値が変わる項目だけ書き換え、下位の Guid などはベースの値を残す。
     /// 配色は未指定（<see cref="N3Brush.IsUnset"/>）の箇所を、歌詞／ルビのかな・英数は全項目が継承の行をベースのまま残す。
-    /// 歌詞／漢字・ルビ／漢字は従来の項目を必ず書き、それ以外の項目は継承ならベースのまま残す（<see cref="MergeFace"/>）。
+    /// 歌詞／漢字・ルビ／漢字は全項目を書く。ただし全項目を持たないフォント（<see cref="N3FontSet.HasFullDetail"/> が false）は、
+    /// 従来の項目を必ず書き、それ以外の項目は継承ならベースのまま残す（<see cref="MergeFace"/>）。
     /// テンプレート連動は、ベースが連動中で NicoKaraPrep 側でも連動中（編集していない同じ Guid のフォント）のときだけ残す。
     /// </summary>
     private static void MergeFontSet(JsonArray fonts, N3FontSet f, int reference, string ver)
@@ -749,7 +750,7 @@ public static class N3ProjWriter
             {
                 if (fis[i] is not JsonObject face) continue;
                 if (i != 0 && i != 3 && d.Faces[i].IsInherited) continue;
-                if (MergeFace(face, d.Faces[i], FaceForExport(f, i), i, reference)) Touch(face, ver);
+                if (MergeFace(face, d.Faces[i], FaceForExport(f, i), i, f.HasFullDetail, reference)) Touch(face, ver);
             }
         }
         if (existing["BrushInfos"] is JsonArray brushes)
@@ -775,19 +776,20 @@ public static class N3ProjWriter
 
     /// <summary>
     /// 文字種別フォント 1 行をマージする。変わった項目があれば true。
-    /// かな・英数（呼び出し側で全項目が継承の行を飛ばしたもの）は全項目を書く。
-    /// 歌詞／漢字・ルビ／漢字は、従来の N3FontSet が持っていた項目（歌詞: フォント名・フェイス・サイズ・縁・縁 2 の有無・縁 2 の幅、
-    /// ルビ: サイズ・縁）を必ず書き、それ以外の項目（歌詞の横倍率、ルビのフォント名・フェイス・横倍率・縁 2 の有無・縁 2 の幅）は
-    /// 継承（空・0・null）ならベースのまま残す。従来の項目しか持たないフォント（旧版の設定・フォント設定ダイアログで作ったもの）を
-    /// 書き出しても、ニコカラメーカー側で設定したルビのフォントなどを消さないため。
+    /// かな・英数（呼び出し側で全項目が継承の行を飛ばしたもの）と、全項目を持つフォントの歌詞／漢字・ルビ／漢字は全項目を書く。
+    /// 全項目を持たないフォント（旧版の設定・フォント設定ダイアログで作ったもの）の歌詞／漢字・ルビ／漢字は、
+    /// 従来の N3FontSet が持っていた項目（歌詞: フォント名・フェイス・サイズ・縁・縁 2 の有無・縁 2 の幅、ルビ: サイズ・縁）を必ず書き、
+    /// それ以外の項目（歌詞の横倍率、ルビのフォント名・フェイス・横倍率・縁 2 の有無・縁 2 の幅）は継承（空・0・null）ならベースのまま残す。
+    /// そのようなフォントの継承は「値を持っていない」だけなので、ニコカラメーカー側で設定したルビのフォントなどを消さないため。
     /// </summary>
     /// <param name="raw">NicoKaraPrep 側の値（継承かどうかの判定に使う）。</param>
     /// <param name="src">書き出す値（<see cref="FaceForExport"/>。ルビ／漢字の 0 を歌詞の半分にしたもの）。</param>
-    private static bool MergeFace(JsonObject face, N3FontFace raw, N3FontFace src, int index, int reference)
+    /// <param name="fullDetail">全項目を持つフォントか（<see cref="N3FontSet.HasFullDetail"/>）。</param>
+    private static bool MergeFace(JsonObject face, N3FontFace raw, N3FontFace src, int index, bool fullDetail, int reference)
     {
-        bool kanaOrAlnum = index is not (0 or 3);
+        bool writeAll = fullDetail || index is not (0 or 3);
         bool lyric = index == 0;
-        bool ShouldWrite(bool legacy, bool inherited) => kanaOrAlnum || legacy || !inherited;
+        bool ShouldWrite(bool legacy, bool inherited) => writeAll || legacy || !inherited;
 
         bool changed = false;
         if (ShouldWrite(lyric, raw.FontName.Length == 0)) changed |= SetString(face, "FontName", src.FontName);
@@ -906,7 +908,8 @@ public static class N3ProjWriter
 
     /// <summary>
     /// 書き出す文字種別フォント 1 行。ルビ／漢字のサイズ・縁・縁 2 の 0 は歌詞／漢字（実効値）の半分にする（NicoKaraPrep の従来仕様）。
-    /// それ以外の 0・空・null は継承のまま書く。ただしマージでは、ルビ／漢字の縁 2 の 0 はベースのまま残す（<see cref="MergeFace"/>。従来どおり）。
+    /// それ以外の 0・空・null は継承のまま書く。ただし全項目を持たないフォントのマージでは、ルビ／漢字の縁 2 の 0 はベースのまま残す
+    /// （<see cref="MergeFace"/>。従来どおり）。
     /// </summary>
     private static N3FontFace FaceForExport(N3FontSet f, int index)
     {

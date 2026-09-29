@@ -383,4 +383,51 @@ public class N3FontWriteTests
         Assert.False(faces[3]!["UseEdge2"]!.GetValue<bool>());
         Assert.Equal(2, faces[3]!["EdgeSize2"]!["Size"]!.GetValue<int>());
     }
+
+    [Fact]
+    public void マージ_全項目を持つフォントは継承に戻した歌詞とルビの項目も継承として書く()
+    {
+        var f = N3ProjFormat.ReadFontSets(ProjectOf(BaseWithRubyFont())).Single();
+        Assert.True(f.HasFullDetail);
+        f.Detail.Faces[0].XScale = 0;
+        var ruby = f.Detail.Faces[3];
+        ruby.FontName = "";
+        ruby.FaceName = "";
+        ruby.XScale = 0;
+        ruby.UseEdge2 = null;
+        ruby.Edge2Px = 0;
+
+        var merged = Export(ProjectOf(BaseWithRubyFont()), f);
+        var faces = merged[0]!["FontInfos"]!.AsArray();
+        Assert.Equal(0, faces[0]!["XScale"]!.GetValue<int>());
+        Assert.Equal("", faces[3]!["FontName"]!.GetValue<string>());
+        Assert.Equal("", faces[3]!["FontFaceName"]!.GetValue<string>());
+        Assert.Equal(0, faces[3]!["XScale"]!.GetValue<int>());
+        Assert.Null(faces[3]!["UseEdge2"]);
+
+        // 書き出した結果の実効値が NicoKaraPrep の実効値と同じ（ルビの縁 2 の 0 は歌詞の半分）
+        var back = N3ProjFormat.ReadFontSets(ProjectOf((JsonObject)merged[0]!.DeepClone())).Single();
+        foreach (int i in new[] { 0, 3 })
+        {
+            var expected = N3FontLibrary.EffectiveFace(f, i);
+            var actual = N3FontLibrary.EffectiveFace(back, i);
+            Assert.Equal((expected.FontName, expected.FaceName, expected.XScale, expected.UseEdge2, expected.Edge2Px),
+                (actual.FontName, actual.FaceName, actual.XScale, actual.UseEdge2, actual.Edge2Px));
+        }
+        Assert.Equal("HGS創英角ﾎﾟｯﾌﾟ体", N3FontLibrary.EffectiveFace(back, 3).FontName);
+        Assert.Equal(2.5, back.Detail.Faces[3].Edge2Px);
+    }
+
+    [Fact]
+    public void マージ_編集した従来の項目だけのフォントはルビの継承もそのまま書く()
+    {
+        var f = new N3FontSet { Name = "（麻衣）（のりこ）", FontFamily = "メイリオ", SizePx = 60 };
+        N3FontLibrary.MarkEdited(f);
+
+        var faces = Export(ProjectOf(BaseWithRubyFont()), f)[0]!["FontInfos"]!.AsArray();
+        Assert.Equal(0, faces[0]!["XScale"]!.GetValue<int>());
+        Assert.Equal("", faces[3]!["FontName"]!.GetValue<string>());
+        Assert.Equal(0, faces[3]!["XScale"]!.GetValue<int>());
+        Assert.Null(faces[3]!["UseEdge2"]);
+    }
 }

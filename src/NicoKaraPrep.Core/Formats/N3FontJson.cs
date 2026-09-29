@@ -42,6 +42,7 @@ internal static class N3FontJson
             NkmGuid = guid.Length > 0 ? guid : null,
             NkmSynchronize = Bool(set["Synchronize"]) ?? false,
             ImportedUtc = DateTime.UtcNow,
+            HasFullDetail = true,
         };
     }
 

@@ -169,8 +169,15 @@ public static class N3FontLibrary
         return old;
     }
 
-    /// <summary>NicoKaraPrep で編集したことを記録する（書き出し時にニコカラメーカーのテンプレート連動を外す）。</summary>
-    public static void MarkEdited(N3FontSet fontSet) => fontSet.NkmSynchronize = false;
+    /// <summary>
+    /// NicoKaraPrep で編集したことを記録する（書き出し時にニコカラメーカーのテンプレート連動を外す）。
+    /// 全項目を NicoKaraPrep 側で決めたフォントとして扱い（<see cref="N3FontSet.HasFullDetail"/>）、マージでも継承の項目をそのまま書き出す。
+    /// </summary>
+    public static void MarkEdited(N3FontSet fontSet)
+    {
+        fontSet.NkmSynchronize = false;
+        fontSet.HasFullDetail = true;
+    }
 
     /// <summary>
     /// 書き出しに使うフォント設定。曲専用のフォントは同じ名前のアプリ共通のフォントを置き換え（位置は共通の位置）、

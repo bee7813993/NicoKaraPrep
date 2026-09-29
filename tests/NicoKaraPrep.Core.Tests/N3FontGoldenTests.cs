@@ -158,9 +158,11 @@ public class N3FontGoldenTests
                 bool kanaOrAlnum = i != 0 && i != 3;
                 if (kanaOrAlnum && model.IsInherited) continue;
 
-                // 歌詞／漢字・ルビ／漢字の従来の項目以外は、継承ならマージでベースのまま残すので壊さない
+                // 全項目を持たないフォントの歌詞／漢字・ルビ／漢字の従来の項目以外は、継承ならマージでベースのまま残すので壊さない
+                // （読み込んだフォントは全項目を持つので、すべて壊す）
+                bool writeAll = kanaOrAlnum || models[f].HasFullDetail;
                 bool lyric = i == 0;
-                bool Breaks(bool legacy, bool inherited) => kanaOrAlnum || legacy || !inherited;
+                bool Breaks(bool legacy, bool inherited) => writeAll || legacy || !inherited;
                 var face = faces[i]!.AsObject();
                 if (Breaks(lyric, model.FontName.Length == 0)) Replace(face, "FontName", "壊したフォント");
                 if (Breaks(lyric, model.FaceName.Length == 0)) Replace(face, "FontFaceName", "壊したフェイス");

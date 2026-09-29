@@ -29,6 +29,7 @@ public class N3FontReadTests : IDisposable
         Assert.Equal("4ad6be49-3d45-47e4-9aee-b4c14a0f6057", f.NkmGuid);
         Assert.True(f.NkmSynchronize);
         Assert.NotNull(f.ImportedUtc);
+        Assert.True(f.HasFullDetail);
 
         var d = f.Detail;
         // ミルフィーユの箇所も種類・マーカーと、残っている単色を読む
@@ -90,6 +91,7 @@ public class N3FontReadTests : IDisposable
         var t = N3FontTemplateReader.ReadTemplate(path);
         Assert.Equal("（麻衣）（のりこ）", t.Name);
         Assert.True(t.NkmSynchronize);
+        Assert.True(t.HasFullDetail);
         Assert.Equal("4ad6be49-3d45-47e4-9aee-b4c14a0f6057", t.NkmGuid);
         Assert.Equal(Path.GetFullPath(path), t.ImportedFrom);
         Assert.Equal(80, t.Detail.Faces[0].SizePx);

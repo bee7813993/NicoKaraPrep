@@ -107,11 +107,12 @@ public class N3FontLibraryTests
     }
 
     [Fact]
-    public void 編集_連動を外す()
+    public void 編集_連動を外し全項目を持つフォントにする()
     {
         var f = new N3FontSet { NkmSynchronize = true, NkmGuid = "0f8fad5b-d9cb-469f-a165-70867728950e" };
         N3FontLibrary.MarkEdited(f);
         Assert.False(f.NkmSynchronize);
+        Assert.True(f.HasFullDetail);
         Assert.Equal("0f8fad5b-d9cb-469f-a165-70867728950e", f.NkmGuid);
     }
 

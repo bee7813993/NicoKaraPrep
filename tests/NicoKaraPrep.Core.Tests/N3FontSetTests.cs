@@ -126,10 +126,22 @@ public class N3FontSetTests
         Assert.Equal(2, f.Detail.DecorKind);
         Assert.Equal(1, f.Detail.BlurLevel);
         Assert.True(Guid.TryParse(f.Id, out _));
+        Assert.False(f.HasFullDetail); // 旧形式は従来の項目しか持たない
 
-        // 保存し直すと同じ Id が残る
+        // 保存し直すと同じ Id が残り、詳細を書いても全項目を持つフォントにはならない
         var again = JsonSerializer.Deserialize<N3FontSet>(JsonSerializer.Serialize(f))!;
         Assert.Equal(f.Id, again.Id);
+        Assert.False(again.HasFullDetail);
+    }
+
+    [Fact]
+    public void JSON互換_全項目を持つかどうかは保存して読み戻しても複製しても変わらない()
+    {
+        var f = new N3FontSet { Name = "a", HasFullDetail = true };
+        var back = JsonSerializer.Deserialize<N3FontSet>(JsonSerializer.Serialize(f))!;
+        Assert.True(back.HasFullDetail);
+        Assert.True(back.Clone().HasFullDetail);
+        Assert.False(new N3FontSet().HasFullDetail);
     }
 
     [Fact]
