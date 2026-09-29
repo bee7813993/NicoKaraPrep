@@ -134,6 +134,23 @@ public sealed class SongProject
     /// <summary>ニコカラメーカー3 プロジェクト書き出しの設定。</summary>
     public N3ProjSongSettings N3Proj { get; set; } = new();
 
+    private List<N3FontSet> _fontSets = new();
+
+    /// <summary>
+    /// この曲専用のフォント設定。書き出しでは同じ名前のアプリ共通のフォント設定より優先する
+    /// （<see cref="N3FontLibrary.ResolveForExport"/>）。
+    /// null は空の一覧に、一覧の中の null は取り除く（手で編集したファイルなど）。
+    /// </summary>
+    public List<N3FontSet> FontSets
+    {
+        get => _fontSets;
+        set
+        {
+            _fontSets = value ?? new();
+            _fontSets.RemoveAll(f => f is null);
+        }
+    }
+
     /// <summary>歌詞ファイルのフィンガープリント（サイズ＋更新時刻）を計算する。</summary>
     public static string ComputeFingerprint(string filePath)
     {

@@ -657,126 +657,325 @@ public static class N3ProjWriter
         "ワイプ前／文字色", "縁取り色", "縁取り 2 色", "飾り色",
     };
 
-    /// <summary>同名のフォント設定があればフォント・単色・文字飾りを上書きし、無ければ追加する。</summary>
+    /// <summary>新規のフォント設定で単色の色が未指定の箇所に入れる色。</summary>
+    private static readonly string[] DefaultBrushColors =
+    {
+        "FFFFFF", "000000", "FFFFFF", "000000",
+        "4DA3FF", "FFFFFF", "000000", "000000",
+    };
+
+    /// <summary>文字種別フォント 6 種の設定名と継承元の名前（ニコカラメーカーが保存する値と同じ）。</summary>
+    private static readonly (string Name, string Fallback)[] FaceNames =
+    {
+        ("歌詞／漢字", "デフォルトフォント"), ("かな", "歌詞／漢字"), ("英数", "歌詞／漢字"),
+        ("ルビ／漢字", "歌詞／漢字"), ("かな", "ルビ／漢字"), ("英数", "ルビ／漢字"),
+    };
+
+    /// <summary>
+    /// 同名のフォント設定があれば NicoKaraPrep 側の値で上書きし、無ければ追加する。
+    /// 上書きは値が変わる項目だけ書き換え、下位の Guid などはベースの値を残す。
+    /// 配色は未指定（<see cref="N3Brush.IsUnset"/>）の箇所を、歌詞／ルビのかな・英数は全項目が継承の行をベースのまま残す。
+    /// 歌詞／漢字・ルビ／漢字は全項目を書く。ただし全項目を持たないフォント（<see cref="N3FontSet.HasFullDetail"/> が false）は、
+    /// 従来の項目を必ず書き、それ以外の項目は継承ならベースのまま残す（<see cref="MergeFace"/>）。
+    /// テンプレート連動は、ベースが連動中で NicoKaraPrep 側でも連動中（編集していない同じ Guid のフォント）のときだけ残す。
+    /// </summary>
     private static void MergeFontSet(JsonArray fonts, N3FontSet f, int reference, string ver)
     {
         if (string.IsNullOrWhiteSpace(f.Name)) return;
         var existing = fonts.OfType<JsonObject>().FirstOrDefault(s => s["SettingsName"]?.GetValue<string>() == f.Name);
         if (existing is null)
         {
-            fonts.Add(NewFontSet(f, reference, ver));
+            fonts.Add(NewFontSet(f, reference, ver, fonts));
             return;
         }
 
+        var d = f.Detail;
         if (existing["FontInfos"] is JsonArray fis)
         {
-            if (fis.Count > 0 && fis[0] is JsonObject main)
+            for (int i = 0; i < N3FontDetail.FaceCount && i < fis.Count; i++)
             {
-                main["FontName"] = f.FontFamily;
-                main["FontFaceName"] = f.FontFace;
-                main["CharSize"] = SizeAndRatio(f.SizePx, reference);
-                main["EdgeSize"] = SizeAndRatio(f.EdgePx, reference);
-                main["UseEdge2"] = f.UseEdge2;
-                main["EdgeSize2"] = SizeAndRatio(f.Edge2Px, reference);
-                main["ModifyAppVer"] = ver;
-                main["LastModified"] = DateTime.UtcNow;
-            }
-            if (fis.Count > 3 && fis[3] is JsonObject ruby)
-            {
-                ruby["CharSize"] = SizeAndRatio(f.RubySizePx > 0 ? f.RubySizePx : f.SizePx / 2, reference);
-                ruby["EdgeSize"] = SizeAndRatio(f.RubyEdgePx > 0 ? f.RubyEdgePx : f.EdgePx / 2, reference);
+                if (fis[i] is not JsonObject face) continue;
+                if (i != 0 && i != 3 && d.Faces[i].IsInherited) continue;
+                if (MergeFace(face, d.Faces[i], FaceForExport(f, i), i, f.HasFullDetail, reference)) Touch(face, ver);
             }
         }
         if (existing["BrushInfos"] is JsonArray brushes)
         {
-            string[] colors =
+            for (int i = 0; i < N3FontDetail.BrushCount && i < brushes.Count; i++)
             {
-                f.TextColorAfter, f.EdgeColorAfter, f.Edge2ColorAfter, f.DecorColorAfter,
-                f.TextColorBefore, f.EdgeColorBefore, f.Edge2ColorBefore, f.DecorColorBefore,
-            };
-            for (int i = 0; i < colors.Length && i < brushes.Count; i++)
-            {
-                if (!N3FontSet.IsValidWeb16(colors[i]) || brushes[i] is not JsonObject b) continue;
-                b["SelectedBrushTypeIndex"] = 0;
-                b["SolidColor"] = ColorBind(colors[i], ver);
-                b["ModifyAppVer"] = ver;
+                if (d.Brushes[i].IsUnset || brushes[i] is not JsonObject b) continue;
+                if (MergeBrush(b, d.Brushes[i], DefaultBrushColors[i], ver)) Touch(b, ver);
             }
         }
-        existing["DecorKind"] = f.DecorKind;
-        existing["DecorSize"] = SizeAndRatio(f.DecorSizePx, reference);
-        existing["BlurLevel"] = f.BlurLevel;
-        existing["ModifyAppVer"] = ver;
-        existing["LastModified"] = DateTime.UtcNow;
+        SetInt(existing, "DecorKind", d.DecorKind, 0);
+        SetSize(existing, "DecorSize", d.DecorSizePx, reference, blankWhenZero: false);
+        SetInt(existing, "BlurLevel", d.BlurLevel, 2);
+        if (existing.ContainsKey("Synchronize"))
+        {
+            string baseGuid = N3FontJson.Str(existing["Guid"]) ?? "";
+            existing["Synchronize"] = (N3FontJson.Bool(existing["Synchronize"]) ?? false)
+                && f.NkmSynchronize
+                && string.Equals(f.NkmGuid, baseGuid, StringComparison.OrdinalIgnoreCase);
+        }
+        Touch(existing, ver);
+    }
+
+    /// <summary>
+    /// 文字種別フォント 1 行をマージする。変わった項目があれば true。
+    /// かな・英数（呼び出し側で全項目が継承の行を飛ばしたもの）と、全項目を持つフォントの歌詞／漢字・ルビ／漢字は全項目を書く。
+    /// 全項目を持たないフォント（旧版の設定・フォント設定ダイアログで作ったもの）の歌詞／漢字・ルビ／漢字は、
+    /// 従来の N3FontSet が持っていた項目（歌詞: フォント名・フェイス・サイズ・縁・縁 2 の有無・縁 2 の幅、ルビ: サイズ・縁）を必ず書き、
+    /// それ以外の項目（歌詞の横倍率、ルビのフォント名・フェイス・横倍率・縁 2 の有無・縁 2 の幅）は継承（空・0・null）ならベースのまま残す。
+    /// そのようなフォントの継承は「値を持っていない」だけなので、ニコカラメーカー側で設定したルビのフォントなどを消さないため。
+    /// </summary>
+    /// <param name="raw">NicoKaraPrep 側の値（継承かどうかの判定に使う）。</param>
+    /// <param name="src">書き出す値（<see cref="FaceForExport"/>。ルビ／漢字の 0 を歌詞の半分にしたもの）。</param>
+    /// <param name="fullDetail">全項目を持つフォントか（<see cref="N3FontSet.HasFullDetail"/>）。</param>
+    private static bool MergeFace(JsonObject face, N3FontFace raw, N3FontFace src, int index, bool fullDetail, int reference)
+    {
+        bool writeAll = fullDetail || index is not (0 or 3);
+        bool lyric = index == 0;
+        bool ShouldWrite(bool legacy, bool inherited) => writeAll || legacy || !inherited;
+
+        bool changed = false;
+        if (ShouldWrite(lyric, raw.FontName.Length == 0)) changed |= SetString(face, "FontName", src.FontName);
+        if (ShouldWrite(lyric, raw.FaceName.Length == 0)) changed |= SetString(face, "FontFaceName", src.FaceName);
+        changed |= SetSize(face, "CharSize", src.SizePx, reference, blankWhenZero: true);
+        if (ShouldWrite(false, raw.XScale == 0)) changed |= SetInt(face, "XScale", src.XScale, 0);
+        changed |= SetSize(face, "EdgeSize", src.EdgePx, reference, blankWhenZero: true);
+        if (ShouldWrite(lyric, raw.UseEdge2 is null) && N3FontJson.Bool(face["UseEdge2"]) != src.UseEdge2)
+        {
+            face["UseEdge2"] = src.UseEdge2;
+            changed = true;
+        }
+        if (ShouldWrite(lyric, raw.Edge2Px <= 0)) changed |= SetSize(face, "EdgeSize2", src.Edge2Px, reference, blankWhenZero: true);
+        return changed;
+    }
+
+    /// <summary>
+    /// 配色 1 箇所をマージする（塗りの種類・単色・マーカー・画像を丸ごと）。変わった項目があれば true。
+    /// 未指定の項目（単色の色が空、マーカーが空、塗りの種類が画像でない箇所の画像のパスが空）はベースのまま残す。
+    /// 単色の色が空で不透明度が 100% でなければ、ベースの色のまま不透明度だけを書く。
+    /// ニコカラメーカーは塗りの種類を戻すと前のマーカー・画像を使うので、見えていないデータも消さない。
+    /// </summary>
+    /// <param name="defaultColor">ベースに単色が無いときに使う色（新規の既定色）。</param>
+    private static bool MergeBrush(JsonObject b, N3Brush src, string defaultColor, string ver)
+    {
+        bool changed = SetInt(b, "SelectedBrushTypeIndex", src.Type, 0);
+
+        // 単色の色が未指定ならベースの単色を残す（不透明度だけ指定されていれば、それだけ書く）
+        string color = N3FontSet.NormalizeWeb16(src.Color);
+        int alpha = Math.Clamp(src.AlphaPercent, 0, 100);
+        if (color.Length == 0)
+        {
+            if (alpha != 100) changed |= SetSolidAlpha(b, alpha, defaultColor, ver);
+        }
+        else
+        {
+            if (b["SolidColor"] is not JsonObject sc)
+            {
+                b["SolidColor"] = ColorBind(color, ver, alpha);
+                changed = true;
+            }
+            else if (N3FontJson.SolidColorOf(sc) != (color, alpha))
+            {
+                N3FontSet.TryParseWeb16(color, out byte r, out byte g, out byte bl);
+                sc["DxColor"] = Color4(r / 255f, g / 255f, bl / 255f, alpha / 100f);
+                sc["Web16"] = color;
+                Touch(sc, ver);
+                changed = true;
+            }
+        }
+
+        // マーカーが空（未指定）ならベースのマーカーを残す（既定 3 点を書くのは新規だけ）
+        if (src.Stops.Count > 0 && !SameStops(N3FontJson.ParseStops(b["GradientStops"]), src.Stops))
+        {
+            b["GradientStops"] = GradientStops(src.Stops);
+            changed = true;
+        }
+
+        // 画像のパスが空で塗りの種類も画像でなければ、画像の設定（パス・拡大率）はベースのまま残す
+        if (src.BitmapPath.Length > 0 || src.Type == N3Brush.TypeBitmap)
+        {
+            changed |= SetString(b, "BitmapPath", src.BitmapPath);
+            changed |= SetInt(b, "BitmapScale", src.BitmapScale, 100);
+        }
+        return changed;
+    }
+
+    /// <summary>単色の不透明度だけを書く（色はベースのまま。ベースに単色が無ければ <paramref name="defaultColor"/>）。書いたら true。</summary>
+    private static bool SetSolidAlpha(JsonObject b, int alpha, string defaultColor, string ver)
+    {
+        if (b["SolidColor"] is not JsonObject sc)
+        {
+            b["SolidColor"] = ColorBind(defaultColor, ver, alpha);
+            return true;
+        }
+        var (baseColor, baseAlpha) = N3FontJson.SolidColorOf(sc);
+        if (baseAlpha == alpha) return false;
+        if (sc["DxColor"] is JsonObject dx)
+        {
+            dx["A"] = alpha / 100f;
+        }
+        else
+        {
+            N3FontSet.TryParseWeb16(baseColor.Length > 0 ? baseColor : defaultColor, out byte r, out byte g, out byte bl);
+            sc["DxColor"] = Color4(r / 255f, g / 255f, bl / 255f, alpha / 100f);
+        }
+        Touch(sc, ver);
+        return true;
     }
 
     /// <summary>フォント設定タブ 1 つ分を新規に作る（配色 8 件・フォントフェース 6 件）。</summary>
-    internal static JsonObject NewFontSet(N3FontSet f, int reference, string ver)
+    /// <param name="fonts">書き出し先のフォント設定（Guid が重なるときは新しい Guid にするため。null なら確かめない）。</param>
+    internal static JsonObject NewFontSet(N3FontSet f, int reference, string ver, JsonArray? fonts = null)
     {
-        string[] colors =
-        {
-            Or(f.TextColorAfter, "FFFFFF"), Or(f.EdgeColorAfter, "000000"), Or(f.Edge2ColorAfter, "FFFFFF"), Or(f.DecorColorAfter, "000000"),
-            Or(f.TextColorBefore, "4DA3FF"), Or(f.EdgeColorBefore, "FFFFFF"), Or(f.Edge2ColorBefore, "000000"), Or(f.DecorColorBefore, "000000"),
-        };
+        var d = f.Detail;
         var brushes = new JsonArray();
-        for (int i = 0; i < 8; i++)
+        for (int i = 0; i < N3FontDetail.BrushCount; i++)
         {
+            var src = d.Brushes[i];
+            string color = N3FontSet.NormalizeWeb16(src.Color);
             var b = new JsonObject
             {
-                ["SelectedBrushTypeIndex"] = 0,
-                ["SolidColor"] = ColorBind(colors[i], ver),
-                ["GradientStops"] = new JsonArray(
-                    GradientStop(0, 1f, 1f, 1f),
-                    GradientStop(0.5f, 0.5019608f, 0.5019608f, 0.5019608f),
-                    GradientStop(1, 0.5019608f, 0.5019608f, 0.5019608f)),
-                ["BitmapPath"] = "",
-                ["BitmapScale"] = 100,
+                ["SelectedBrushTypeIndex"] = src.Type,
+                ["SolidColor"] = ColorBind(color.Length > 0 ? color : DefaultBrushColors[i], ver, Math.Clamp(src.AlphaPercent, 0, 100)),
+                ["GradientStops"] = GradientStops(StopsForExport(src)),
+                ["BitmapPath"] = src.BitmapPath,
+                ["BitmapScale"] = src.BitmapScale,
             };
             AddSettingsName(b, BrushNames[i], 0);
             AddIdentity(b, ver, NoTime, "");
             brushes.Add(b);
         }
 
-        double rubySize = f.RubySizePx > 0 ? f.RubySizePx : f.SizePx / 2;
-        double rubyEdge = f.RubyEdgePx > 0 ? f.RubyEdgePx : f.EdgePx / 2;
-        var fontInfos = new JsonArray(
-            FontInfo("歌詞／漢字", f.FontFamily, f.FontFace, f.SizePx, f.EdgePx, f.UseEdge2, f.Edge2Px, "デフォルトフォント", reference, ver),
-            FontInfo("かな", "", "", null, null, null, null, "歌詞／漢字", reference, ver),
-            FontInfo("英数", "", "", null, null, null, null, "歌詞／漢字", reference, ver),
-            FontInfo("ルビ／漢字", "", "", rubySize, rubyEdge, null, f.Edge2Px / 2, "歌詞／漢字", reference, ver),
-            FontInfo("かな", "", "", null, null, null, null, "ルビ／漢字", reference, ver),
-            FontInfo("英数", "", "", null, null, null, null, "ルビ／漢字", reference, ver));
+        var fontInfos = new JsonArray();
+        for (int i = 0; i < N3FontDetail.FaceCount; i++)
+        {
+            fontInfos.Add(FontInfo(FaceNames[i].Name, FaceForExport(f, i), FaceNames[i].Fallback, reference, ver));
+        }
 
         var set = new JsonObject
         {
             ["BrushInfos"] = brushes,
             ["FontInfos"] = fontInfos,
-            ["DecorKind"] = f.DecorKind,
-            ["DecorSize"] = SizeAndRatio(f.DecorSizePx, reference),
-            ["BlurLevel"] = f.BlurLevel,
+            ["DecorKind"] = d.DecorKind,
+            ["DecorSize"] = SizeAndRatio(d.DecorSizePx, reference),
+            ["BlurLevel"] = d.BlurLevel,
         };
         AddSettingsName(set, f.Name, 0);
         AddIdentity(set, ver, DateTime.UtcNow, "");
+
+        // 取り込んだフォントはニコカラメーカーの Guid を引き継ぐ（テンプレート連動は Guid で行われる）
+        if (Guid.TryParse(f.NkmGuid, out var nkmGuid))
+        {
+            string guid = nkmGuid.ToString();
+            bool used = fonts is not null && fonts.OfType<JsonObject>()
+                .Any(o => string.Equals(N3FontJson.Str(o["Guid"]), guid, StringComparison.OrdinalIgnoreCase));
+            if (!used)
+            {
+                set["Guid"] = guid;
+                set["Synchronize"] = f.NkmSynchronize;
+            }
+        }
         return set;
     }
 
-    private static string Or(string value, string fallback) => N3FontSet.IsValidWeb16(value) ? value.Trim().TrimStart('#').ToUpperInvariant() : fallback;
+    /// <summary>
+    /// 書き出す文字種別フォント 1 行。ルビ／漢字のサイズ・縁・縁 2 の 0 は歌詞／漢字（実効値）の半分にする（NicoKaraPrep の従来仕様）。
+    /// それ以外の 0・空・null は継承のまま書く。ただし全項目を持たないフォントのマージでは、ルビ／漢字の縁 2 の 0 はベースのまま残す
+    /// （<see cref="MergeFace"/>。従来どおり）。
+    /// </summary>
+    private static N3FontFace FaceForExport(N3FontSet f, int index)
+    {
+        var face = f.Detail.Faces[index].Clone();
+        if (index == 3)
+        {
+            var lyric = N3FontLibrary.EffectiveFace(f, 0);
+            if (face.SizePx <= 0) face.SizePx = lyric.SizePx / 2;
+            if (face.EdgePx <= 0) face.EdgePx = lyric.EdgePx / 2;
+            if (face.Edge2Px <= 0) face.Edge2Px = lyric.Edge2Px / 2;
+        }
+        return face;
+    }
 
-    private static JsonObject FontInfo(string name, string fontName, string face, double? sizePx, double? edgePx, bool? useEdge2, double? edge2Px, string fallback, int reference, string ver)
+    private static JsonObject FontInfo(string name, N3FontFace face, string fallback, int reference, string ver)
     {
         var o = new JsonObject
         {
-            ["FontName"] = fontName,
-            ["FontFaceName"] = face,
-            ["CharSize"] = sizePx is double s ? SizeAndRatio(s, reference) : BlankSize(),
-            ["XScale"] = 0,
-            ["EdgeSize"] = edgePx is double e ? SizeAndRatio(e, reference) : BlankSize(),
-            ["UseEdge2"] = useEdge2,
-            ["EdgeSize2"] = edge2Px is double e2 ? SizeAndRatio(e2, reference) : BlankSize(),
+            ["FontName"] = face.FontName,
+            ["FontFaceName"] = face.FaceName,
+            ["CharSize"] = FaceSize(face.SizePx, reference),
+            ["XScale"] = face.XScale,
+            ["EdgeSize"] = FaceSize(face.EdgePx, reference),
+            ["UseEdge2"] = face.UseEdge2,
+            ["EdgeSize2"] = FaceSize(face.Edge2Px, reference),
             ["FallbackName"] = fallback,
         };
         AddSettingsName(o, name, 0);
         AddIdentity(o, ver, NoTime, "");
         return o;
+    }
+
+    /// <summary>文字種別フォントのサイズ（0 以下は継承を表す空のサイズ）。</summary>
+    private static JsonObject FaceSize(double px, int reference) => px > 0 ? SizeAndRatio(px, reference) : BlankSize();
+
+    /// <summary>書き出すマーカー（未指定ならニコカラメーカーの既定 3 点）。</summary>
+    private static List<N3GradientStop> StopsForExport(N3Brush b) => b.Stops.Count > 0 ? b.Stops : N3Brush.DefaultStops();
+
+    private static JsonArray GradientStops(IEnumerable<N3GradientStop> stops)
+    {
+        var arr = new JsonArray();
+        foreach (var s in stops) arr.Add(GradientStop((float)s.Position, s.Color, s.AlphaPercent));
+        return arr;
+    }
+
+    private static bool SameStops(List<N3GradientStop> a, List<N3GradientStop> b)
+    {
+        if (a.Count != b.Count) return false;
+        for (int i = 0; i < a.Count; i++)
+        {
+            if (Math.Abs(a[i].Position - b[i].Position) > 1e-6 ||
+                a[i].Color != N3FontSet.NormalizeWeb16(b[i].Color) ||
+                a[i].AlphaPercent != Math.Clamp(b[i].AlphaPercent, 0, 100))
+            {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    /// <summary>文字列の項目を書く（同じ値なら書かず、ベースに無い項目を空で足すこともしない）。書いたら true。</summary>
+    private static bool SetString(JsonObject o, string key, string value)
+    {
+        string? current = N3FontJson.Str(o[key]);
+        if (current == value || (current is null && !o.ContainsKey(key) && value.Length == 0)) return false;
+        o[key] = value;
+        return true;
+    }
+
+    /// <summary>整数の項目を書く（同じ値なら書かず、ベースに無い項目を既定値で足すこともしない）。書いたら true。</summary>
+    private static bool SetInt(JsonObject o, string key, int value, int valueWhenMissing)
+    {
+        if (!o.ContainsKey(key) ? value == valueWhenMissing : N3FontJson.Int(o[key]) == value) return false;
+        o[key] = value;
+        return true;
+    }
+
+    /// <summary>SizeAndRatio の項目を書く（読み取ると同じ px になるなら書かない）。書いたら true。</summary>
+    private static bool SetSize(JsonObject o, string key, double px, int reference, bool blankWhenZero)
+    {
+        px = Math.Max(0, px);
+        if (Math.Abs(N3FontJson.SizePx(o[key], reference) - px) < 1e-6) return false;
+        o[key] = blankWhenZero ? FaceSize(px, reference) : SizeAndRatio(px, reference);
+        return true;
+    }
+
+    /// <summary>変更した項目の LastModified / ModifyAppVer を更新する。</summary>
+    private static void Touch(JsonObject o, string ver)
+    {
+        o["ModifyAppVer"] = ver;
+        o["LastModified"] = DateTime.UtcNow;
     }
 
     // ------------------------------------------------------------ レイアウト・タイトル
@@ -919,8 +1118,8 @@ public static class N3ProjWriter
     /// <summary>未指定（継承）を表す SizeAndRatio。</summary>
     private static JsonObject BlankSize() => new() { ["Size"] = 0, ["Reference"] = 0, ["Ratio"] = 0 };
 
-    /// <summary>ColorBindModel（DxColor + Web16）。</summary>
-    internal static JsonObject ColorBind(string web16, string ver)
+    /// <summary>ColorBindModel（DxColor + Web16）。R/G/B は byte/255、A は不透明度 % / 100。</summary>
+    internal static JsonObject ColorBind(string web16, string ver, int alphaPercent = 100)
     {
         if (!N3FontSet.TryParseWeb16(web16, out byte r, out byte g, out byte b))
         {
@@ -928,14 +1127,14 @@ public static class N3ProjWriter
         }
         var o = new JsonObject
         {
-            ["DxColor"] = Color4(r / 255f, g / 255f, b / 255f),
+            ["DxColor"] = Color4(r / 255f, g / 255f, b / 255f, Math.Clamp(alphaPercent, 0, 100) / 100f),
             ["Web16"] = $"{r:X2}{g:X2}{b:X2}",
         };
         AddIdentity(o, ver, NoTime, "");
         return o;
     }
 
-    private static JsonObject Color4(float r, float g, float b)
+    private static JsonObject Color4(float r, float g, float b, float a)
     {
         float sum = r + g + b;
         return new JsonObject
@@ -943,18 +1142,25 @@ public static class N3ProjWriter
             ["R"] = r,
             ["G"] = g,
             ["B"] = b,
-            ["A"] = 1f,
+            ["A"] = a,
             ["SumRGB"] = sum,
             ["Average"] = sum / 3f,
             ["Luma"] = 0.299f * r + 0.587f * g + 0.114f * b,
         };
     }
 
-    private static JsonObject GradientStop(float position, float r, float g, float b) => new()
+    private static JsonObject GradientStop(float position, string web16, int alphaPercent)
     {
-        ["Position"] = position,
-        ["Color"] = Color4(r, g, b),
-    };
+        if (!N3FontSet.TryParseWeb16(web16, out byte r, out byte g, out byte b))
+        {
+            r = g = b = 0;
+        }
+        return new JsonObject
+        {
+            ["Position"] = position,
+            ["Color"] = Color4(r / 255f, g / 255f, b / 255f, Math.Clamp(alphaPercent, 0, 100) / 100f),
+        };
+    }
 
     private static string RelativePath(string baseDir, string path)
     {
