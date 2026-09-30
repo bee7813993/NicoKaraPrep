@@ -98,6 +98,12 @@ public sealed class AppSettings
     /// </summary>
     public List<N3FontTreeNode>? N3FontHierarchy { get; set; }
 
+    /// <summary>ユーザーが作った配色パターン（標準のパターンは <see cref="N3ColorPatterns.BuiltIns"/>。テンプレートには含めない）。</summary>
+    public List<N3ColorPattern> N3UserColorPatterns { get; set; } = new();
+
+    /// <summary>新しいフォント設定に使う配色パターンの識別子（<see cref="N3ColorPatterns.NoneId"/> は使わない）。</summary>
+    public string N3DefaultColorPatternId { get; set; } = N3ColorPatterns.CharaInverseId;
+
     // ---- メディア再生 ----
     /// <summary>Z / X（および Ctrl+←/→）でシークする秒数。</summary>
     public double SeekSeconds { get; set; } = 3.0;
@@ -263,7 +269,7 @@ public sealed class AppSettings
         N3IntervalSeconds = other.N3IntervalSeconds;
         N3ProtectSeconds = other.N3ProtectSeconds;
         N3TopLong = other.N3TopLong;
-        // N3FontSets（ニコカラメーカー3 のフォント設定）とその階層 N3FontHierarchy はテンプレートとは独立したライブラリなので取り込まない
+        // N3FontSets（ニコカラメーカー3 のフォント設定）とその階層 N3FontHierarchy・配色パターンはテンプレートとは独立したライブラリなので取り込まない
         // （テンプレートの適用でライブラリが置き換わらないように。古いテンプレートに入っていても無視する）
     }
 

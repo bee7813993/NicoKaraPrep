@@ -481,6 +481,7 @@ public sealed partial class FontSettingsViewModel : ObservableObject
             N3FontLibrary.Add(Common, font);
             where = "アプリ共通の" + PlaceNewCommonNode(N3FontTreeNode.ForFont(font.Id));
         }
+        ApplyDefaultPattern(font); // 既定の配色パターン（キャラ色の反転など）の形に色をそろえる
         N3FontLibrary.MarkEdited(font); // 新規は全項目を NicoKaraPrep 側で決めたフォントとして扱う
         MarkDirty(song);
         ClearFilterFor(font.Id);

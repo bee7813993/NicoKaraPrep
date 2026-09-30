@@ -255,6 +255,23 @@ public sealed partial class BrushCellViewModel : ObservableObject
     [ObservableProperty]
     private bool isSelected;
 
+    /// <summary>配色パターンでのこの箇所の役割の名前（「キャラ色」など。個別・パターンなしは空）。</summary>
+    [ObservableProperty]
+    private string roleText = "";
+
+    /// <summary>役割があるか（<see cref="RoleText"/> が空でない）。</summary>
+    public bool HasRole => RoleText.Length > 0;
+
+    partial void OnRoleTextChanged(string value) => OnPropertyChanged(nameof(HasRole));
+
+    /// <summary>編集している箇所と同じ役割で、まとめて変わる箇所か（枠を薄く強調する）。</summary>
+    [ObservableProperty]
+    private bool isLinked;
+
+    /// <summary>配色パターンの役割と色がそろっていない箇所か（印を出す）。</summary>
+    [ObservableProperty]
+    private bool isDeviation;
+
     public void Load(N3Brush brush)
     {
         Swatch = N3BrushPreview.Create(brush);

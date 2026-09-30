@@ -89,6 +89,49 @@ public sealed partial class FontEditorViewModel : ObservableObject
     /// <summary>選択中の配色の箇所の編集欄。</summary>
     public BrushEditorViewModel BrushEditor { get; }
 
+    // ------------------------------------------------------------ 配色パターン
+
+    /// <summary>配色パターンの選択肢（先頭は「個別（パターンなし）」、続けて標準・ユーザーのパターン）。</summary>
+    public ObservableCollection<PatternChoice> PatternChoices { get; } = new();
+
+    /// <summary>当てはめている配色パターンの選択肢の位置（0 = 個別）。</summary>
+    [ObservableProperty]
+    private int selectedPatternIndex;
+
+    /// <summary>当てはめている配色パターンの役割と箇所の説明。</summary>
+    [ObservableProperty]
+    private string patternNote = "";
+
+    /// <summary>配色パターンの形と違う箇所があるか。</summary>
+    [ObservableProperty]
+    private bool hasPatternDeviation;
+
+    [ObservableProperty]
+    private string patternDeviationText = "";
+
+    /// <summary>同じ役割の箇所をまとめて変えるか（既定はまとめる。外すと、選んだ 1 箇所だけを変える）。</summary>
+    [ObservableProperty]
+    private bool editRoleTogether = true;
+
+    /// <summary>選んだ箇所に役割があるか（「まとめて変える」の切り替えを出す）。</summary>
+    [ObservableProperty]
+    private bool selectedSlotHasRole;
+
+    [ObservableProperty]
+    private string roleTogetherText = "";
+
+    /// <summary>当てはめている配色パターンと、違う箇所（パターンなしは null）。</summary>
+    private N3PatternMatch? _match;
+
+    /// <summary>当てはめている配色パターン（パターンなしは null）。</summary>
+    public N3ColorPattern? Pattern => _match?.Pattern;
+
+    /// <summary>
+    /// 編集したときにフォント設定に覚えさせる配色パターン（配色から自動で当てはめているときだけ。覚えさせたら 1 箇所だけ変えて
+    /// 形が崩れても、パターンを見失わない）。
+    /// </summary>
+    internal string? PatternIdToKeep => Font?.ColorPatternId is null ? _match?.Pattern.Id : null;
+
     // ------------------------------------------------------------ フォントフェース
 
     /// <summary>文字種別フォント 6 行（添字 = <see cref="N3FontDetail.Faces"/> の添字）。</summary>
@@ -206,7 +249,127 @@ public sealed partial class FontEditorViewModel : ObservableObject
     {
         for (int i = 0; i < N3FontDetail.BrushCount; i++) BrushCells[i].Load(Font!.Detail.Brushes[i]);
         if (SelectedBrushIndex is < 0 or >= N3FontDetail.BrushCount) SelectedBrushIndex = 0;
-        BrushEditor.Load(SelectedBrushIndex);
+        RefreshPatternStateCore();
+        LoadBrushEditor();
+    }
+
+    /// <summary>配色パターンの選択肢を作り直す（パターンを編集したあと）。</summary>
+    public void ReloadPatternChoices()
+    {
+        bool was = _loading;
+        _loading = true;
+        try
+        {
+            PatternChoices.Clear();
+            PatternChoices.Add(new PatternChoice(N3ColorPatterns.NoneId, "個別（パターンなし。8 箇所を別々に指定）"));
+            foreach (var pattern in _owner.Patterns) PatternChoices.Add(new PatternChoice(pattern.Id, pattern.Name));
+            if (Font is not null) RefreshPatternStateCore();
+        }
+        finally
+        {
+            _loading = was;
+        }
+    }
+
+    /// <summary>配色を変えたあと（まとめて編集・コピー・交換など）に、配色パターンとの違いの表示を読み直す。</summary>
+    internal void RefreshPatternState()
+    {
+        if (Font is null) return;
+        bool was = _loading;
+        _loading = true;
+        try
+        {
+            var before = _match?.Pattern;
+            RefreshPatternStateCore();
+
+            // 当てはめるパターンが変わったら（自動で当てはめていて、配色の形が変わった）、まとめて変える箇所も変える
+            if (!ReferenceEquals(before, _match?.Pattern)) LoadBrushEditor();
+        }
+        finally
+        {
+            _loading = was;
+        }
+    }
+
+    private void RefreshPatternStateCore()
+    {
+        var font = Font!;
+        if (PatternChoices.Count == 0)
+        {
+            PatternChoices.Add(new PatternChoice(N3ColorPatterns.NoneId, "個別（パターンなし。8 箇所を別々に指定）"));
+            foreach (var pattern in _owner.Patterns) PatternChoices.Add(new PatternChoice(pattern.Id, pattern.Name));
+        }
+        _match = N3ColorPatterns.Effective(font, _owner.Patterns);
+        var p = _match?.Pattern;
+        int index = p is null ? 0 : PatternChoices.ToList().FindIndex(c => c.Id == p.Id);
+        SelectedPatternIndex = Math.Max(0, index);
+
+        for (int i = 0; i < N3FontDetail.BrushCount; i++)
+        {
+            int role = p?.RoleOf(i) ?? N3ColorPattern.Individual;
+            BrushCells[i].RoleText = p?.RoleName(role) ?? "";
+            BrushCells[i].IsDeviation = _match?.Deviations.Contains(i) ?? false;
+        }
+
+        if (p is null)
+        {
+            PatternNote = font.ColorPatternId == N3ColorPatterns.NoneId
+                ? "8 箇所を別々に指定しています"
+                : "どの配色パターンの形にも当てはまりません（8 箇所を別々に指定しています）。パターンを選ぶと、その形に色をそろえます";
+        }
+        else
+        {
+            var roles = Enumerable.Range(0, p.Roles.Count)
+                .Select(r => (Name: p.RoleName(r), Slots: p.SlotsOf(r)))
+                .Where(r => r.Slots.Count > 0)
+                .Select(r => $"{r.Name}: {N3ColorPatterns.Describe(r.Slots)}");
+            string auto = font.ColorPatternId is null ? "（配色から自動で当てはめています）" : "";
+            PatternNote = $"{string.Join(" ／ ", roles)}{auto}";
+        }
+
+        HasPatternDeviation = _match is { IsExact: false };
+        PatternDeviationText = _match is { IsExact: false } m
+            ? $"「{m.Pattern.Name}」の形と {m.Deviations.Count} 箇所違います（{N3ColorPatterns.Describe(m.Deviations)}）。入力の間違いなら「パターンに合わせる」で、同じ役割の多いほうの色にそろえます"
+            : "";
+    }
+
+    /// <summary>選んだ箇所を編集欄に読み込む（同じ役割の箇所をまとめて変えるなら、その箇所も一緒に）。</summary>
+    private void LoadBrushEditor()
+    {
+        int index = SelectedBrushIndex;
+        var p = _match?.Pattern;
+        int role = p?.RoleOf(index) ?? N3ColorPattern.Individual;
+        var slots = role >= 0 ? p!.SlotsOf(role) : new List<int>();
+        SelectedSlotHasRole = slots.Count > 1;
+        RoleTogetherText = SelectedSlotHasRole
+            ? $"同じ役割（{p!.RoleName(role)}）の {slots.Count} 箇所をまとめて変える"
+            : "";
+        var linked = SelectedSlotHasRole && EditRoleTogether ? slots : new List<int>();
+        foreach (var cell in BrushCells) cell.IsLinked = cell.Index != index && linked.Contains(cell.Index);
+        BrushEditor.Load(index, linked, p?.RoleName(role) ?? "");
+    }
+
+    partial void OnEditRoleTogetherChanged(bool value)
+    {
+        if (Font is null) return;
+        bool was = _loading;
+        _loading = true;
+        try
+        {
+            LoadBrushEditor();
+        }
+        finally
+        {
+            _loading = was;
+        }
+    }
+
+    partial void OnSelectedPatternIndexChanged(int value)
+    {
+        if (_loading || Font is null || value < 0 || value >= PatternChoices.Count) return;
+        string id = PatternChoices[value].Id;
+        if (id == (_match?.Pattern.Id ?? N3ColorPatterns.NoneId) && Font.ColorPatternId is not null) return;
+        _owner.SetFontPattern(Font, id);
     }
 
     /// <summary>配色の 1 箇所の色見本を読み直す。</summary>
@@ -235,12 +398,18 @@ public sealed partial class FontEditorViewModel : ObservableObject
         _loading = true;
         try
         {
-            BrushEditor.Load(value);
+            LoadBrushEditor();
         }
         finally
         {
             _loading = was;
         }
+    }
+
+    /// <summary>配色パターンの選択肢 1 つ（識別子と表示名）。</summary>
+    public sealed record PatternChoice(string Id, string Name)
+    {
+        public override string ToString() => Name;
     }
 
     /// <summary>ワイプ前後の配色を交換する。</summary>

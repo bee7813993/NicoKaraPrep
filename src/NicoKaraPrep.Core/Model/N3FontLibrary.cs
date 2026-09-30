@@ -25,6 +25,9 @@ public enum N3FontIssueKind
 
     /// <summary>塗りの種類・不透明度・文字飾り・ブラーの濃さが範囲外。</summary>
     ValueOutOfRange,
+
+    /// <summary>配色が配色パターンの形と少し違う（同じ役割の箇所の色がそろっていない）。</summary>
+    PatternMismatch,
 }
 
 /// <summary>フォント設定の検証結果 1 件。</summary>

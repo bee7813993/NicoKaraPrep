@@ -11,6 +11,7 @@ namespace NicoKaraPrep.App.ViewModels;
 /// <summary>
 /// 配色 1 箇所（<see cref="N3Brush"/>）の編集欄。塗りの種類・色（ColorPicker・16 進・不透明度）・マーカー・画像。
 /// ColorPicker は 1 つだけで、単色なら箇所の色を、グラデーション・ミルフィーユなら選んだマーカーの色を編集する。
+/// 配色パターンで同じ役割の箇所（<see cref="LinkedIndices"/>）があれば、編集のたびに編集した箇所の写しをそこへも入れる（まとめて編集）。
 /// </summary>
 public sealed partial class BrushEditorViewModel : ObservableObject
 {
@@ -27,6 +28,12 @@ public sealed partial class BrushEditorViewModel : ObservableObject
 
     /// <summary>編集している配色の箇所（<see cref="N3FontDetail.Brushes"/> の添字）。</summary>
     public int Index { get; private set; }
+
+    /// <summary>まとめて変える、同じ役割のほかの箇所（無ければ空）。</summary>
+    public IReadOnlyList<int> LinkedIndices { get; private set; } = Array.Empty<int>();
+
+    /// <summary>まとめて変える役割の名前（「キャラ色」など。まとめないときは空）。</summary>
+    private string _roleName = "";
 
     private N3Brush? Model => _editor.Font?.Detail.Brushes[Index];
 
@@ -93,14 +100,20 @@ public sealed partial class BrushEditorViewModel : ObservableObject
 
     // ------------------------------------------------------------ 読み込み
 
-    /// <summary>配色の箇所を読み込む（編集欄の値をすべて置き換える）。</summary>
-    public void Load(int index)
+    /// <summary>
+    /// 配色の箇所を読み込む（編集欄の値をすべて置き換える）。linked は同じ役割でまとめて変えるほかの箇所、roleName はその役割の名前。
+    /// </summary>
+    public void Load(int index, IReadOnlyList<int>? linked = null, string roleName = "")
     {
         _loading = true;
         try
         {
             Index = index;
-            Header = N3FontDetail.BrushLabels[index];
+            LinkedIndices = linked?.Where(i => i != index && i >= 0 && i < N3FontDetail.BrushCount).Distinct().ToList() ?? new List<int>();
+            _roleName = LinkedIndices.Count > 0 ? roleName : "";
+            Header = LinkedIndices.Count > 0
+                ? $"{_roleName}（{N3ColorPatterns.Describe(LinkedIndices.Append(index).OrderBy(i => i))}）をまとめて編集"
+                : N3FontDetail.BrushLabels[index];
             if (Model is not { } b) return;
             BrushType = b.Type is >= N3Brush.TypeSolid and <= N3Brush.TypeBitmap ? b.Type : -1;
             UpdateTypeFlags(b);
@@ -220,19 +233,31 @@ public sealed partial class BrushEditorViewModel : ObservableObject
 
     private string Key(string what) => $"brush{Index}.{what}";
 
-    /// <summary>この箇所の配色を変え、色見本と帯を更新する。</summary>
+    /// <summary>
+    /// この箇所の配色を変え、同じ役割でまとめて変える箇所へ写しを入れて、色見本と帯を更新する。
+    /// 配色から自動で当てはめていた配色パターンは、ここで編集したフォント設定に覚えさせる（1 箇所だけ変えて形が崩れても、パターンを見失わないように）。
+    /// </summary>
     private void Edit(string? key, Action<N3Brush> change)
     {
         if (_loading || _editor.IsLoading || Model is null) return;
         int index = Index;
-        _editor.Edit(key, f => change(f.Detail.Brushes[index]));
+        var linked = LinkedIndices;
+        string? pin = _editor.PatternIdToKeep;
+        _editor.Edit(key, f =>
+        {
+            change(f.Detail.Brushes[index]);
+            foreach (int i in linked) f.Detail.Brushes[i] = f.Detail.Brushes[index].Clone();
+            if (pin is not null) f.ColorPatternId ??= pin;
+        });
         AfterEdit();
     }
 
     private void AfterEdit()
     {
         _editor.RefreshBrushCell(Index);
+        foreach (int i in LinkedIndices) _editor.RefreshBrushCell(i);
         UpdateStrip();
+        _editor.RefreshPatternState();
     }
 
     partial void OnBrushTypeChanged(int value)
@@ -244,7 +269,7 @@ public sealed partial class BrushEditorViewModel : ObservableObject
             // マーカーが無いままグラデーション・ミルフィーユにしたら、ニコカラメーカー3 の既定の 3 点から始める
             if (value is N3Brush.TypeGradient or N3Brush.TypeMilleFeuille && b.Stops.Count == 0) b.Stops = N3Brush.DefaultStops();
         });
-        Load(Index);
+        Load(Index, LinkedIndices, _roleName);
     }
 
     /// <summary>ColorPicker に最後に設定した色（ColorPicker がその色を返してきたときは、操作ではないので編集として扱わない）。</summary>

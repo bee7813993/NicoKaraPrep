@@ -743,15 +743,39 @@ public sealed partial class FontSettingsView : UserControl
 
     private void OnBeforeToAfterClick(object sender, RoutedEventArgs e) => ViewModel?.Editor.CopyBeforeToAfter();
 
+    /// <summary>色のコピーの単位（コピーの画面の選択肢の順）。Role が 0 以上なら配色パターンの役割、-1 なら Indices の箇所をそのまま写す。</summary>
+    private readonly List<(int Role, int[] Indices)> _copyScopes = new();
+
     private void OnCopyFlyoutOpening(object sender, object e)
     {
         CopySearchBox.Text = "";
         UpdateCopySources();
-        int index = ViewModel?.Editor.SelectedBrushIndex ?? 0;
-        if (index is >= 0 and < N3FontDetail.BrushCount && CopyScopeButtons.Items.Count > 1)
+        BuildCopyScopes();
+    }
+
+    /// <summary>
+    /// 色のコピーの単位を作る: 8 箇所すべて、配色パターンの役割ごと（「キャラ色だけ」など）、編集中の 1 箇所だけ。
+    /// </summary>
+    private void BuildCopyScopes()
+    {
+        _copyScopes.Clear();
+        CopyScopeButtons.Items.Clear();
+        CopyScopeButtons.Items.Add("8 箇所すべて");
+        _copyScopes.Add((-1, Enumerable.Range(0, N3FontDetail.BrushCount).ToArray()));
+        if (ViewModel?.Editor.Pattern is { } pattern)
         {
-            CopyScopeButtons.Items[1] = $"編集中の 1 箇所だけ（{N3FontDetail.BrushLabels[index]}）";
+            for (int role = 0; role < pattern.Roles.Count; role++)
+            {
+                var slots = pattern.SlotsOf(role);
+                if (slots.Count == 0) continue;
+                CopyScopeButtons.Items.Add($"{pattern.RoleName(role)}だけ（{slots.Count} 箇所）");
+                _copyScopes.Add((role, slots.ToArray()));
+            }
         }
+        int index = Math.Clamp(ViewModel?.Editor.SelectedBrushIndex ?? 0, 0, N3FontDetail.BrushCount - 1);
+        CopyScopeButtons.Items.Add($"編集中の 1 箇所だけ（{N3FontDetail.BrushLabels[index]}）");
+        _copyScopes.Add((-1, new[] { index }));
+        CopyScopeButtons.SelectedIndex = 0;
     }
 
     private void OnCopySearchChanged(object sender, TextChangedEventArgs e) => UpdateCopySources();
@@ -772,13 +796,37 @@ public sealed partial class FontSettingsView : UserControl
 
     private void OnCopyBrushesClick(object sender, RoutedEventArgs e)
     {
-        if (ViewModel is not { } vm || CopySourceList.SelectedItem is not FontListItem source) return;
-        int[] indices = CopyScopeButtons.SelectedIndex == 1
-            ? new[] { vm.Editor.SelectedBrushIndex }
-            : Enumerable.Range(0, N3FontDetail.BrushCount).ToArray();
-        vm.CopyBrushesFrom(source, indices);
+        if (ViewModel is not { } vm || CopySourceList.SelectedItem is not FontListItem source || _copyScopes.Count == 0) return;
+        var (role, indices) = _copyScopes[Math.Clamp(CopyScopeButtons.SelectedIndex, 0, _copyScopes.Count - 1)];
+        if (role >= 0 && vm.Editor.Pattern is { } pattern)
+        {
+            vm.CopyRoleFrom(source, pattern, role);
+        }
+        else
+        {
+            vm.CopyBrushesFrom(source, indices);
+        }
         CopyFlyout.Hide();
     }
+
+    // ------------------------------------------------------------ 配色パターン
+
+    /// <summary>配色パターンの編集画面を出し、決めたパターンと新しいフォント設定の既定を保存する。</summary>
+    private async void OnEditPatternsClick(object sender, RoutedEventArgs e)
+    {
+        if (ViewModel is not { } vm) return;
+        var dialog = new ColorPatternDialog(
+            N3ColorPatterns.BuiltIns,
+            vm.UserPatterns.Select(p => p.Clone()).ToList(),
+            vm.DefaultPatternId,
+            vm.Editor.Pattern?.Id);
+        if (await ShowDialogAsync(dialog) != ContentDialogResult.Primary) return;
+        vm.SaveColorPatterns(dialog.UserPatterns, dialog.DefaultPatternId);
+    }
+
+    private void OnAlignPatternClick(object sender, RoutedEventArgs e) => ViewModel?.AlignSelectedToPattern();
+
+    private void OnKeepColorsClick(object sender, RoutedEventArgs e) => ViewModel?.KeepIndividualColors();
 
     // ------------------------------------------------------------ 右ペイン
 

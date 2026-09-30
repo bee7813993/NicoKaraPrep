@@ -139,6 +139,13 @@ public sealed class N3FontSet
     /// </summary>
     public bool HasFullDetail { get; set; }
 
+    /// <summary>
+    /// 配色パターンの識別子（<see cref="N3ColorPattern.Id"/>）。null は配色から自動で探す、
+    /// <see cref="N3ColorPatterns.NoneId"/> はパターンを使わない（8 箇所を個別に指定）。書き出しには使わない。
+    /// </summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? ColorPatternId { get; set; }
+
     /// <summary>全項目（常に non-null）。JSON では既存の項目の後に書く。</summary>
     [JsonPropertyOrder(1)]
     public N3FontDetail Detail

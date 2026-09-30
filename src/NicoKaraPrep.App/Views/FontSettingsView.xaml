@@ -56,7 +56,11 @@
                     <StackPanel Grid.Row="1" Orientation="Horizontal" Spacing="4">
                         <TextBlock Text="{x:Bind Label}" FontSize="12" />
                         <TextBlock Text="{x:Bind TypeText, Mode=OneWay}" FontSize="11" Foreground="{ThemeResource TextFillColorSecondaryBrush}" TextTrimming="CharacterEllipsis" />
+                        <TextBlock Text="{x:Bind RoleText, Mode=OneWay}" FontSize="11" Foreground="{ThemeResource AccentTextFillColorPrimaryBrush}" TextTrimming="CharacterEllipsis" Visibility="{x:Bind HasRole, Mode=OneWay}" />
+                        <FontIcon Glyph="&#xE7BA;" FontSize="12" Foreground="{ThemeResource SystemFillColorCautionBrush}" Visibility="{x:Bind IsDeviation, Mode=OneWay}" ToolTipService.ToolTip="配色パターンの同じ役割の色とそろっていません" />
                     </StackPanel>
+                    <!-- まとめて変わる同じ役割の箇所は、選んだ箇所より薄い枠 -->
+                    <Border Grid.RowSpan="2" Margin="-3" CornerRadius="4" BorderThickness="2" Opacity="0.45" BorderBrush="{ThemeResource AccentFillColorDefaultBrush}" Visibility="{x:Bind IsLinked, Mode=OneWay}" />
                     <Border Grid.RowSpan="2" Margin="-3" CornerRadius="4" BorderThickness="2" BorderBrush="{ThemeResource AccentFillColorDefaultBrush}" Visibility="{x:Bind IsSelected, Mode=OneWay}" />
                 </Grid>
             </Button>
@@ -425,6 +429,32 @@
                     <Border Style="{StaticResource Card}">
                         <StackPanel Spacing="10">
                             <TextBlock Text="配色" Style="{StaticResource SectionTitle}" />
+                            <!-- 配色パターン: 同じ役割（キャラ色・ベース色など）の箇所をまとめて編集する -->
+                            <StackPanel Orientation="Horizontal" Spacing="8">
+                                <ComboBox
+                                    x:Name="PatternBox"
+                                    Header="配色パターン"
+                                    MinWidth="300"
+                                    ItemsSource="{x:Bind ViewModel.Editor.PatternChoices}"
+                                    SelectedIndex="{x:Bind ViewModel.Editor.SelectedPatternIndex, Mode=TwoWay}"
+                                    ToolTipService.ToolTip="パターンを選ぶと、同じ役割の箇所の色をそろえ、1 箇所を変えると同じ役割の箇所もまとめて変わります" />
+                                <Button x:Name="EditPatternsButton" VerticalAlignment="Bottom" Content="パターンの編集..." Click="OnEditPatternsClick" ToolTipService.ToolTip="配色パターンを追加・編集し、新しいフォント設定に使うパターンを選びます" />
+                            </StackPanel>
+                            <TextBlock x:Name="PatternNoteText" Text="{x:Bind ViewModel.Editor.PatternNote, Mode=OneWay}" Style="{StaticResource Note}" />
+                            <InfoBar
+                                x:Name="PatternBar"
+                                Title="配色パターンと違う箇所があります"
+                                Severity="Warning"
+                                IsClosable="False"
+                                IsOpen="{x:Bind ViewModel.Editor.HasPatternDeviation, Mode=OneWay}"
+                                Message="{x:Bind ViewModel.Editor.PatternDeviationText, Mode=OneWay}">
+                                <InfoBar.Content>
+                                    <StackPanel Orientation="Horizontal" Spacing="8" Margin="0,0,0,12">
+                                        <Button x:Name="AlignPatternButton" Content="パターンに合わせる" Click="OnAlignPatternClick" />
+                                        <Button x:Name="KeepColorsButton" Content="この配色のままにする（パターンを外す）" Click="OnKeepColorsClick" />
+                                    </StackPanel>
+                                </InfoBar.Content>
+                            </InfoBar>
                             <!-- 8 箇所（上段 = ワイプ後、下段 = ワイプ前）。押した箇所を下の編集欄で編集する -->
                             <Grid ColumnSpacing="8" RowSpacing="6">
                                 <Grid.ColumnDefinitions>
@@ -482,6 +512,12 @@
                                     </Button.Flyout>
                                 </Button>
                             </StackPanel>
+                            <CheckBox
+                                x:Name="RoleTogetherBox"
+                                Content="{x:Bind ViewModel.Editor.RoleTogetherText, Mode=OneWay}"
+                                IsChecked="{x:Bind ViewModel.Editor.EditRoleTogether, Mode=TwoWay}"
+                                Visibility="{x:Bind ViewModel.Editor.SelectedSlotHasRole, Mode=OneWay}"
+                                ToolTipService.ToolTip="外すと、選んだ 1 箇所だけを変えます（パターンの形から外れた箇所には印が付きます）" />
                             <fs:BrushEditor x:Name="BrushEditorPart" Margin="0,4,0,0" />
                         </StackPanel>
                     </Border>
