@@ -48,6 +48,7 @@ public sealed partial class MainWindow
     /// <summary>
     /// ニコカラメーカー3 プロジェクトの読み込み（メニュー・ドラッグ＆ドロップ・フォント設定ビューの取り込みの共通入口）。
     /// 内容を調べて確認画面を出し、選んだ項目だけを取り込む。path が null ならファイルを選ばせる。
+    /// フォント設定ビューの取り込み以外では、確認画面の前にプロジェクトの歌詞ファイルも開く（<see cref="OpenProjectLyricsAsync"/>）。
     /// </summary>
     private async Task ImportN3ProjAsync(string? path, N3ProjImportFocus focus = N3ProjImportFocus.Default)
     {
@@ -75,12 +76,26 @@ public sealed partial class MainWindow
                 return;
             }
 
+            // 過去にニコカラメーカー3 で作ったプロジェクトを開いたときは、そのプロジェクトの歌詞も開く
+            // （開いた歌詞と行を照らし合わせるので、行ごとの表示時刻もそのまま取り込める）
+            string? lyricsNote = null;
+            if (focus == N3ProjImportFocus.Default)
+            {
+                var (proceed, note) = await OpenProjectLyricsAsync(preview);
+                if (!proceed) return;
+                lyricsNote = note;
+            }
+
             var dialog = new N3ProjImportDialog(ViewModel, preview, focus) { XamlRoot = Content.XamlRoot };
-            if (await dialog.ShowAsync() != ContentDialogResult.Primary) return;
+            if (await dialog.ShowAsync() != ContentDialogResult.Primary)
+            {
+                if (lyricsNote is not null) ViewModel.StatusText = $"{lyricsNote}（プロジェクトの設定は読み込みませんでした）";
+                return;
+            }
 
             var choices = dialog.Result;
             TryRun(() => ViewModel.ApplyN3ProjImport(preview, choices));
-            string summary = ViewModel.StatusText;
+            string summary = lyricsNote is null ? ViewModel.StatusText : $"{lyricsNote}　／　{ViewModel.StatusText}";
             if (choices.Media && ViewModel.MediaPath is string media && File.Exists(media))
             {
                 OpenMedia(media);
@@ -105,6 +120,72 @@ public sealed partial class MainWindow
             await ShowMessageAsync("ニコカラメーカー3 プロジェクトの読み込み中にエラーが発生しました",
                 $"{(path is null ? "" : Path.GetFileName(path) + "\n\n")}{detail}");
         }
+    }
+
+    /// <summary>
+    /// n3proj を開いたとき、そのプロジェクトのメインの歌詞ファイル（最初の歌詞設定タブの歌詞ファイル）も開く。
+    /// 歌詞を開いていなければそのまま開き、別の歌詞を開いていれば開くか尋ねる。同じ曲の歌詞（同じ名前の rlf なども）を
+    /// 開いていれば何もしない。尋ねた画面でキャンセルされたら Proceed = false（読み込みをやめる）。
+    /// Note は歌詞を開いた・開けなかったことの説明（ステータスバーに出す）。
+    /// コーラスなど 2 つ目以降のタブの歌詞は開かない（保存するとメインの歌詞ファイルにまとめて書くため、
+    /// ニコカラメーカー3 のプロジェクトの歌詞ファイルと形が変わってしまう）。
+    /// </summary>
+    private async Task<(bool Proceed, string? Note)> OpenProjectLyricsAsync(N3ProjImportPreview preview)
+    {
+        if (preview.Tabs.FirstOrDefault() is not { } main) return (true, null); // 歌詞の無いプロジェクト
+        string? lyrics = N3ProjImport.FindLyricsFile(preview.Path, main);
+        string? current = ViewModel.MainFilePath;
+        bool blank = ViewModel.IsDocumentBlank;
+        if (lyrics is null)
+        {
+            // 歌詞を開いていないときだけ知らせる（開いている歌詞に設定を読み込むときは、今までどおり）
+            string name = Path.GetFileName(main.LyricsRelativePath ?? main.LyricsPath ?? "");
+            return (true, blank ? $"このプロジェクトの歌詞ファイル{(name.Length > 0 ? $"（{name}）" : "")}が見つからないため、歌詞は開きませんでした" : null);
+        }
+        if (current is not null && N3ProjImport.IsSameLyrics(current, lyrics)) return (true, null);
+
+        if (!blank)
+        {
+            string currentName = current is null ? "（無題）" : Path.GetFileName(current);
+            bool unsaved = ViewModel.HasUnsavedChanges;
+            var ask = new ContentDialog
+            {
+                XamlRoot = Content.XamlRoot,
+                Title = "プロジェクトの歌詞も開きますか？",
+                Content = new TextBlock
+                {
+                    Text = $"このプロジェクトの歌詞ファイル「{Path.GetFileName(lyrics)}」も開きますか？今開いている「{currentName}」は閉じます。" +
+                           (unsaved ? "\n開いている歌詞には保存していない変更があります。歌詞も開くと、その変更は失われます。" : "") +
+                           "\n\n「設定だけ読み込む」では、今開いている歌詞にプロジェクトの設定を読み込みます。",
+                    TextWrapping = TextWrapping.Wrap,
+                },
+                PrimaryButtonText = "歌詞も開く",
+                SecondaryButtonText = "設定だけ読み込む",
+                CloseButtonText = "キャンセル",
+                DefaultButton = unsaved ? ContentDialogButton.Secondary : ContentDialogButton.Primary,
+            };
+            var answer = await ask.ShowAsync();
+            if (answer == ContentDialogResult.None) return (false, null);
+            if (answer == ContentDialogResult.Secondary) return (true, null);
+        }
+
+        try
+        {
+            ViewModel.OpenFile(lyrics, autoImportNearby: false);
+        }
+        catch (Exception ex)
+        {
+            DebugLog($"プロジェクトの歌詞を開けませんでした: {lyrics}: {ex}");
+            string detail = ErrorText.Describe(ex);
+            ViewModel.StatusText = $"エラー: {detail}";
+            await ShowMessageAsync("プロジェクトの歌詞を開けませんでした", $"{lyrics}\n\n{detail}");
+            return (true, $"プロジェクトの歌詞 {Path.GetFileName(lyrics)} を開けませんでした");
+        }
+        AfterDocumentLoaded();
+
+        var others = preview.Tabs.Skip(1).Select(t => t.Name).Where(n => n.Length > 0).ToList();
+        string otherNote = others.Count > 0 ? $"（{string.Join("・", others)} の歌詞は開いていません）" : "";
+        return (true, $"プロジェクトの歌詞 {Path.GetFileName(lyrics)} を開きました（{ViewModel.Lines.Count} 行）{otherNote}");
     }
 
     /// <summary>

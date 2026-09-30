@@ -257,7 +257,12 @@ public partial class MainViewModel : ObservableObject
 
     // ------------------------------------------------------------ 読み込み
 
-    public void OpenFile(string path)
+    /// <param name="path">歌詞ファイル（rlf・lrc など）。</param>
+    /// <param name="autoImportNearby">
+    /// 同じフォルダの n3proj を自動で読み込むか（設定で有効なとき）。n3proj を開いてその歌詞を開くときは、
+    /// そのあとの読み込み確認画面で選んだ項目だけを取り込むので false にする。
+    /// </param>
+    public void OpenFile(string path, bool autoImportNearby = true)
     {
         string ext = Path.GetExtension(path).ToLowerInvariant();
         if (ext == ".rlf")
@@ -339,7 +344,14 @@ public partial class MainViewModel : ObservableObject
         StatusText = $"読み込みました: {Path.GetFileName(path)}（{Lines.Count} 行）";
 
         // 同じフォルダに n3proj が 1 つだけあれば、字幕フォント・画面サイズと実際の表示区間を自動で読み込む
-        AutoImportNearbyN3Proj(path);
+        if (autoImportNearby)
+        {
+            AutoImportNearbyN3Proj(path);
+        }
+        else
+        {
+            _n3projLineTimes = null; // 前の曲の実際の表示区間を持ち越さない
+        }
 
         if (tabRestoreNote is not null)
         {
@@ -358,6 +370,18 @@ public partial class MainViewModel : ObservableObject
 
     /// <summary>未保存の変更があるか（メイン・分離タブのいずれか）。</summary>
     public bool HasUnsavedChanges => IsModified || Tabs.Any(t => t.IsModified);
+
+    /// <summary>歌詞を開いていないか（歌詞ファイルが無く、歌詞行も無く、保存していない変更も無い）。</summary>
+    public bool IsDocumentBlank
+    {
+        get
+        {
+            StoreActiveTab();
+            return Tabs.FirstOrDefault(t => t.IsMain)?.FilePath is null
+                && !HasUnsavedChanges
+                && Tabs.All(t => t.Document.Lines.All(l => l.IsEmpty));
+        }
+    }
 
     /// <summary>新規（空）ドキュメントに切り替える。ファイルを閉じる操作を兼ねる。</summary>
     public void NewDocument()

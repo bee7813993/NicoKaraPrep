@@ -238,4 +238,50 @@ public class N3ProjImportTests : IDisposable
         Assert.True(ratio >= threshold,
             $"一致 {timing.Matched}/{timing.Total}（{ratio:P1}）ワイプ前 {timing.LeadMs} / ワイプ後 {timing.TailMs} / 間隔 {timing.IntervalMs}");
     }
+    // ------------------------------------------------------------ プロジェクトの歌詞ファイル
+
+    [Fact]
+    public void 歌詞ファイル_プロジェクトの相対パスで探し_無ければ絶対パス()
+    {
+        string sub = Path.Combine(_dir, "moved");
+        Directory.CreateDirectory(sub);
+        string project = Path.Combine(sub, "song.n3proj");
+        string lrc = Path.Combine(sub, "song.lrc");
+        File.WriteAllText(lrc, "[00:01:00]あ[00:02:00]");
+        string elsewhere = Path.Combine(_dir, "other.lrc");
+        File.WriteAllText(elsewhere, "[00:01:00]い[00:02:00]");
+
+        // フォルダごと移した: 保存されている絶対パスは古い場所でも、相対パスで見つかる
+        var moved = new N3ProjSourceTab { Name = "メイン", LyricsPath = @"W:\old\song.lrc", LyricsRelativePath = "song.lrc" };
+        Assert.Equal(lrc, N3ProjImport.FindLyricsFile(project, moved));
+
+        // 相対パスに無ければ絶対パス
+        var absolute = new N3ProjSourceTab { Name = "メイン", LyricsPath = elsewhere, LyricsRelativePath = "missing.lrc" };
+        Assert.Equal(elsewhere, N3ProjImport.FindLyricsFile(project, absolute));
+
+        // どちらにも無い・未設定
+        Assert.Null(N3ProjImport.FindLyricsFile(project, new N3ProjSourceTab { Name = "メイン", LyricsPath = @"W:\old\song.lrc", LyricsRelativePath = "missing.lrc" }));
+        Assert.Null(N3ProjImport.FindLyricsFile(project, new N3ProjSourceTab { Name = "メイン" }));
+    }
+
+    [Fact]
+    public void 歌詞ファイル_書き出したプロジェクトから読み出せる()
+    {
+        string lrc = Path.Combine(_dir, "song.lrc");
+        File.WriteAllText(lrc, "[00:10:00]あ[00:12:00]");
+        string path = ExportAndEdit(Song(), new N3ShowTimeSettings());
+        var preview = N3ProjImport.Analyze(path);
+        var main = Assert.Single(preview.Tabs);
+        Assert.Equal("song.lrc", main.LyricsRelativePath);
+        Assert.Equal(lrc, N3ProjImport.FindLyricsFile(path, main));
+    }
+
+    [Fact]
+    public void 歌詞ファイル_同じ曲か()
+    {
+        Assert.True(N3ProjImport.IsSameLyrics(@"C:\songs\a.lrc", @"c:\SONGS\A.lrc"));
+        Assert.True(N3ProjImport.IsSameLyrics(@"C:\songs\a.rlf", @"C:\songs\a.lrc")); // rlf と、そこから作った lrc
+        Assert.False(N3ProjImport.IsSameLyrics(@"C:\songs\a.lrc", @"C:\songs\b.lrc"));
+        Assert.False(N3ProjImport.IsSameLyrics(@"C:\songs\a.lrc", @"C:\other\a.lrc"));
+    }
 }

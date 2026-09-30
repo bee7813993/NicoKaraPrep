@@ -12,6 +12,9 @@ public sealed class N3ProjSourceTab
     /// <summary>歌詞ファイルのパス（未設定なら null）。</summary>
     public string? LyricsPath { get; init; }
 
+    /// <summary>プロジェクトのフォルダから見た歌詞ファイルの相対パス（未設定・空なら null）。</summary>
+    public string? LyricsRelativePath { get; init; }
+
     /// <summary>表示時刻の自動設定が「上段歌詞を長めに表示する」か。</summary>
     public bool TopLong { get; init; }
 
@@ -176,6 +179,45 @@ public static class N3ProjImport
         }
     }
 
+    /// <summary>
+    /// 歌詞設定タブの歌詞ファイルを探す。プロジェクトのフォルダからの相対パスを先に、次に保存されている絶対パスを見る
+    /// （プロジェクトをフォルダごと移した・別のドライブ名で開いたときも見つかるように）。見つからなければ null。
+    /// </summary>
+    public static string? FindLyricsFile(string projectPath, N3ProjSourceTab tab)
+    {
+        var candidates = new List<string>();
+        try
+        {
+            string? dir = Path.GetDirectoryName(Path.GetFullPath(projectPath));
+            if (dir is not null && tab.LyricsRelativePath is { } rel) candidates.Add(Path.GetFullPath(Path.Combine(dir, rel)));
+        }
+        catch (Exception e) when (e is ArgumentException or NotSupportedException or PathTooLongException)
+        {
+            // 相対パスが壊れていれば絶対パスだけを見る
+        }
+        if (tab.LyricsPath is { Length: > 0 } abs) candidates.Add(abs);
+        return candidates.FirstOrDefault(File.Exists);
+    }
+
+    /// <summary>
+    /// 2 つのパスが同じ曲の歌詞か（同じファイル、または同じフォルダで拡張子だけが違う。rlf と、そこから作った lrc など）。
+    /// </summary>
+    public static bool IsSameLyrics(string a, string b)
+    {
+        try
+        {
+            string fa = Path.GetFullPath(a);
+            string fb = Path.GetFullPath(b);
+            if (string.Equals(fa, fb, StringComparison.OrdinalIgnoreCase)) return true;
+            return string.Equals(Path.GetDirectoryName(fa), Path.GetDirectoryName(fb), StringComparison.OrdinalIgnoreCase)
+                && string.Equals(Path.GetFileNameWithoutExtension(fa), Path.GetFileNameWithoutExtension(fb), StringComparison.OrdinalIgnoreCase);
+        }
+        catch (Exception e) when (e is ArgumentException or NotSupportedException or PathTooLongException)
+        {
+            return string.Equals(a, b, StringComparison.OrdinalIgnoreCase);
+        }
+    }
+
     /// <summary>歌詞設定タブを読み出す（歌詞行の無いタブは除く）。</summary>
     public static List<N3ProjSourceTab> ReadSourceTabs(JsonObject root)
     {
@@ -189,6 +231,7 @@ public static class N3ProjImport
             {
                 Name = info["SettingsName"]?.GetValue<string>() ?? "",
                 LyricsPath = info["SourceLyricsPath"]?.GetValue<string>(),
+                LyricsRelativePath = info["SourceLyricsRelativePath"]?.GetValue<string>() is { Length: > 0 } rel ? rel : null,
                 TopLong = info["LastSelectedAddOns"]?["ShowTimeAdjusterId"]?.GetValue<string>() == "SHINTA.TopLongAdjuster",
             };
 
