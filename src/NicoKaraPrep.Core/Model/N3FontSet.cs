@@ -146,6 +146,13 @@ public sealed class N3FontSet
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public string? ColorPatternId { get; set; }
 
+    /// <summary>
+    /// 組み合わせフォント（複数人で歌うパート用）の作り方。null はふつうのフォント設定。
+    /// 元のフォント設定の色が変わったら作り直す（<see cref="N3FontComposition.Linked"/>）。書き出しには色だけが使われる。
+    /// </summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public N3FontComposition? Composition { get; set; }
+
     /// <summary>全項目（常に non-null）。JSON では既存の項目の後に書く。</summary>
     [JsonPropertyOrder(1)]
     public N3FontDetail Detail
@@ -160,6 +167,7 @@ public sealed class N3FontSet
         var c = (N3FontSet)MemberwiseClone();
         c._id = Id;
         c._detail = _detail?.Clone();
+        c.Composition = Composition?.Clone();
         return c;
     }
 

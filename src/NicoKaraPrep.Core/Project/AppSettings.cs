@@ -104,6 +104,15 @@ public sealed class AppSettings
     /// <summary>新しいフォント設定に使う配色パターンの識別子（<see cref="N3ColorPatterns.NoneId"/> は使わない）。</summary>
     public string N3DefaultColorPatternId { get; set; } = N3ColorPatterns.CharaInverseId;
 
+    /// <summary>絵文字を 2 種類以上続けて入れたとき、その組み合わせのフォント設定（2 人用など）を自動で作るか。</summary>
+    public bool N3AutoComposeFonts { get; set; } = true;
+
+    /// <summary>組み合わせフォントの塗りの種類の既定（ミルフィーユかグラデーション）。</summary>
+    public int N3ComposeBrushType { get; set; } = N3Brush.TypeMilleFeuille;
+
+    /// <summary>組み合わせフォントの、端の帯の広さの既定（%。端の帯を中央の帯より何 % 広くするか）。</summary>
+    public double N3ComposeEndWidenPercent { get; set; } = N3FontComposer.DefaultEndWidenPercent;
+
     // ---- メディア再生 ----
     /// <summary>Z / X（および Ctrl+←/→）でシークする秒数。</summary>
     public double SeekSeconds { get; set; } = 3.0;

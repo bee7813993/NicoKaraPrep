@@ -36,12 +36,16 @@ public sealed partial class FontSettingsViewModel
         if (font.ColorPatternId == patternId && !align) return;
 
         PushUndo(null);
+        var lowContrast = LowContrastSlots(font);
+        string status = _main.StatusText;
         font.ColorPatternId = patternId;
         int changed = 0;
         if (align)
         {
             changed = N3ColorPatterns.Align(font.Detail, pattern!);
             N3FontLibrary.MarkEdited(font);
+            AfterFontEdited(font);
+            NoteNewLowContrast(font, lowContrast, status);
         }
         OnFontContentChanged(font);
         if (ReferenceEquals(SelectedFont, font)) Editor.ReloadBrushes();

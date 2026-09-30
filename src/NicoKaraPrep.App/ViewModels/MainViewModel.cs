@@ -1096,6 +1096,7 @@ public partial class MainViewModel : ObservableObject
         StatusText = EmojiTagger.HasUntaggableEmoji(line, matcher)
             ? $"絵文字 {emojiChar} を挿入しました（直後にタイムタグ付きの文字が無いため時刻は未設定です）"
             : $"絵文字 {emojiChar} を挿入しました";
+        NoteComposedFonts(AutoComposeFontsFor(line)); // 2 種類続けて入れたら、組み合わせのフォント設定を作る
 
         string newRaw = TextEditModeFormat.WriteLyricLine(line);
         int newCursor = FindCursorAfterCharIndex(newRaw, charIndex + inserted);
@@ -1234,6 +1235,7 @@ public partial class MainViewModel : ObservableObject
         StatusText = EmojiTagger.HasUntaggableEmoji(line, matcher)
             ? $"絵文字 {emojiChar} を挿入しました（直後にタイムタグ付きの文字が無いため時刻は未設定です）"
             : $"絵文字 {emojiChar} を挿入しました";
+        NoteComposedFonts(AutoComposeFontsFor(line)); // 2 種類続けて入れたら、組み合わせのフォント設定を作る
 
         return GetInsertViewLineStart(lineIndex) + charOffset + emojiChar.Length;
     }
@@ -1752,9 +1754,11 @@ public partial class MainViewModel : ObservableObject
 
         int errors = Issues.Count(i => i.Severity == IssueSeverity.Error);
         int warnings = Issues.Count(i => i.Severity == IssueSeverity.Warning);
-        StatusText = Issues.Count == 0
+        string result = Issues.Count == 0
             ? "チェック OK（問題なし）"
             : $"チェック結果: エラー {errors} 件 / 警告 {warnings} 件";
+        StatusText = _noticeBeforeCheck is { } notice ? $"{notice}　／　{result}" : result;
+        _noticeBeforeCheck = null;
     }
 
     private void UpdateTitle()

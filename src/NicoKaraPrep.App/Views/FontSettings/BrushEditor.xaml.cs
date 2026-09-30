@@ -1,5 +1,6 @@
 ﻿using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
+using Microsoft.UI.Xaml.Input;
 using NicoKaraPrep.App.ViewModels;
 
 namespace NicoKaraPrep.App.Views.FontSettings;
@@ -10,7 +11,17 @@ public sealed partial class BrushEditor : UserControl
     public BrushEditor()
     {
         InitializeComponent();
+
+        // 色の四角・つまみのドラッグの始めと終わりを知らせる（ColorPicker の中の部品が押下を処理済みにするので、処理済みのものも受け取る）
+        Picker.AddHandler(PointerPressedEvent, new PointerEventHandler((_, _) => ColorDragChanged?.Invoke(this, true)), handledEventsToo: true);
+        var end = new PointerEventHandler((_, _) => ColorDragChanged?.Invoke(this, false));
+        Picker.AddHandler(PointerReleasedEvent, end, handledEventsToo: true);
+        Picker.AddHandler(PointerCaptureLostEvent, end, handledEventsToo: true);
+        Picker.AddHandler(PointerCanceledEvent, end, handledEventsToo: true);
     }
+
+    /// <summary>ColorPicker の上でドラッグを始めた（true）・終えた（false）。</summary>
+    public event EventHandler<bool>? ColorDragChanged;
 
     /// <summary>編集欄の ViewModel（フォント設定ビューが 1 回だけ設定する）。</summary>
     public BrushEditorViewModel? ViewModel { get; private set; }
@@ -21,6 +32,12 @@ public sealed partial class BrushEditor : UserControl
         ViewModel = viewModel;
         Bindings.Update();
     }
+
+    /// <summary>
+    /// 外側の ScrollViewer に位置を保たせる欄（スクロール アンカーの候補。色の四角・16 進の欄など、操作中に画面の上で動いてほしくないもの）。
+    /// 塗りの種類のラジオボタンとマーカーの一覧の項目は、自動で候補になる。
+    /// </summary>
+    public IEnumerable<UIElement> AnchorCandidates => new UIElement[] { StopsPanel, BitmapPanel, Picker, HexRow };
 
     private void OnClearColorClick(object sender, RoutedEventArgs e) => ViewModel?.ClearColor();
 

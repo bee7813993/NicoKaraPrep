@@ -152,6 +152,7 @@ public sealed partial class FontSettingsViewModel
             if (_exitSignature == b.Signature) _exitSignature = now;
         }
         _coalesceKey = null;
+        RecomposeAllLinked(); // 取り込みで元のフォント設定が入れ替わっていれば、連動している組み合わせフォントを作り直す
         Rebuild(null);
     }
 

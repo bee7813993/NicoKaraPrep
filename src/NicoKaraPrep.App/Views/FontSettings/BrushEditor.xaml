@@ -23,7 +23,7 @@
             SelectedIndex="{x:Bind ViewModel.BrushType, Mode=TwoWay}" />
 
         <!-- グラデーション・ミルフィーユのマーカー -->
-        <StackPanel Spacing="6" Visibility="{x:Bind ViewModel.IsStops, Mode=OneWay}">
+        <StackPanel x:Name="StopsPanel" Spacing="6" Visibility="{x:Bind ViewModel.IsStops, Mode=OneWay}">
             <TextBlock Text="{x:Bind ViewModel.StopsNote, Mode=OneWay}" Style="{StaticResource SmallNote}" />
             <Grid ColumnSpacing="10">
                 <Grid.ColumnDefinitions>
@@ -89,7 +89,7 @@
         </StackPanel>
 
         <!-- 画像 -->
-        <StackPanel Spacing="6" Visibility="{x:Bind ViewModel.IsBitmap, Mode=OneWay}">
+        <StackPanel x:Name="BitmapPanel" Spacing="6" Visibility="{x:Bind ViewModel.IsBitmap, Mode=OneWay}">
             <Grid ColumnSpacing="8">
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="*" />
@@ -132,7 +132,7 @@
                 IsHexInputVisible="False"
                 IsMoreButtonVisible="False"
                 IsColorPreviewVisible="True" />
-            <StackPanel Orientation="Horizontal" Spacing="8">
+            <StackPanel x:Name="HexRow" Orientation="Horizontal" Spacing="8">
                 <TextBox
                     x:Name="HexBox"
                     Header="16 進 (RRGGBB)"

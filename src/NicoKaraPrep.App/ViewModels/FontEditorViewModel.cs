@@ -123,6 +123,49 @@ public sealed partial class FontEditorViewModel : ObservableObject
     /// <summary>当てはめている配色パターンと、違う箇所（パターンなしは null）。</summary>
     private N3PatternMatch? _match;
 
+    // ------------------------------------------------------------ 見づらい配色
+
+    /// <summary>文字と縁の明るさが近い（見づらい）組があるか。</summary>
+    [ObservableProperty]
+    private bool hasContrastIssue;
+
+    [ObservableProperty]
+    private string contrastText = "";
+
+    /// <summary>見づらい配色を直す色の候補。</summary>
+    public ObservableCollection<ContrastSuggestionItem> ContrastSuggestions { get; } = new();
+
+    /// <summary>色のドラッグ中か（そのあいだは配色の注意の欄を出し入れしない）。</summary>
+    private bool _holdNotices;
+
+    /// <summary>ドラッグ中に配色の注意の中身が変わり、まだ出し直していないか。</summary>
+    private bool _noticesPending;
+
+    // ------------------------------------------------------------ 組み合わせ
+
+    /// <summary>組み合わせフォント（複数人で歌うパート用）か。</summary>
+    [ObservableProperty]
+    private bool isComposed;
+
+    /// <summary>元のフォント設定の並び（上の帯から）。</summary>
+    [ObservableProperty]
+    private string compositionSourcesText = "";
+
+    /// <summary>塗り方（0 ミルフィーユ / 1 グラデーション）。</summary>
+    [ObservableProperty]
+    private int compositionBrushIndex;
+
+    /// <summary>端の帯の広さ（%）。</summary>
+    [ObservableProperty]
+    private double compositionWiden = N3FontComposer.DefaultEndWidenPercent;
+
+    /// <summary>元のフォント設定の色が変わったら作り直すか。</summary>
+    [ObservableProperty]
+    private bool compositionLinked = true;
+
+    [ObservableProperty]
+    private string compositionNote = "";
+
     /// <summary>当てはめている配色パターン（パターンなしは null）。</summary>
     public N3ColorPattern? Pattern => _match?.Pattern;
 
@@ -160,6 +203,8 @@ public sealed partial class FontEditorViewModel : ObservableObject
     /// <summary>選択したフォント設定を編集欄に読み込む（null なら空にする）。</summary>
     public void Load(FontListItem? item)
     {
+        _holdNotices = false;
+        _noticesPending = false;
         _loading = true;
         try
         {
@@ -228,6 +273,49 @@ public sealed partial class FontEditorViewModel : ObservableObject
                 ? "同じ名前の曲専用のフォント設定があるため、この曲の書き出しでは曲専用のほうが使われます"
                 : "アプリ共通のフォント設定は settings.json に保存され、どの曲でも使えます";
         foreach (var face in Faces) face.RefreshPlaceholders(f);
+        LoadComposition(f);
+    }
+
+    /// <summary>組み合わせの欄を読み直す（元のフォント設定の名前・塗り方・帯の広さ・連動）。</summary>
+    private void LoadComposition(N3FontSet f)
+    {
+        var c = f.Composition;
+        IsComposed = c is not null;
+        if (c is null)
+        {
+            CompositionSourcesText = "";
+            CompositionNote = "";
+            return;
+        }
+        var names = c.SourceIds.Select(id => _owner.FindFont(id)?.Name ?? "（見つかりません）").ToList();
+        CompositionSourcesText = string.Join(" → ", names);
+        CompositionBrushIndex = c.BrushType == N3Brush.TypeGradient ? 1 : 0;
+        CompositionWiden = c.EndWidenPercent;
+        CompositionLinked = c.Linked;
+        bool missing = c.SourceIds.Any(id => _owner.FindFont(id) is null);
+        CompositionNote = missing
+            ? "元のフォント設定が見つからないものがあるため、作り直せません（今の色のままです）"
+            : c.Linked
+                ? "元のフォント設定のキャラ色を変えると、この組み合わせの色も自動で作り直します。ベース色などほかの箇所は、最初の元のフォント設定と同じです"
+                : "元のフォント設定とは連動していません（色は今のまま変わりません）";
+    }
+
+    partial void OnCompositionBrushIndexChanged(int value)
+    {
+        if (_loading || Font?.Composition is null || value < 0) return;
+        _owner.UpdateComposition(Font, "compose.type", c => c.BrushType = value == 1 ? N3Brush.TypeGradient : N3Brush.TypeMilleFeuille);
+    }
+
+    partial void OnCompositionWidenChanged(double value)
+    {
+        if (_loading || Font?.Composition is null || double.IsNaN(value)) return;
+        _owner.UpdateComposition(Font, "compose.widen", c => c.EndWidenPercent = Math.Clamp(value, 0, 200));
+    }
+
+    partial void OnCompositionLinkedChanged(bool value)
+    {
+        if (_loading || Font?.Composition is null) return;
+        _owner.UpdateComposition(Font, "compose.linked", c => c.Linked = value, recompose: value); // 外すときは今の色のまま
     }
 
     /// <summary>配色の 8 箇所と、選択中の箇所の編集欄を読み直す（一括の操作・色のコピーのあと）。</summary>
@@ -327,10 +415,84 @@ public sealed partial class FontEditorViewModel : ObservableObject
             PatternNote = $"{string.Join(" ／ ", roles)}{auto}";
         }
 
+        RefreshNoticesCore(font);
+    }
+
+    /// <summary>
+    /// 色の四角・つまみのドラッグを始めた・終えた。ドラッグ中は配色の注意の欄（パターンと違う・見づらい色）を出し入れしない
+    /// （欄の高さが変わると下の色の四角が画面の上でずれ、ずれた先の色になってしまうため）。終えたら今の配色で出し直す。
+    /// </summary>
+    public void HoldNotices(bool hold)
+    {
+        _holdNotices = hold;
+        if (hold || !_noticesPending || Font is null) return;
+        _noticesPending = false;
+        bool was = _loading;
+        _loading = true;
+        try
+        {
+            RefreshNoticesCore(Font);
+        }
+        finally
+        {
+            _loading = was;
+        }
+    }
+
+    /// <summary>配色の注意の欄（パターンと違う・見づらい色）を読み直す（色のドラッグ中は、終わってから）。</summary>
+    private void RefreshNoticesCore(N3FontSet font)
+    {
+        if (_holdNotices)
+        {
+            _noticesPending = true;
+            return;
+        }
+        RefreshContrastCore(font);
         HasPatternDeviation = _match is { IsExact: false };
         PatternDeviationText = _match is { IsExact: false } m
             ? $"「{m.Pattern.Name}」の形と {m.Deviations.Count} 箇所違います（{N3ColorPatterns.Describe(m.Deviations)}）。入力の間違いなら「パターンに合わせる」で、同じ役割の多いほうの色にそろえます"
             : "";
+    }
+
+    /// <summary>
+    /// 見づらい配色（文字と縁の明るさが近い組）の注意と、色の候補を読み直す。候補は、単色どうしの最初の組（ワイプ前が先）から作る。
+    /// </summary>
+    private void RefreshContrastCore(N3FontSet font)
+    {
+        ContrastSuggestions.Clear();
+        var issues = N3Contrast.Check(font);
+        HasContrastIssue = issues.Count > 0;
+        if (issues.Count == 0)
+        {
+            ContrastText = "";
+            return;
+        }
+        var lines = issues.Select(i =>
+            $"{N3FontDetail.BrushLabels[i.TextSlot]}（#{i.TextColor}）と{N3FontDetail.BrushLabels[i.EdgeSlot]}（#{i.EdgeColor}）の明るさが近く、見づらくなります（コントラスト比 {i.Ratio:0.0}）").ToList();
+        var first = issues.FirstOrDefault(i => i.BothSolid);
+        if (first is null)
+        {
+            lines.Add("多色の箇所は、元のフォント設定の色を直してください");
+        }
+        else
+        {
+            foreach (var s in N3Contrast.Suggest(first))
+            {
+                var slots = _owner.ContrastTargetSlots(font, s.Slot);
+                int role = _match?.Pattern.RoleOf(s.Slot) ?? N3ColorPattern.Individual;
+                string target = slots.Count > 1 && role >= 0
+                    ? $"{_match!.Pattern.RoleName(role)}（{slots.Count} 箇所）"
+                    : N3FontDetail.BrushLabels[s.Slot];
+                string how = s.Kind switch
+                {
+                    N3ContrastSuggestionKind.TextLightness => N3Contrast.Luminance(s.Color) < N3Contrast.Luminance(first.TextColor) ? "を暗くして" : "を明るくして",
+                    N3ContrastSuggestionKind.EdgeShade => "を文字の色合いの" + (N3Contrast.Luminance(s.Color) < N3Contrast.Luminance(first.TextColor) ? "濃い色" : "淡い色") + "にして",
+                    _ => "を" + (s.Color == "000000" ? "黒" : "白") + "にして",
+                };
+                ContrastSuggestions.Add(new ContrastSuggestionItem(s, first, $"{target}{how} #{s.Color} に"));
+            }
+        }
+        ContrastText = string.Join("\n", lines);
     }
 
     /// <summary>選んだ箇所を編集欄に読み込む（同じ役割の箇所をまとめて変えるなら、その箇所も一緒に）。</summary>

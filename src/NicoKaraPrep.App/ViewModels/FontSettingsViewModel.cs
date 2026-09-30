@@ -407,8 +407,12 @@ public sealed partial class FontSettingsViewModel : ObservableObject
     public void EditFont(N3FontSet font, string? key, Action<N3FontSet> change)
     {
         PushUndo(key is null ? null : $"{font.Id}:{key}"); // まとめるのは同じフォント設定の同じ欄だけ
+        var lowContrast = LowContrastSlots(font);
+        string status = _main.StatusText;
         change(font);
         N3FontLibrary.MarkEdited(font);
+        AfterFontEdited(font); // 組み合わせフォントの連動（手で変えたら外す・元が変わったら作り直す）
+        NoteNewLowContrast(font, lowContrast, status);
         OnFontContentChanged(font);
     }
 

@@ -70,6 +70,21 @@ public sealed partial class FontSettingsView : UserControl
         ListResizeGrip.Stepped += (_, dx) => SetListWidth(ListColumn.Width.Value + dx, save: true);
         ListResizeGrip.ResetRequested += (_, _) => SetListWidth(DefaultListWidth, save: true);
 
+        // 配色の注意（パターンと違う・見づらい色）の欄が出たり消えたりしても、表示範囲の上端に近い欄が画面の上で動かないようにする
+        // （スクロール アンカー。色の四角をドラッグしている途中に編集欄がずれると、ずれた先の色になってしまうため）。
+        // ItemsRepeater の項目（配色の 8 箇所・ラジオボタンなど）は自動で候補になるので、それ以外の主な欄を候補にする。
+        // 配色のカードそのものは、中に注意の欄があるので候補にしない（候補になると、注意の欄の変化で下の欄が動く）
+        foreach (var element in new UIElement[] { BasicCard, CompositionCard, PatternRow, PatternNoteText, BrushCellsGrid, BrushActionsRow, CopyFromRow, RoleTogetherBox, FaceCard, DecorCard }
+                     .Concat(BrushEditorPart.AnchorCandidates))
+        {
+            EditorScroll.RegisterAnchorCandidate(element);
+        }
+
+        // 色の四角・つまみのドラッグ中は、配色の注意の欄を出し入れしない（離したときに出し直す）。欄の文や候補の数が変わるたびに
+        // 高さが変わり、いちばん下の近くまで送っているときは色の四角が動きかねないため
+        BrushEditorPart.ColorDragChanged += (_, dragging) => ViewModel?.Editor.HoldNotices(dragging);
+        EditorStack.LayoutUpdated += OnEditorLayoutUpdated;
+
         Loaded += (_, _) =>
         {
             // 画面に載る前に選んだ節は、ツリーの行ができてから選び直して見せる
@@ -133,6 +148,7 @@ public sealed partial class FontSettingsView : UserControl
         // 左の一覧のツリー（ViewModel を作ったときの一覧はもうできているので、ここで最初の節を作る）
         ViewModel.TreeRebuilt += (_, _) => RebuildTreeNodes();
         ViewModel.PropertyChanged += OnViewModelPropertyChanged;
+        ViewModel.Editor.PropertyChanged += OnEditorPropertyChanged;
         RebuildTreeNodes();
     }
 
@@ -826,6 +842,103 @@ public sealed partial class FontSettingsView : UserControl
 
     private void OnAlignPatternClick(object sender, RoutedEventArgs e) => ViewModel?.AlignSelectedToPattern();
 
+    // ------------------------------------------------------------ 組み合わせ・見づらい配色
+
+    /// <summary>組み合わせフォントを作る画面を出す（今のフォント設定を最初に並べておく）。</summary>
+    private async void OnComposeClick(object sender, RoutedEventArgs e)
+    {
+        if (ViewModel is not { } vm) return;
+        var dialog = new ComposeDialog(vm.AllItems, vm.SelectedItem, vm.ComposeBrushType, vm.ComposeEndWidenPercent, vm.AutoComposeFonts, vm.Patterns);
+        if (await ShowDialogAsync(dialog) != ContentDialogResult.Primary || dialog.Sources.Count < 2) return;
+        vm.CreateComposedFont(dialog.Sources, dialog.BrushType, dialog.EndWidenPercent, dialog.SaveDefaults, dialog.AutoCompose);
+    }
+
+    private void OnDetachCompositionClick(object sender, RoutedEventArgs e) => ViewModel?.DetachComposition();
+
+    // ------------------------------------------------------------ 配色の注意の欄と表示位置
+
+    /// <summary>配色の注意の欄が閉じた分だけ、編集欄のいちばん下に一時的に足している余白（px）。</summary>
+    private double _editorSpacer;
+
+    /// <summary>注意の欄が閉じた分だけ送り直している途中の、編集欄の表示位置（同じ処理の中で 2 つの欄が閉じたときに足し合わせる）。</summary>
+    private double? _editorTargetOffset;
+
+    /// <summary>
+    /// 注意の欄が閉じた分を自分で送った直後か。その配置が終わるまで余白を減らさない（先に減らすと中身の高さが変わり、
+    /// スクロール アンカーの補正が重なって、逆向きにずれる）。
+    /// </summary>
+    private bool _compensating;
+
+    /// <summary>
+    /// 配色の注意の欄（見づらい色・パターンと違う）が閉じるとき、欄より下を見ていれば（欄の上端が表示範囲より上）、欄の高さの分だけ
+    /// 表示位置を上へ送って、下の欄（色の編集欄など）を画面の上で動かさない。欄が開くときは ScrollViewer のスクロール アンカーが
+    /// 同じように合わせる。閉じるときは、いちばん下の近くまで送っていると表示位置が詰まったうえにアンカーの補正もかかって
+    /// ずれるので、閉じる前の高さだけ編集欄のいちばん下に余白を足して中身の高さを変えず、自分で送る
+    /// （余白は、表示範囲の外になったら減らす: <see cref="TrimEditorSpacer"/>）。
+    /// </summary>
+    private void OnEditorPropertyChanged(object? sender, PropertyChangedEventArgs e)
+    {
+        if (ViewModel?.Editor is not { } editor) return;
+        FrameworkElement? closing = e.PropertyName switch
+        {
+            nameof(FontEditorViewModel.HasContrastIssue) when !editor.HasContrastIssue => ContrastBar,
+            nameof(FontEditorViewModel.HasPatternDeviation) when !editor.HasPatternDeviation => PatternBar,
+            _ => null,
+        };
+        if (closing is not { ActualHeight: > 0 } || EditorScroll.Visibility != Visibility.Visible) return;
+        double height = closing.ActualHeight;
+        SetEditorSpacer(_editorSpacer + height);
+
+        double top;
+        try
+        {
+            top = closing.TransformToVisual(EditorScroll).TransformPoint(new Windows.Foundation.Point(0, 0)).Y;
+        }
+        catch (ArgumentException)
+        {
+            return;
+        }
+        if (top >= 0) return;
+        _editorTargetOffset = Math.Max(0, (_editorTargetOffset ?? EditorScroll.VerticalOffset) - height);
+        _compensating = true;
+        EditorScroll.ChangeView(null, _editorTargetOffset, null, disableAnimation: true);
+    }
+
+    private void OnEditorViewChanged(object? sender, ScrollViewerViewChangedEventArgs e)
+    {
+        if (!_compensating) TrimEditorSpacer();
+    }
+
+    /// <summary>注意の欄が閉じた分を送った配置が終わったら、表示範囲より下の余白を減らす。</summary>
+    private void OnEditorLayoutUpdated(object? sender, object e)
+    {
+        if (!_compensating) return;
+        _compensating = false;
+        _editorTargetOffset = null;
+        TrimEditorSpacer();
+    }
+
+    /// <summary>足した余白のうち、表示範囲より下にある分を減らす（いちばん下にあるので、その分までは減らしても表示位置が変わらない）。</summary>
+    private void TrimEditorSpacer()
+    {
+        if (!(_editorSpacer > 0)) return;
+        double below = EditorScroll.ExtentHeight - EditorScroll.ViewportHeight - EditorScroll.VerticalOffset;
+        double trim = Math.Min(_editorSpacer, Math.Max(0, below));
+        if (trim >= 1) SetEditorSpacer(_editorSpacer - trim);
+    }
+
+    private void SetEditorSpacer(double height)
+    {
+        _editorSpacer = Math.Max(0, height);
+        EditorStack.Padding = new Thickness(0, 0, 16, 16 + _editorSpacer);
+    }
+
+    /// <summary>見づらい配色を直す色の候補を当てる。</summary>
+    private void OnContrastSuggestionClick(object sender, RoutedEventArgs e)
+    {
+        if (ViewModel is { } vm && (sender as FrameworkElement)?.Tag is N3ContrastSuggestion suggestion) vm.ApplyContrastSuggestion(suggestion);
+    }
+
     private void OnKeepColorsClick(object sender, RoutedEventArgs e) => ViewModel?.KeepIndividualColors();
 
     // ------------------------------------------------------------ 右ペイン
@@ -840,6 +953,19 @@ public sealed partial class FontSettingsView : UserControl
         if (issue.Issue.FontId is { } id && vm.Select(id))
         {
             if (issue.Issue.BrushIndex >= 0) vm.Editor.SelectedBrushIndex = issue.Issue.BrushIndex;
+
+            // 配色の注意（見づらい色・パターンと違う）なら、直し方のボタンがある注意の欄まで送る（欄が開いてから）
+            FrameworkElement? bar = issue.Issue.Kind switch
+            {
+                N3FontIssueKind.LowContrast => ContrastBar,
+                N3FontIssueKind.PatternMismatch => PatternBar,
+                _ => null,
+            };
+            if (bar is not null)
+            {
+                DispatcherQueue.TryEnqueue(Microsoft.UI.Dispatching.DispatcherQueuePriority.Low, () =>
+                    bar.StartBringIntoView(new BringIntoViewOptions { VerticalAlignmentRatio = 0, VerticalOffset = 12, AnimationDesired = true }));
+            }
         }
         else if (issue.Issue.FontName is { } name)
         {

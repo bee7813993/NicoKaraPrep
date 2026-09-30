@@ -1,0 +1,79 @@
+﻿<ContentDialog
+    x:Class="NicoKaraPrep.App.Views.FontSettings.ComposeDialog"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    Title="組み合わせのフォント設定を作る"
+    PrimaryButtonText="作る"
+    CloseButtonText="キャンセル"
+    DefaultButton="Primary"
+    IsPrimaryButtonEnabled="False">
+
+    <ContentDialog.Resources>
+        <Style x:Key="DialogNote" TargetType="TextBlock">
+            <Setter Property="FontSize" Value="12" />
+            <Setter Property="TextWrapping" Value="Wrap" />
+            <Setter Property="Foreground" Value="{ThemeResource TextFillColorSecondaryBrush}" />
+        </Style>
+    </ContentDialog.Resources>
+
+    <!-- 左 = 元にするフォント設定を探して足す、右 = 並び・塗り方・端の帯の広さ・見本 -->
+    <Grid Width="860" ColumnSpacing="20">
+        <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="*" />
+            <ColumnDefinition Width="*" />
+        </Grid.ColumnDefinitions>
+
+        <StackPanel Spacing="8">
+            <TextBlock Style="{StaticResource DialogNote}" Text="一緒に歌うキャラのフォント設定を探して「追加」します（ダブルクリックでも追加できます）" />
+            <TextBox x:Name="ComposeSearchBox" PlaceholderText="名前で検索" TextChanged="OnSearchChanged" />
+            <ListView x:Name="CandidateList" Height="330" SelectionMode="Single" SelectionChanged="OnCandidateSelectionChanged" DoubleTapped="OnCandidateDoubleTapped" />
+            <Button x:Name="AddSourceButton" Content="追加 →" IsEnabled="False" Click="OnAddSourceClick" />
+        </StackPanel>
+
+        <StackPanel Grid.Column="1" Spacing="8">
+            <TextBlock Style="{StaticResource DialogNote}" Text="並び（上の帯から。歌詞の記号もこの並びで続けて書くと、そこにこのフォント設定が当たります）" />
+            <ListView x:Name="SourceList" Height="130" SelectionMode="Single" SelectionChanged="OnSourceSelectionChanged" />
+            <StackPanel Orientation="Horizontal" Spacing="6">
+                <Button x:Name="SourceUpButton" Padding="8,4" AutomationProperties.Name="上へ" ToolTipService.ToolTip="上の帯へ" Click="OnSourceUpClick">
+                    <FontIcon Glyph="&#xE70E;" FontSize="12" />
+                </Button>
+                <Button x:Name="SourceDownButton" Padding="8,4" AutomationProperties.Name="下へ" ToolTipService.ToolTip="下の帯へ" Click="OnSourceDownClick">
+                    <FontIcon Glyph="&#xE70D;" FontSize="12" />
+                </Button>
+                <Button x:Name="RemoveSourceButton" Padding="8,4" AutomationProperties.Name="外す" ToolTipService.ToolTip="並びから外す" Click="OnRemoveSourceClick">
+                    <FontIcon Glyph="&#xE711;" FontSize="12" />
+                </Button>
+            </StackPanel>
+            <TextBlock x:Name="ComposeNameText" TextWrapping="Wrap" />
+            <StackPanel Orientation="Horizontal" Spacing="24">
+                <RadioButtons x:Name="StyleButtons" Header="塗り方" MaxColumns="2" SelectionChanged="OnStyleChanged">
+                    <x:String>ミルフィーユ</x:String>
+                    <x:String>グラデーション</x:String>
+                </RadioButtons>
+                <NumberBox
+                    x:Name="WidenBox"
+                    Header="端の帯の広さ %"
+                    Width="170"
+                    Minimum="0"
+                    Maximum="200"
+                    SpinButtonPlacementMode="Compact"
+                    SmallChange="5"
+                    ValueChanged="OnWidenChanged"
+                    ToolTipService.ToolTip="端の帯を中央の帯より何 % 広くするか（0 で等分）。文字の上下の端は面積が小さいので、少し広くすると見た目がそろいます" />
+            </StackPanel>
+            <StackPanel Orientation="Horizontal" Spacing="12">
+                <Border
+                    x:Name="PreviewStrip"
+                    Width="48"
+                    Height="120"
+                    CornerRadius="4"
+                    BorderThickness="1"
+                    BorderBrush="{ThemeResource ControlStrokeColorDefaultBrush}"
+                    ToolTipService.ToolTip="キャラ色の塗りの見本（上端 = 文字の上端）" />
+                <TextBlock x:Name="BandsText" Style="{StaticResource DialogNote}" VerticalAlignment="Center" MaxWidth="320" />
+            </StackPanel>
+            <CheckBox x:Name="SaveDefaultsBox" Content="この塗り方と端の帯の広さを、絵文字から自動で作るときにも使う" />
+            <CheckBox x:Name="AutoComposeBox" Content="絵文字を 2 種類以上続けて入れたら、組み合わせのフォント設定を自動で作る" />
+        </StackPanel>
+    </Grid>
+</ContentDialog>

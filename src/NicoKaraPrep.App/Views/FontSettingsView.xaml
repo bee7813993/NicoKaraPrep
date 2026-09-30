@@ -369,11 +369,11 @@
                     </Border>
                 </StackPanel>
             </ScrollViewer>
-            <ScrollViewer x:Name="EditorScroll" Visibility="{x:Bind ViewModel.Editor.HasFont, Mode=OneWay}">
-                <StackPanel Spacing="12" Padding="0,0,16,16">
+            <ScrollViewer x:Name="EditorScroll" Visibility="{x:Bind ViewModel.Editor.HasFont, Mode=OneWay}" ViewChanged="OnEditorViewChanged">
+                <StackPanel x:Name="EditorStack" Spacing="12" Padding="0,0,16,16">
 
                     <!-- 基本 -->
-                    <Border Style="{StaticResource Card}">
+                    <Border x:Name="BasicCard" Style="{StaticResource Card}">
                         <StackPanel Spacing="8">
                             <TextBlock Text="基本" Style="{StaticResource SectionTitle}" />
                             <Grid ColumnSpacing="8">
@@ -410,6 +410,11 @@
                                     Click="OnMoveToCommonClick" />
                             </StackPanel>
                             <TextBlock Text="{x:Bind ViewModel.Editor.ScopeNote, Mode=OneWay}" Style="{StaticResource Note}" />
+                            <Button
+                                x:Name="ComposeButton"
+                                Content="ほかのフォント設定と組み合わせて新しく作る..."
+                                ToolTipService.ToolTip="複数人で歌うパート用に、キャラ色を並べたフォント設定（「（梢）（吟子）」など）を作ります"
+                                Click="OnComposeClick" />
                             <InfoBar
                                 x:Name="LinkBar"
                                 Title="ニコカラメーカー3 のテンプレートと連動"
@@ -425,12 +430,43 @@
                         </StackPanel>
                     </Border>
 
+                    <!-- 組み合わせ（複数人で歌うパート用のフォント設定だけ） -->
+                    <Border x:Name="CompositionCard" Style="{StaticResource Card}" Visibility="{x:Bind ViewModel.Editor.IsComposed, Mode=OneWay}">
+                        <StackPanel Spacing="8">
+                            <TextBlock Text="組み合わせ" Style="{StaticResource SectionTitle}" />
+                            <StackPanel Orientation="Horizontal" Spacing="8">
+                                <TextBlock Text="元のフォント設定（上の帯から）:" Style="{StaticResource Note}" VerticalAlignment="Center" />
+                                <TextBlock x:Name="CompositionSourcesText" Text="{x:Bind ViewModel.Editor.CompositionSourcesText, Mode=OneWay}" VerticalAlignment="Center" TextWrapping="Wrap" />
+                            </StackPanel>
+                            <StackPanel Orientation="Horizontal" Spacing="24">
+                                <RadioButtons x:Name="CompositionStyleButtons" Header="塗り方" MaxColumns="2" SelectedIndex="{x:Bind ViewModel.Editor.CompositionBrushIndex, Mode=TwoWay}">
+                                    <x:String>ミルフィーユ</x:String>
+                                    <x:String>グラデーション</x:String>
+                                </RadioButtons>
+                                <NumberBox
+                                    x:Name="CompositionWidenBox"
+                                    Header="端の帯の広さ %"
+                                    Width="170"
+                                    VerticalAlignment="Top"
+                                    Minimum="0"
+                                    Maximum="200"
+                                    SmallChange="5"
+                                    SpinButtonPlacementMode="Compact"
+                                    Value="{x:Bind ViewModel.Editor.CompositionWiden, Mode=TwoWay}"
+                                    ToolTipService.ToolTip="端の帯を中央の帯より何 % 広くするか（0 で等分）。文字の上下の端は面積が小さいので、少し広くすると見た目がそろいます" />
+                            </StackPanel>
+                            <CheckBox x:Name="CompositionLinkedBox" Content="元のフォント設定の色が変わったら、この組み合わせの色も作り直す" IsChecked="{x:Bind ViewModel.Editor.CompositionLinked, Mode=TwoWay}" />
+                            <TextBlock Text="{x:Bind ViewModel.Editor.CompositionNote, Mode=OneWay}" Style="{StaticResource Note}" />
+                            <Button x:Name="DetachCompositionButton" Content="切り離す（今の色のまま、ふつうのフォント設定にする）" Click="OnDetachCompositionClick" />
+                        </StackPanel>
+                    </Border>
+
                     <!-- 配色 -->
                     <Border Style="{StaticResource Card}">
                         <StackPanel Spacing="10">
                             <TextBlock Text="配色" Style="{StaticResource SectionTitle}" />
                             <!-- 配色パターン: 同じ役割（キャラ色・ベース色など）の箇所をまとめて編集する -->
-                            <StackPanel Orientation="Horizontal" Spacing="8">
+                            <StackPanel x:Name="PatternRow" Orientation="Horizontal" Spacing="8">
                                 <ComboBox
                                     x:Name="PatternBox"
                                     Header="配色パターン"
@@ -455,8 +491,41 @@
                                     </StackPanel>
                                 </InfoBar.Content>
                             </InfoBar>
+                            <InfoBar
+                                x:Name="ContrastBar"
+                                Title="見づらい色の組み合わせがあります"
+                                Severity="Warning"
+                                IsClosable="False"
+                                IsOpen="{x:Bind ViewModel.Editor.HasContrastIssue, Mode=OneWay}"
+                                Message="{x:Bind ViewModel.Editor.ContrastText, Mode=OneWay}">
+                                <InfoBar.Content>
+                                    <ItemsRepeater x:Name="ContrastSuggestionsRepeater" Margin="0,0,0,12" ItemsSource="{x:Bind ViewModel.Editor.ContrastSuggestions}">
+                                        <ItemsRepeater.Layout>
+                                            <StackLayout Spacing="6" />
+                                        </ItemsRepeater.Layout>
+                                        <ItemsRepeater.ItemTemplate>
+                                            <DataTemplate x:DataType="vm:ContrastSuggestionItem">
+                                                <Button
+                                                    HorizontalAlignment="Left"
+                                                    Padding="6,4"
+                                                    Tag="{x:Bind Suggestion}"
+                                                    AutomationProperties.Name="{x:Bind Label}"
+                                                    ToolTipService.ToolTip="{x:Bind ToolTip}"
+                                                    Click="OnContrastSuggestionClick">
+                                                    <StackPanel Orientation="Horizontal" Spacing="8">
+                                                        <Border Width="36" Height="28" CornerRadius="3" Background="{x:Bind SampleEdge}">
+                                                            <TextBlock Text="永" FontSize="18" FontWeight="Bold" HorizontalAlignment="Center" VerticalAlignment="Center" Foreground="{x:Bind SampleText}" />
+                                                        </Border>
+                                                        <TextBlock Text="{x:Bind Label}" VerticalAlignment="Center" />
+                                                    </StackPanel>
+                                                </Button>
+                                            </DataTemplate>
+                                        </ItemsRepeater.ItemTemplate>
+                                    </ItemsRepeater>
+                                </InfoBar.Content>
+                            </InfoBar>
                             <!-- 8 箇所（上段 = ワイプ後、下段 = ワイプ前）。押した箇所を下の編集欄で編集する -->
-                            <Grid ColumnSpacing="8" RowSpacing="6">
+                            <Grid x:Name="BrushCellsGrid" ColumnSpacing="8" RowSpacing="6">
                                 <Grid.ColumnDefinitions>
                                     <ColumnDefinition Width="Auto" />
                                     <ColumnDefinition Width="*" />
@@ -478,12 +547,12 @@
                                     </ItemsRepeater.Layout>
                                 </ItemsRepeater>
                             </Grid>
-                            <StackPanel Orientation="Horizontal" Spacing="8">
+                            <StackPanel x:Name="BrushActionsRow" Orientation="Horizontal" Spacing="8">
                                 <Button x:Name="SwapButton" Content="前後を交換" Click="OnSwapClick" ToolTipService.ToolTip="ワイプ前とワイプ後の配色を入れ替えます" />
                                 <Button x:Name="AfterToBeforeButton" Content="後→前へコピー" Click="OnAfterToBeforeClick" ToolTipService.ToolTip="ワイプ後の配色をワイプ前にコピーします" />
                                 <Button x:Name="BeforeToAfterButton" Content="前→後へコピー" Click="OnBeforeToAfterClick" ToolTipService.ToolTip="ワイプ前の配色をワイプ後にコピーします" />
                             </StackPanel>
-                            <StackPanel Orientation="Horizontal" Spacing="8">
+                            <StackPanel x:Name="CopyFromRow" Orientation="Horizontal" Spacing="8">
                                 <Button x:Name="CopyFromButton" Content="他のフォントから色をコピー...">
                                     <Button.Flyout>
                                         <Flyout x:Name="CopyFlyout" Opening="OnCopyFlyoutOpening" Placement="Bottom">
@@ -523,7 +592,7 @@
                     </Border>
 
                     <!-- フォントフェース -->
-                    <Border Style="{StaticResource Card}">
+                    <Border x:Name="FaceCard" Style="{StaticResource Card}">
                         <StackPanel Spacing="8">
                             <TextBlock Text="フォントフェース" Style="{StaticResource SectionTitle}" />
                             <fs:FaceTable x:Name="FaceTablePart" />
@@ -531,7 +600,7 @@
                     </Border>
 
                     <!-- 文字飾り -->
-                    <Border Style="{StaticResource Card}">
+                    <Border x:Name="DecorCard" Style="{StaticResource Card}">
                         <StackPanel Spacing="8">
                             <TextBlock Text="文字飾り" Style="{StaticResource SectionTitle}" />
                             <RadioButtons x:Name="DecorKindButtons" Header="種類" MaxColumns="3" SelectedIndex="{x:Bind ViewModel.Editor.DecorKind, Mode=TwoWay}">

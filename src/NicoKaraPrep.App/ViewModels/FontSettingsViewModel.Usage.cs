@@ -161,6 +161,7 @@ public sealed partial class FontSettingsViewModel
         referenced.ExceptWith(_main.GetBaseFontNames());
         var issues = N3FontLibrary.Validate(export, referenced);
         issues.AddRange(PatternIssues(export));
+        issues.AddRange(ContrastIssues(export));
         foreach (var issue in issues.OrderByDescending(i => i.Severity)) Issues.Add(new FontIssueItem(issue));
         IssueSummary = issues.Count == 0 ? "問題は見つかりませんでした" : $"{issues.Count} 件";
     }

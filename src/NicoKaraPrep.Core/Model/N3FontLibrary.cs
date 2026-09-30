@@ -28,6 +28,9 @@ public enum N3FontIssueKind
 
     /// <summary>配色が配色パターンの形と少し違う（同じ役割の箇所の色がそろっていない）。</summary>
     PatternMismatch,
+
+    /// <summary>文字と縁の明るさが近く、見づらい（黄色の文字と白の縁など）。</summary>
+    LowContrast,
 }
 
 /// <summary>フォント設定の検証結果 1 件。</summary>

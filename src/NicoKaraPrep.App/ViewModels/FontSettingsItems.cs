@@ -287,6 +287,35 @@ public sealed partial class BrushCellViewModel : ObservableObject
     }
 }
 
+/// <summary>見づらい配色を直す色の候補 1 つ（配色の欄のボタン）。見本は候補の色で文字と縁を並べたもの。</summary>
+public sealed class ContrastSuggestionItem
+{
+    public ContrastSuggestionItem(N3ContrastSuggestion suggestion, N3ContrastIssue issue, string label)
+    {
+        Suggestion = suggestion;
+        Label = label;
+        bool text = suggestion.Slot == issue.TextSlot;
+        SampleText = new SolidColorBrush(N3BrushPreview.ToColor(text ? suggestion.Color : issue.TextColor, 100, Microsoft.UI.Colors.White));
+        SampleEdge = new SolidColorBrush(N3BrushPreview.ToColor(text ? issue.EdgeColor : suggestion.Color, 100, Microsoft.UI.Colors.White));
+        ToolTip = $"{label}（コントラスト比 {issue.Ratio:0.0} → {suggestion.Ratio:0.0}）";
+    }
+
+    public N3ContrastSuggestion Suggestion { get; }
+
+    /// <summary>候補の説明（「キャラ色を暗くして #B3B300 に」など）。</summary>
+    public string Label { get; }
+
+    /// <summary>見本の文字の色。</summary>
+    public Brush SampleText { get; }
+
+    /// <summary>見本の縁（背景）の色。</summary>
+    public Brush SampleEdge { get; }
+
+    public string ToolTip { get; }
+
+    public override string ToString() => Label;
+}
+
 /// <summary>フォント設定を使っている行 1 つ（使用状況の一覧）。</summary>
 /// <param name="Text">表示（タブ名・行番号・行の先頭）。</param>
 public sealed record FontUsageLine(string Text)
