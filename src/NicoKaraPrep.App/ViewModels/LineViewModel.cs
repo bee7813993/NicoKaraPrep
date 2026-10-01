@@ -45,24 +45,25 @@ public partial class LineViewModel : ObservableObject
         }
     }
 
-    // 幅チェックに適用中のフォント（全行共通。n3proj 取り込み結果の確認用）
-    [ObservableProperty]
-    private string fontText = "";
-
-    [ObservableProperty]
-    private string fontSizeText = "";
+    // 横幅を測るフォント（全行共通。横幅の欄のツールチップに出す。n3proj 取り込み結果の確認用）
+    private string _widthFont = "";
 
     public void SetFontInfo(string family, double sizePx)
     {
-        if (Model.IsEmpty)
-        {
-            FontText = "";
-            FontSizeText = "";
-            return;
-        }
-        FontText = family;
-        FontSizeText = $"{sizePx:F0}";
+        string text = Model.IsEmpty ? "" : $"{family} {sizePx:F0}px";
+        if (_widthFont == text) return;
+        _widthFont = text;
+        OnPropertyChanged(nameof(WidthToolTip));
     }
+
+    /// <summary>横幅の欄のツールチップ。</summary>
+    public string WidthToolTip =>
+        "横幅 px と有効幅（マージン除き）に対する使用率。90% 超はオレンジで予告"
+        + (_widthFont.Length > 0 ? $"\n横幅を測るフォント（全行共通。ファイル > 設定 の字幕フォント）: {_widthFont}" : "");
+
+    /// <summary>この行に当たるフォント設定（n3proj の書き出しと同じ決め方。チェックのたびに更新する）。</summary>
+    [ObservableProperty]
+    private LineFontDisplay appliedFont = LineFontDisplay.None;
 
     /// <summary>表示テキスト（空行は視認用の記号。タグだけが残った行は注意書きを出す）。</summary>
     public string DisplayText

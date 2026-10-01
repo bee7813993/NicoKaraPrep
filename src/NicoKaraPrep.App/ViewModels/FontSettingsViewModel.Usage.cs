@@ -63,13 +63,15 @@ public sealed partial class FontSettingsViewModel
         _analysisTimer.Start();
     }
 
-    /// <summary>書き出しと同じ条件（全タブ・行をまたいで引き継ぐ・既定のフォント設定）で使われ方を計算する。</summary>
+    /// <summary>
+    /// 書き出しと同じ条件（全タブ・行をまたいで引き継ぐ・ベースの n3proj のフォント設定と合わせた名前の並び・既定のフォント設定）で
+    /// 使われ方を計算する（行リストの「フォント設定」欄と同じ結果になる）。
+    /// </summary>
     private (List<LyricsDocument> Docs, List<N3FontSet> Export, List<string> Names, string? Default) UsageContext()
     {
         var docs = _main.GetAllTabs().Select(t => t.Document).ToList();
         var export = _main.ExportFontSets;
-        var names = export.Select(f => f.Name).ToList();
-        string? def = _main.N3ProjSettings.DefaultFontSetName is { Length: > 0 } d ? d : null;
+        var (names, def) = _main.GetExportFontNames();
         return (docs, export, names, def);
     }
 

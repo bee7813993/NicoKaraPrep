@@ -342,10 +342,9 @@
                                     <ColumnDefinition Width="76" />
                                     <ColumnDefinition Width="22" />
                                     <ColumnDefinition Width="22" />
-                                    <ColumnDefinition Width="110" />
-                                    <ColumnDefinition Width="36" />
                                     <ColumnDefinition Width="92" />
                                     <ColumnDefinition Width="18" />
+                                    <ColumnDefinition Width="220" />
                                     <ColumnDefinition Width="*" />
                                 </Grid.ColumnDefinitions>
                                 <CheckBox Grid.Column="0" MinWidth="0" Padding="0" IsChecked="{x:Bind IsSelected, Mode=OneWay}" Click="OnRowCheckClick" Tag="{x:Bind}" ToolTipService.ToolTip="選択（複数選択してエクスポートなどに使用）" />
@@ -355,11 +354,30 @@
                                 <TextBlock Grid.Column="4" Text="{x:Bind EndTimeText, Mode=OneWay}" FontFamily="Consolas" Foreground="{x:Bind EndTimeBrush, Mode=OneWay}" ToolTipService.ToolTip="終了時間（ページ衝突時は色付き）" />
                                 <TextBlock Grid.Column="5" Text="{x:Bind OverlapGlyph, Mode=OneWay}" ToolTipService.ToolTip="同時歌唱などのタイムタグ重なりあり（正常）" />
                                 <TextBlock Grid.Column="6" Text="{x:Bind WidthGlyph, Mode=OneWay}" ToolTipService.ToolTip="横幅チェック結果" />
-                                <TextBlock Grid.Column="7" Text="{x:Bind FontText, Mode=OneWay}" FontSize="11" Foreground="{ThemeResource TextFillColorSecondaryBrush}" TextTrimming="CharacterEllipsis" VerticalAlignment="Center" ToolTipService.ToolTip="{x:Bind FontText, Mode=OneWay}" />
-                                <TextBlock Grid.Column="8" Text="{x:Bind FontSizeText, Mode=OneWay}" FontSize="11" Foreground="{ThemeResource TextFillColorSecondaryBrush}" VerticalAlignment="Center" ToolTipService.ToolTip="フォントサイズ px" />
-                                <TextBlock Grid.Column="9" Text="{x:Bind WidthText, Mode=OneWay}" FontSize="12" Foreground="{x:Bind WidthBrush, Mode=OneWay}" VerticalAlignment="Center" ToolTipService.ToolTip="横幅 px と有効幅（マージン除き）に対する使用率。90% 超はオレンジで予告" />
-                                <TextBlock Grid.Column="10" Text="{x:Bind OverrideMark, Mode=OneWay}" FontSize="12" VerticalAlignment="Center" Foreground="{ThemeResource AccentTextFillColorPrimaryBrush}" ToolTipService.ToolTip="ニコカラメーカー用の手動指定（表示時刻・フォント）あり" />
-                                <TextBlock Grid.Column="11" Text="{x:Bind DisplayText, Mode=OneWay}" TextTrimming="CharacterEllipsis" />
+                                <TextBlock Grid.Column="7" Text="{x:Bind WidthText, Mode=OneWay}" FontSize="12" Foreground="{x:Bind WidthBrush, Mode=OneWay}" VerticalAlignment="Center" ToolTipService.ToolTip="{x:Bind WidthToolTip, Mode=OneWay}" />
+                                <TextBlock Grid.Column="8" Text="{x:Bind OverrideMark, Mode=OneWay}" FontSize="12" VerticalAlignment="Center" Foreground="{ThemeResource AccentTextFillColorPrimaryBrush}" ToolTipService.ToolTip="ニコカラメーカー用の手動指定（表示時刻・フォント）あり" />
+                                <!-- この行に当たるフォント設定（書き出しと同じ決め方。途中で切り替わる行は最初と最後を → でつなぐ） -->
+                                <Grid Grid.Column="9" ColumnSpacing="4" VerticalAlignment="Center" Background="Transparent" Visibility="{x:Bind AppliedFont.IsVisible, Mode=OneWay}" ToolTipService.ToolTip="{x:Bind AppliedFont.ToolTip, Mode=OneWay}">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="Auto" />
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="Auto" />
+                                    </Grid.ColumnDefinitions>
+                                    <StackPanel Orientation="Horizontal" Spacing="2" VerticalAlignment="Center">
+                                        <Border Width="8" Height="18" CornerRadius="2" BorderThickness="1" BorderBrush="{ThemeResource ControlStrokeColorDefaultBrush}" Background="{x:Bind AppliedFont.First.After, Mode=OneWay}" />
+                                        <Border Width="8" Height="18" CornerRadius="2" BorderThickness="1" BorderBrush="{ThemeResource ControlStrokeColorDefaultBrush}" Background="{x:Bind AppliedFont.First.Before, Mode=OneWay}" />
+                                    </StackPanel>
+                                    <TextBlock Grid.Column="1" Text="{x:Bind AppliedFont.First.Name, Mode=OneWay}" FontSize="12" TextTrimming="CharacterEllipsis" VerticalAlignment="Center" />
+                                    <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="4" VerticalAlignment="Center" Visibility="{x:Bind AppliedFont.HasLast, Mode=OneWay}">
+                                        <TextBlock Text="{x:Bind AppliedFont.Arrow, Mode=OneWay}" FontSize="12" VerticalAlignment="Center" Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+                                        <StackPanel Orientation="Horizontal" Spacing="2" VerticalAlignment="Center">
+                                            <Border Width="8" Height="18" CornerRadius="2" BorderThickness="1" BorderBrush="{ThemeResource ControlStrokeColorDefaultBrush}" Background="{x:Bind AppliedFont.Last.After, Mode=OneWay}" />
+                                            <Border Width="8" Height="18" CornerRadius="2" BorderThickness="1" BorderBrush="{ThemeResource ControlStrokeColorDefaultBrush}" Background="{x:Bind AppliedFont.Last.Before, Mode=OneWay}" />
+                                        </StackPanel>
+                                        <TextBlock Text="{x:Bind AppliedFont.Last.Name, Mode=OneWay}" FontSize="12" MaxWidth="72" TextTrimming="CharacterEllipsis" VerticalAlignment="Center" />
+                                    </StackPanel>
+                                </Grid>
+                                <TextBlock Grid.Column="10" Text="{x:Bind DisplayText, Mode=OneWay}" TextTrimming="CharacterEllipsis" />
                             </Grid>
                         </DataTemplate>
                     </ListView.ItemTemplate>
@@ -413,8 +431,8 @@
                     <Button Grid.Column="5" Content="自動に戻す" FontSize="12" Padding="8,3" Click="OnResetShowTimeClick" />
                     <TextBlock Grid.Column="6" Text="フォント" FontSize="12" VerticalAlignment="Center" Margin="8,0,0,0" />
                     <ComboBox Grid.Column="7" x:Name="LineFontBox" IsEditable="True" FontSize="12" HorizontalAlignment="Stretch" PlaceholderText="（自動）"
-                              SelectionChanged="OnLineFontChanged" TextSubmitted="OnLineFontSubmitted"
-                              ToolTipService.ToolTip="この行に適用するニコカラメーカーのフォント設定名（空欄はパート記号で自動判定）" />
+                              SelectionChanged="OnLineFontChanged" TextSubmitted="OnLineFontSubmitted" PreviewKeyDown="OnLineFontPreviewKeyDown"
+                              ToolTipService.ToolTip="この行に適用するニコカラメーカーのフォント設定名（空欄はパート記号で自動判定。空にして Enter で自動に戻す）" />
                     <Button Grid.Column="8" x:Name="EditLineFontButton" Content="編集..." FontSize="12" Padding="8,3" Click="OnEditLineFontClick"
                             ToolTipService.ToolTip="フォント設定ビュー（F3）を開いて、このフォント設定を編集します" />
                     <TextBlock Grid.Column="9" x:Name="N3LineInfo" FontSize="12" VerticalAlignment="Center" Foreground="{ThemeResource TextFillColorSecondaryBrush}" TextTrimming="CharacterEllipsis" />

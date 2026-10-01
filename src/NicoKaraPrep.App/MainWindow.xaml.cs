@@ -52,6 +52,7 @@ public sealed partial class MainWindow : Window
             if (ViewModel.ViewMode == MainViewMode.FontSettings) return;
             TryRun(ViewModel.RunValidation);
             RefreshInsertGutter(); // 挿入ビュー表示中なら横幅などの再計算結果を行情報欄へ反映
+            RefreshLineFontPlaceholder(); // 行設定のフォントの欄の薄字（当たるフォント設定）も新しい結果に
         };
 
         // パレットのドラッグ＆ドロップ並び替え → スロット番号を振り直す
@@ -631,6 +632,7 @@ public sealed partial class MainWindow : Window
     {
         if (ValidationBlocked()) return;
         TryRun(ViewModel.RunValidation);
+        RefreshLineFontPlaceholder();
         IssuePanel.IsExpanded = ViewModel.Issues.Count > 0;
     }
 
@@ -685,6 +687,7 @@ public sealed partial class MainWindow : Window
         {
             LoadQuickEmojiSettings();
             TryRun(ViewModel.RunValidation);
+            RefreshLineFontPlaceholder();
         }
     }
 

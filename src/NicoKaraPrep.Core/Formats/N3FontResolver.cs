@@ -103,6 +103,48 @@ public sealed class N3FontResolver
         return usage;
     }
 
+    /// <summary>
+    /// 1 行に適用されるフォント設定。Runs は fontNames の添字を文字の順に並べ、続く同じものを 1 つにまとめたもの
+    /// （2 連タグ用スペーサーは数えない。空行は空）。Manual は行ごとの手動指定（FontSetName）で行全体をそろえたとき true
+    /// （手動指定があっても、その名前が fontNames に無ければ使われないので false）。
+    /// </summary>
+    public sealed record LineFonts(IReadOnlyList<int> Runs, bool Manual);
+
+    private static readonly LineFonts NoFonts = new(Array.Empty<int>(), false);
+
+    /// <summary>
+    /// 複数の文書（歌詞設定タブ）を順に通したときの、行ごとに適用されるフォント設定（[文書の番号][doc.Lines の添字]）。
+    /// n3proj の書き出しと同じく空行は飛ばし、前の文書の最後のフォントを次の文書へ引き継ぐ。
+    /// </summary>
+    public static List<List<LineFonts>> ResolveLines(IEnumerable<LyricsDocument> documents, IReadOnlyList<string> fontNames, string? defaultName, bool continueAcrossLines)
+    {
+        var result = new List<List<LineFonts>>();
+        var resolver = fontNames.Count > 0 ? new N3FontResolver(fontNames, defaultName, continueAcrossLines) : null;
+        foreach (var doc in documents)
+        {
+            var lines = new List<LineFonts>(doc.Lines.Count);
+            foreach (var line in doc.Lines)
+            {
+                if (line.IsEmpty || resolver is null)
+                {
+                    lines.Add(NoFonts);
+                    continue;
+                }
+                int[] fonts = resolver.Resolve(line);
+                var runs = new List<int>();
+                for (int i = 0; i < fonts.Length; i++)
+                {
+                    if (line.Chars[i].IsSpacer) continue;
+                    if (runs.Count == 0 || runs[^1] != fonts[i]) runs.Add(fonts[i]);
+                }
+                bool manual = line.FontSetName is string m && resolver._byName.ContainsKey(m);
+                lines.Add(new LineFonts(runs, manual));
+            }
+            result.Add(lines);
+        }
+        return result;
+    }
+
     /// <summary>指定したフォント設定が 1 文字以上に適用される行の番号（doc.Lines の添字、昇順）。</summary>
     public static IReadOnlyList<int> LinesUsing(LyricsDocument doc, IReadOnlyList<string> fontNames, string? defaultName, bool continueAcrossLines, string fontName) =>
         LinesUsing(new[] { doc }, fontNames, defaultName, continueAcrossLines, fontName).Select(p => p.Line).ToList();

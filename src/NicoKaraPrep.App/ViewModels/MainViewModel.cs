@@ -1746,11 +1746,12 @@ public partial class MainViewModel : ObservableObject
             Lines[i].SetOverlapInfo(overlapped.Contains(i));
         }
 
-        // 4) 各行に適用フォント情報を表示（n3proj 取り込み結果の確認用）
+        // 4) 横幅を測るフォント（横幅の欄のツールチップ。n3proj 取り込み結果の確認用）と、各行に当たるフォント設定
         foreach (var line in Lines)
         {
             line.SetFontInfo(Settings.FontFamily, Settings.FontSizePx);
         }
+        UpdateLineFonts();
 
         int errors = Issues.Count(i => i.Severity == IssueSeverity.Error);
         int warnings = Issues.Count(i => i.Severity == IssueSeverity.Warning);

@@ -198,5 +198,81 @@ public class N3FontResolverTests
         Assert.Empty(N3FontResolver.CountUsage(doc, Array.Empty<string>(), null, true));
         Assert.Empty(N3FontResolver.LinesUsing(doc, Array.Empty<string>(), null, true, "標準"));
         Assert.Equal(new[] { "0" }, ResolveAll(doc, Array.Empty<string>()));
+        Assert.Empty(N3FontResolver.ResolveLines(new[] { doc }, Array.Empty<string>(), null, true)[0][0].Runs);
+    }
+
+    // ------------------------------------------------------------ 行ごとの一覧（行リストの表示）
+
+    [Fact]
+    public void 行ごと_切り替わった順に並び次の行へ引き継ぐ()
+    {
+        var doc = Doc(
+            "[00:01:00]あ[00:02:00]",
+            "[00:03:00]（麻衣）（のりこ）歌[00:04:00]",
+            "",
+            "[00:05:00]続き[00:06:00]",
+            "[00:07:00]い（麻衣）う（のりこ）え[00:08:00]");
+        var lines = N3FontResolver.ResolveLines(new[] { doc }, Names, null, true)[0];
+        Assert.Equal(5, lines.Count);
+        Assert.Equal(new[] { 0 }, lines[0].Runs);
+        Assert.Equal(new[] { 3 }, lines[1].Runs); // 記号が続く箇所は組み合わせのフォント設定だけ
+        Assert.Empty(lines[2].Runs);
+        Assert.Equal(new[] { 3 }, lines[3].Runs);
+        Assert.Equal(new[] { 3, 1, 2 }, lines[4].Runs);
+        Assert.All(lines, l => Assert.False(l.Manual));
+    }
+
+    [Fact]
+    public void 行ごと_手動指定は行全体をそろえ次の行の引き継ぎには影響しない()
+    {
+        var doc = Doc(
+            "[00:01:00]（麻衣）あ[00:02:00]",
+            "[00:03:00]い（のりこ）う[00:04:00]",
+            "[00:05:00]え[00:06:00]");
+        doc.Lines[1].FontSetName = "（麻衣）（のりこ）";
+        var lines = N3FontResolver.ResolveLines(new[] { doc }, Names, null, true)[0];
+        Assert.Equal(new[] { 3 }, lines[1].Runs);
+        Assert.True(lines[1].Manual);
+        Assert.Equal(new[] { 2 }, lines[2].Runs); // 手動指定の行の中の記号は、そのあとの行に効く（書き出しと同じ）
+    }
+
+    [Fact]
+    public void 行ごと_無い名前の手動指定は使われない()
+    {
+        var doc = Doc("[00:01:00]（麻衣）あ[00:02:00]");
+        doc.Lines[0].FontSetName = "（無い名前）";
+        var line = N3FontResolver.ResolveLines(new[] { doc }, Names, null, true)[0][0];
+        Assert.Equal(new[] { 1 }, line.Runs);
+        Assert.False(line.Manual);
+    }
+
+    [Fact]
+    public void 行ごと_スペーサーは数えず前の文書のフォントを引き継ぐ()
+    {
+        // 行頭のスペーサーは前の行のフォントのままだが、文字ではないので並びに入れない
+        var main = Doc("[00:01:00]（麻衣）あ[00:02:00]", "[00:02:50][00:03:00]（のりこ）え[00:04:00]");
+        var chorus = Doc("[00:05:00]お[00:06:00]");
+        var result = N3FontResolver.ResolveLines(new[] { main, chorus }, Names, "（麻衣）", true);
+        Assert.Equal(new[] { 2 }, result[0][1].Runs);
+        Assert.Equal(new[] { 2 }, result[1][0].Runs);
+    }
+
+    [Fact]
+    public void 行ごと_書き出しの文字のフォントと同じ()
+    {
+        var doc = Doc("@Emoji=（麻衣）,a.png", "@Emoji=（のりこ）,b.png",
+            "[00:01:00]前[00:01:50]（麻衣）[00:02:00]歌[00:03:00]",
+            "",
+            "[00:04:00]（のりこ）[00:04:50]詞[00:05:00]",
+            "[00:06:00]続[00:07:00]");
+        var layouts = new N3ProjWriter.LayoutResolver(new List<N3ProjLayoutInfo> { new("下寄せ2行", 0, 2) }, null, null, null, new List<string>(), "t");
+        var action = ("SHINTA.CharFadeInFadeOut", new JsonObject { ["$type"] = "CharFadeInFadeOutSettingsModel" });
+        var written = N3ProjWriter.BuildLineInfos(doc, new N3ShowTimeSettings(), doc.EmojiEntries, new N3FontResolver(Names, null, true), layouts, action, "Ver 13.79", out _)
+            .Where(l => l!["Kind"]!.GetValue<int>() == 1)
+            .Select(l => l!["LyricsCharInfos"]!.AsArray().Select(c => c!["FontIndex"]!.GetValue<int>()).Distinct().ToArray())
+            .ToList();
+        var resolved = N3FontResolver.ResolveLines(new[] { doc }, Names, null, true)[0].Where(l => l.Runs.Count > 0).Select(l => l.Runs.ToArray()).ToList();
+        Assert.Equal(written, resolved);
+        Assert.Equal(new[] { 0, 1 }, resolved[0]);
     }
 }

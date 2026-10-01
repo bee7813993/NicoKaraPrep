@@ -157,6 +157,27 @@ public static class N3ProjWriter
     /// <summary>歌詞設定タブと、書き出した lrc の内容。</summary>
     internal sealed record TabSource(N3ProjExportTab Tab, string LyricsPath, string LrcText, DateTime LyricsLastModified);
 
+    /// <summary>
+    /// 書き出すプロジェクトのフォント設定名の並び（<see cref="BuildProjectJson"/> が作る LyricsFonts と同じ順）。
+    /// ベースのフォント設定の順に、ベースに無い名前を後ろへ足す（合わせない設定ならベースのまま）。どちらも無ければ既定のフォント設定 1 件。
+    /// 行のフォントを決める <see cref="N3FontResolver"/> にはこの並びを渡す（書き出す前に、行ごとに当たるフォント設定を書き出しと同じに出すため）。
+    /// </summary>
+    public static List<string> ExportFontNames(IEnumerable<string> baseNames, IEnumerable<N3FontSet> fontSets, bool mergeFontSets, string defaultName = "標準")
+    {
+        var names = baseNames.ToList();
+        if (mergeFontSets)
+        {
+            var known = new HashSet<string>(names, StringComparer.Ordinal);
+            foreach (var f in fontSets)
+            {
+                if (string.IsNullOrWhiteSpace(f.Name) || !known.Add(f.Name)) continue;
+                names.Add(f.Name);
+            }
+        }
+        if (names.Count == 0) names.Add(defaultName);
+        return names;
+    }
+
     /// <summary>プロジェクト全体の JSON を組み立てる（ファイルは書かない）。</summary>
     internal static JsonObject BuildProjectJson(
         string projectPath,

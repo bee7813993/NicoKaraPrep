@@ -357,6 +357,36 @@ public class N3ProjWriterTests
     }
 
     [Fact]
+    public void プロジェクト全体_フォント設定名の並びは書き出すプロジェクトと同じ()
+    {
+        var doc = Doc("[00:01:00]あ[00:02:00]");
+        static List<string> NamesOf(JsonObject root) => root["LyricsFonts"]!.AsArray().Select(n => n!["SettingsName"]!.GetValue<string>()).ToList();
+        var scratch = new N3ProjExportOptions
+        {
+            DefaultFont = new N3FontSet { Name = "標準" },
+            FontSets = new[] { new N3FontSet { Name = "標準" }, new N3FontSet { Name = "（花帆）" } },
+        };
+        var baseRoot = N3ProjWriter.BuildProjectJson(@"C:\v\a.n3proj", new[] { Tab("メイン", doc, @"C:\v\a.lrc") }, scratch, null, new List<string>(), out _, out _);
+        var baseNames = NamesOf(baseRoot);
+        Assert.Equal(new[] { "標準", "（花帆）" }, baseNames);
+
+        var sets = new[] { new N3FontSet { Name = "（麻衣）" }, new N3FontSet { Name = "（花帆）" }, new N3FontSet { Name = " " }, new N3FontSet { Name = "（麻衣）" } };
+        foreach (bool merge in new[] { true, false })
+        {
+            foreach (bool withBase in new[] { true, false })
+            {
+                var root = withBase ? baseRoot.DeepClone().AsObject() : null;
+                var options = new N3ProjExportOptions { BaseProject = root, FontSets = sets, MergeFontSets = merge, DefaultFont = new N3FontSet { Name = "標準" } };
+                var built = N3ProjWriter.BuildProjectJson(@"C:\v\b.n3proj", new[] { Tab("メイン", doc, @"C:\v\b.lrc") }, options, root, new List<string>(), out _, out _);
+                Assert.Equal(NamesOf(built), N3ProjWriter.ExportFontNames(withBase ? baseNames : Array.Empty<string>(), sets, merge));
+            }
+        }
+        Assert.Equal(new[] { "標準", "（花帆）", "（麻衣）" }, N3ProjWriter.ExportFontNames(baseNames, sets, true));
+        Assert.Equal(new[] { "（麻衣）", "（花帆）" }, N3ProjWriter.ExportFontNames(Array.Empty<string>(), sets, true));
+        Assert.Equal(new[] { "標準" }, N3ProjWriter.ExportFontNames(Array.Empty<string>(), sets, false));
+    }
+
+    [Fact]
     public void プロジェクト全体_ZIPに保存して読み戻せる()
     {
         string dir = Path.Combine(Path.GetTempPath(), "NicoKaraPrepTests", Guid.NewGuid().ToString("N"));

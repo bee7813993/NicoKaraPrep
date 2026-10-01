@@ -43,6 +43,9 @@ public sealed partial class MainWindow
         TryRun(() => ViewModel.ExportN3Proj(path, settings));
         _n3FontNamesKey = null;
         RefreshN3LinePanel();
+        // 書き出し設定（ベース・既定のフォント設定・合わせるか）で、行に当たるフォント設定が変わることがある（書き出しの知らせは残す）
+        TryRun(ViewModel.UpdateLineFonts);
+        RefreshLineFontPlaceholder();
     }
 
     /// <summary>
@@ -110,6 +113,7 @@ public sealed partial class MainWindow
             _validateTimer.Stop();
             TryRun(ViewModel.RunValidation);
             RefreshInsertGutter();
+            RefreshLineFontPlaceholder();
             ViewModel.StatusText = $"{summary}　／　{ViewModel.StatusText}";
         }
         catch (Exception ex)
@@ -290,6 +294,7 @@ public sealed partial class MainWindow
                 ShowEndBox.PlaceholderText = "--:--:--";
                 LineFontBox.Text = "";
                 N3LineInfo.Text = "";
+                RefreshLineFontPlaceholder();
                 return;
             }
 
@@ -304,6 +309,7 @@ public sealed partial class MainWindow
 
             EnsureN3FontNames();
             LineFontBox.Text = model.FontSetName ?? "";
+            RefreshLineFontPlaceholder();
 
             if (plan is null)
             {
@@ -321,6 +327,16 @@ public sealed partial class MainWindow
         {
             _n3PanelLoading = false;
         }
+    }
+
+    /// <summary>
+    /// 行設定のフォントの欄の薄字（手動指定が無いときに当たるフォント設定）を、選択行の今のチェック結果にする。
+    /// 手動指定のある行は、その名前が欄に入っているので「（自動）」のまま。
+    /// </summary>
+    private void RefreshLineFontPlaceholder()
+    {
+        var font = ViewModel.SelectedLine is { Model.IsEmpty: false } line ? line.AppliedFont : ViewModels.LineFontDisplay.None;
+        LineFontBox.PlaceholderText = font.IsVisible && !font.IsManual ? $"自動: {font.Summary}" : "（自動）";
     }
 
     private static string FmtCs(int cs) => TimeTag.Format(cs).Trim('[', ']');
@@ -439,5 +455,27 @@ public sealed partial class MainWindow
         ViewModel.StatusText = string.IsNullOrWhiteSpace(name)
             ? $"{line.Index + 1} 行目のフォント指定を自動に戻しました"
             : $"{line.Index + 1} 行目にフォント設定「{name.Trim()}」を指定しました";
+        // 行リストのフォント設定の欄（この行と、引き継ぐ後ろの行）を作り直す（チェックはしないので、上の知らせは消えない）
+        TryRun(ViewModel.UpdateLineFonts);
+        RefreshLineFontPlaceholder();
+    }
+
+    /// <summary>
+    /// フォントの欄を空にして Enter を押したら、自動に戻す。編集できる ComboBox は、空の文字を確定しても TextSubmitted を出さず、
+    /// 選んでいた名前に戻してしまうため、ComboBox が Enter を処理する前にここで受ける。
+    /// </summary>
+    private void OnLineFontPreviewKeyDown(object sender, KeyRoutedEventArgs e)
+    {
+        if (e.Key != Windows.System.VirtualKey.Enter || e.OriginalSource is not TextBox box || !string.IsNullOrWhiteSpace(box.Text)) return;
+        _n3PanelLoading = true;
+        try
+        {
+            LineFontBox.SelectedIndex = -1; // このあとの ComboBox の確定で、前の名前に戻さないように
+        }
+        finally
+        {
+            _n3PanelLoading = false;
+        }
+        ApplyLineFont(null);
     }
 }
