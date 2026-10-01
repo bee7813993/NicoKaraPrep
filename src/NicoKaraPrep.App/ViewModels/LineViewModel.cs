@@ -65,6 +65,33 @@ public partial class LineViewModel : ObservableObject
     [ObservableProperty]
     private LineFontDisplay appliedFont = LineFontDisplay.None;
 
+    /// <summary>歌詞を字幕の見た目で描く材料（null なら文字のまま表示する）。チェックのたびに更新する。</summary>
+    public Services.Subtitles.LineRenderSource? RenderSource { get; private set; }
+
+    /// <summary>歌詞を字幕の見た目で描くか。</summary>
+    public bool ShowStyledText => RenderSource is not null;
+
+    /// <summary>歌詞を文字のまま表示するか。</summary>
+    public bool ShowPlainText => RenderSource is null;
+
+    /// <summary>字幕の見た目で描く材料を設定する（描く内容が同じなら何もしない）。</summary>
+    public void SetRenderSource(Services.Subtitles.LineRenderSource? source)
+    {
+        if (source is null ? RenderSource is null : RenderSource is not null && RenderSource.Key == source.Key && ReferenceEquals(RenderSource.Line, source.Line)) return;
+        bool styledChanged = (source is null) != (RenderSource is null);
+        RenderSource = source;
+        OnPropertyChanged(nameof(RenderSource));
+        if (styledChanged)
+        {
+            OnPropertyChanged(nameof(ShowStyledText));
+            OnPropertyChanged(nameof(ShowPlainText));
+        }
+    }
+
+    /// <summary>行リストで選んでいる文字（<see cref="LyricsLine.Chars"/> の添字の範囲、両端を含む）。無ければ null。</summary>
+    [ObservableProperty]
+    private (int Start, int End)? charSelection;
+
     /// <summary>表示テキスト（空行は視認用の記号。タグだけが残った行は注意書きを出す）。</summary>
     public string DisplayText
     {

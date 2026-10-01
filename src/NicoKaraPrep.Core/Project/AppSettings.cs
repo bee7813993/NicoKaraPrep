@@ -126,6 +126,12 @@ public sealed class AppSettings
     /// <summary>メディアプレイヤーの表示高さ px（ドラッグハンドルで変更）。</summary>
     public double PlayerHeightPx { get; set; } = 260;
 
+    /// <summary>行リストの歌詞を字幕の見た目（フォント設定の書体・配色・ルビ・アイコン）で描くか。</summary>
+    public bool LineListStyledLyrics { get; set; } = true;
+
+    /// <summary>メディア再生パネルの動画の上に、字幕のプレビューを重ねるか。</summary>
+    public bool PlayerSubtitlePreview { get; set; } = true;
+
     /// <summary>フォント設定ビューの左の一覧の幅 px（一覧と編集欄のあいだのつまみで変更）。</summary>
     public double FontListWidthPx { get; set; } = 300;
 

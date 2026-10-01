@@ -451,6 +451,7 @@ public partial class MainViewModel : ObservableObject
 
     private void RebuildLines()
     {
+        CharSelectionLine = null; // 行を作り直すと、文字の選択は外れる
         Lines.Clear();
         for (int i = 0; i < Document.Lines.Count; i++)
         {

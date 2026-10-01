@@ -410,6 +410,14 @@ public sealed partial class MainWindow
     private void OnRootKeyDown(object sender, KeyRoutedEventArgs e)
     {
         if (e.Handled || e.Key != Windows.System.VirtualKey.Escape) return;
+        if (ViewModel.ViewMode == MainViewMode.Lines && ViewModel.CharSelectionLine is not null)
+        {
+            // 行リストで選んでいた歌詞の文字の選択を外す（行の選択はそのまま）
+            e.Handled = true;
+            ViewModel.ClearCharSelection();
+            RefreshLineFontForSelection();
+            return;
+        }
         if (ViewModel.ViewMode != MainViewMode.FontSettings) return;
         e.Handled = true;
         ReturnFromFontSettings();

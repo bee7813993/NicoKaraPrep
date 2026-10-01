@@ -566,8 +566,8 @@ public static class N3ProjWriter
 
     // ------------------------------------------------------------ レイアウト選択（行数）
 
-    /// <summary>ニコカラメーカーの「行数に応じてレイアウトを設定」相当（固定名の指定も可）。</summary>
-    internal sealed class LayoutResolver
+    /// <summary>ニコカラメーカーの「行数に応じてレイアウトを設定」相当（固定名の指定も可）。字幕のプレビューも同じ選び方を使う。</summary>
+    public sealed class LayoutResolver
     {
         private readonly List<N3ProjLayoutInfo> _layouts;
         private readonly int? _fixed;
@@ -1001,7 +1001,7 @@ public static class N3ProjWriter
 
     // ------------------------------------------------------------ レイアウト・タイトル
 
-    private static JsonArray NewDefaultLayouts(int reference, string ver)
+    internal static JsonArray NewDefaultLayouts(int reference, string ver)
     {
         var arr = new JsonArray
         {

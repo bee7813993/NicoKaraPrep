@@ -294,6 +294,7 @@ public sealed partial class MainWindow
                 ShowEndBox.PlaceholderText = "--:--:--";
                 LineFontBox.Text = "";
                 N3LineInfo.Text = "";
+                LineFontLabel.Text = "フォント";
                 RefreshLineFontPlaceholder();
                 return;
             }
@@ -309,7 +310,7 @@ public sealed partial class MainWindow
 
             EnsureN3FontNames();
             LineFontBox.Text = model.FontSetName ?? "";
-            RefreshLineFontPlaceholder();
+            RefreshLineFontForSelection();
 
             if (plan is null)
             {
@@ -335,8 +336,60 @@ public sealed partial class MainWindow
     /// </summary>
     private void RefreshLineFontPlaceholder()
     {
+        if (CharSelectionActive())
+        {
+            LineFontBox.PlaceholderText = "（自動）";
+            return;
+        }
         var font = ViewModel.SelectedLine is { Model.IsEmpty: false } line ? line.AppliedFont : ViewModels.LineFontDisplay.None;
         LineFontBox.PlaceholderText = font.IsVisible && !font.IsManual ? $"自動: {font.Summary}" : "（自動）";
+    }
+
+    /// <summary>選択行の中で文字を選んでいるか（行設定のフォントの欄は、選んだ文字だけに指定する）。</summary>
+    private bool CharSelectionActive() =>
+        ViewModel.SelectedLine is { } line && ReferenceEquals(ViewModel.CharSelectionLine, line) && line.CharSelection is not null;
+
+    /// <summary>行設定のフォントの欄の見出しと中身を、文字の選択に合わせる（選んでいれば、選んだ文字の指定）。</summary>
+    private void RefreshLineFontForSelection()
+    {
+        bool chars = CharSelectionActive();
+        bool loading = _n3PanelLoading;
+        _n3PanelLoading = true;
+        try
+        {
+            if (chars)
+            {
+                LineFontLabel.Text = $"フォント（選んだ {ViewModel.CharSelectionCount()} 文字）";
+                LineFontBox.Text = ViewModel.CharSelectionFontName() ?? "";
+            }
+            else
+            {
+                LineFontLabel.Text = "フォント";
+                LineFontBox.Text = ViewModel.SelectedLine?.Model.FontSetName ?? "";
+            }
+        }
+        finally
+        {
+            _n3PanelLoading = loading;
+        }
+        RefreshLineFontPlaceholder();
+    }
+
+    /// <summary>行リストの歌詞の文字を選んだ（押した・ドラッグした）。その行だけを選び、文字の範囲を覚える。</summary>
+    private void OnLyricCharSelecting(object? sender, Views.LyricCharSelectEventArgs e)
+    {
+        if (e.StartUnit < 0)
+        {
+            ViewModel.ClearCharSelection(); // 文字の無いところを押した
+            RefreshLineFontForSelection();
+            return;
+        }
+        if (e.Started && (LineList.SelectedItems.Count != 1 || !ReferenceEquals(LineList.SelectedItem, e.Line)))
+        {
+            LineList.SelectedItem = e.Line;
+        }
+        ViewModel.SetCharSelection(e.Line, e.StartUnit, e.EndUnit);
+        RefreshLineFontForSelection();
     }
 
     private static string FmtCs(int cs) => TimeTag.Format(cs).Trim('[', ']');
@@ -448,13 +501,41 @@ public sealed partial class MainWindow
     private void ApplyLineFont(string? name)
     {
         if (_n3PanelLoading || ViewModel.SelectedLine is not { } line || line.Model.IsEmpty) return;
-        bool changed = false;
-        TryRun(() => changed = ViewModel.SetLineFontSet(line.Index, name));
-        if (!changed) return;
-        line.RaiseOverrideMark();
-        ViewModel.StatusText = string.IsNullOrWhiteSpace(name)
-            ? $"{line.Index + 1} 行目のフォント指定を自動に戻しました"
-            : $"{line.Index + 1} 行目にフォント設定「{name.Trim()}」を指定しました";
+        string label = string.IsNullOrWhiteSpace(name) ? "" : name.Trim();
+        var indexes = SelectedIndexes;
+        if (CharSelectionActive() && line.CharSelection is (int start, int end))
+        {
+            // 選んだ文字だけ
+            int count = ViewModel.CharSelectionCount();
+            int changedChars = 0;
+            TryRun(() => changedChars = ViewModel.SetCharFontSet(line.Index, start, end, name));
+            if (changedChars == 0) return;
+            line.RaiseOverrideMark();
+            ViewModel.StatusText = label.Length == 0
+                ? $"{line.Index + 1} 行目の選んだ {count} 文字のフォント指定を自動に戻しました"
+                : $"{line.Index + 1} 行目の選んだ {count} 文字にフォント設定「{label}」を指定しました";
+        }
+        else if (indexes.Count > 1)
+        {
+            // 選んだ行すべて（ニコカラメーカー3 でチェックした行に指定するのと同じ）
+            int n = 0;
+            TryRun(() => n = ViewModel.SetLinesFontSet(indexes, name));
+            if (n == 0) return;
+            foreach (var l in ViewModel.Lines) l.RaiseOverrideMark();
+            ViewModel.StatusText = label.Length == 0
+                ? $"選んだ {n} 行のフォント指定を自動に戻しました"
+                : $"選んだ {n} 行にフォント設定「{label}」を指定しました";
+        }
+        else
+        {
+            bool changed = false;
+            TryRun(() => changed = ViewModel.SetLineFontSet(line.Index, name));
+            if (!changed) return;
+            line.RaiseOverrideMark();
+            ViewModel.StatusText = label.Length == 0
+                ? $"{line.Index + 1} 行目のフォント指定を自動に戻しました"
+                : $"{line.Index + 1} 行目にフォント設定「{label}」を指定しました";
+        }
         // 行リストのフォント設定の欄（この行と、引き継ぐ後ろの行）を作り直す（チェックはしないので、上の知らせは消えない）
         TryRun(ViewModel.UpdateLineFonts);
         RefreshLineFontPlaceholder();

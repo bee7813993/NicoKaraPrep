@@ -36,7 +36,9 @@ public sealed partial class MainWindow : Window
             }
         };
 
-        Player.Height = Math.Clamp(ViewModel.Settings.PlayerHeightPx, 120, 1200);
+        PlayerHost.Height = Math.Clamp(ViewModel.Settings.PlayerHeightPx, 120, 1200);
+        StyledLyricsMenuItem.IsChecked = ViewModel.Settings.LineListStyledLyrics;
+        InitializePlayerBar();
 
         RestoreWindowBounds();
         Closed += (_, _) => SaveWindowBounds();
@@ -322,7 +324,11 @@ public sealed partial class MainWindow : Window
     private void CloseMedia()
     {
         _mediaTimer?.Stop();
+        HookFrames(false);
         Player.Source = null;
+        SubtitlePreview.HasVideo = false;
+        PlayerTimeText.Text = "0:00.00";
+        PlayerDurationText.Text = "0:00";
         MediaPanel.IsExpanded = false;
     }
 
@@ -569,6 +575,11 @@ public sealed partial class MainWindow : Window
     private void OnLineSelectionChanged(object sender, SelectionChangedEventArgs e)
     {
         ViewModel.SelectedLine = LineList.SelectedItem as LineViewModel;
+        // 文字を選んでいた行だけを選んでいるのでなくなったら、文字の選択を外す
+        if (ViewModel.CharSelectionLine is { } charLine && !(LineList.SelectedItems.Count == 1 && ReferenceEquals(LineList.SelectedItem, charLine)))
+        {
+            ViewModel.ClearCharSelection();
+        }
         LineEditor.Text = ViewModel.SelectedLine?.RawText ?? "";
         RenderPreview();
         RefreshN3LinePanel();
@@ -627,6 +638,14 @@ public sealed partial class MainWindow : Window
     }
 
     // ------------------------------------------------------------ チェック
+
+    /// <summary>表示 > 行リストの歌詞を字幕の見た目で表示。</summary>
+    private void OnStyledLyricsMenuClick(object sender, RoutedEventArgs e)
+    {
+        ViewModel.Settings.LineListStyledLyrics = StyledLyricsMenuItem.IsChecked;
+        ViewModel.Settings.Save();
+        TryRun(ViewModel.UpdateLineFonts);
+    }
 
     private void OnValidateClick(object sender, RoutedEventArgs e)
     {
@@ -1134,7 +1153,9 @@ public sealed partial class MainWindow : Window
     {
         TryRun(() =>
         {
+            SubtitlePreview.HasVideo = false; // 開き終わったら動画の有無で決め直す
             Player.Source = Windows.Media.Core.MediaSource.CreateFromUri(new Uri(path));
+            ObservePlayer();
             ViewModel.MediaPath = path;
             ViewModel.SaveProject();
             if (ViewModel.ViewMode != MainViewMode.FontSettings) MediaPanel.Visibility = Visibility.Visible; // フォント設定ビューでは隠したまま
@@ -1156,6 +1177,7 @@ public sealed partial class MainWindow : Window
     {
         var session = Player.MediaPlayer?.PlaybackSession;
         if (session is null) return;
+        if (session.PlaybackState != Windows.Media.Playback.MediaPlaybackState.Playing) UpdatePlayerTime(); // 止めているあいだに動かした位置
         if (session.PlaybackState != Windows.Media.Playback.MediaPlaybackState.Playing &&
             _lastCurrentLine >= 0)
         {
@@ -1221,13 +1243,13 @@ public sealed partial class MainWindow : Window
 
     private void OnPlayerResizeDelta(object sender, ManipulationDeltaRoutedEventArgs e)
     {
-        double current = double.IsNaN(Player.Height) ? Player.ActualHeight : Player.Height;
-        Player.Height = Math.Clamp(current + e.Delta.Translation.Y, 120, 1200);
+        double current = double.IsNaN(PlayerHost.Height) ? PlayerHost.ActualHeight : PlayerHost.Height;
+        PlayerHost.Height = Math.Clamp(current + e.Delta.Translation.Y, 120, 1200);
     }
 
     private void OnPlayerResizeCompleted(object sender, ManipulationCompletedRoutedEventArgs e)
     {
-        ViewModel.Settings.PlayerHeightPx = Player.Height;
+        ViewModel.Settings.PlayerHeightPx = PlayerHost.Height;
         ViewModel.Settings.Save();
     }
 
@@ -1238,6 +1260,7 @@ public sealed partial class MainWindow : Window
         var target = session.Position + TimeSpan.FromSeconds(seconds);
         if (target < TimeSpan.Zero) target = TimeSpan.Zero;
         session.Position = target;
+        UpdatePlayerTime();
     }
 
     private void OnSeekBackClick(object sender, RoutedEventArgs e) => SeekBy(-ViewModel.Settings.SeekSeconds);
@@ -1250,6 +1273,7 @@ public sealed partial class MainWindow : Window
         var session = Player.MediaPlayer?.PlaybackSession;
         if (session is null || Player.MediaPlayer?.Source is null) return;
         session.Position = TimeSpan.FromSeconds(ViewModel.TagCsToMediaSeconds(cs));
+        UpdatePlayerTime();
         ViewModel.StatusText = $"再生位置を {TimeTag.Format(cs)} へ移動しました";
     }
 

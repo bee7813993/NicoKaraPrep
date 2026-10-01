@@ -248,6 +248,61 @@ public static class N3FontLibrary
     }
 
     /// <summary>
+    /// 書き出しで、NicoKaraPrep のフォント設定（<paramref name="own"/>）を同じ名前のベースの n3proj のフォント設定（<paramref name="fromBase"/>）へ
+    /// 合わせた結果（描画用。N3ProjWriter の MergeFontSet と同じ規則）。配色は未指定の箇所・項目（単色の色・マーカー・画像）だけベースの値、
+    /// 文字種別フォントは全項目を持つフォント設定ならこちらの値（継承の項目は継承のまま）、全部が継承の歌詞／かな・英数とルビ／かな・英数はベースの値、
+    /// 文字飾りはこちらの値。ベースが無ければ複製を返す。
+    /// </summary>
+    public static N3FontSet MergeForPreview(N3FontSet own, N3FontSet? fromBase)
+    {
+        var result = own.Clone();
+        if (fromBase is null) return result;
+        var d = result.Detail;
+        var b = fromBase.Detail;
+        for (int i = 0; i < N3FontDetail.BrushCount; i++)
+        {
+            var mine = d.Brushes[i];
+            var theirs = b.Brushes[i];
+            if (mine.IsUnset)
+            {
+                d.Brushes[i] = theirs.Clone();
+                continue;
+            }
+            bool hasColor = N3FontSet.NormalizeWeb16(mine.Color).Length > 0;
+            if (!hasColor)
+            {
+                mine.Color = theirs.Color;
+                if (mine.AlphaPercent == 100) mine.AlphaPercent = theirs.AlphaPercent;
+            }
+            if (mine.Stops.Count == 0) mine.Stops = theirs.Stops.Select(s => s.Clone()).ToList();
+            if (mine.BitmapPath.Length == 0)
+            {
+                mine.BitmapPath = theirs.BitmapPath;
+                mine.BitmapScale = theirs.BitmapScale;
+            }
+        }
+        for (int i = 0; i < N3FontDetail.FaceCount; i++)
+        {
+            var mine = d.Faces[i];
+            var theirs = b.Faces[i];
+            if (i != 0 && i != 3 && mine.IsInherited)
+            {
+                d.Faces[i] = theirs.Clone();
+                continue;
+            }
+            if (own.HasFullDetail) continue;
+            // 従来の項目しか持たないフォント設定: 歌詞／漢字の横倍率と、ルビ／漢字のフォント名・フェイス・横倍率・縁 2 は、継承ならベースの値を残す
+            bool lyric = i == 0;
+            if (!lyric && mine.FontName.Length == 0) mine.FontName = theirs.FontName;
+            if (!lyric && mine.FaceName.Length == 0) mine.FaceName = theirs.FaceName;
+            if (mine.XScale == 0) mine.XScale = theirs.XScale;
+            if (!lyric && mine.UseEdge2 is null) mine.UseEdge2 = theirs.UseEdge2;
+            if (!lyric && mine.Edge2Px <= 0) mine.Edge2Px = theirs.Edge2Px;
+        }
+        return result;
+    }
+
+    /// <summary>
     /// 字幕を描くときの文字種別フォントの実効値。ニコカラメーカー3 と同じく、歌詞／英数は歌詞／かなを、ルビ／英数はルビ／かなを継承する
     /// （<see cref="EffectiveFace"/> はどちらも漢字を継承する。違うのは、かなだけを指定して英数を空欄にしたとき）。
     /// </summary>
