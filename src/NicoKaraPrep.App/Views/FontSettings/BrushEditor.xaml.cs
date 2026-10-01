@@ -18,6 +18,9 @@ public sealed partial class BrushEditor : UserControl
         Picker.AddHandler(PointerReleasedEvent, end, handledEventsToo: true);
         Picker.AddHandler(PointerCaptureLostEvent, end, handledEventsToo: true);
         Picker.AddHandler(PointerCanceledEvent, end, handledEventsToo: true);
+
+        // ドラッグ中の途中の色は最近使った色に入れず、離したときの色を入れる
+        ColorDragChanged += (_, dragging) => ViewModel?.SetDragging(dragging);
     }
 
     /// <summary>ColorPicker の上でドラッグを始めた（true）・終えた（false）。</summary>

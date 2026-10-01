@@ -113,6 +113,16 @@ public sealed partial class BrushEditorViewModel : ObservableObject
     [ObservableProperty]
     private bool hasPaletteImages;
 
+    /// <summary>最近使った色（ColorPicker・16 進・不透明度で指定した色。新しい順）。</summary>
+    public ObservableCollection<PaletteColorItem> RecentColors { get; } = new();
+
+    [ObservableProperty]
+    private bool hasRecentColors;
+
+    /// <summary>使っている色・最近使った色のどれかを出すか（どれも無ければ一覧の欄ごと出さない）。</summary>
+    [ObservableProperty]
+    private bool hasColorLists;
+
     // ------------------------------------------------------------ 読み込み
 
     /// <summary>
@@ -120,6 +130,7 @@ public sealed partial class BrushEditorViewModel : ObservableObject
     /// </summary>
     public void Load(int index, IReadOnlyList<int>? linked = null, string roleName = "")
     {
+        FlushRecent(); // 前の箇所で指定した色を、読み込み直す前に最近使った色へ
         _loading = true;
         try
         {
@@ -336,6 +347,7 @@ public sealed partial class BrushEditorViewModel : ObservableObject
             SyncColorFields(b.Color, b.AlphaPercent, source);
             IsColorUnset = false;
             ColorTargetText = "単色の色";
+            if (!separate) NoteRecent(b.Color, b.AlphaPercent);
         }
         else if (IsStops && SelectedStop is { } s)
         {
@@ -347,6 +359,7 @@ public sealed partial class BrushEditorViewModel : ObservableObject
             });
             SyncColorFields(stop.Color, stop.AlphaPercent, source);
             s.Refresh();
+            if (!separate) NoteRecent(stop.Color, stop.AlphaPercent);
         }
     }
 
@@ -370,6 +383,65 @@ public sealed partial class BrushEditorViewModel : ObservableObject
         foreach (var image in images) PaletteImages.Add(new PaletteImageItem(image));
         HasPaletteImages = PaletteImages.Count > 0;
         HasPalette = PaletteGroups.Count > 0 || HasPaletteImages;
+        HasColorLists = HasPalette || HasRecentColors;
+    }
+
+    /// <summary>最近使った色の一覧を入れ替える。</summary>
+    public void SetRecentColors(IReadOnlyList<N3PaletteColor> colors)
+    {
+        RecentColors.Clear();
+        foreach (var c in colors) RecentColors.Add(new PaletteColorItem(c, "最近使った色"));
+        HasRecentColors = RecentColors.Count > 0;
+        HasColorLists = HasPalette || HasRecentColors;
+    }
+
+    // ------------------------------------------------------------ 最近使った色に入れる
+
+    /// <summary>最近使った色に入れる前の、指定した色（ドラッグ中や入力の途中は、手が止まるまで待つ）。</summary>
+    private (string Color, int Alpha)? _pendingRecent;
+
+    private Microsoft.UI.Dispatching.DispatcherQueueTimer? _recentTimer;
+
+    /// <summary>ColorPicker の上でドラッグしている最中か（そのあいだは最近使った色に入れない）。</summary>
+    private bool _dragging;
+
+    /// <summary>
+    /// ColorPicker・16 進・不透明度・マーカーの色の欄で色を指定した。手が止まってから（ドラッグ中は離してから）最近使った色に入れる。
+    /// 使っている色・最近使った色の一覧から選んだ色は入れない（呼ばない）。
+    /// </summary>
+    private void NoteRecent(string color, int alphaPercent)
+    {
+        if (!N3FontSet.IsValidWeb16(color)) return;
+        _pendingRecent = (N3FontSet.NormalizeWeb16(color), alphaPercent);
+        if (_recentTimer is null)
+        {
+            _recentTimer = Microsoft.UI.Dispatching.DispatcherQueue.GetForCurrentThread()?.CreateTimer();
+            if (_recentTimer is null) return;
+            _recentTimer.Interval = TimeSpan.FromSeconds(1.2);
+            _recentTimer.IsRepeating = false;
+            _recentTimer.Tick += (_, _) =>
+            {
+                if (!_dragging) FlushRecent();
+            };
+        }
+        _recentTimer.Stop();
+        _recentTimer.Start();
+    }
+
+    /// <summary>待っている色を最近使った色に入れる（箇所を読み込み直す前・ドラッグを終えたとき・手が止まったとき）。</summary>
+    public void FlushRecent()
+    {
+        _recentTimer?.Stop();
+        if (_pendingRecent is not { } p) return;
+        _pendingRecent = null;
+        _editor.AddRecentColor(p.Color, p.Alpha);
+    }
+
+    /// <summary>ColorPicker の上でのドラッグを始めた・終えた（終えたら、指定した色を最近使った色に入れる）。</summary>
+    public void SetDragging(bool dragging)
+    {
+        _dragging = dragging;
+        if (!dragging && _pendingRecent is not null) FlushRecent();
     }
 
     /// <summary>
@@ -484,6 +556,7 @@ public sealed partial class BrushEditorViewModel : ObservableObject
         });
         stop.Refresh();
         if (ReferenceEquals(SelectedStop, stop)) LoadColorTarget();
+        NoteRecent(target.Color, target.AlphaPercent);
     }
 
     /// <summary>

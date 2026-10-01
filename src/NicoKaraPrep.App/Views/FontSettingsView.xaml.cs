@@ -85,6 +85,15 @@ public sealed partial class FontSettingsView : UserControl
         BrushEditorPart.ColorDragChanged += (_, dragging) => ViewModel?.Editor.HoldNotices(dragging);
         EditorStack.LayoutUpdated += OnEditorLayoutUpdated;
 
+        // 検索の結果の一覧でも、押した行を組み合わせるフォント設定として選べるようにする（選んでいる行を押し直したときも届くよう、処理済みのものも受け取る）
+        FontList.AddHandler(TappedEvent, new TappedEventHandler(OnFontListTapped), handledEventsToo: true);
+
+        // Ctrl を押しているか（キーの押し下げ・離しと、マウスで押したときの修飾キーで覚える。処理済みのものも受け取る）
+        AddHandler(KeyDownEvent, new KeyEventHandler((_, e) => { if (IsControlKey(e.Key)) _ctrlDown = true; }), handledEventsToo: true);
+        AddHandler(KeyUpEvent, new KeyEventHandler((_, e) => { if (IsControlKey(e.Key)) _ctrlDown = false; }), handledEventsToo: true);
+        AddHandler(PointerPressedEvent, new PointerEventHandler((_, e) =>
+            _ctrlDown = (e.KeyModifiers & Windows.System.VirtualKeyModifiers.Control) != 0), handledEventsToo: true);
+
         Loaded += (_, _) =>
         {
             // 画面に載る前に選んだ節は、ツリーの行ができてから選び直して見せる
@@ -148,6 +157,7 @@ public sealed partial class FontSettingsView : UserControl
         // 左の一覧のツリー（ViewModel を作ったときの一覧はもうできているので、ここで最初の節を作る）
         ViewModel.TreeRebuilt += (_, _) => RebuildTreeNodes();
         ViewModel.PropertyChanged += OnViewModelPropertyChanged;
+        ViewModel.PropertyChanged += TrackSelectedFont;
         ViewModel.Editor.PropertyChanged += OnEditorPropertyChanged;
         RebuildTreeNodes();
     }
@@ -231,7 +241,11 @@ public sealed partial class FontSettingsView : UserControl
         BackButton.Focus(FocusState.Programmatic);
     }
 
-    private void OnBackClick(object sender, RoutedEventArgs e) => BackRequested?.Invoke(this, EventArgs.Empty);
+    private void OnBackClick(object sender, RoutedEventArgs e)
+    {
+        ViewModel?.StopPicking(quiet: true);
+        BackRequested?.Invoke(this, EventArgs.Empty);
+    }
 
     /// <summary>
     /// Esc で前のビューへ戻る。ComboBox のドロップダウンやフライアウトを閉じる Esc は
@@ -250,6 +264,11 @@ public sealed partial class FontSettingsView : UserControl
         if (ReferenceEquals(focused, FolderNameBox) && ViewModel?.SelectedFolder is { } folder && FolderNameBox.Text != folder.Name)
         {
             FolderNameBox.Text = folder.Name;
+        }
+        if (ViewModel is { IsPicking: true } vm)
+        {
+            vm.StopPicking(); // 組み合わせるフォント設定を選んでいる最中なら、選ぶのをやめるだけ（ビューは抜けない）
+            return;
         }
         BackRequested?.Invoke(this, EventArgs.Empty);
     }
@@ -443,6 +462,7 @@ public sealed partial class FontSettingsView : UserControl
     {
         if (_syncingTree || ViewModel is not { } vm) return;
         var item = (args.InvokedItem as TreeViewNode)?.Content as FontTreeItem ?? args.InvokedItem as FontTreeItem;
+        if (item?.Font is { } font) PickFromList(vm, font);
         if (item is not null) SelectFromTree(vm, item);
     }
 
@@ -511,6 +531,69 @@ public sealed partial class FontSettingsView : UserControl
             .Where(n => n.Content is FontTreeItem)
             .Select(n => new DroppedTreeNode(((FontTreeItem)n.Content).Key, ReadTreeNodes(n.Children)))
             .ToList();
+
+    // ------------------------------------------------------------ 一覧で選んで組み合わせる
+
+    /// <summary>今と 1 つ前に選んだフォント設定と、今のものを選んだ時刻（Ctrl を押しながら押して選び始めるときに使う）。</summary>
+    private FontListItem? _currentFont;
+    private FontListItem? _previousFont;
+    private DateTime _fontSelectedUtc;
+
+    private void TrackSelectedFont(object? sender, PropertyChangedEventArgs e)
+    {
+        if (e.PropertyName != nameof(FontSettingsViewModel.SelectedItem) || ViewModel?.SelectedItem is not { } font) return;
+        if (ReferenceEquals(font, _currentFont)) return;
+        _previousFont = _currentFont;
+        _currentFont = font;
+        _fontSelectedUtc = DateTime.UtcNow;
+    }
+
+    /// <summary>このビューの中で Ctrl を押しているか（キーの押し下げで立て、離したとき・Ctrl なしでマウスを押したときに下ろす）。</summary>
+    private bool _ctrlDown;
+
+    private static bool IsControlKey(Windows.System.VirtualKey key) =>
+        key is Windows.System.VirtualKey.Control or Windows.System.VirtualKey.LeftControl or Windows.System.VirtualKey.RightControl;
+
+    private bool IsControlDown() =>
+        _ctrlDown
+        || Microsoft.UI.Input.InputKeyboardSource.GetKeyStateForCurrentThread(Windows.System.VirtualKey.Control)
+            .HasFlag(Windows.UI.Core.CoreVirtualKeyStates.Down);
+
+    /// <summary>
+    /// 一覧でフォント設定を押したとき: 組み合わせるフォント設定を選んでいる最中なら、選ぶ・外す。
+    /// Ctrl を押しながら押したら選ぶ状態を始める（それまで選んでいたフォント設定を 1 つ目、押したものを 2 つ目にする）。
+    /// </summary>
+    private void PickFromList(FontSettingsViewModel vm, FontListItem font)
+    {
+        if (!vm.IsPicking)
+        {
+            if (!IsControlDown()) return;
+            // この押した操作で選択がもう移っていれば、その前に選んでいたもの。押す前から選んでいたものを押したなら、それだけ
+            bool movedNow = ReferenceEquals(_currentFont, font) && (DateTime.UtcNow - _fontSelectedUtc).TotalMilliseconds < 600;
+            var first = movedNow ? _previousFont : vm.SelectedItem;
+            vm.StartPicking(first is not null && !ReferenceEquals(first, font) ? first : null);
+        }
+        vm.TogglePick(font);
+    }
+
+    private void OnFontListTapped(object sender, TappedRoutedEventArgs e)
+    {
+        if (ViewModel is { } vm && (e.OriginalSource as FrameworkElement)?.DataContext is FontListItem font) PickFromList(vm, font);
+    }
+
+    /// <summary>選んだ順に並べて、組み合わせのフォント設定を作る画面を開く。</summary>
+    private async void OnComposePicksClick(object sender, RoutedEventArgs e)
+    {
+        if (ViewModel is not { } vm) return;
+        var picks = vm.PickedItems;
+        if (picks.Count < 2) return;
+        var dialog = new ComposeDialog(vm.AllItems, picks, vm.ComposeBrushType, vm.ComposeEndWidenPercent, vm.AutoComposeFonts, vm.Patterns);
+        if (await ShowDialogAsync(dialog) != ContentDialogResult.Primary || dialog.Sources.Count < 2) return;
+        vm.StopPicking(quiet: true);
+        vm.CreateComposedFont(dialog.Sources, dialog.BrushType, dialog.EndWidenPercent, dialog.SaveDefaults, dialog.AutoCompose);
+    }
+
+    private void OnCancelPickClick(object sender, RoutedEventArgs e) => ViewModel?.StopPicking();
 
     // ------------------------------------------------------------ 一覧（検索・絞り込みの結果）
 
@@ -848,7 +931,8 @@ public sealed partial class FontSettingsView : UserControl
     private async void OnComposeClick(object sender, RoutedEventArgs e)
     {
         if (ViewModel is not { } vm) return;
-        var dialog = new ComposeDialog(vm.AllItems, vm.SelectedItem, vm.ComposeBrushType, vm.ComposeEndWidenPercent, vm.AutoComposeFonts, vm.Patterns);
+        var first = vm.SelectedItem is { } current ? new[] { current } : Array.Empty<FontListItem>();
+        var dialog = new ComposeDialog(vm.AllItems, first, vm.ComposeBrushType, vm.ComposeEndWidenPercent, vm.AutoComposeFonts, vm.Patterns);
         if (await ShowDialogAsync(dialog) != ContentDialogResult.Primary || dialog.Sources.Count < 2) return;
         vm.CreateComposedFont(dialog.Sources, dialog.BrushType, dialog.EndWidenPercent, dialog.SaveDefaults, dialog.AutoCompose);
     }

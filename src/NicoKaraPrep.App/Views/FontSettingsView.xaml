@@ -82,6 +82,16 @@
                         <ColumnDefinition Width="Auto" />
                     </Grid.ColumnDefinitions>
                     <StackPanel Orientation="Horizontal" Spacing="2" VerticalAlignment="Center">
+                        <Border
+                            Width="18"
+                            Height="18"
+                            Margin="0,0,4,0"
+                            CornerRadius="9"
+                            Background="{ThemeResource AccentFillColorDefaultBrush}"
+                            Visibility="{x:Bind Font.IsPicked, Mode=OneWay}"
+                            ToolTipService.ToolTip="組み合わせるフォント設定として選んだ順（上の帯から）">
+                            <TextBlock Text="{x:Bind Font.PickOrderText, Mode=OneWay}" FontSize="11" FontWeight="SemiBold" HorizontalAlignment="Center" VerticalAlignment="Center" Foreground="{ThemeResource TextOnAccentFillColorPrimaryBrush}" />
+                        </Border>
                         <Border Width="10" Height="20" CornerRadius="2" BorderThickness="1" BorderBrush="{ThemeResource ControlStrokeColorDefaultBrush}" Background="{x:Bind Font.AfterBrush, Mode=OneWay}" />
                         <Border Width="10" Height="20" CornerRadius="2" BorderThickness="1" BorderBrush="{ThemeResource ControlStrokeColorDefaultBrush}" Background="{x:Bind Font.BeforeBrush, Mode=OneWay}" />
                     </StackPanel>
@@ -128,6 +138,7 @@
                 <RowDefinition Height="Auto" />
                 <RowDefinition Height="Auto" />
                 <RowDefinition Height="*" />
+                <RowDefinition Height="Auto" />
                 <RowDefinition Height="Auto" />
                 <RowDefinition Height="Auto" />
                 <RowDefinition Height="Auto" />
@@ -202,6 +213,16 @@
                                 <ColumnDefinition Width="Auto" />
                             </Grid.ColumnDefinitions>
                             <StackPanel Orientation="Horizontal" Spacing="2" VerticalAlignment="Center">
+                                <Border
+                                    Width="18"
+                                    Height="18"
+                                    Margin="0,0,4,0"
+                                    CornerRadius="9"
+                                    Background="{ThemeResource AccentFillColorDefaultBrush}"
+                                    Visibility="{x:Bind IsPicked, Mode=OneWay}"
+                                    ToolTipService.ToolTip="組み合わせるフォント設定として選んだ順（上の帯から）">
+                                    <TextBlock Text="{x:Bind PickOrderText, Mode=OneWay}" FontSize="11" FontWeight="SemiBold" HorizontalAlignment="Center" VerticalAlignment="Center" Foreground="{ThemeResource TextOnAccentFillColorPrimaryBrush}" />
+                                </Border>
                                 <Border Width="12" Height="30" CornerRadius="2" BorderThickness="1" BorderBrush="{ThemeResource ControlStrokeColorDefaultBrush}" Background="{x:Bind AfterBrush, Mode=OneWay}" />
                                 <Border Width="12" Height="30" CornerRadius="2" BorderThickness="1" BorderBrush="{ThemeResource ControlStrokeColorDefaultBrush}" Background="{x:Bind BeforeBrush, Mode=OneWay}" />
                             </StackPanel>
@@ -224,7 +245,32 @@
                     </DataTemplate>
                 </ListView.ItemTemplate>
             </ListView>
-            <StackPanel Grid.Row="5" Orientation="Horizontal" Spacing="4">
+            <!-- 一覧で選んで組み合わせる（選ぶ状態のあいだだけ。一覧の下に出すので、出ても一覧の行は動かない） -->
+            <Border
+                x:Name="PickBar"
+                Grid.Row="5"
+                Padding="10,8"
+                CornerRadius="6"
+                BorderThickness="1"
+                BorderBrush="{ThemeResource AccentFillColorDefaultBrush}"
+                Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
+                Visibility="{x:Bind ViewModel.IsPicking, Mode=OneWay}">
+                <StackPanel Spacing="6">
+                    <TextBlock Text="組み合わせるフォント設定を、上の帯にする順に押してください（もう一度押すと外します）" Style="{StaticResource Note}" />
+                    <TextBlock x:Name="PickListText" Text="{x:Bind ViewModel.PickText, Mode=OneWay}" TextWrapping="Wrap" />
+                    <StackPanel Orientation="Horizontal" Spacing="6">
+                        <Button
+                            x:Name="ComposePicksButton"
+                            Content="組み合わせて作る..."
+                            Style="{StaticResource AccentButtonStyle}"
+                            IsEnabled="{x:Bind ViewModel.CanComposePicks, Mode=OneWay}"
+                            ToolTipService.ToolTip="選んだ順に並べて、組み合わせのフォント設定を作る画面を開きます（並び・塗り方はそこで変えられます）"
+                            Click="OnComposePicksClick" />
+                        <Button x:Name="CancelPickButton" Content="やめる (Esc)" Click="OnCancelPickClick" />
+                    </StackPanel>
+                </StackPanel>
+            </Border>
+            <StackPanel Grid.Row="6" Orientation="Horizontal" Spacing="4">
                 <Button x:Name="AddButton" Padding="8,4" Click="OnAddClick" ToolTipService.ToolTip="フォント設定を追加（選んでいるフォルダの中・選んでいるフォント設定のすぐ後。この曲専用を選んでいれば曲専用に）">
                     <StackPanel Orientation="Horizontal" Spacing="4">
                         <FontIcon Glyph="&#xE710;" FontSize="12" />
@@ -243,8 +289,16 @@
                 <Button x:Name="DeleteButton" Padding="8,4" Click="OnDeleteClick" IsEnabled="{x:Bind ViewModel.CanDeleteSelection, Mode=OneWay}" AutomationProperties.Name="削除" ToolTipService.ToolTip="選んだフォント設定を削除（フォルダを選んでいれば、フォルダだけを削除して中身は 1 つ上の階層へ。Ctrl+Z で戻せます）">
                     <FontIcon Glyph="&#xE74D;" FontSize="12" />
                 </Button>
+                <ToggleButton
+                    x:Name="PickModeButton"
+                    Padding="8,4"
+                    IsChecked="{x:Bind ViewModel.IsPicking, Mode=TwoWay}"
+                    AutomationProperties.Name="選んで組み合わせる"
+                    ToolTipService.ToolTip="一覧で複数のフォント設定を選んで、組み合わせのフォント設定を作ります（押した順が上の帯から。Ctrl を押しながら一覧を押しても選べます）">
+                    <FontIcon Glyph="&#xE762;" FontSize="12" />
+                </ToggleButton>
             </StackPanel>
-            <StackPanel Grid.Row="6" Orientation="Horizontal" Spacing="4">
+            <StackPanel Grid.Row="7" Orientation="Horizontal" Spacing="4">
                 <Button x:Name="MoveUpButton" Padding="8,4" Click="OnMoveUpClick" IsEnabled="{x:Bind ViewModel.CanMoveUp, Mode=OneWay}" AutomationProperties.Name="上へ" ToolTipService.ToolTip="上へ（同じ階層の中で）">
                     <FontIcon Glyph="&#xE70E;" FontSize="12" />
                 </Button>
@@ -270,7 +324,7 @@
                     </DropDownButton.Flyout>
                 </DropDownButton>
             </StackPanel>
-            <StackPanel Grid.Row="7" Spacing="2">
+            <StackPanel Grid.Row="8" Spacing="2">
                 <TextBlock x:Name="ListSummaryText" Text="{x:Bind ViewModel.ListSummary, Mode=OneWay}" Style="{StaticResource Note}" />
                 <TextBlock
                     x:Name="SaveNoteText"

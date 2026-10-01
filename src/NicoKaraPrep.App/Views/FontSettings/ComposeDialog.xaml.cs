@@ -20,8 +20,8 @@ public sealed partial class ComposeDialog : ContentDialog
     private bool _loading;
 
     /// <param name="candidates">元にできるフォント設定（アプリ共通・この曲専用）。</param>
-    /// <param name="first">最初に並べておくフォント設定（無ければ null）。</param>
-    public ComposeDialog(IReadOnlyList<FontListItem> candidates, FontListItem? first, int brushType, double endWidenPercent, bool autoCompose, IReadOnlyList<N3ColorPattern> patterns)
+    /// <param name="initial">最初に並べておくフォント設定（上の帯から。一覧で選んだ順など）。</param>
+    public ComposeDialog(IReadOnlyList<FontListItem> candidates, IReadOnlyList<FontListItem> initial, int brushType, double endWidenPercent, bool autoCompose, IReadOnlyList<N3ColorPattern> patterns)
     {
         _candidates = candidates;
         _patterns = patterns;
@@ -35,7 +35,7 @@ public sealed partial class ComposeDialog : ContentDialog
             WidenBox.Value = endWidenPercent;
             AutoComposeBox.IsChecked = autoCompose;
             SourceList.ItemsSource = _sources;
-            if (first is not null) _sources.Add(first);
+            foreach (var item in initial.Distinct()) _sources.Add(item);
             ApplySearch();
         }
         finally

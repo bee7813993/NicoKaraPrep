@@ -511,13 +511,17 @@ public sealed partial class FontEditorViewModel : ObservableObject
         foreach (var cell in BrushCells) cell.IsLinked = cell.Index != index && linked.Contains(cell.Index);
         BrushEditor.Load(index, linked, p?.RoleName(role) ?? "");
 
-        // 使っている色の一覧（ColorPicker の横）。編集中に一覧が動かないよう、箇所を選び直したときだけ作り直す
+        // 使っている色・最近使った色の一覧（ColorPicker の横）。編集中に一覧が動かないよう、箇所を選び直したときだけ作り直す
         if (Font is { } font)
         {
             var (groups, images) = _owner.UsedColors(font);
             BrushEditor.SetPalette(groups, images);
         }
+        BrushEditor.SetRecentColors(_owner.RecentColors());
     }
+
+    /// <summary>最近使った色に入れる（配色の編集欄から）。</summary>
+    internal void AddRecentColor(string color, int alphaPercent) => _owner.AddRecentColor(color, alphaPercent);
 
     partial void OnEditRoleTogetherChanged(bool value)
     {

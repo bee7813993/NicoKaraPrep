@@ -189,6 +189,7 @@ public sealed partial class FontSettingsViewModel : ObservableObject
             _all.Clear();
             foreach (var f in Song) _all.Add(new FontListItem(f, isSong: true));
             foreach (var f in Common) _all.Add(new FontListItem(f, isSong: false));
+            if (IsPicking) RefreshPicks(); // 組み合わせるフォント設定として選んだ順を、作り直した行にも出す
             BuildTreeItems();
             UpdateItemUsage();
             ApplyFilter(selectKey, forceReload: true);

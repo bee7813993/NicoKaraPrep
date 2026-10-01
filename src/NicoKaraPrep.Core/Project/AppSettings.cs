@@ -113,6 +113,12 @@ public sealed class AppSettings
     /// <summary>組み合わせフォントの、端の帯の広さの既定（%。端の帯を中央の帯より何 % 広くするか）。</summary>
     public double N3ComposeEndWidenPercent { get; set; } = N3FontComposer.DefaultEndWidenPercent;
 
+    /// <summary>
+    /// フォント設定ビューの最近使った色（ColorPicker・16 進・不透明度で指定した色。新しい順。<see cref="N3RecentColors"/> の形式）。
+    /// テンプレートには含めない。
+    /// </summary>
+    public List<string> N3RecentColorHistory { get; set; } = new();
+
     // ---- メディア再生 ----
     /// <summary>Z / X（および Ctrl+←/→）でシークする秒数。</summary>
     public double SeekSeconds { get; set; } = 3.0;

@@ -62,6 +62,22 @@ public sealed partial class FontListItem : ObservableObject
     /// <summary>階層の中の場所を出すか（<see cref="PathText"/> が空でない）。</summary>
     public bool HasPath => PathText.Length > 0;
 
+    /// <summary>組み合わせるフォント設定として一覧で選んだ順（1 から。選んでいなければ 0）。</summary>
+    [ObservableProperty]
+    private int pickOrder;
+
+    /// <summary>組み合わせるフォント設定として選んでいるか（行に順番を出す）。</summary>
+    public bool IsPicked => PickOrder > 0;
+
+    /// <summary>選んだ順の表示（選んでいなければ空）。</summary>
+    public string PickOrderText => PickOrder > 0 ? PickOrder.ToString() : "";
+
+    partial void OnPickOrderChanged(int value)
+    {
+        OnPropertyChanged(nameof(IsPicked));
+        OnPropertyChanged(nameof(PickOrderText));
+    }
+
     partial void OnPathTextChanged(string value)
     {
         OnPropertyChanged(nameof(HasPath));
@@ -342,7 +358,7 @@ public sealed class PaletteColorItem
         Swatch = new SolidColorBrush(N3BrushPreview.ToColor(color.Color, color.AlphaPercent, Microsoft.UI.Colors.White));
         string alpha = color.AlphaPercent != 100 ? $"（不透明度 {color.AlphaPercent}%）" : "";
         Name = $"{roleName} #{color.Color}{alpha}";
-        ToolTip = $"#{color.Color}{alpha}\n{PaletteText.Fonts(color.FontNames)}";
+        ToolTip = color.FontNames.Count > 0 ? $"#{color.Color}{alpha}\n{PaletteText.Fonts(color.FontNames)}" : $"#{color.Color}{alpha}";
     }
 
     public N3PaletteColor Color { get; }

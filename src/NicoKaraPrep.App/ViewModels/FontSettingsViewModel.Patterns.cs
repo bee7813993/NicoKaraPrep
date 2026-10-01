@@ -37,6 +37,16 @@ public sealed partial class FontSettingsViewModel
         return (N3ColorPalette.Collect(all, Patterns, pattern.Roles), N3ColorPalette.CollectImages(all));
     }
 
+    /// <summary>最近使った色（新しい順）。</summary>
+    public List<N3PaletteColor> RecentColors() => N3RecentColors.Colors(_main.Settings.N3RecentColorHistory);
+
+    /// <summary>最近使った色に入れる（一覧が変わったら設定を保存する。表示は箇所を選び直したときに作り直す）。</summary>
+    public void AddRecentColor(string color, int alphaPercent)
+    {
+        _main.Settings.N3RecentColorHistory ??= new List<string>();
+        if (N3RecentColors.Add(_main.Settings.N3RecentColorHistory, color, alphaPercent)) MarkDirty(song: false);
+    }
+
     /// <summary>
     /// フォント設定の配色パターンを変える。パターンの形と違う箇所があれば、役割ごとに多いほうの色へそろえる
     /// （色が変わったときだけ編集扱いにする。パターンの選択だけならニコカラメーカー3 のテンプレートとの連動は外さない）。
