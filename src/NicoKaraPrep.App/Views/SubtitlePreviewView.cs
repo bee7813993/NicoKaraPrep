@@ -107,13 +107,12 @@ public sealed class SubtitlePreviewView : Grid
         {
             using var clip = ds.CreateLayer(1f, screen);
             double t = _timeMs;
-            var widths = new Dictionary<(int, int), float>();
             foreach (var line in model.Lines)
             {
                 if (t < line.BeginMs || t >= line.EndMs) continue;
                 var layout = line.Source.GetLayout();
                 if (layout.Tokens.Count == 0) continue;
-                var (x, baseline) = Position(model, line, layout, widths, W, H);
+                var (x, baseline) = Position(line, layout, W, H);
                 var transform = Matrix3x2.CreateTranslation(x, baseline) * Matrix3x2.CreateScale(scale) * Matrix3x2.CreateTranslation(ox, oy);
                 SubtitleRenderer.Draw(ds, layout, transform, scale, Wiped(line, layout, t / 10));
             }
@@ -124,9 +123,12 @@ public sealed class SubtitlePreviewView : Grid
         }
     }
 
-    /// <summary>行の左端の x と本文のベースラインの y（字幕の画面の px）。</summary>
-    private static (float X, float Baseline) Position(
-        SubtitlePreviewModel model, PreviewLine line, SubtitleLineLayout layout, Dictionary<(int, int), float> widths, float W, float H)
+    /// <summary>
+    /// 行の左端の x と本文のベースラインの y（字幕の画面の px）。左右は行ごとの左右レイアウトの位置に置き、
+    /// スマート水平配置は、画面の中央に届かない短い行にだけ当てる（ニコカラメーカー3 のヘルプ:「歌詞 1 行の文字が短くて寄せすぎるとバランスが悪い場合に、
+    /// 自動的に中央寄りに配置する」。中心位置揃えは左寄せの行が中央で終わり右寄せの行が中央から始まる、左右余白揃えは中央に寄せる。近似）。
+    /// </summary>
+    internal static (float X, float Baseline) Position(PreviewLine line, SubtitleLineLayout layout, float W, float H)
     {
         var L = line.Layout;
         float textHeight = layout.TextBottom - layout.TextTop;
@@ -167,25 +169,15 @@ public sealed class SubtitlePreviewView : Grid
             2 => W - hm - w,
             _ => (W - w) / 2,
         };
-        if (L.SmartHorizon == 1)
+        // 短い行: 左寄せで右端が画面の中央に届かない・右寄せで左端が中央より右
+        bool shortLine = (align == 0 && hm + w < W / 2) || (align == 2 && W - hm - w > W / 2);
+        if (shortLine && L.SmartHorizon == 1)
         {
-            // 中心位置揃え: 短い行は、左寄せなら中央で終わり、右寄せなら中央から始まる
-            if (align == 0) x = Math.Max(hm, W / 2 - w);
-            else if (align == 2) x = Math.Min(W - hm - w, W / 2);
+            x = align == 0 ? W / 2 - w : W / 2; // 中心位置揃え: 中央で終わる（左寄せ）・中央から始まる（右寄せ）
         }
-        else if (L.SmartHorizon == 2)
+        else if (shortLine && L.SmartHorizon == 2)
         {
-            // 左右余白揃え: ページのいちばん長い行に合わせて、左右の余白を等しくしながら中央へ寄せる
-            if (!widths.TryGetValue((line.Tab, line.Page), out float longest))
-            {
-                longest = model.Pages.TryGetValue((line.Tab, line.Page), out var page)
-                    ? page.Max(p => p.Source.GetLayout().Width)
-                    : w;
-                widths[(line.Tab, line.Page)] = longest;
-            }
-            float m = Math.Max(hm, (W - longest) / 2);
-            if (align == 0) x = m;
-            else if (align == 2) x = W - m - w;
+            x = (W - w) / 2; // 左右余白揃え: 左右の余白を等しく（中央に寄せる）
         }
         return (x, baseline);
     }
