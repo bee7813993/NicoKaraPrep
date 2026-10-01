@@ -20,7 +20,8 @@ public sealed record N3LayoutSettings(
     double LyricsIntervalPx,
     double RubyIntervalPx,
     double LyricsAndRubyIntervalPx,
-    int RubyAlignment)
+    int RubyAlignment,
+    bool AllowBiting = false)
 {
     /// <summary>行ごとの左右配置の行数（レイアウトを選ぶときのページの行数）。</summary>
     public int LineCount => Math.Max(1, HorizontalAlignments.Count);
@@ -76,7 +77,8 @@ public static class N3LayoutReader
                 N3FontJson.SizePx(o["LyricsInterval"], height),
                 N3FontJson.SizePx(o["RubyInterval"], height),
                 N3FontJson.SizePx(o["LyricsAndRubyInterval"], height),
-                N3FontJson.Int(o["RubyAlignment"]) ?? 0));
+                N3FontJson.Int(o["RubyAlignment"]) ?? 0,
+                N3FontJson.Bool(o["AllowBiting"]) ?? false));
             index++;
         }
         return result;

@@ -54,6 +54,12 @@ public sealed class N3ProjExportOptions
 
     public bool MergeFontSets { get; set; } = true;
 
+    /// <summary>NicoKaraPrep で編集したレイアウト設定（同じ名前のベースのレイアウト設定に上書き、無い名前は追加）。</summary>
+    public IReadOnlyList<N3Layout> Layouts { get; set; } = Array.Empty<N3Layout>();
+
+    /// <summary><see cref="Layouts"/> をベースに合わせるか（false ならベースのレイアウト設定のまま）。</summary>
+    public bool MergeLayouts { get; set; } = true;
+
     /// <summary>ベース無し・フォント設定無しのときに作る唯一のフォント設定。</summary>
     public N3FontSet? DefaultFont { get; set; }
 
@@ -226,6 +232,10 @@ public static class N3ProjWriter
             layouts = NewDefaultLayouts(height, ver);
             root["LyricsLayouts"] = layouts;
         }
+        if (options.MergeLayouts)
+        {
+            foreach (var l in options.Layouts) MergeLayout(layouts, l, height, ver);
+        }
         RenumberSettings(layouts);
         var layoutInfos = layouts.Select((n, i) => new N3ProjLayoutInfo(
             n?["SettingsName"]?.GetValue<string>() ?? "",
@@ -344,7 +354,17 @@ public static class N3ProjWriter
         var layoutOfLine = new Dictionary<int, int>();
         foreach (var page in pages)
         {
-            int layout = layouts.Resolve(page.Count);
+            // ページの中で最初に手動指定のある行のレイアウト（無い名前なら行数から選ぶ）
+            int? manual = null;
+            foreach (int i in page)
+            {
+                if (doc.Lines[i].LayoutName is { Length: > 0 } name && layouts.FindIndex(name) is int found)
+                {
+                    manual = found;
+                    break;
+                }
+            }
+            int layout = manual ?? layouts.Resolve(page.Count);
             foreach (int i in page) layoutOfLine[i] = layout;
         }
         var matcher = new EmojiMatcher(emoji.Select(e => e.ReplaceChar));
@@ -600,6 +620,9 @@ public static class N3ProjWriter
                 _rangeEnd = layouts.Count - 1;
             }
         }
+
+        /// <summary>名前のレイアウト設定の番号（無ければ null）。</summary>
+        public int? FindIndex(string name) => _layouts.FirstOrDefault(l => l.Name == name)?.Index;
 
         public int Resolve(int lineCount)
         {
@@ -1000,6 +1023,88 @@ public static class N3ProjWriter
     }
 
     // ------------------------------------------------------------ レイアウト・タイトル
+
+    /// <summary>
+    /// 編集したレイアウト設定 1 件をベースのレイアウト設定（LyricsLayouts）へ合わせる。同じ名前があればその項目を書き換え（Guid などはそのまま）、
+    /// 無ければ足す。行ごとの左右配置は、ある行の Guid を残して数と値を合わせる。
+    /// </summary>
+    private static void MergeLayout(JsonArray layouts, N3Layout l, int reference, string ver)
+    {
+        if (string.IsNullOrWhiteSpace(l.Name)) return;
+        var existing = layouts.OfType<JsonObject>().FirstOrDefault(o => o["SettingsName"]?.GetValue<string>() == l.Name);
+        if (existing is null)
+        {
+            var o = Layout(l.Name, l.VerticalAlignment, l.HorizontalAlignments.ToArray(), reference, ver);
+            ApplyLayout(o, l, reference);
+            layouts.Add(o);
+            return;
+        }
+        if (ApplyLayout(existing, l, reference)) Touch(existing, ver);
+        if (existing["HorizontalAlignments"] is not JsonArray aligns)
+        {
+            aligns = new JsonArray();
+            existing["HorizontalAlignments"] = aligns;
+        }
+        bool changed = false;
+        for (int i = 0; i < l.HorizontalAlignments.Count; i++)
+        {
+            int value = l.HorizontalAlignments[i];
+            if (i < aligns.Count && aligns[i] is JsonObject a)
+            {
+                if (N3FontJson.Int(a["HorizontalLayoutAlignment"]) == value) continue;
+                a["HorizontalLayoutAlignment"] = value;
+                Touch(a, ver);
+                changed = true;
+            }
+            else
+            {
+                var a2 = new JsonObject { ["HorizontalLayoutAlignment"] = value };
+                AddIdentity(a2, ver, NoTime, "");
+                aligns.Add(a2);
+                changed = true;
+            }
+        }
+        while (aligns.Count > l.HorizontalAlignments.Count)
+        {
+            aligns.RemoveAt(aligns.Count - 1);
+            changed = true;
+        }
+        if (changed) Touch(existing, ver);
+    }
+
+    /// <summary>レイアウト設定の項目（行ごとの左右配置以外）を書く。変わった項目があれば true。</summary>
+    private static bool ApplyLayout(JsonObject o, N3Layout l, int reference)
+    {
+        bool changed = SetInt(o, "SelectedVerticalAlignmentIndex", Math.Clamp(l.VerticalAlignment, 0, 2), 2);
+        changed |= SetLayoutSize(o, "LineSpace", l.LineSpacePx, reference);
+        changed |= SetInt(o, "SmartHorizon", Math.Clamp(l.SmartHorizon, 0, 2), 0);
+        changed |= SetLayoutSize(o, "VerticalMargin", l.VerticalMarginPx, reference);
+        changed |= SetLayoutSize(o, "HorizontalMargin", l.HorizontalMarginPx, reference);
+        changed |= SetLayoutSize(o, "LyricsInterval", l.LyricsIntervalPx, reference);
+        if (N3FontJson.Bool(o["AllowBiting"]) != l.AllowBiting)
+        {
+            o["AllowBiting"] = l.AllowBiting;
+            changed = true;
+        }
+        changed |= SetLayoutSize(o, "RubyInterval", l.RubyIntervalPx, reference);
+        changed |= SetInt(o, "RubyAlignment", Math.Clamp(l.RubyAlignment, 0, 2), 0);
+        changed |= SetLayoutSize(o, "LyricsAndRubyInterval", l.LyricsAndRubyIntervalPx, reference);
+        return changed;
+    }
+
+    /// <summary>レイアウト設定の大きさ（マイナスも可）を書く。変わったら true。</summary>
+    private static bool SetLayoutSize(JsonObject o, string key, double px, int reference)
+    {
+        if (!double.IsFinite(px)) px = 0;
+        if (o.ContainsKey(key) && Math.Abs(N3FontJson.SizePx(o[key], reference) - px) < 0.05) return false;
+        o[key] = new JsonObject
+        {
+            ["Size"] = (int)Math.Round(px),
+            ["Reference"] = reference,
+            ["Ratio"] = reference > 0 ? px / reference : 0.0,
+        };
+        return true;
+    }
 
     internal static JsonArray NewDefaultLayouts(int reference, string ver)
     {

@@ -246,6 +246,9 @@ public sealed partial class MainWindow
         {
             NormalView.Visibility = mode == MainViewMode.Lines ? Visibility.Visible : Visibility.Collapsed;
             InsertView.Visibility = mode == MainViewMode.EmojiInsert ? Visibility.Visible : Visibility.Collapsed;
+            // 右パネル: 行リストではフォント一覧・レイアウト設定、絵文字挿入ビューでは絵文字のパレット
+            LineSideHost.Visibility = mode == MainViewMode.Lines ? Visibility.Visible : Visibility.Collapsed;
+            EmojiSidePanel.Visibility = mode == MainViewMode.EmojiInsert ? Visibility.Visible : Visibility.Collapsed;
         }
     }
 

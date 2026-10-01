@@ -118,6 +118,7 @@ public partial class MainViewModel
             line.ShowBeginCs = null;
             line.ShowEndCs = null;
             line.FontSetName = null;
+            line.LayoutName = null;
             CharFontOperations.Clear(line);
         }
         MarkModified();
@@ -222,6 +223,8 @@ public partial class MainViewModel
             EmojiEntries = GetEffectiveEmojiList(),
             FontSets = ExportFontSets,
             MergeFontSets = settings.MergeFontSets,
+            Layouts = Settings.N3Layouts,
+            MergeLayouts = settings.MergeLayouts,
             DefaultFont = new N3FontSet
             {
                 Name = "標準",

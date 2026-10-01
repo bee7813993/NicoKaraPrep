@@ -126,6 +126,12 @@ public sealed class AppSettings
     /// <summary>メディアプレイヤーの表示高さ px（ドラッグハンドルで変更）。</summary>
     public double PlayerHeightPx { get; set; } = 260;
 
+    /// <summary>
+    /// NicoKaraPrep で編集したニコカラメーカー3 のレイアウト設定（アプリ共通）。書き出しでは、ベースの n3proj の同じ名前のレイアウト設定に上書きし、
+    /// 無い名前は足す。字幕のプレビューと行リストのレイアウトの表示も同じ合わせ方で使う。
+    /// </summary>
+    public List<N3Layout> N3Layouts { get; set; } = new();
+
     /// <summary>行リストの歌詞を字幕の見た目（フォント設定の書体・配色・ルビ・アイコン）で描くか。</summary>
     public bool LineListStyledLyrics { get; set; } = true;
 

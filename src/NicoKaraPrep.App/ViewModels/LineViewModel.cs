@@ -65,6 +65,17 @@ public partial class LineViewModel : ObservableObject
     [ObservableProperty]
     private LineFontDisplay appliedFont = LineFontDisplay.None;
 
+    /// <summary>この行のページのレイアウト設定名（手動指定なら先頭に ✎。チェックのたびに更新する）。表示時刻が決まらない行は空。</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(HasLayoutText))]
+    private string layoutText = "";
+
+    /// <summary>レイアウトの決まり方の説明（ツールチップ）。</summary>
+    [ObservableProperty]
+    private string layoutToolTip = "";
+
+    public bool HasLayoutText => LayoutText.Length > 0;
+
     /// <summary>歌詞を字幕の見た目で描く材料（null なら文字のまま表示する）。チェックのたびに更新する。</summary>
     public Services.Subtitles.LineRenderSource? RenderSource { get; private set; }
 
@@ -308,6 +319,7 @@ public partial class LineViewModel : ObservableObject
         newModel.ShowBeginCs = Model.ShowBeginCs;
         newModel.ShowEndCs = Model.ShowEndCs;
         newModel.FontSetName = Model.FontSetName;
+        newModel.LayoutName = Model.LayoutName;
         Model = newModel;
         RaiseAllChanged();
     }

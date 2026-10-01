@@ -8,14 +8,22 @@ namespace NicoKaraPrep.App.Services.Subtitles;
 /// </summary>
 public sealed class LineRenderSource
 {
-    public LineRenderSource(LyricsLine line, IReadOnlyList<N3FontSet?> unitFonts, SubtitleContext context, SubtitleSpacing spacing, string key)
+    /// <param name="contentKey">文字の間隔のほかに描く内容を表すキー（共通の材料・行の内容・文字ごとのフォント設定）。</param>
+    public LineRenderSource(LyricsLine line, IReadOnlyList<N3FontSet?> unitFonts, SubtitleContext context, SubtitleSpacing spacing, string contentKey)
     {
         Line = line;
         UnitFonts = unitFonts;
         Context = context;
         Spacing = spacing;
-        Key = key;
+        ContentKey = contentKey;
+        Key = $"{spacing}|{contentKey}";
     }
+
+    /// <summary>文字の間隔だけを変えた材料（レイアウトの画面の見本で、選んだレイアウトの文字間隔で描くため）。</summary>
+    public LineRenderSource WithSpacing(SubtitleSpacing spacing) =>
+        spacing == Spacing ? this : new LineRenderSource(Line, UnitFonts, Context, spacing, ContentKey);
+
+    public string ContentKey { get; }
 
     public LyricsLine Line { get; }
 

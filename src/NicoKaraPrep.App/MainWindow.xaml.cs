@@ -39,6 +39,7 @@ public sealed partial class MainWindow : Window
         PlayerHost.Height = Math.Clamp(ViewModel.Settings.PlayerHeightPx, 120, 1200);
         StyledLyricsMenuItem.IsChecked = ViewModel.Settings.LineListStyledLyrics;
         InitializePlayerBar();
+        InitializeLineSide();
 
         RestoreWindowBounds();
         Closed += (_, _) => SaveWindowBounds();
@@ -580,6 +581,7 @@ public sealed partial class MainWindow : Window
         {
             ViewModel.ClearCharSelection();
         }
+        LineSide.SelectLayoutOfLine(ViewModel.SelectedLine);
         LineEditor.Text = ViewModel.SelectedLine?.RawText ?? "";
         RenderPreview();
         RefreshN3LinePanel();

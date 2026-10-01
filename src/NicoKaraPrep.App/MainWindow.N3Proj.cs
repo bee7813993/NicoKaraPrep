@@ -19,6 +19,10 @@ public sealed partial class MainWindow
 
     private bool _n3PanelLoading;
     private string? _n3FontNamesKey;
+    private string? _n3LayoutNamesKey;
+
+    /// <summary>行設定のレイアウトの欄の「自動」の項目。</summary>
+    private const string AutoLayoutItem = "（自動）";
 
     // ------------------------------------------------------------ メニュー
 
@@ -295,6 +299,9 @@ public sealed partial class MainWindow
                 LineFontBox.Text = "";
                 N3LineInfo.Text = "";
                 LineFontLabel.Text = "フォント";
+                LineLayoutBox.SelectedIndex = -1;
+                LineLayoutBox.PlaceholderText = "（自動）";
+                UpdateSideTarget();
                 RefreshLineFontPlaceholder();
                 return;
             }
@@ -311,6 +318,7 @@ public sealed partial class MainWindow
             EnsureN3FontNames();
             LineFontBox.Text = model.FontSetName ?? "";
             RefreshLineFontForSelection();
+            RefreshLineLayoutBox(line);
 
             if (plan is null)
             {
@@ -373,6 +381,7 @@ public sealed partial class MainWindow
             _n3PanelLoading = loading;
         }
         RefreshLineFontPlaceholder();
+        UpdateSideTarget();
     }
 
     /// <summary>行リストの歌詞の文字を選んだ（押した・ドラッグした）。その行だけを選び、文字の範囲を覚える。</summary>
@@ -390,6 +399,62 @@ public sealed partial class MainWindow
         }
         ViewModel.SetCharSelection(e.Line, e.StartUnit, e.EndUnit);
         RefreshLineFontForSelection();
+    }
+
+    /// <summary>行設定のレイアウトの欄（候補はベース＋編集したレイアウト。手動指定が無ければ薄字に自動で選ぶレイアウト）。</summary>
+    private void RefreshLineLayoutBox(ViewModels.LineViewModel line)
+    {
+        bool loading = _n3PanelLoading;
+        _n3PanelLoading = true;
+        try
+        {
+            var names = ViewModel.GetEffectiveLayouts().Select(l => l.Name).Where(n => n.Length > 0).Distinct().ToList();
+            string key = string.Join("\n", names);
+            if (_n3LayoutNamesKey != key)
+            {
+                _n3LayoutNamesKey = key;
+                LineLayoutBox.Items.Clear();
+                LineLayoutBox.Items.Add(AutoLayoutItem);
+                foreach (string n in names) LineLayoutBox.Items.Add(n);
+            }
+            string? manual = line.Model.LayoutName;
+            int index = manual is { Length: > 0 } ? LineLayoutBox.Items.IndexOf(manual) : -1;
+            LineLayoutBox.SelectedIndex = index;
+            string auto = line.LayoutText.TrimStart('✎');
+            LineLayoutBox.PlaceholderText = index < 0 && auto.Length > 0 && !line.LayoutText.StartsWith('✎') ? $"自動: {auto}" : "（自動）";
+        }
+        finally
+        {
+            _n3PanelLoading = loading;
+        }
+    }
+
+    /// <summary>行設定のレイアウトの欄で選んだ（選んだ行のページすべてに指定。「（自動）」で戻す）。</summary>
+    private void OnLineLayoutChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (_n3PanelLoading || ViewModel.SelectedLine is not { } line || line.Model.IsEmpty) return;
+        if (LineLayoutBox.SelectedItem is not string choice) return;
+        ApplyLineLayout(choice == AutoLayoutItem ? null : choice);
+    }
+
+    /// <summary>選んだ行のページにレイアウトを指定する（null で自動に戻す）。</summary>
+    private void ApplyLineLayout(string? name)
+    {
+        if (ViewModel.SelectedLine is not { } line || line.Model.IsEmpty) return;
+        var indexes = SelectedIndexes;
+        if (indexes.Count == 0) indexes = new List<int> { line.Index };
+        int n = 0;
+        TryRun(() => n = ViewModel.SetLinesLayout(indexes, name));
+        if (n > 0)
+        {
+            foreach (var l in ViewModel.Lines) l.RaiseOverrideMark();
+            ViewModel.StatusText = name is null
+                ? $"選んだ行のページ（{n} 行）のレイアウト指定を自動に戻しました"
+                : $"選んだ行のページ（{n} 行）にレイアウト設定「{name}」を指定しました";
+        }
+        // 行リストのレイアウトの表示とプレビューを作り直す（チェックはしないので、上の知らせは消えない）
+        TryRun(ViewModel.UpdateLineFonts);
+        RefreshLineLayoutBox(line);
     }
 
     private static string FmtCs(int cs) => TimeTag.Format(cs).Trim('[', ']');

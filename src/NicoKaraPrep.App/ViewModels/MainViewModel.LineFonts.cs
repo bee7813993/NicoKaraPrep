@@ -115,25 +115,21 @@ public partial class MainViewModel
 
         // 字幕の見た目で描くフォント設定（書き出しでベースと合わせた結果。名前ごとに 1 回だけ作る）
         bool styled = Settings.LineListStyledLyrics;
-        bool preview = Settings.PlayerSubtitlePreview;
-        var context = styled || preview ? GetSubtitleContext() : null;
+        var context = GetSubtitleContext();
         var effective = new N3FontSet?[names.Count];
         var fontIds = new int[names.Count];
-        if (context is not null)
+        for (int k = 0; k < names.Count; k++)
         {
-            for (int k = 0; k < names.Count; k++)
-            {
-                own.TryGetValue(names[k], out var o);
-                fromBase.TryGetValue(names[k], out var b);
-                effective[k] = o is not null ? N3FontLibrary.MergeForPreview(o, b) : b ?? context.DefaultFont;
-                fontIds[k] = FontContentId(effective[k]!);
-            }
+            own.TryGetValue(names[k], out var o);
+            fromBase.TryGetValue(names[k], out var b);
+            effective[k] = o is not null ? N3FontLibrary.MergeForPreview(o, b) : b ?? context.DefaultFont;
+            fontIds[k] = FontContentId(effective[k]!);
         }
 
         LineRenderSource Source(LyricsLine line, N3FontResolver.LineFonts fonts, SubtitleSpacing spacing)
         {
             var unitFonts = fonts.Units.Select(u => effective[u]).ToArray();
-            string key = $"{context!.Key}|{spacing}|{TextEditModeFormat.WriteLyricLine(line)}|{string.Join(",", fonts.Units.Select(u => fontIds[u]))}";
+            string key = $"{context.Key}|{TextEditModeFormat.WriteLyricLine(line)}|{string.Join(",", fonts.Units.Select(u => fontIds[u]))}";
             return new LineRenderSource(line, unitFonts, context, spacing, key);
         }
 
@@ -145,7 +141,7 @@ public partial class MainViewModel
                 ? LineFontDisplay.None
                 : LineFontDisplay.Create(fonts.Runs.Select(RunOf).ToList(), fonts.Manual, line.Model.FontSetName, fonts.CharManual);
 
-            if (!styled || context is null || fonts is null || fonts.Runs.Count == 0 || line.Model.GetDisplayText().Length == 0)
+            if (!styled || fonts is null || fonts.Runs.Count == 0 || line.Model.GetDisplayText().Length == 0)
             {
                 line.SetRenderSource(null);
                 continue;
@@ -153,25 +149,11 @@ public partial class MainViewModel
             line.SetRenderSource(Source(line.Model, fonts, SubtitleSpacing.Default));
         }
 
-        // 字幕のプレビュー（全タブ。書き出しと同じ表示時刻・ページ・レイアウト）
-        if (!preview || context is null)
-        {
-            if (PreviewModel is not null)
-            {
-                PreviewModel = null;
-                PreviewModelChanged?.Invoke(this, EventArgs.Empty);
-            }
-            return;
-        }
-        int screenWidth = Settings.ScreenWidthPx > 0 ? Settings.ScreenWidthPx : 1920;
-        int screenHeight = screenWidth == 1920 ? 1080 : (int)Math.Round(screenWidth * 9.0 / 16);
-        if (baseProject is not null)
-        {
-            screenWidth = baseProject.Width;
-            screenHeight = baseProject.Height;
-        }
-        var layouts = baseProject is { Layouts.Count: > 0 } ? baseProject.Layouts : N3LayoutReader.Defaults(screenHeight);
+        // 字幕のプレビュー（全タブ。書き出しと同じ表示時刻・ページ・レイアウト）と、行リストのレイアウトの表示
+        var (screenWidth, screenHeight) = GetScreenSize();
+        var layouts = GetEffectiveLayouts();
         var infos = layouts.Select(l => l.Info).ToList();
+        var layoutTexts = new Dictionary<int, (string Text, string Tip)>();
         var previewLines = new List<PreviewLine>();
         for (int t = 0; t < tabs.Count; t++)
         {
@@ -180,15 +162,30 @@ public partial class MainViewModel
             if (plans.Count == 0) continue;
             string? fixedLayout = N3ProjSettings.TabLayouts.GetValueOrDefault(tabs[t].Name) is { Length: > 0 } fl ? fl : null;
             var resolver = new N3ProjWriter.LayoutResolver(infos, fixedLayout, Nkm3Env?.LayoutSelectableBegin, Nkm3Env?.LayoutSelectableEnd, new List<string>(), tabs[t].Name);
-            var pages = plans.Values.GroupBy(p => p.PageIndex).ToDictionary(g => g.Key, g => (Count: g.Count(), Rows: g.Max(p => p.Row)));
+            var pages = plans.GroupBy(p => p.Value.PageIndex).ToDictionary(g => g.Key, g =>
+            {
+                // ページの中で最初に手動指定のある行のレイアウト（無い名前なら行数から選ぶ。書き出しと同じ）
+                string? manual = g.OrderBy(p => p.Key)
+                    .Select(p => doc.Lines[p.Key].LayoutName)
+                    .FirstOrDefault(n => n is { Length: > 0 } && resolver.FindIndex(n) is not null);
+                int index = manual is not null ? resolver.FindIndex(manual)!.Value : resolver.Resolve(g.Count());
+                return (Count: g.Count(), Rows: g.Max(p => p.Value.Row), Layout: Math.Clamp(index, 0, layouts.Count - 1), Manual: manual is not null);
+            });
             foreach (var (index, plan) in plans.OrderBy(p => p.Key))
             {
                 var line = doc.Lines[index];
+                var page = pages[plan.PageIndex];
+                var layout = layouts[page.Layout];
+                if (t == active)
+                {
+                    string how = page.Manual ? "このページに手動で指定したレイアウト" : fixedLayout is not null && resolver.FindIndex(fixedLayout) is not null
+                        ? "タブに固定したレイアウト（n3proj の書き出しの設定）"
+                        : $"ページの行数（{page.Count} 行）から自動で選んだレイアウト";
+                    layoutTexts[index] = ((page.Manual ? "✎" : "") + layout.Name, $"{how}: {layout.Name}");
+                }
                 if (line.IsEmpty || line.GetDisplayText().Length == 0 || index >= resolved[t].Count) continue;
                 var fonts = resolved[t][index];
                 if (fonts.Runs.Count == 0) continue;
-                var page = pages[plan.PageIndex];
-                var layout = layouts[Math.Clamp(resolver.Resolve(page.Count), 0, layouts.Count - 1)];
                 var spacing = new SubtitleSpacing((float)layout.LyricsIntervalPx, (float)layout.RubyIntervalPx, (float)layout.LyricsAndRubyIntervalPx, layout.RubyAlignment);
                 previewLines.Add(new PreviewLine(
                     Source(line, fonts, spacing), plan.BeginMs, plan.EndMs, t, plan.PageIndex, plan.Row, Math.Max(page.Rows, page.Count),
@@ -197,6 +194,13 @@ public partial class MainViewModel
         }
         PreviewModel = new SubtitlePreviewModel(screenWidth, screenHeight, previewLines);
         PreviewModelChanged?.Invoke(this, EventArgs.Empty);
+
+        for (int i = 0; i < Lines.Count; i++)
+        {
+            var (text, tip) = layoutTexts.TryGetValue(i, out var lt) ? lt : ("", "");
+            Lines[i].LayoutText = text;
+            Lines[i].LayoutToolTip = tip;
+        }
     }
 
     /// <summary>行リストで文字を選んでいる行（無ければ null）。選んでいる範囲は <see cref="LineViewModel.CharSelection"/>。</summary>

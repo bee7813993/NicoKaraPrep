@@ -813,6 +813,7 @@ public partial class MainViewModel : ObservableObject
         line.ShowBeginCs = previous.ShowBeginCs;
         line.ShowEndCs = previous.ShowEndCs;
         line.FontSetName = previous.FontSetName;
+        line.LayoutName = previous.LayoutName;
         CharFontOperations.CopyCharFonts(previous, line);
         Document.Lines[index] = line;
         LineOperations.SplitLine(Document, index, charIndex);

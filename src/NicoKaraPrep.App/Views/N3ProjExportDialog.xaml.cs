@@ -70,6 +70,7 @@ public sealed partial class N3ProjExportDialog : ContentDialog
         ProjectNameBox.Text = current.ProjectName;
         ProjectNameBox.PlaceholderText = Path.GetFileNameWithoutExtension(vm.SuggestN3ProjOutputPath() ?? "lyrics");
         MergeFontsCheck.IsChecked = current.MergeFontSets;
+        MergeLayoutsCheck.IsChecked = current.MergeLayouts;
         var fonts = vm.ExportFontSets;
         int songFonts = vm.SongFontSets.Count;
         string songNote = songFonts > 0 ? $"。この曲専用 {songFonts} 件を含む" : "";
@@ -123,6 +124,10 @@ public sealed partial class N3ProjExportDialog : ContentDialog
             }
         }
         BaseInfoText.Text = info;
+
+        // ベースが無ければ書き出しの既定のレイアウト、どちらにも NicoKaraPrep で足したレイアウトを加える
+        if (_basePath is null) layoutNames = N3LayoutReader.Defaults(1080).Select(l => l.Name).ToList();
+        layoutNames.AddRange(_vm.Settings.N3Layouts.Select(l => l.Name).Where(n => n.Length > 0));
 
         // レイアウト候補（自動 + ベースのレイアウト名）を差し替える（行の選択は維持）
         var selected = Rows.Select(r => r.LayoutChoice).ToList();
@@ -181,6 +186,7 @@ public sealed partial class N3ProjExportDialog : ContentDialog
             ProjectName = ProjectNameBox.Text.Trim(),
             DefaultFontSetName = DefaultFontBox.Text.Trim(),
             MergeFontSets = MergeFontsCheck.IsChecked == true,
+            MergeLayouts = MergeLayoutsCheck.IsChecked == true,
         };
         foreach (var row in Rows)
         {

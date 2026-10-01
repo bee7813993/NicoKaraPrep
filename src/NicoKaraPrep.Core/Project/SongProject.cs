@@ -20,6 +20,9 @@ public sealed class LineExportSettings
     /// <summary>フォント設定名の手動指定。null は自動。</summary>
     public string? FontSetName { get; set; }
 
+    /// <summary>行のページのレイアウト設定名の手動指定。null は自動。</summary>
+    public string? LayoutName { get; set; }
+
     /// <summary>文字単位のフォント設定名の手動指定（表示文字の位置の範囲）。無ければ null。</summary>
     public List<CharFontRange>? CharFonts { get; set; }
 
@@ -41,6 +44,7 @@ public sealed class LineExportSettings
                 ShowBeginCs = l.ShowBeginCs,
                 ShowEndCs = l.ShowEndCs,
                 FontSetName = l.FontSetName,
+                LayoutName = l.LayoutName,
                 CharFonts = ranges.Count > 0 ? ranges : null,
                 CharText = ranges.Count > 0 ? l.GetDisplayText() : null,
             });
@@ -59,6 +63,7 @@ public sealed class LineExportSettings
             l.ShowBeginCs = s.ShowBeginCs;
             l.ShowEndCs = s.ShowEndCs;
             l.FontSetName = string.IsNullOrEmpty(s.FontSetName) ? null : s.FontSetName;
+            l.LayoutName = string.IsNullOrEmpty(s.LayoutName) ? null : s.LayoutName;
             if (s.CharFonts is { Count: > 0 } && s.CharText == l.GetDisplayText()) CharFontOperations.ApplyRanges(l, s.CharFonts);
         }
     }
@@ -87,6 +92,9 @@ public sealed class N3ProjSongSettings
 
     /// <summary>NicoKaraPrep 側のフォント設定をベースへマージするか。</summary>
     public bool MergeFontSets { get; set; } = true;
+
+    /// <summary>NicoKaraPrep で編集したレイアウト設定を、ベースの同じ名前のレイアウト設定に上書き・無い名前は追加するか。</summary>
+    public bool MergeLayouts { get; set; } = true;
 }
 
 /// <summary>分離タブ 1 つ分の保存データ。</summary>
