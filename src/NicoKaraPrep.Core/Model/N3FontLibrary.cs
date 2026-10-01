@@ -247,6 +247,44 @@ public static class N3FontLibrary
         };
     }
 
+    /// <summary>
+    /// 字幕を描くときの文字種別フォントの実効値。ニコカラメーカー3 と同じく、歌詞／英数は歌詞／かなを、ルビ／英数はルビ／かなを継承する
+    /// （<see cref="EffectiveFace"/> はどちらも漢字を継承する。違うのは、かなだけを指定して英数を空欄にしたとき）。
+    /// </summary>
+    public static N3FontFace RenderFace(N3FontSet fontSet, int faceIndex)
+    {
+        if (faceIndex < 0 || faceIndex >= N3FontDetail.FaceCount) throw new ArgumentOutOfRangeException(nameof(faceIndex));
+        var faces = fontSet.Detail.Faces;
+        return faceIndex switch
+        {
+            2 => Inherit(faces[2], EffectiveFace(fontSet, 1), halfSizes: false),
+            5 => Inherit(faces[5], EffectiveFace(fontSet, 4), halfSizes: false),
+            _ => EffectiveFace(fontSet, faceIndex),
+        };
+    }
+
+    /// <summary>
+    /// 文字の種類に合う文字種別フォントの添字（ニコカラメーカー3 と同じ分け方: ひらがな・カタカナは「かな」、
+    /// 半角英数字（ASCII の文字。空白も含む）は「英数」、それ以外は「漢字」）。ruby が true ならルビの添字（3〜5）。
+    /// </summary>
+    public static int FaceIndexFor(string text, bool ruby)
+    {
+        int kind = 0;
+        if (!string.IsNullOrEmpty(text))
+        {
+            int cp = char.IsSurrogatePair(text, 0) ? char.ConvertToUtf32(text, 0) : text[0];
+            if (cp is (>= 0x3040 and <= 0x309F) or (>= 0x30A0 and <= 0x30FF) or (>= 0x31F0 and <= 0x31FF) or (>= 0xFF66 and <= 0xFF9F))
+            {
+                kind = 1;
+            }
+            else if (cp is >= 0x20 and <= 0x7E)
+            {
+                kind = 2;
+            }
+        }
+        return (ruby ? 3 : 0) + kind;
+    }
+
     private static N3FontFace Inherit(N3FontFace face, N3FontFace parent, bool halfSizes)
     {
         double Size(double own, double inherited) => own > 0 ? own : (halfSizes ? inherited / 2 : inherited);

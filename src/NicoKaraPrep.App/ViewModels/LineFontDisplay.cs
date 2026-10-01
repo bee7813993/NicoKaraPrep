@@ -19,7 +19,8 @@ public sealed record LineFontDisplay(bool IsVisible, LineFontRun First, LineFont
     /// <param name="runs">行に当たるフォント設定（文字の順。1 つ以上）。</param>
     /// <param name="manual">行の手動指定で行全体をそろえたか。</param>
     /// <param name="manualName">行の手動指定の名前（無ければ null）。manual が false なのに名前があるのは、書き出すフォント設定に無い名前。</param>
-    public static LineFontDisplay Create(IReadOnlyList<LineFontRun> runs, bool manual, string? manualName)
+    /// <param name="charManual">文字ごとの手動指定が 1 文字以上に効いているか。</param>
+    public static LineFontDisplay Create(IReadOnlyList<LineFontRun> runs, bool manual, string? manualName, bool charManual = false)
     {
         string summary = string.Join(" → ", runs.Select(r => r.Name));
         var tip = new List<string>
@@ -30,6 +31,7 @@ public sealed record LineFontDisplay(bool IsVisible, LineFontRun First, LineFont
         {
             tip.Add($"⚠ 手動指定の「{missing}」は書き出すフォント設定に無いため使われません");
         }
+        if (charManual) tip.Add("一部の文字は、文字ごとの手動指定のフォント設定です");
         tip.Add("ニコカラメーカー3 プロジェクトの書き出しと同じ決め方です（フォント設定と同じ名前の記号から先がそのフォント設定になり、次の行にも引き継ぎます）");
         return new LineFontDisplay(
             true,

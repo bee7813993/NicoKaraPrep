@@ -81,6 +81,10 @@ public partial class MainViewModel
             foreach (var line in tab.Document.Lines)
             {
                 if (line.FontSetName is { Length: > 0 } n) names.Add(n);
+                foreach (var c in line.Chars)
+                {
+                    if (c.FontSetName is { Length: > 0 } cn) names.Add(cn);
+                }
             }
         }
         if (N3ProjSettings.DefaultFontSetName is { Length: > 0 } d) names.Add(d);
@@ -138,15 +142,25 @@ public partial class MainViewModel
         return count;
     }
 
-    /// <summary>1 つの文書の行の手動指定を新しい名前にし、変わった行の数を返す。</summary>
+    /// <summary>1 つの文書の行・文字の手動指定を新しい名前にし、変わった行の数を返す。</summary>
     private static int RenameFontReferences(LyricsDocument doc, string oldName, string newName)
     {
         int changed = 0;
         foreach (var line in doc.Lines)
         {
-            if (line.FontSetName != oldName) continue;
-            line.FontSetName = newName.Length > 0 ? newName : null;
-            changed++;
+            bool lineChanged = false;
+            if (line.FontSetName == oldName)
+            {
+                line.FontSetName = newName.Length > 0 ? newName : null;
+                lineChanged = true;
+            }
+            foreach (var c in line.Chars)
+            {
+                if (c.FontSetName != oldName) continue;
+                c.FontSetName = newName.Length > 0 ? newName : null;
+                lineChanged = true;
+            }
+            if (lineChanged) changed++;
         }
         return changed;
     }

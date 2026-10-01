@@ -149,7 +149,8 @@ public sealed partial class FontSettingsViewModel
             string text = line.GetDisplayText();
             if (text.Length > 20) text = text[..20] + "…";
             string tab = d < tabs.Count ? tabs[d].Name : "";
-            string manual = line.FontSetName == item.Font.Name ? "（手動指定）" : "";
+            string manual = line.FontSetName == item.Font.Name ? "（手動指定）"
+                : line.Chars.Any(c => c.FontSetName == item.Font.Name) ? "（文字の手動指定）" : "";
             UsageLines.Add(new FontUsageLine($"{tab} {l + 1} 行目{manual}: {text}"));
         }
     }

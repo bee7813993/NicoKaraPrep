@@ -33,8 +33,11 @@ public sealed class LyricsLine
     /// <summary>行に適用するニコカラメーカーのフォント設定名の手動指定。null は自動（パート記号で判定）。</summary>
     public string? FontSetName { get; set; }
 
-    /// <summary>ニコカラメーカー3 書き出し用の手動設定を 1 つでも持つか。</summary>
-    public bool HasN3Overrides => ShowBeginCs is not null || ShowEndCs is not null || FontSetName is not null;
+    /// <summary>文字単位のフォント設定名の手動指定（<see cref="CharUnit.FontSetName"/>）を 1 つでも持つか。</summary>
+    public bool HasCharFonts => Chars.Any(c => c.FontSetName is not null);
+
+    /// <summary>ニコカラメーカー3 書き出し用の手動設定（表示時刻・行のフォント・文字のフォント）を 1 つでも持つか。</summary>
+    public bool HasN3Overrides => ShowBeginCs is not null || ShowEndCs is not null || FontSetName is not null || HasCharFonts;
 
     /// <summary>空行（ページ区切り）かどうか。</summary>
     public bool IsEmpty => Chars.Count == 0 && EndTimeCs is null;

@@ -94,7 +94,7 @@ public partial class MainViewModel
             var fonts = i < lines.Count ? lines[i] : null;
             Lines[i].AppliedFont = fonts is null || fonts.Runs.Count == 0
                 ? LineFontDisplay.None
-                : LineFontDisplay.Create(fonts.Runs.Select(RunOf).ToList(), fonts.Manual, Lines[i].Model.FontSetName);
+                : LineFontDisplay.Create(fonts.Runs.Select(RunOf).ToList(), fonts.Manual, Lines[i].Model.FontSetName, fonts.CharManual);
         }
     }
 

@@ -6,7 +6,8 @@ namespace NicoKaraPrep.Core.Formats;
 /// ニコカラメーカー3 の「パート別にフォントを設定（歌詞の文字と同じ名称のフォント設定を適用する）」相当。
 /// 行内にフォント設定名と同じ文字列（絵文字の置き換え文字列など）が現れると、そこから先の文字に
 /// そのフォント設定を適用する。長い名前を優先し、2 連タグ用スペーサーを飛ばして照合する。行ごとの手動指定（FontSetName）があれば
-/// その行はそれで統一する。行を順に渡すと、前の行のフォントを引き継ぐ（行が変わっても維持する場合）。
+/// その行はそれで統一し、文字ごとの手動指定（CharUnit.FontSetName）があればその文字はそれにする（どちらの手動指定も、
+/// 後ろの文字・行へは引き継がない）。行を順に渡すと、前の行のフォントを引き継ぐ（行が変わっても維持する場合）。
 /// </summary>
 public sealed class N3FontResolver
 {
@@ -67,6 +68,10 @@ public sealed class N3FontResolver
         {
             Array.Fill(result, m);
         }
+        for (int i = 0; i < result.Length; i++)
+        {
+            if (line.Chars[i].FontSetName is string charManual && _byName.TryGetValue(charManual, out int cm)) result[i] = cm;
+        }
         return result;
     }
 
@@ -106,11 +111,12 @@ public sealed class N3FontResolver
     /// <summary>
     /// 1 行に適用されるフォント設定。Runs は fontNames の添字を文字の順に並べ、続く同じものを 1 つにまとめたもの
     /// （2 連タグ用スペーサーは数えない。空行は空）。Manual は行ごとの手動指定（FontSetName）で行全体をそろえたとき true
-    /// （手動指定があっても、その名前が fontNames に無ければ使われないので false）。
+    /// （手動指定があっても、その名前が fontNames に無ければ使われないので false）。CharManual は文字ごとの手動指定が 1 文字以上に効いたとき true。
+    /// Units は CharUnit ごとの fontNames の添字（<see cref="Resolve"/> の結果。描画用）。
     /// </summary>
-    public sealed record LineFonts(IReadOnlyList<int> Runs, bool Manual);
+    public sealed record LineFonts(IReadOnlyList<int> Runs, bool Manual, bool CharManual, IReadOnlyList<int> Units);
 
-    private static readonly LineFonts NoFonts = new(Array.Empty<int>(), false);
+    private static readonly LineFonts NoFonts = new(Array.Empty<int>(), false, false, Array.Empty<int>());
 
     /// <summary>
     /// 複数の文書（歌詞設定タブ）を順に通したときの、行ごとに適用されるフォント設定（[文書の番号][doc.Lines の添字]）。
@@ -138,7 +144,8 @@ public sealed class N3FontResolver
                     if (runs.Count == 0 || runs[^1] != fonts[i]) runs.Add(fonts[i]);
                 }
                 bool manual = line.FontSetName is string m && resolver._byName.ContainsKey(m);
-                lines.Add(new LineFonts(runs, manual));
+                bool charManual = line.Chars.Any(c => !c.IsSpacer && c.FontSetName is string cm && resolver._byName.ContainsKey(cm));
+                lines.Add(new LineFonts(runs, manual, charManual, fonts));
             }
             result.Add(lines);
         }

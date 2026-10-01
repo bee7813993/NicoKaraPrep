@@ -726,6 +726,7 @@ public partial class MainViewModel : ObservableObject
         PushUndo();
         var newLine = TextEditModeFormat.ParseLyricLine(rawText);
         int idx = SelectedLine.Index;
+        CharFontOperations.CopyCharFonts(Document.Lines[idx], newLine); // 文字ごとのフォントの指定は同じ文字へ引き継ぐ
         Document.Lines[idx] = newLine;
         SelectedLine.ReplaceModel(newLine);
         MarkModified();
@@ -806,11 +807,12 @@ public partial class MainViewModel : ObservableObject
         cursor = SnapCursorOutsideToken(rawText, Math.Clamp(cursor, 0, rawText.Length));
         int charIndex = TextEditModeFormat.ParseLyricLine(rawText[..cursor]).Chars.Count;
 
-        // ニコカラメーカー用の手動指定（表示時刻・フォント）は分割前の行から引き継ぐ
+        // ニコカラメーカー用の手動指定（表示時刻・フォント）は分割前の行から引き継ぐ（文字ごとのフォントは同じ文字へ）
         var previous = Document.Lines[index];
         line.ShowBeginCs = previous.ShowBeginCs;
         line.ShowEndCs = previous.ShowEndCs;
         line.FontSetName = previous.FontSetName;
+        CharFontOperations.CopyCharFonts(previous, line);
         Document.Lines[index] = line;
         LineOperations.SplitLine(Document, index, charIndex);
         RebuildLinesPreservingMarks();
@@ -1082,6 +1084,7 @@ public partial class MainViewModel : ObservableObject
 
         var line = TextEditModeFormat.ParseLyricLine(raw);
         int charIndex = TextEditModeFormat.ParseLyricLine(raw[..cursor]).Chars.Count;
+        if (SelectedLine is not null) CharFontOperations.CopyCharFonts(Document.Lines[SelectedLine.Index], line);
 
         var matcher = CreateEmojiMatcher(emojiChar);
         int inserted = EmojiTagger.InsertEmoji(line, charIndex, emojiChar, matcher, EmojiTagSettings);

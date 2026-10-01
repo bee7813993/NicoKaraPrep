@@ -3,7 +3,10 @@ using NicoKaraPrep.Core.Model;
 
 namespace NicoKaraPrep.Core.Project;
 
-/// <summary>行ごとのニコカラメーカー3 書き出し設定（表示時刻の手動指定・フォント設定名）。行インデックスで保存する。</summary>
+/// <summary>
+/// 行ごとのニコカラメーカー3 書き出し設定（表示時刻の手動指定・フォント設定名・文字単位のフォント設定名）。行インデックスで保存する。
+/// 文字単位の指定は、保存したときの行の表示文字列と今の行が同じときだけ当てる（歌詞を外で直したときに別の文字へ付かないように）。
+/// </summary>
 public sealed class LineExportSettings
 {
     public int Index { get; set; }
@@ -17,6 +20,12 @@ public sealed class LineExportSettings
     /// <summary>フォント設定名の手動指定。null は自動。</summary>
     public string? FontSetName { get; set; }
 
+    /// <summary>文字単位のフォント設定名の手動指定（表示文字の位置の範囲）。無ければ null。</summary>
+    public List<CharFontRange>? CharFonts { get; set; }
+
+    /// <summary><see cref="CharFonts"/> を保存したときの行の表示文字列（スペーサーを除く）。</summary>
+    public string? CharText { get; set; }
+
     /// <summary>ドキュメントの行から手動設定を持つ行だけを集める。</summary>
     public static List<LineExportSettings> Collect(LyricsDocument doc)
     {
@@ -25,12 +34,15 @@ public sealed class LineExportSettings
         {
             var l = doc.Lines[i];
             if (!l.HasN3Overrides) continue;
+            var ranges = CharFontOperations.Ranges(l);
             result.Add(new LineExportSettings
             {
                 Index = i,
                 ShowBeginCs = l.ShowBeginCs,
                 ShowEndCs = l.ShowEndCs,
                 FontSetName = l.FontSetName,
+                CharFonts = ranges.Count > 0 ? ranges : null,
+                CharText = ranges.Count > 0 ? l.GetDisplayText() : null,
             });
         }
         return result;
@@ -47,6 +59,7 @@ public sealed class LineExportSettings
             l.ShowBeginCs = s.ShowBeginCs;
             l.ShowEndCs = s.ShowEndCs;
             l.FontSetName = string.IsNullOrEmpty(s.FontSetName) ? null : s.FontSetName;
+            if (s.CharFonts is { Count: > 0 } && s.CharText == l.GetDisplayText()) CharFontOperations.ApplyRanges(l, s.CharFonts);
         }
     }
 }

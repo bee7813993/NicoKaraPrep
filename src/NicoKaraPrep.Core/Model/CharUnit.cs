@@ -37,6 +37,13 @@ public sealed class CharUnit
     /// <summary>rlf の sakura_script（FLELE 用）。通常 null。ラウンドトリップ用。</summary>
     public string? SakuraScript { get; set; }
 
+    /// <summary>
+    /// この文字に適用するニコカラメーカーのフォント設定名の手動指定（文字単位。null は自動）。
+    /// 行の手動指定（<see cref="LyricsLine.FontSetName"/>）とパート記号による切り替えより優先し、後ろの文字・行へは引き継がない。
+    /// 歌詞ファイルには保存せず .tttproj に保存する。
+    /// </summary>
+    public string? FontSetName { get; set; }
+
     /// <summary>2連タグ用スペーサーかどうか。</summary>
     public bool IsSpacer => Text == Spacer;
 
@@ -55,6 +62,7 @@ public sealed class CharUnit
             WidthCache = WidthCache,
             SakuraSurface = SakuraSurface,
             SakuraScript = SakuraScript,
+            FontSetName = FontSetName,
         };
         c.AuxTimeTagsCs.AddRange(AuxTimeTagsCs);
         return c;
