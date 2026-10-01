@@ -31,6 +31,8 @@ public sealed partial class BrushEditor : UserControl
     {
         ViewModel = viewModel;
         Bindings.Update();
+        PickerPalette.SetViewModel(viewModel);
+        BitmapPalette.SetViewModel(viewModel);
     }
 
     /// <summary>

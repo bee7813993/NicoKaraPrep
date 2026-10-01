@@ -255,7 +255,7 @@ public sealed partial class BrushCellViewModel : ObservableObject
     [ObservableProperty]
     private bool isSelected;
 
-    /// <summary>配色パターンでのこの箇所の役割の名前（「キャラ色」など。個別・パターンなしは空）。</summary>
+    /// <summary>配色パターンでのこの箇所の役割の名前（「メイン色」など。個別・パターンなしは空）。</summary>
     [ObservableProperty]
     private string roleText = "";
 
@@ -302,7 +302,7 @@ public sealed class ContrastSuggestionItem
 
     public N3ContrastSuggestion Suggestion { get; }
 
-    /// <summary>候補の説明（「キャラ色を暗くして #B3B300 に」など）。</summary>
+    /// <summary>候補の説明（「メイン色を暗くして #B3B300 に」など）。</summary>
     public string Label { get; }
 
     /// <summary>見本の文字の色。</summary>
@@ -314,6 +314,82 @@ public sealed class ContrastSuggestionItem
     public string ToolTip { get; }
 
     public override string ToString() => Label;
+}
+
+/// <summary>使っている色の一覧の役割 1 つ（配色の編集欄の横。「メイン色」と、その色の見本）。</summary>
+public sealed class PaletteGroupItem
+{
+    public PaletteGroupItem(N3PaletteGroup group)
+    {
+        Title = group.RoleName;
+        Colors = group.Colors.Select(c => new PaletteColorItem(c, group.RoleName)).ToList();
+    }
+
+    /// <summary>役割の名前（メイン色・ベース色など）。</summary>
+    public string Title { get; }
+
+    public IReadOnlyList<PaletteColorItem> Colors { get; }
+
+    public override string ToString() => Title;
+}
+
+/// <summary>使っている色 1 つ（押すと、編集中の箇所をその色にする）。</summary>
+public sealed class PaletteColorItem
+{
+    public PaletteColorItem(N3PaletteColor color, string roleName)
+    {
+        Color = color;
+        Swatch = new SolidColorBrush(N3BrushPreview.ToColor(color.Color, color.AlphaPercent, Microsoft.UI.Colors.White));
+        string alpha = color.AlphaPercent != 100 ? $"（不透明度 {color.AlphaPercent}%）" : "";
+        Name = $"{roleName} #{color.Color}{alpha}";
+        ToolTip = $"#{color.Color}{alpha}\n{PaletteText.Fonts(color.FontNames)}";
+    }
+
+    public N3PaletteColor Color { get; }
+
+    public Brush Swatch { get; }
+
+    /// <summary>読み上げ・自動操作用の名前（「メイン色 #66C5EC」など）。</summary>
+    public string Name { get; }
+
+    public string ToolTip { get; }
+
+    public override string ToString() => Name;
+}
+
+/// <summary>使っている画像 1 つ（押すと、編集中の箇所をその画像にする）。</summary>
+public sealed class PaletteImageItem
+{
+    public PaletteImageItem(N3PaletteImage image)
+    {
+        Image = image;
+        Swatch = N3BrushPreview.Create(new N3Brush { Type = N3Brush.TypeBitmap, BitmapPath = image.Path, BitmapScale = image.Scale });
+        string file = System.IO.Path.GetFileName(image.Path);
+        string missing = File.Exists(image.Path) ? "" : "（見つかりません）";
+        Name = $"画像 {file}{missing}";
+        ToolTip = $"{image.Path}{missing}（拡大率 {image.Scale}%）\n{PaletteText.Fonts(image.FontNames)}";
+    }
+
+    public N3PaletteImage Image { get; }
+
+    public Brush Swatch { get; }
+
+    /// <summary>読み上げ・自動操作用の名前（「画像 star.png」など）。</summary>
+    public string Name { get; }
+
+    public string ToolTip { get; }
+
+    public override string ToString() => Name;
+}
+
+/// <summary>使っている色・画像の説明の文字列。</summary>
+internal static class PaletteText
+{
+    /// <summary>使っているフォント設定の名前（多ければ先頭の 6 つと件数）。</summary>
+    public static string Fonts(IReadOnlyList<string> names) =>
+        names.Count <= 6
+            ? $"使っているフォント設定: {string.Join("、", names)}"
+            : $"使っているフォント設定: {string.Join("、", names.Take(6))} ほか {names.Count - 6} 件";
 }
 
 /// <summary>フォント設定を使っている行 1 つ（使用状況の一覧）。</summary>

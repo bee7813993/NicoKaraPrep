@@ -2,6 +2,7 @@
     x:Class="NicoKaraPrep.App.Views.FontSettings.BrushEditor"
     xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:local="using:NicoKaraPrep.App.Views.FontSettings"
     xmlns:vm="using:NicoKaraPrep.App.ViewModels">
 
     <UserControl.Resources>
@@ -108,30 +109,46 @@
                 SpinButtonPlacementMode="Compact"
                 Value="{x:Bind ViewModel.BitmapScaleValue, Mode=TwoWay}" />
             <TextBlock Text="{x:Bind ViewModel.BitmapNote, Mode=OneWay}" TextWrapping="Wrap" FontSize="12" Foreground="{ThemeResource SystemFillColorCautionBrush}" />
-            <Border
-                Width="160"
-                Height="96"
-                HorizontalAlignment="Left"
-                CornerRadius="4"
-                BorderThickness="1"
-                BorderBrush="{ThemeResource ControlStrokeColorDefaultBrush}"
-                Background="{x:Bind ViewModel.StripBrush, Mode=OneWay}" />
+            <!-- 画像の見本と、その右に使っている色・画像の一覧（色を押すと単色に、画像を押すとその画像にする） -->
+            <Grid ColumnSpacing="16">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="*" />
+                </Grid.ColumnDefinitions>
+                <Border
+                    Width="160"
+                    Height="96"
+                    VerticalAlignment="Top"
+                    CornerRadius="4"
+                    BorderThickness="1"
+                    BorderBrush="{ThemeResource ControlStrokeColorDefaultBrush}"
+                    Background="{x:Bind ViewModel.StripBrush, Mode=OneWay}" />
+                <local:UsedColorsPanel x:Name="BitmapPalette" Grid.Column="1" VerticalAlignment="Top" />
+            </Grid>
         </StackPanel>
 
         <!-- 色（単色の色、または選んだマーカーの色） -->
         <TextBlock Text="{x:Bind ViewModel.ColorTargetText, Mode=OneWay}" Style="{StaticResource SmallNote}" />
-        <StackPanel Spacing="6" HorizontalAlignment="Left" Visibility="{x:Bind ViewModel.IsColorEditorVisible, Mode=OneWay}">
-            <ColorPicker
-                x:Name="Picker"
-                Color="{x:Bind ViewModel.PickerColor, Mode=TwoWay}"
-                ColorSpectrumShape="Box"
-                IsAlphaEnabled="True"
-                IsAlphaSliderVisible="True"
-                IsAlphaTextInputVisible="False"
-                IsColorChannelTextInputVisible="False"
-                IsHexInputVisible="False"
-                IsMoreButtonVisible="False"
-                IsColorPreviewVisible="True" />
+        <StackPanel Spacing="6" Visibility="{x:Bind ViewModel.IsColorEditorVisible, Mode=OneWay}">
+            <!-- ColorPicker と、その右の空いた所に使っている色の一覧 -->
+            <Grid ColumnSpacing="16">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="*" />
+                </Grid.ColumnDefinitions>
+                <ColorPicker
+                    x:Name="Picker"
+                    Color="{x:Bind ViewModel.PickerColor, Mode=TwoWay}"
+                    ColorSpectrumShape="Box"
+                    IsAlphaEnabled="True"
+                    IsAlphaSliderVisible="True"
+                    IsAlphaTextInputVisible="False"
+                    IsColorChannelTextInputVisible="False"
+                    IsHexInputVisible="False"
+                    IsMoreButtonVisible="False"
+                    IsColorPreviewVisible="True" />
+                <local:UsedColorsPanel x:Name="PickerPalette" Grid.Column="1" VerticalAlignment="Top" />
+            </Grid>
             <StackPanel x:Name="HexRow" Orientation="Horizontal" Spacing="8">
                 <TextBox
                     x:Name="HexBox"

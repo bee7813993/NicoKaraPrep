@@ -770,7 +770,7 @@ public sealed partial class FontSettingsView : UserControl
     }
 
     /// <summary>
-    /// 色のコピーの単位を作る: 8 箇所すべて、配色パターンの役割ごと（「キャラ色だけ」など）、編集中の 1 箇所だけ。
+    /// 色のコピーの単位を作る: 8 箇所すべて、配色パターンの役割ごと（「メイン色だけ」など）、編集中の 1 箇所だけ。
     /// </summary>
     private void BuildCopyScopes()
     {

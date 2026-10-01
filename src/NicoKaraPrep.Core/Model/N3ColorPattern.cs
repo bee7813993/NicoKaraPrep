@@ -3,9 +3,9 @@
 namespace NicoKaraPrep.Core.Model;
 
 /// <summary>
-/// 配色パターン。配色の 8 箇所（<see cref="N3FontDetail.Brushes"/> の添字）それぞれを、役割（「キャラ色」「ベース色」など）か
+/// 配色パターン。配色の 8 箇所（<see cref="N3FontDetail.Brushes"/> の添字）それぞれを、役割（「メイン色」「ベース色」など）か
 /// 個別（パターンに縛らない）に割り当てる。同じ役割の箇所は同じ色にそろえる。
-/// 例: キャラ色 = ワイプ後の縁・ワイプ前の文字・ワイプ前の飾り、ベース色 = ワイプ後の文字・ワイプ後の飾り・ワイプ前の縁。
+/// 例: メイン色 = ワイプ後の縁・ワイプ前の文字・ワイプ前の飾り、ベース色 = ワイプ後の文字・ワイプ後の飾り・ワイプ前の縁。
 /// </summary>
 public sealed class N3ColorPattern
 {
@@ -73,7 +73,7 @@ public static class N3ColorPatterns
     /// <summary>フォント設定で「パターンを使わない（8 箇所を個別に指定）」を選んだときの識別子。</summary>
     public const string NoneId = "none";
 
-    /// <summary>キャラ色の反転（2 色）の識別子（新しいフォント設定の既定）。</summary>
+    /// <summary>メイン色の反転（2 色）の識別子（新しいフォント設定の既定）。もとはキャラ色と呼んでいたので識別子は chara のまま（保存済みの設定のため変えない）。</summary>
     public const string CharaInverseId = BuiltInPrefix + "chara-inverse";
 
     /// <summary>ワイプ前後が同じ（3 色）の識別子。</summary>
@@ -93,12 +93,12 @@ public static class N3ColorPatterns
     /// <summary>標準のパターン（実際のフォント設定から読み取ったもの）。</summary>
     public static IReadOnlyList<N3ColorPattern> BuiltIns { get; } = new[]
     {
-        // ワイプ前の文字・飾りとワイプ後の縁 = キャラ色、ワイプ前の縁とワイプ後の文字・飾り = ベース色（白など）。縁 2 は個別
+        // ワイプ前の文字・飾りとワイプ後の縁 = メイン色（キャラの色など）、ワイプ前の縁とワイプ後の文字・飾り = ベース色（白など）。縁 2 は個別
         new N3ColorPattern
         {
             Id = CharaInverseId,
-            Name = "キャラ色の反転（2 色）",
-            Roles = new List<string> { "キャラ色", "ベース色" },
+            Name = "メイン色の反転（2 色）",
+            Roles = new List<string> { "メイン色", "ベース色" },
             Slots = new[] { 1, 0, N3ColorPattern.Individual, 1, 0, 1, N3ColorPattern.Individual, 0 },
         },
         // ワイプの前後で色が変わらない（情報などの字幕）。文字・縁・飾りをそれぞれ前後で同じにする。縁 2 は個別

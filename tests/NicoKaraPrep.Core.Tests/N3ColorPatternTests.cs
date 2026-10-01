@@ -17,7 +17,7 @@ public class N3ColorPatternTests
         Stops = stops.Select(s => new N3GradientStop { Position = s.Position, Color = s.Color, AlphaPercent = 100 }).ToList(),
     };
 
-    /// <summary>ユーザーのキャラ用フォント: キャラ色 → [1][4][7]、白 → [0][3][5]。縁 2 は [2]=黒・[6]=白（未使用）。</summary>
+    /// <summary>ユーザーのキャラ用フォント: メイン色（キャラの色） → [1][4][7]、白 → [0][3][5]。縁 2 は [2]=黒・[6]=白（未使用）。</summary>
     private static N3FontDetail CharaFont(string chara)
     {
         var d = N3FontDetail.CreateDefault();
@@ -38,7 +38,7 @@ public class N3ColorPatternTests
     // ------------------------------------------------------------ 比べる
 
     [Fact]
-    public void 比べる_キャラ用フォントはキャラ色の反転の形()
+    public void 比べる_キャラ用フォントはメイン色の反転の形()
     {
         var d = CharaFont("F8B500");
         var m = N3ColorPatterns.Detect(d, N3ColorPatterns.BuiltIns);
@@ -91,7 +91,7 @@ public class N3ColorPatternTests
 
         // ワイプ前後が同じ: 文字（2 箇所）と縁（2 箇所）が食い違っていて、どちらが正しいか分からない
         Assert.True(N3ColorPatterns.Evaluate(d, NoWipe).Ambiguous);
-        // キャラ色の反転: ベース色の 3 箇所がすべて違う
+        // メイン色の反転: ベース色の 3 箇所がすべて違う
         Assert.True(N3ColorPatterns.Evaluate(d, Chara).Ambiguous);
         Assert.Null(N3ColorPatterns.Detect(d, N3ColorPatterns.BuiltIns));
     }

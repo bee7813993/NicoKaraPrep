@@ -6,7 +6,7 @@ public class N3ContrastTests
 {
     private static N3Brush Solid(string color, int alpha = 100) => new() { Type = N3Brush.TypeSolid, Color = color, AlphaPercent = alpha };
 
-    /// <summary>キャラ色の反転のキャラ用フォント（キャラ色 → [1][4][7]、白 → [0][3][5]）。</summary>
+    /// <summary>メイン色の反転のキャラ用フォント（メイン色 → [1][4][7]、白 → [0][3][5]）。</summary>
     private static N3FontSet Chara(string color)
     {
         var f = new N3FontSet { Name = "（X）" };

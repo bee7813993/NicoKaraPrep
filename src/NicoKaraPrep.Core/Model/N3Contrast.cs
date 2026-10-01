@@ -42,8 +42,8 @@ public static class N3Contrast
     public const double TargetRatio = 2.5;
 
     /// <summary>
-    /// 調べる文字と縁の組（ワイプ前、ワイプ後の順。キャラ色の反転では、ワイプ前がキャラ色の文字と白の縁になり、
-    /// その組の候補（キャラ色を直す）がいちばん分かりやすいので先にする）。
+    /// 調べる文字と縁の組（ワイプ前、ワイプ後の順。メイン色の反転では、ワイプ前がメイン色の文字と白の縁になり、
+    /// その組の候補（メイン色を直す）がいちばん分かりやすいので先にする）。
     /// </summary>
     public static IReadOnlyList<(int Text, int Edge)> Pairs { get; } = new[] { (4, 5), (0, 1) };
 

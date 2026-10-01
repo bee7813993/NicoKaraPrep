@@ -9,7 +9,7 @@ public class N3FontComposerTests
 
     private static N3Brush Solid(string color) => new() { Type = N3Brush.TypeSolid, Color = color, AlphaPercent = 100 };
 
-    /// <summary>ユーザーのキャラ用フォント（キャラ色 → [1][4][7]、白 → [0][3][5]）。</summary>
+    /// <summary>ユーザーのキャラ用フォント（メイン色 → [1][4][7]、白 → [0][3][5]）。</summary>
     private static N3FontSet Chara1(string name, string color)
     {
         var f = new N3FontSet { Name = name };
@@ -62,7 +62,7 @@ public class N3FontComposerTests
     // ------------------------------------------------------------ 作る
 
     [Fact]
-    public void 作る_キャラ色だけ多色_ベース色と色以外は最初の元フォント()
+    public void 作る_メイン色だけ多色_ベース色と色以外は最初の元フォント()
     {
         var kozue = Chara1("（梢）", "68BE8D");
         var ginko = Chara1("（吟子）", "A2D7DD");
@@ -98,7 +98,7 @@ public class N3FontComposerTests
     }
 
     [Fact]
-    public void 作り直す_元のキャラ色を直すと作り直せる_手で変えたかも分かる()
+    public void 作り直す_元のメイン色を直すと作り直せる_手で変えたかも分かる()
     {
         var kozue = Chara1("（梢）", "68BE8D");
         var ginko = Chara1("（吟子）", "A2D7DD");

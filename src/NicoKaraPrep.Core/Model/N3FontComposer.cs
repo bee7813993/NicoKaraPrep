@@ -28,7 +28,7 @@ public sealed class N3FontComposition
 }
 
 /// <summary>
-/// 組み合わせフォントを作る・作り直す。配色パターンの最初の役割（キャラ色の反転ならキャラ色）を多色（ミルフィーユかグラデーション）にし、
+/// 組み合わせフォントを作る・作り直す。配色パターンの最初の役割（メイン色の反転ならメイン色）を多色（ミルフィーユかグラデーション）にし、
 /// それ以外の箇所（ベース色・縁 2）と色以外の項目は最初の元フォント設定から写す。
 /// </summary>
 public static class N3FontComposer
@@ -149,7 +149,7 @@ public static class N3FontComposer
         return font;
     }
 
-    /// <summary>組み合わせに使うパターン（組み合わせフォントで選んだもの → 最初の元フォント設定に当てはまるもの → キャラ色の反転）。</summary>
+    /// <summary>組み合わせに使うパターン（組み合わせフォントで選んだもの → 最初の元フォント設定に当てはまるもの → メイン色の反転）。</summary>
     public static N3ColorPattern PatternFor(N3FontSet? composed, IReadOnlyList<N3FontSet> sources, IReadOnlyList<N3ColorPattern> patterns)
     {
         if (composed is not null && N3ColorPatterns.Find(patterns, composed.ColorPatternId) is { Roles.Count: > 0 } chosen) return chosen;

@@ -25,6 +25,19 @@ public sealed partial class FontSettingsViewModel
     public N3PatternMatch? PatternOf(N3FontSet font) => N3ColorPatterns.Effective(font, Patterns);
 
     /// <summary>
+    /// 使っている色と画像の一覧（配色の編集欄の横に出す）。色は、編集中のフォント設定の配色パターンの役割ごと
+    /// （パターンを使っていなければ、新しいフォント設定に使うパターンの役割ごと）に、アプリ共通・この曲専用のすべてのフォント設定から集める。
+    /// </summary>
+    public (List<N3PaletteGroup> Groups, List<N3PaletteImage> Images) UsedColors(N3FontSet font)
+    {
+        var all = AllFonts;
+        var pattern = PatternOf(font)?.Pattern
+            ?? N3ColorPatterns.Find(Patterns, DefaultPatternId)
+            ?? N3ColorPatterns.BuiltIns[0];
+        return (N3ColorPalette.Collect(all, Patterns, pattern.Roles), N3ColorPalette.CollectImages(all));
+    }
+
+    /// <summary>
     /// フォント設定の配色パターンを変える。パターンの形と違う箇所があれば、役割ごとに多いほうの色へそろえる
     /// （色が変わったときだけ編集扱いにする。パターンの選択だけならニコカラメーカー3 のテンプレートとの連動は外さない）。
     /// <see cref="N3ColorPatterns.NoneId"/> ならパターンを外す（色は変えない）。

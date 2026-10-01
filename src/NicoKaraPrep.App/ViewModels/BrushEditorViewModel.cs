@@ -32,7 +32,7 @@ public sealed partial class BrushEditorViewModel : ObservableObject
     /// <summary>まとめて変える、同じ役割のほかの箇所（無ければ空）。</summary>
     public IReadOnlyList<int> LinkedIndices { get; private set; } = Array.Empty<int>();
 
-    /// <summary>まとめて変える役割の名前（「キャラ色」など。まとめないときは空）。</summary>
+    /// <summary>まとめて変える役割の名前（「メイン色」など。まとめないときは空）。</summary>
     private string _roleName = "";
 
     private N3Brush? Model => _editor.Font?.Detail.Brushes[Index];
@@ -97,6 +97,21 @@ public sealed partial class BrushEditorViewModel : ObservableObject
 
     [ObservableProperty]
     private string bitmapNote = "";
+
+    // ------------------------------------------------------------ 使っている色（ColorPicker の横）
+
+    /// <summary>役割（メイン色・ベース色など）ごとの使っている色。</summary>
+    public ObservableCollection<PaletteGroupItem> PaletteGroups { get; } = new();
+
+    /// <summary>使っている画像。</summary>
+    public ObservableCollection<PaletteImageItem> PaletteImages { get; } = new();
+
+    /// <summary>使っている色か画像があるか（無ければ一覧を出さない）。</summary>
+    [ObservableProperty]
+    private bool hasPalette;
+
+    [ObservableProperty]
+    private bool hasPaletteImages;
 
     // ------------------------------------------------------------ 読み込み
 
@@ -302,13 +317,17 @@ public sealed partial class BrushEditorViewModel : ObservableObject
         ApplyColor(null, (int)Math.Round(Math.Clamp(value, 0, 100)), ColorSource.Alpha);
     }
 
-    /// <summary>単色の色か選んだマーカーの色を変える（null の項目は変えない）。変えたあと、ほかの色の欄を合わせる。</summary>
+    /// <summary>
+    /// 単色の色か選んだマーカーの色を変える（null の項目は変えない）。変えたあと、ほかの色の欄を合わせる。
+    /// 使っている色の一覧から選んだときは、ColorPicker の操作とまとめず、1 回の 元に戻す で戻るようにする。
+    /// </summary>
     private void ApplyColor(string? hex, int? alpha, ColorSource source)
     {
         if (Model is not { } b) return;
+        bool separate = source == ColorSource.Palette;
         if (IsSolid)
         {
-            Edit(Key("color"), x =>
+            Edit(separate ? null : Key("color"), x =>
             {
                 if (hex is not null) x.Color = hex;
                 else if (!N3FontSet.IsValidWeb16(x.Color)) x.Color = "FFFFFF"; // 未指定の色の不透明度だけを変えたら白にする
@@ -321,7 +340,7 @@ public sealed partial class BrushEditorViewModel : ObservableObject
         else if (IsStops && SelectedStop is { } s)
         {
             var stop = s.Model;
-            Edit(Key($"stop{s.Index}.color"), _ =>
+            Edit(separate ? null : Key($"stop{s.Index}.color"), _ =>
             {
                 if (hex is not null) stop.Color = hex;
                 if (alpha is int a) stop.AlphaPercent = a;
@@ -331,12 +350,60 @@ public sealed partial class BrushEditorViewModel : ObservableObject
         }
     }
 
-    /// <summary>色を変えた欄。</summary>
+    /// <summary>色を変えた欄（<see cref="Palette"/> は使っている色の一覧。どの欄にも書き戻す）。</summary>
     private enum ColorSource
     {
         Picker,
         Hex,
         Alpha,
+        Palette,
+    }
+
+    // ------------------------------------------------------------ 使っている色
+
+    /// <summary>使っている色・画像の一覧を入れ替える（色が無い役割は出さない）。</summary>
+    public void SetPalette(IReadOnlyList<N3PaletteGroup> groups, IReadOnlyList<N3PaletteImage> images)
+    {
+        PaletteGroups.Clear();
+        foreach (var g in groups.Where(g => g.Colors.Count > 0)) PaletteGroups.Add(new PaletteGroupItem(g));
+        PaletteImages.Clear();
+        foreach (var image in images) PaletteImages.Add(new PaletteImageItem(image));
+        HasPaletteImages = PaletteImages.Count > 0;
+        HasPalette = PaletteGroups.Count > 0 || HasPaletteImages;
+    }
+
+    /// <summary>
+    /// 使っている色を当てる。単色ならその色に、グラデーション・ミルフィーユで選んでいるマーカーがあればマーカーの色にする。
+    /// 画像（とマーカーを選んでいないとき）は、その色の単色にする。同じ役割でまとめて変える箇所にも入る。
+    /// </summary>
+    public void ApplyPaletteColor(N3PaletteColor color)
+    {
+        if (Model is null) return;
+        if (IsSolid || (IsStops && SelectedStop is not null))
+        {
+            ApplyColor(color.Color, color.AlphaPercent, ColorSource.Palette);
+            return;
+        }
+        Edit(null, b =>
+        {
+            b.Type = N3Brush.TypeSolid;
+            b.Color = color.Color;
+            b.AlphaPercent = color.AlphaPercent;
+        });
+        Load(Index, LinkedIndices, _roleName);
+    }
+
+    /// <summary>使っている画像を当てる（その画像と拡大率の画像の塗りにする。同じ役割でまとめて変える箇所にも入る）。</summary>
+    public void ApplyPaletteImage(N3PaletteImage image)
+    {
+        if (Model is null) return;
+        Edit(null, b =>
+        {
+            b.Type = N3Brush.TypeBitmap;
+            b.BitmapPath = image.Path;
+            b.BitmapScale = image.Scale;
+        });
+        Load(Index, LinkedIndices, _roleName);
     }
 
     /// <summary>色を変えたあと、変えた欄以外（ColorPicker・16 進・不透明度）を合わせる。</summary>

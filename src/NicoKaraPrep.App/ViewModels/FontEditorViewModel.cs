@@ -293,10 +293,11 @@ public sealed partial class FontEditorViewModel : ObservableObject
         CompositionWiden = c.EndWidenPercent;
         CompositionLinked = c.Linked;
         bool missing = c.SourceIds.Any(id => _owner.FindFont(id) is null);
+        string role = _owner.PatternOf(f)?.Pattern.RoleName(N3FontComposer.MultiColorRole) is { Length: > 0 } r ? r : "メイン色";
         CompositionNote = missing
             ? "元のフォント設定が見つからないものがあるため、作り直せません（今の色のままです）"
             : c.Linked
-                ? "元のフォント設定のキャラ色を変えると、この組み合わせの色も自動で作り直します。ベース色などほかの箇所は、最初の元のフォント設定と同じです"
+                ? $"元のフォント設定の{role}を変えると、この組み合わせの色も自動で作り直します。{role}以外の箇所は、最初の元のフォント設定と同じです"
                 : "元のフォント設定とは連動していません（色は今のまま変わりません）";
     }
 
@@ -509,6 +510,13 @@ public sealed partial class FontEditorViewModel : ObservableObject
         var linked = SelectedSlotHasRole && EditRoleTogether ? slots : new List<int>();
         foreach (var cell in BrushCells) cell.IsLinked = cell.Index != index && linked.Contains(cell.Index);
         BrushEditor.Load(index, linked, p?.RoleName(role) ?? "");
+
+        // 使っている色の一覧（ColorPicker の横）。編集中に一覧が動かないよう、箇所を選び直したときだけ作り直す
+        if (Font is { } font)
+        {
+            var (groups, images) = _owner.UsedColors(font);
+            BrushEditor.SetPalette(groups, images);
+        }
     }
 
     partial void OnEditRoleTogetherChanged(bool value)
