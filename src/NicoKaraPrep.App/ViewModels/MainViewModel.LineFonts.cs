@@ -186,7 +186,7 @@ public partial class MainViewModel
                 if (line.IsEmpty || line.GetDisplayText().Length == 0 || index >= resolved[t].Count) continue;
                 var fonts = resolved[t][index];
                 if (fonts.Runs.Count == 0) continue;
-                var spacing = new SubtitleSpacing((float)layout.LyricsIntervalPx, (float)layout.RubyIntervalPx, (float)layout.LyricsAndRubyIntervalPx, layout.RubyAlignment);
+                var spacing = new SubtitleSpacing((float)layout.LyricsIntervalPx, (float)layout.RubyIntervalPx, (float)layout.LyricsAndRubyIntervalPx, layout.RubyAlignment, layout.AllowBiting);
                 previewLines.Add(new PreviewLine(
                     Source(line, fonts, spacing), plan.BeginMs, plan.EndMs, t, plan.PageIndex, plan.Row, Math.Max(page.Rows, page.Count),
                     layout, N3WipeTimeline.Groups(line)));

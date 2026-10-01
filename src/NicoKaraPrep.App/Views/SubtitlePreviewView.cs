@@ -160,24 +160,26 @@ public sealed class SubtitlePreviewView : Grid
             }
         }
 
-        float w = layout.Width;
+        // 左右は縁を含めて描く範囲で余白にそろえる（ニコカラメーカー3 と同じく、縁の外側が余白の位置）
+        float left = layout.DrawLeft, right = layout.DrawRight;
+        float w = right - left;
         float hm = (float)L.HorizontalMarginPx;
         int align = L.AlignmentForRow(line.Row, rows);
         float x = align switch
         {
-            0 => hm,
-            2 => W - hm - w,
-            _ => (W - w) / 2,
+            0 => hm - left,
+            2 => W - hm - right,
+            _ => (W - w) / 2 - left,
         };
         // 短い行: 左寄せで右端が画面の中央に届かない・右寄せで左端が中央より右
         bool shortLine = (align == 0 && hm + w < W / 2) || (align == 2 && W - hm - w > W / 2);
         if (shortLine && L.SmartHorizon == 1)
         {
-            x = align == 0 ? W / 2 - w : W / 2; // 中心位置揃え: 中央で終わる（左寄せ）・中央から始まる（右寄せ）
+            x = align == 0 ? W / 2 - right : W / 2 - left; // 中心位置揃え: 中央で終わる（左寄せ）・中央から始まる（右寄せ）
         }
         else if (shortLine && L.SmartHorizon == 2)
         {
-            x = (W - w) / 2; // 左右余白揃え: 左右の余白を等しく（中央に寄せる）
+            x = (W - w) / 2 - left; // 左右余白揃え: 左右の余白を等しく（中央に寄せる）
         }
         return (x, baseline);
     }

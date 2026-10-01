@@ -404,7 +404,7 @@ public sealed partial class LineSidePanel : UserControl
         var lines = new List<PreviewLine>();
         if (anchor is not null && model.Pages.TryGetValue((anchor.Tab, anchor.Page), out var page))
         {
-            var spacing = new SubtitleSpacing((float)layout.LyricsIntervalPx, (float)layout.RubyIntervalPx, (float)layout.LyricsAndRubyIntervalPx, layout.RubyAlignment);
+            var spacing = new SubtitleSpacing((float)layout.LyricsIntervalPx, (float)layout.RubyIntervalPx, (float)layout.LyricsAndRubyIntervalPx, layout.RubyAlignment, layout.AllowBiting);
             lines = page.Select(p => p with
             {
                 Source = p.Source.WithSpacing(spacing),

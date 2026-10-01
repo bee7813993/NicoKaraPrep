@@ -6,10 +6,13 @@ using Windows.Foundation;
 
 namespace NicoKaraPrep.App.Services.Subtitles;
 
-/// <summary>文字の間隔・ルビの並べ方（ニコカラメーカー3 のレイアウト設定の文字間隔の項目。基準の画面の高さの px）。</summary>
-public sealed record SubtitleSpacing(float LyricsInterval, float RubyInterval, float LyricsAndRubyInterval, int RubyAlignment)
+/// <summary>
+/// 文字の間隔・ルビの並べ方（ニコカラメーカー3 のレイアウト設定の文字間隔の項目。基準の画面の高さの px）。
+/// AllowBiting は「一部の文字の食い込みを許容する」（false: 縁を含めた字面が隣の文字と重ならないように並べる）。
+/// </summary>
+public sealed record SubtitleSpacing(float LyricsInterval, float RubyInterval, float LyricsAndRubyInterval, int RubyAlignment, bool AllowBiting = false)
 {
-    /// <summary>ニコカラメーカー3 の新しいレイアウトの既定（間隔 0・ルビは自動配置）。</summary>
+    /// <summary>ニコカラメーカー3 の新しいレイアウトの既定（間隔 0・ルビは自動配置・食い込みは許さない）。</summary>
     public static readonly SubtitleSpacing Default = new(0, 0, 0, 0);
 }
 
@@ -162,6 +165,11 @@ internal sealed class SubtitleLineLayout : IDisposable
 
     public Rect RubyInk { get; private set; }
 
+    /// <summary>描く範囲（縁を含めた字面・画像）の左端・右端。行を左右の余白にそろえるときに使う（ニコカラメーカー3 も縁を含めて余白をとる）。</summary>
+    public float DrawLeft { get; private set; }
+
+    public float DrawRight { get; private set; }
+
     /// <summary>本文のいちばん大きい文字のサイズ（行リストで縮める倍率を決めるため）。</summary>
     public float MainSize { get; private set; }
 
@@ -213,6 +221,7 @@ internal sealed class SubtitleLineLayout : IDisposable
 
         Rect? mainInk = null;
         float ascent = 0, descent = 0, mainOuter = 0, mainSize = 0;
+        float drawLeft = float.MaxValue, drawRight = float.MinValue;
         float imageTop = 0, imageBottom = 0;
         float x = 0;
         bool any = false;
@@ -256,6 +265,8 @@ internal sealed class SubtitleLineLayout : IDisposable
                     x += (float)Math.Max(0, opts.MarginLeft);
                     var rect = new Rect(x, bottom - h, w, h);
                     layout.Images.Add(new Image(before, after, rect));
+                    drawLeft = Math.Min(drawLeft, (float)rect.Left);
+                    drawRight = Math.Max(drawRight, (float)rect.Right);
                     x += (float)w + (float)Math.Max(0, opts.MarginRight);
                     layout.Tokens.Add(new Token(o.Start, o.EndExclusive - 1, start, x - start, true, font));
                     imageTop = Math.Min(imageTop, (float)rect.Top);
@@ -277,24 +288,30 @@ internal sealed class SubtitleLineLayout : IDisposable
             var faceValue = N3FontLibrary.RenderFace(fonts[f], faceIndex);
             var glyph = SubtitleGlyphCache.Get(c.Text, faceValue);
             if (!glyph.FontFound) layout.MissingFont = true;
-            layout.Tokens.Add(new Token(i, i, x, glyph.Advance, false, f));
+            float outerEdge = OuterEdge(faceValue);
+            var (pitch, offset) = Pitch(glyph, faceValue, outerEdge, spacing.AllowBiting);
+            layout.Tokens.Add(new Token(i, i, x, pitch, false, f));
             glyphTokens.Add((layout.Tokens.Count - 1, glyph, faceIndex));
             if (glyph.Geometry is not null)
             {
-                var moved = glyph.Geometry.Transform(Matrix3x2.CreateTranslation(x, 0));
+                var moved = glyph.Geometry.Transform(Matrix3x2.CreateTranslation(x + offset, 0));
                 Add(mainParts, (f, faceIndex), moved);
                 var ink = glyph.Ink!.Value;
-                var r = new Rect(ink.X + x, ink.Y, ink.Width, ink.Height);
+                var r = new Rect(ink.X + x + offset, ink.Y, ink.Width, ink.Height);
                 mainInk = mainInk is Rect u ? Union(u, r) : r;
+                drawLeft = Math.Min(drawLeft, (float)r.Left - outerEdge / 2);
+                drawRight = Math.Max(drawRight, (float)r.Right + outerEdge / 2);
             }
             ascent = Math.Max(ascent, glyph.Ascent);
             descent = Math.Max(descent, glyph.Descent);
-            mainOuter = Math.Max(mainOuter, OuterEdge(faceValue));
+            mainOuter = Math.Max(mainOuter, outerEdge);
             mainSize = Math.Max(mainSize, (float)faceValue.SizePx);
-            x += glyph.Advance;
+            x += pitch;
             any = true;
         }
         layout.Width = x;
+        layout.DrawLeft = drawLeft <= drawRight ? drawLeft : 0;
+        layout.DrawRight = drawLeft <= drawRight ? drawRight : x;
         layout.MainSize = mainSize;
         layout.TextTop = -ascent;
         layout.TextBottom = descent;
@@ -386,16 +403,19 @@ internal sealed class SubtitleLineLayout : IDisposable
             var t1 = layout.Tokens[lastToken];
             int font = t0.Font;
             float gx0 = t0.X, gx1 = t1.X + t1.Width;
-            var chars = new List<(SubtitleGlyph Glyph, int Face)>();
+            var chars = new List<(SubtitleGlyph Glyph, int Face, float Pitch, float Offset)>();
             foreach (string ch in TextElements(ruby))
             {
                 int face = N3FontLibrary.FaceIndexFor(ch, ruby: true);
                 var value = N3FontLibrary.RenderFace(fonts[font], face);
-                chars.Add((SubtitleGlyphCache.Get(ch, value), face));
-                rubyOuter = Math.Max(rubyOuter, OuterEdge(value));
+                var glyph = SubtitleGlyphCache.Get(ch, value);
+                float outerEdge = OuterEdge(value);
+                var (pitch, offset) = Pitch(glyph, value, outerEdge, spacing.AllowBiting);
+                chars.Add((glyph, face, pitch, offset));
+                rubyOuter = Math.Max(rubyOuter, outerEdge);
             }
             if (chars.Count == 0) continue;
-            float sum = chars.Sum(c => c.Glyph.Advance);
+            float sum = chars.Sum(c => c.Pitch);
             float width = gx1 - gx0;
 
             // 自動配置: 親文字が英数字だけなら中央、それ以外は均等割り付け
@@ -423,13 +443,34 @@ internal sealed class SubtitleLineLayout : IDisposable
             {
                 x = (gx0 + gx1) / 2 - (sum + gapBetween * (chars.Count - 1)) / 2;
             }
-            foreach (var (glyph, face) in chars)
+            foreach (var (glyph, face, pitch, offset) in chars)
             {
-                result.Add((x, glyph, font, face));
-                x += glyph.Advance + gapBetween;
+                result.Add((x + offset, glyph, font, face));
+                x += pitch + gapBetween;
             }
         }
         return result;
+    }
+
+    /// <summary>
+    /// 文字の送り幅と、送りの左端から文字の原点までのずれ。食い込みを許さない（ニコカラメーカー3 の既定）ときは、
+    /// 送り幅を「1 文字の幅（文字サイズ × 横倍率）」と「縁を含めた字面（字面を外側の縁の幅の半分ずつ広げた範囲）」の大きいほうにして、
+    /// 縁を含めた字面を送りの中央に置く（隣の文字と縁が重ならない。英字も 1 文字の幅に置く。ニコカラメーカー3 の歌詞設定パネルの並び方と同じ）。
+    /// 食い込みを許すときはフォントの送り幅のまま（縁は重なる）。
+    /// </summary>
+    private static (float Pitch, float Offset) Pitch(SubtitleGlyph glyph, N3FontFace face, float outerEdge, bool allowBiting)
+    {
+        if (allowBiting) return (glyph.Advance, 0);
+        float xScale = (face.XScale > 0 ? Math.Clamp(face.XScale, 10, 1000) : 100) / 100f;
+        float em = (float)(double.IsFinite(face.SizePx) ? Math.Clamp(face.SizePx, 1, 2000) : 100) * xScale;
+        if (glyph.Ink is not Rect ink)
+        {
+            float blank = Math.Max(glyph.Advance, em); // 空白も 1 文字の幅
+            return (blank, (blank - glyph.Advance) / 2);
+        }
+        float drawn = (float)ink.Width + outerEdge;
+        float pitch = Math.Max(em, drawn);
+        return (pitch, (pitch - drawn) / 2 - ((float)ink.X - outerEdge / 2));
     }
 
     /// <summary>2 つの表示の単位のあいだに絵文字が無いか（ルビのまとまりは絵文字をまたがない）。</summary>
