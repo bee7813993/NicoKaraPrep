@@ -8,7 +8,7 @@ namespace NicoKaraPrep.App.Services.Subtitles;
 
 /// <summary>
 /// 文字の間隔・ルビの並べ方（ニコカラメーカー3 のレイアウト設定の文字間隔の項目。基準の画面の高さの px）。
-/// AllowBiting は「一部の文字の食い込みを許容する」（false: 縁を含めた字面が隣の文字と重ならないように並べる）。
+/// AllowBiting は「一部の文字の食い込みを許容する」（false: 字面の左右に縁の分のすき間をとって、隣の文字と縁が重ならないように並べる）。
 /// </summary>
 public sealed record SubtitleSpacing(float LyricsInterval, float RubyInterval, float LyricsAndRubyInterval, int RubyAlignment, bool AllowBiting = false)
 {
@@ -147,13 +147,21 @@ internal sealed class SubtitleLineLayout : IDisposable
 
     public List<Image> Images { get; } = new();
 
-    /// <summary>行の幅（最初の文字の左端から最後の文字の送りの右端まで）。</summary>
+    /// <summary>行の幅（最初の文字の送りの左端から最後の文字の送りの右端まで）。行を左右の余白にそろえるときはこの幅を使う。</summary>
     public float Width { get; private set; }
 
-    /// <summary>本文の文字の枠の上端・下端（行を並べる位置の基準）。</summary>
+    /// <summary>本文の文字の枠（フォントの上端〜下端）の上端・下端。</summary>
     public float TextTop { get; private set; }
 
     public float TextBottom { get; private set; }
+
+    /// <summary>
+    /// 本文の文字の枠に縁の幅の半分ずつを足した上端・下端（行を並べる位置の基準）。ニコカラメーカー3 は、この枠どうしの間を行間にし、
+    /// 下寄せでは下端を下余白の位置に、上寄せでは上端を上余白の位置に置く（出力画像の実測）。
+    /// </summary>
+    public float BoxTop { get; private set; }
+
+    public float BoxBottom { get; private set; }
 
     /// <summary>描く範囲（ルビ・縁・飾り・画像を含む）の上端・下端。</summary>
     public float Top { get; private set; }
@@ -164,11 +172,6 @@ internal sealed class SubtitleLineLayout : IDisposable
     public Rect MainInk { get; private set; }
 
     public Rect RubyInk { get; private set; }
-
-    /// <summary>描く範囲（縁を含めた字面・画像）の左端・右端。行を左右の余白にそろえるときに使う（ニコカラメーカー3 も縁を含めて余白をとる）。</summary>
-    public float DrawLeft { get; private set; }
-
-    public float DrawRight { get; private set; }
 
     /// <summary>本文のいちばん大きい文字のサイズ（行リストで縮める倍率を決めるため）。</summary>
     public float MainSize { get; private set; }
@@ -221,7 +224,6 @@ internal sealed class SubtitleLineLayout : IDisposable
 
         Rect? mainInk = null;
         float ascent = 0, descent = 0, mainOuter = 0, mainSize = 0;
-        float drawLeft = float.MaxValue, drawRight = float.MinValue;
         float imageTop = 0, imageBottom = 0;
         float x = 0;
         bool any = false;
@@ -258,15 +260,14 @@ internal sealed class SubtitleLineLayout : IDisposable
                             w = box * size.W / size.H;
                         }
                     }
-                    // 縦の位置: 縁取りの分だけ文字の枠の下端より下げ、下余白だけ上げる（実機の表示の実測。行プレビューと同じ）
+                    // 縦の位置: 画像の下端を、文字の枠に縁の幅の半分を足した下端（行を並べる枠の下端）にそろえ、下余白だけ上げる
+                    // （ニコカラメーカー3 の出力画像の実測）
                     var reference = SubtitleGlyphCache.Get("あ", face);
-                    float bottom = (float)(reference.Descent + Math.Max(0, face.EdgePx) - opts.MarginBottom);
+                    float bottom = (float)(reference.Descent + OuterEdge(face) / 2 - opts.MarginBottom);
                     float start = x;
                     x += (float)Math.Max(0, opts.MarginLeft);
                     var rect = new Rect(x, bottom - h, w, h);
                     layout.Images.Add(new Image(before, after, rect));
-                    drawLeft = Math.Min(drawLeft, (float)rect.Left);
-                    drawRight = Math.Max(drawRight, (float)rect.Right);
                     x += (float)w + (float)Math.Max(0, opts.MarginRight);
                     layout.Tokens.Add(new Token(o.Start, o.EndExclusive - 1, start, x - start, true, font));
                     imageTop = Math.Min(imageTop, (float)rect.Top);
@@ -299,8 +300,6 @@ internal sealed class SubtitleLineLayout : IDisposable
                 var ink = glyph.Ink!.Value;
                 var r = new Rect(ink.X + x + offset, ink.Y, ink.Width, ink.Height);
                 mainInk = mainInk is Rect u ? Union(u, r) : r;
-                drawLeft = Math.Min(drawLeft, (float)r.Left - outerEdge / 2);
-                drawRight = Math.Max(drawRight, (float)r.Right + outerEdge / 2);
             }
             ascent = Math.Max(ascent, glyph.Ascent);
             descent = Math.Max(descent, glyph.Descent);
@@ -310,22 +309,22 @@ internal sealed class SubtitleLineLayout : IDisposable
             any = true;
         }
         layout.Width = x;
-        layout.DrawLeft = drawLeft <= drawRight ? drawLeft : 0;
-        layout.DrawRight = drawLeft <= drawRight ? drawRight : x;
         layout.MainSize = mainSize;
         layout.TextTop = -ascent;
         layout.TextBottom = descent;
+        layout.BoxTop = -ascent - mainOuter / 2;
+        layout.BoxBottom = descent + mainOuter / 2;
         layout.MainInk = mainInk ?? new Rect(0, -ascent, Math.Max(1, x), Math.Max(1, ascent + descent));
 
         // ルビ
         float rubyOuter = 0;
         Rect? rubyInk = null;
         var rubyGlyphs = PlaceRuby(line, layout, glyphTokens, fonts, spacing, ref rubyOuter);
-        if (rubyGlyphs.Count > 0 && mainInk is Rect main)
+        if (rubyGlyphs.Count > 0)
         {
-            float rubyInkBottom = rubyGlyphs.Max(g => (float)(g.Glyph.Ink?.Bottom ?? g.Glyph.Descent));
-            float gap = mainOuter / 2 + rubyOuter / 2 + mainSize * 0.04f + spacing.LyricsAndRubyInterval;
-            float baseline = (float)main.Top - gap - rubyInkBottom;
+            // ルビの文字の枠（縁の幅の半分を足したもの）の下端を、本文の行の枠の上端に付け、歌詞とルビの間隔だけ離す（ニコカラメーカー3 の出力画像の実測）
+            float rubyDescent = rubyGlyphs.Max(g => g.Glyph.Descent);
+            float baseline = layout.BoxTop - spacing.LyricsAndRubyInterval - rubyOuter / 2 - rubyDescent;
             foreach (var (gx, glyph, font, face) in rubyGlyphs)
             {
                 if (glyph.Geometry is null) continue;
@@ -453,24 +452,28 @@ internal sealed class SubtitleLineLayout : IDisposable
     }
 
     /// <summary>
-    /// 文字の送り幅と、送りの左端から文字の原点までのずれ。食い込みを許さない（ニコカラメーカー3 の既定）ときは、
-    /// 送り幅を「1 文字の幅（文字サイズ × 横倍率）」と「縁を含めた字面（字面を外側の縁の幅の半分ずつ広げた範囲）」の大きいほうにして、
-    /// 縁を含めた字面を送りの中央に置く（隣の文字と縁が重ならない。英字も 1 文字の幅に置く。ニコカラメーカー3 の歌詞設定パネルの並び方と同じ）。
-    /// 食い込みを許すときはフォントの送り幅のまま（縁は重なる）。
+    /// 文字の送り幅と、送りの左端から文字の原点までのずれ。食い込みを許さない（ニコカラメーカー3 の既定）ときは、字面の左右に
+    /// 「サイドベアリング（文字サイズの 2 割までで打ち切る）の半分 ＋ 縁の幅の半分 ＋ 送り幅の 2% − 0.2」ずつのすき間をとって並べる。
+    /// 字面の無い文字（空白）は「送り幅 × 0.54 ＋ 縁の幅 − 0.4」。
+    /// ニコカラメーカー3 の出力画像（1920x1080）で文字の位置を測って求めた近似（英字・かな・漢字・小さい「っ」・全角「！」・空白・ルビで、
+    /// 隣どうしの字面のすき間が平均 0.7px の差で合う）。食い込みを許すときはフォントの送り幅のまま（縁は重なる）。
     /// </summary>
     private static (float Pitch, float Offset) Pitch(SubtitleGlyph glyph, N3FontFace face, float outerEdge, bool allowBiting)
     {
         if (allowBiting) return (glyph.Advance, 0);
-        float xScale = (face.XScale > 0 ? Math.Clamp(face.XScale, 10, 1000) : 100) / 100f;
-        float em = (float)(double.IsFinite(face.SizePx) ? Math.Clamp(face.SizePx, 1, 2000) : 100) * xScale;
+        float advance = glyph.Advance;
         if (glyph.Ink is not Rect ink)
         {
-            float blank = Math.Max(glyph.Advance, em); // 空白も 1 文字の幅
-            return (blank, (blank - glyph.Advance) / 2);
+            float blank = Math.Max(0, advance * 0.54f + outerEdge - 0.4f);
+            return (blank, (blank - advance) / 2);
         }
-        float drawn = (float)ink.Width + outerEdge;
-        float pitch = Math.Max(em, drawn);
-        return (pitch, (pitch - drawn) / 2 - ((float)ink.X - outerEdge / 2));
+        float xScale = (face.XScale > 0 ? Math.Clamp(face.XScale, 10, 1000) : 100) / 100f;
+        float size = (float)(double.IsFinite(face.SizePx) ? Math.Clamp(face.SizePx, 1, 2000) : 100) * xScale;
+        float cap = size * 0.2f;
+        float Pad(float bearing) => Math.Max(0, Math.Clamp(bearing, 0, cap) / 2 + outerEdge / 2 + advance * 0.02f - 0.2f);
+        float left = Pad((float)ink.X);
+        float right = Pad(advance - (float)ink.Right);
+        return (left + (float)ink.Width + right, left - (float)ink.X);
     }
 
     /// <summary>2 つの表示の単位のあいだに絵文字が無いか（ルビのまとまりは絵文字をまたがない）。</summary>

@@ -131,9 +131,11 @@ public sealed class SubtitlePreviewView : Grid
     internal static (float X, float Baseline) Position(PreviewLine line, SubtitleLineLayout layout, float W, float H)
     {
         var L = line.Layout;
-        float textHeight = layout.TextBottom - layout.TextTop;
+        // 上下は、文字の枠に縁の幅の半分ずつを足した枠で並べる（ニコカラメーカー3 の出力画像の実測: 行の間隔 = 枠の高さ + 行間、
+        // 下寄せは枠の下端が下余白の位置）
+        float boxHeight = layout.BoxBottom - layout.BoxTop;
         float space = (float)L.LineSpacePx;
-        float step = textHeight + space;
+        float step = boxHeight + space;
         float vm = (float)L.VerticalMarginPx;
         int rows = Math.Max(line.RowsInPage, line.Row);
         float baseline;
@@ -142,44 +144,43 @@ public sealed class SubtitlePreviewView : Grid
             case 0: // 上寄せ: 上の行から
             {
                 float top = vm + (rows - line.Row) * step;
-                baseline = top - layout.TextTop;
+                baseline = top - layout.BoxTop;
                 break;
             }
             case 1: // 中央: ページの行をまとめて上下の中央に
             {
-                float total = rows * textHeight + (rows - 1) * space;
+                float total = rows * boxHeight + (rows - 1) * space;
                 float top = (H - total) / 2 + (rows - line.Row) * step;
-                baseline = top - layout.TextTop;
+                baseline = top - layout.BoxTop;
                 break;
             }
             default: // 下寄せ: 下の行から
             {
                 float bottom = H - vm - (line.Row - 1) * step;
-                baseline = bottom - layout.TextBottom;
+                baseline = bottom - layout.BoxBottom;
                 break;
             }
         }
 
-        // 左右は縁を含めて描く範囲で余白にそろえる（ニコカラメーカー3 と同じく、縁の外側が余白の位置）
-        float left = layout.DrawLeft, right = layout.DrawRight;
-        float w = right - left;
+        // 左右は行の送りの範囲（文字の左右のすき間を含む）で余白にそろえる（ニコカラメーカー3 の出力画像の実測）
+        float w = layout.Width;
         float hm = (float)L.HorizontalMarginPx;
         int align = L.AlignmentForRow(line.Row, rows);
         float x = align switch
         {
-            0 => hm - left,
-            2 => W - hm - right,
-            _ => (W - w) / 2 - left,
+            0 => hm,
+            2 => W - hm - w,
+            _ => (W - w) / 2,
         };
         // 短い行: 左寄せで右端が画面の中央に届かない・右寄せで左端が中央より右
         bool shortLine = (align == 0 && hm + w < W / 2) || (align == 2 && W - hm - w > W / 2);
         if (shortLine && L.SmartHorizon == 1)
         {
-            x = align == 0 ? W / 2 - right : W / 2 - left; // 中心位置揃え: 中央で終わる（左寄せ）・中央から始まる（右寄せ）
+            x = align == 0 ? W / 2 - w : W / 2; // 中心位置揃え: 中央で終わる（左寄せ）・中央から始まる（右寄せ）
         }
         else if (shortLine && L.SmartHorizon == 2)
         {
-            x = (W - w) / 2 - left; // 左右余白揃え: 左右の余白を等しく（中央に寄せる）
+            x = (W - w) / 2; // 左右余白揃え: 左右の余白を等しく（中央に寄せる）
         }
         return (x, baseline);
     }

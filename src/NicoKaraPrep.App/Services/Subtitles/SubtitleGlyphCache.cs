@@ -107,7 +107,8 @@ internal static class SubtitleGlyphCache
         using var layout = new CanvasTextLayout(device, text, format, 100000f, 100000f);
         var metrics = layout.LineMetrics;
         float baseline = metrics.Length > 0 ? metrics[0].Baseline : size * 0.88f;
-        var box = layout.LayoutBounds;
+        // 空白だけの文字は LayoutBounds の幅が 0 になる（末尾の空白を含めない）ので、末尾の空白を含めた幅を送り幅にする
+        var box = layout.LayoutBoundsIncludingTrailingWhitespace;
         float ascent = (float)(baseline - box.Top);
         float descent = (float)(box.Bottom - baseline);
         float advance = (float)box.Width * xScale;
