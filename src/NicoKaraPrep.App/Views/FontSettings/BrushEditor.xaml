@@ -85,6 +85,25 @@
                         <Button x:Name="AddStopButton" Content="マーカーを追加" Click="OnAddStopClick" ToolTipService.ToolTip="選んだマーカーと次のマーカーの間（選んでいなければいちばん広い間）に足します" />
                         <Button x:Name="DistributeStopsButton" Content="均等に配置" Click="OnDistributeStopsClick" />
                     </StackPanel>
+                    <!-- 端の帯ほど広く並べ直す（組み合わせのフォント設定と同じ並べ方） -->
+                    <StackPanel Orientation="Horizontal" Spacing="8">
+                        <Button
+                            x:Name="WidenEndsButton"
+                            Content="端を広く配置"
+                            Click="OnWidenEndsClick"
+                            ToolTipService.ToolTip="文字の上下の端は面積が小さいので、端の帯ほど広くなるようにマーカーを並べ直します（色の並びはそのまま。右の % だけ、端の帯を中央の帯より広くします。組み合わせのフォント設定と同じ並べ方）" />
+                        <NumberBox
+                            x:Name="EndWidenBox"
+                            Width="104"
+                            Minimum="0"
+                            Maximum="200"
+                            SmallChange="5"
+                            SpinButtonPlacementMode="Compact"
+                            Value="{x:Bind ViewModel.EndWidenValue, Mode=TwoWay}"
+                            AutomationProperties.Name="端の帯の広さ %"
+                            ToolTipService.ToolTip="端の帯を中央の帯より何 % 広くするか（0 で等分）" />
+                        <TextBlock Text="%" VerticalAlignment="Center" />
+                    </StackPanel>
                 </StackPanel>
             </Grid>
         </StackPanel>

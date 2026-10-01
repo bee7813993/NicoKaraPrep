@@ -50,6 +50,8 @@ public sealed partial class BrushEditor : UserControl
 
     private void OnDistributeStopsClick(object sender, RoutedEventArgs e) => ViewModel?.DistributeStops();
 
+    private void OnWidenEndsClick(object sender, RoutedEventArgs e) => ViewModel?.WidenEndStops();
+
     private void OnDeleteStopClick(object sender, RoutedEventArgs e)
     {
         if ((sender as FrameworkElement)?.DataContext is GradientStopViewModel stop) ViewModel?.DeleteStop(stop);

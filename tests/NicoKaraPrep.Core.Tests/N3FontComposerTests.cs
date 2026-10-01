@@ -59,6 +59,49 @@ public class N3FontComposerTests
         Assert.Equal("0:F8B500 0.5:68BE8D 1:E4007F", Stops(grad));
     }
 
+    [Fact]
+    public void 端を広く並べ直す_ミルフィーユは帯の上端と最後を100パーセント_色の並びはそのまま()
+    {
+        var mille = new N3Brush
+        {
+            Type = N3Brush.TypeMilleFeuille,
+            Stops = new List<N3GradientStop>
+            {
+                new() { Position = 0.5, Color = "E4007F" },
+                new() { Position = 0, Color = "F8B500" },
+                new() { Position = 0.25, Color = "68BE8D" },
+                new() { Position = 0.75, Color = "A2D7DD" },
+                new() { Position = 1, Color = "808080" },
+            },
+        };
+        N3FontComposer.WidenEnds(mille, 10);
+        Assert.Equal("0:F8B500 0.2578:68BE8D 0.5:E4007F 0.7422:A2D7DD 1:808080", Stops(mille));
+
+        // 0 % で等分（均等に配置と同じ）
+        N3FontComposer.WidenEnds(mille, 0);
+        Assert.Equal("0:F8B500 0.25:68BE8D 0.5:E4007F 0.75:A2D7DD 1:808080", Stops(mille));
+    }
+
+    [Fact]
+    public void 端を広く並べ直す_グラデーションは両端と帯の中央_組み合わせで作ったときと同じ位置()
+    {
+        var colors = new List<(string, int)> { ("F8B500", 100), ("68BE8D", 100), ("E4007F", 100), ("A2D7DD", 100) };
+        var made = N3FontComposer.MultiColorBrush(colors, N3Brush.TypeGradient, 10);
+        Assert.Equal("0:F8B500 0.3789:68BE8D 0.6211:E4007F 1:A2D7DD", Stops(made));
+
+        var grad = N3FontComposer.MultiColorBrush(colors, N3Brush.TypeGradient, 0);
+        N3FontComposer.WidenEnds(grad, 10);
+        Assert.Equal(Stops(made), Stops(grad));
+
+        // マーカーが 1 つ・単色は変えない
+        var one = new N3Brush { Type = N3Brush.TypeGradient, Stops = new List<N3GradientStop> { new() { Position = 0.3, Color = "F8B500" } } };
+        N3FontComposer.WidenEnds(one, 10);
+        Assert.Equal("0.3:F8B500", Stops(one));
+        var solid = new N3Brush { Type = N3Brush.TypeSolid, Color = "F8B500", Stops = new List<N3GradientStop> { new() { Position = 0.3 }, new() { Position = 0.6 } } };
+        N3FontComposer.WidenEnds(solid, 10);
+        Assert.Equal(0.3, solid.Stops[0].Position);
+    }
+
     // ------------------------------------------------------------ 作る
 
     [Fact]

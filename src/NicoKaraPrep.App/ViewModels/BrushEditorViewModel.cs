@@ -87,6 +87,13 @@ public sealed partial class BrushEditorViewModel : ObservableObject
     [ObservableProperty]
     private string stopsNote = "";
 
+    /// <summary>「端を広く配置」で、端の帯を中央の帯より何 % 広くするか（最初は組み合わせのフォント設定の既定。変えた値はビューを開いているあいだ保つ）。</summary>
+    [ObservableProperty]
+    private double endWidenValue = N3FontComposer.DefaultEndWidenPercent;
+
+    /// <summary><see cref="EndWidenValue"/> を組み合わせのフォント設定の既定で読み込んだか。</summary>
+    private bool _endWidenLoaded;
+
     // ------------------------------------------------------------ 画像
 
     [ObservableProperty]
@@ -134,6 +141,11 @@ public sealed partial class BrushEditorViewModel : ObservableObject
         _loading = true;
         try
         {
+            if (!_endWidenLoaded)
+            {
+                EndWidenValue = _editor.ComposeEndWidenPercent;
+                _endWidenLoaded = true;
+            }
             Index = index;
             LinkedIndices = linked?.Where(i => i != index && i >= 0 && i < N3FontDetail.BrushCount).Distinct().ToList() ?? new List<int>();
             _roleName = LinkedIndices.Count > 0 ? roleName : "";
@@ -610,6 +622,20 @@ public sealed partial class BrushEditorViewModel : ObservableObject
         var target = stop.Model;
         Edit(null, x => x.Stops.Remove(target));
         LoadStops(keep: null);
+        LoadColorTarget();
+    }
+
+    /// <summary>
+    /// マーカーを、端の帯ほど広くなる位置に並べ直す（色の並びはそのまま。端の帯を中央の帯より <see cref="EndWidenValue"/> % 広く。
+    /// ミルフィーユは最後のマーカーを 100% に置く。組み合わせのフォント設定と同じ並べ方）。
+    /// </summary>
+    public void WidenEndStops()
+    {
+        if (Model is not { } b || b.Stops.Count < 2) return;
+        var keep = SelectedStop?.Model;
+        double widen = double.IsNaN(EndWidenValue) ? N3FontComposer.DefaultEndWidenPercent : Math.Clamp(EndWidenValue, 0, 200);
+        Edit(null, x => N3FontComposer.WidenEnds(x, widen));
+        LoadStops(keep);
         LoadColorTarget();
     }
 

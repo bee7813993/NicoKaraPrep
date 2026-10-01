@@ -60,21 +60,61 @@ public static class N3FontComposer
     }
 
     /// <summary>
+    /// 色を <paramref name="count"/> 個並べるときのマーカーの位置（上から順）。ミルフィーユは帯の上端（最後の 100% のマーカーは含まない）、
+    /// グラデーションは最初を 0%、最後を 100%、間を帯の中央にする。端の帯ほど広い（<see cref="BandWidths"/>）。
+    /// 位置は小数 4 桁に四捨五入する（上下の端の帯を同じ幅にするため）。
+    /// </summary>
+    public static double[] BandStopPositions(int count, int brushType, double endWidenPercent)
+    {
+        var widths = BandWidths(count, endWidenPercent);
+        var positions = new double[count];
+        double top = 0;
+        for (int i = 0; i < count; i++)
+        {
+            double position = brushType == N3Brush.TypeGradient
+                ? (i == 0 ? 0 : i == count - 1 ? 1 : top + widths[i] / 2)
+                : top;
+            positions[i] = Math.Round(position, 4, MidpointRounding.AwayFromZero);
+            top += widths[i];
+        }
+        return positions;
+    }
+
+    /// <summary>
+    /// 多色の塗り（ミルフィーユ・グラデーション）のマーカーを、今の色の並びのまま、端の帯ほど広くなる位置へ並べ直す
+    /// （<see cref="MultiColorBrush"/> で作ったときと同じ位置）。ミルフィーユは最後のマーカー（塗りに使われない）を 100% に置き、
+    /// ほかを帯の上端に置く。グラデーションは最初を 0%、最後を 100%、間を帯の中央に置く。マーカーが 2 つ未満なら何もしない。
+    /// </summary>
+    public static void WidenEnds(N3Brush brush, double endWidenPercent)
+    {
+        int n = brush.Stops.Count;
+        if (n < 2 || brush.Type is not (N3Brush.TypeGradient or N3Brush.TypeMilleFeuille)) return;
+        var stops = brush.Stops.OrderBy(s => s.Position).ToList();
+        if (brush.Type == N3Brush.TypeMilleFeuille)
+        {
+            var positions = BandStopPositions(n - 1, N3Brush.TypeMilleFeuille, endWidenPercent);
+            for (int i = 0; i < n - 1; i++) stops[i].Position = positions[i];
+            stops[n - 1].Position = 1;
+        }
+        else
+        {
+            var positions = BandStopPositions(n, N3Brush.TypeGradient, endWidenPercent);
+            for (int i = 0; i < n; i++) stops[i].Position = positions[i];
+        }
+        brush.Stops = stops;
+    }
+
+    /// <summary>
     /// 色の並びから、多色の塗りを作る。ミルフィーユは帯の上端にマーカーを置き、最後に 100% のマーカー（塗りには使われない）を足す。
     /// グラデーションは最初を 0%、最後を 100%、間を帯の中央に置く。位置は小数 4 桁に四捨五入する（上下の端の帯を同じ幅にするため）。
     /// </summary>
     public static N3Brush MultiColorBrush(IReadOnlyList<(string Color, int Alpha)> colors, int brushType, double endWidenPercent)
     {
-        var widths = BandWidths(colors.Count, endWidenPercent);
+        var positions = BandStopPositions(colors.Count, brushType, endWidenPercent);
         var stops = new List<N3GradientStop>();
-        double top = 0;
         for (int i = 0; i < colors.Count; i++)
         {
-            double position = brushType == N3Brush.TypeGradient
-                ? (i == 0 ? 0 : i == colors.Count - 1 ? 1 : top + widths[i] / 2)
-                : top;
-            stops.Add(new N3GradientStop { Position = Math.Round(position, 4, MidpointRounding.AwayFromZero), Color = N3FontSet.NormalizeWeb16(colors[i].Color), AlphaPercent = colors[i].Alpha });
-            top += widths[i];
+            stops.Add(new N3GradientStop { Position = positions[i], Color = N3FontSet.NormalizeWeb16(colors[i].Color), AlphaPercent = colors[i].Alpha });
         }
         if (brushType != N3Brush.TypeGradient) stops.Add(new N3GradientStop { Position = 1, Color = MilleFeuilleTailColor, AlphaPercent = 100 });
         return new N3Brush

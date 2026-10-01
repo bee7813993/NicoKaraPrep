@@ -520,6 +520,9 @@ public sealed partial class FontEditorViewModel : ObservableObject
         BrushEditor.SetRecentColors(_owner.RecentColors());
     }
 
+    /// <summary>組み合わせのフォント設定の、端の帯の広さの既定（%。「端を広く配置」の最初の値）。</summary>
+    internal double ComposeEndWidenPercent => _owner.ComposeEndWidenPercent;
+
     /// <summary>最近使った色に入れる（配色の編集欄から）。</summary>
     internal void AddRecentColor(string color, int alphaPercent) => _owner.AddRecentColor(color, alphaPercent);
 
