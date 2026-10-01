@@ -1023,6 +1023,18 @@ public sealed partial class FontSettingsView : UserControl
         if (ViewModel is { } vm && (sender as FrameworkElement)?.Tag is N3ContrastSuggestion suggestion) vm.ApplyContrastSuggestion(suggestion);
     }
 
+    /// <summary>
+    /// 組み合わせのフォント設定の見づらい多色の箇所を直しに、元のフォント設定を開く（元のほうにも見づらい配色の注意があれば、そこまで送る）。
+    /// </summary>
+    private void OnContrastSourceClick(object sender, RoutedEventArgs e)
+    {
+        if (ViewModel is not { } vm || (sender as FrameworkElement)?.Tag is not string id || !vm.Select(id)) return;
+        DispatcherQueue.TryEnqueue(Microsoft.UI.Dispatching.DispatcherQueuePriority.Low, () =>
+        {
+            if (vm.Editor.HasContrastIssue) ContrastBar.StartBringIntoView(new BringIntoViewOptions { VerticalAlignmentRatio = 0, VerticalOffset = 12, AnimationDesired = true });
+        });
+    }
+
     private void OnKeepColorsClick(object sender, RoutedEventArgs e) => ViewModel?.KeepIndividualColors();
 
     // ------------------------------------------------------------ 右ペイン

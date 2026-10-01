@@ -135,6 +135,11 @@ public sealed partial class FontEditorViewModel : ObservableObject
     /// <summary>見づらい配色を直す色の候補。</summary>
     public ObservableCollection<ContrastSuggestionItem> ContrastSuggestions { get; } = new();
 
+    /// <summary>
+    /// 組み合わせのフォント設定（元のフォント設定と連動中）の多色の箇所が見づらいとき、直しに行く元のフォント設定（開くボタン）。
+    /// </summary>
+    public ObservableCollection<ContrastSourceItem> ContrastSources { get; } = new();
+
     /// <summary>色のドラッグ中か（そのあいだは配色の注意の欄を出し入れしない）。</summary>
     private bool _holdNotices;
 
@@ -461,6 +466,7 @@ public sealed partial class FontEditorViewModel : ObservableObject
     private void RefreshContrastCore(N3FontSet font)
     {
         ContrastSuggestions.Clear();
+        ContrastSources.Clear();
         var issues = N3Contrast.Check(font);
         HasContrastIssue = issues.Count > 0;
         if (issues.Count == 0)
@@ -470,30 +476,55 @@ public sealed partial class FontEditorViewModel : ObservableObject
         }
         var lines = issues.Select(i =>
             $"{N3FontDetail.BrushLabels[i.TextSlot]}（#{i.TextColor}）と{N3FontDetail.BrushLabels[i.EdgeSlot]}（#{i.EdgeColor}）の明るさが近く、見づらくなります（コントラスト比 {i.Ratio:0.0}）").ToList();
-        var first = issues.FirstOrDefault(i => i.BothSolid);
-        if (first is null)
+        var first = issues[0]; // ワイプ前が先
+
+        // 元のフォント設定と連動している組み合わせの多色の箇所は、ここで直すと連動が外れるので、元のフォント設定を開いて直してもらう
+        if (!first.BothSolid && font.Composition is { Linked: true } composition)
         {
-            lines.Add("多色の箇所は、元のフォント設定の色を直してください");
+            string role = _match?.Pattern.RoleName(N3FontComposer.MultiColorRole) is { Length: > 0 } r ? r : "メイン色";
+            lines.Add($"多色の箇所の色は、元のフォント設定の{role}から作っています。下のボタンで元のフォント設定を開いて色を直すと、この組み合わせも作り直します（ここで色を変えると、元のフォント設定との連動が外れます）");
+            foreach (var (id, name) in ContrastSourceFonts(font, composition, first)) ContrastSources.Add(new ContrastSourceItem($"「{name}」を開く", id));
+            ContrastText = string.Join("\n", lines);
+            return;
         }
-        else
+
+        foreach (var s in N3Contrast.Suggest(first, font.Detail))
         {
-            foreach (var s in N3Contrast.Suggest(first))
+            var slots = _owner.ContrastTargetSlots(font, s.Slot);
+            int role = _match?.Pattern.RoleOf(s.Slot) ?? N3ColorPattern.Individual;
+            string target = slots.Count > 1 && role >= 0
+                ? $"{_match!.Pattern.RoleName(role)}（{slots.Count} 箇所）"
+                : N3FontDetail.BrushLabels[s.Slot];
+            string how = s.Kind switch
             {
-                var slots = _owner.ContrastTargetSlots(font, s.Slot);
-                int role = _match?.Pattern.RoleOf(s.Slot) ?? N3ColorPattern.Individual;
-                string target = slots.Count > 1 && role >= 0
-                    ? $"{_match!.Pattern.RoleName(role)}（{slots.Count} 箇所）"
-                    : N3FontDetail.BrushLabels[s.Slot];
-                string how = s.Kind switch
-                {
-                    N3ContrastSuggestionKind.TextLightness => N3Contrast.Luminance(s.Color) < N3Contrast.Luminance(first.TextColor) ? "を暗くして" : "を明るくして",
-                    N3ContrastSuggestionKind.EdgeShade => "を文字の色合いの" + (N3Contrast.Luminance(s.Color) < N3Contrast.Luminance(first.TextColor) ? "濃い色" : "淡い色") + "にして",
-                    _ => "を" + (s.Color == "000000" ? "黒" : "白") + "にして",
-                };
-                ContrastSuggestions.Add(new ContrastSuggestionItem(s, first, $"{target}{how} #{s.Color} に"));
-            }
+                N3ContrastSuggestionKind.TextLightness => N3Contrast.Luminance(s.Color) < N3Contrast.Luminance(first.TextColor) ? "を暗くして" : "を明るくして",
+                N3ContrastSuggestionKind.EdgeShade => "を文字の色合いの" + (N3Contrast.Luminance(s.Color) < N3Contrast.Luminance(first.TextColor) ? "濃い色" : "淡い色") + "にして",
+                N3ContrastSuggestionKind.StopLightness =>
+                    $"のマーカー {s.Stop + 1}（#{s.OriginalColor}）を" + (N3Contrast.Luminance(s.Color) < N3Contrast.Luminance(s.OriginalColor) ? "暗く" : "明るく") + "して",
+                _ => "を" + (s.Color == "000000" ? "黒" : "白") + "にして",
+            };
+            ContrastSuggestions.Add(new ContrastSuggestionItem(s, first, $"{target}{how} #{s.Color} に"));
         }
         ContrastText = string.Join("\n", lines);
+    }
+
+    /// <summary>
+    /// 組み合わせのフォント設定の見づらい多色の箇所を直しに行く、元のフォント設定（Id と名前）。見づらいマーカーの色を
+    /// 多色の役割の色に持っているものを選ぶ（見つからなければ、元のフォント設定すべて）。
+    /// </summary>
+    private List<(string Id, string Name)> ContrastSourceFonts(N3FontSet font, N3FontComposition composition, N3ContrastIssue issue)
+    {
+        var sources = composition.SourceIds.Select(id => _owner.FindFont(id)).OfType<N3FontSet>().ToList();
+        var bad = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        if (issue.TextStop >= 0) bad.Add(issue.TextColor);
+        if (issue.EdgeStop >= 0) bad.Add(issue.EdgeColor);
+        var hits = sources.Where(src =>
+        {
+            var pattern = _owner.PatternOf(src)?.Pattern ?? _match?.Pattern;
+            return pattern is not null
+                && N3FontComposer.RoleColors(src.Detail, pattern, N3FontComposer.MultiColorRole).Any(c => bad.Contains(N3FontSet.NormalizeWeb16(c.Color)));
+        }).ToList();
+        return (hits.Count > 0 ? hits : sources).Select(f => (f.Id, f.Name)).ToList();
     }
 
     /// <summary>選んだ箇所を編集欄に読み込む（同じ役割の箇所をまとめて変えるなら、その箇所も一緒に）。</summary>

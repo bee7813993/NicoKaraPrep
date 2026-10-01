@@ -553,29 +553,57 @@
                                 IsOpen="{x:Bind ViewModel.Editor.HasContrastIssue, Mode=OneWay}"
                                 Message="{x:Bind ViewModel.Editor.ContrastText, Mode=OneWay}">
                                 <InfoBar.Content>
-                                    <ItemsRepeater x:Name="ContrastSuggestionsRepeater" Margin="0,0,0,12" ItemsSource="{x:Bind ViewModel.Editor.ContrastSuggestions}">
-                                        <ItemsRepeater.Layout>
-                                            <StackLayout Spacing="6" />
-                                        </ItemsRepeater.Layout>
-                                        <ItemsRepeater.ItemTemplate>
-                                            <DataTemplate x:DataType="vm:ContrastSuggestionItem">
-                                                <Button
-                                                    HorizontalAlignment="Left"
-                                                    Padding="6,4"
-                                                    Tag="{x:Bind Suggestion}"
-                                                    AutomationProperties.Name="{x:Bind Label}"
-                                                    ToolTipService.ToolTip="{x:Bind ToolTip}"
-                                                    Click="OnContrastSuggestionClick">
-                                                    <StackPanel Orientation="Horizontal" Spacing="8">
-                                                        <Border Width="36" Height="28" CornerRadius="3" Background="{x:Bind SampleEdge}">
-                                                            <TextBlock Text="永" FontSize="18" FontWeight="Bold" HorizontalAlignment="Center" VerticalAlignment="Center" Foreground="{x:Bind SampleText}" />
-                                                        </Border>
-                                                        <TextBlock Text="{x:Bind Label}" VerticalAlignment="Center" />
-                                                    </StackPanel>
-                                                </Button>
-                                            </DataTemplate>
-                                        </ItemsRepeater.ItemTemplate>
-                                    </ItemsRepeater>
+                                    <StackPanel Spacing="6" Margin="0,0,0,12">
+                                        <ItemsRepeater x:Name="ContrastSuggestionsRepeater" ItemsSource="{x:Bind ViewModel.Editor.ContrastSuggestions}">
+                                            <ItemsRepeater.Layout>
+                                                <StackLayout Spacing="6" />
+                                            </ItemsRepeater.Layout>
+                                            <ItemsRepeater.ItemTemplate>
+                                                <DataTemplate x:DataType="vm:ContrastSuggestionItem">
+                                                    <!-- 説明が長い（マーカーの色の候補など）ときは折り返す。ボタンは欄の幅いっぱいにそろえる -->
+                                                    <Button
+                                                        HorizontalAlignment="Stretch"
+                                                        HorizontalContentAlignment="Left"
+                                                        Padding="6,4"
+                                                        Tag="{x:Bind Suggestion}"
+                                                        AutomationProperties.Name="{x:Bind Label}"
+                                                        ToolTipService.ToolTip="{x:Bind ToolTip}"
+                                                        Click="OnContrastSuggestionClick">
+                                                        <Grid ColumnSpacing="8">
+                                                            <Grid.ColumnDefinitions>
+                                                                <ColumnDefinition Width="Auto" />
+                                                                <ColumnDefinition Width="*" />
+                                                            </Grid.ColumnDefinitions>
+                                                            <Border Width="36" Height="28" CornerRadius="3" Background="{x:Bind SampleEdge}">
+                                                                <TextBlock Text="永" FontSize="18" FontWeight="Bold" HorizontalAlignment="Center" VerticalAlignment="Center" Foreground="{x:Bind SampleText}" />
+                                                            </Border>
+                                                            <TextBlock Grid.Column="1" Text="{x:Bind Label}" VerticalAlignment="Center" TextWrapping="Wrap" />
+                                                        </Grid>
+                                                    </Button>
+                                                </DataTemplate>
+                                            </ItemsRepeater.ItemTemplate>
+                                        </ItemsRepeater>
+                                        <!-- 組み合わせのフォント設定（元と連動中）の多色の箇所は、元のフォント設定を開いて直す -->
+                                        <ItemsRepeater x:Name="ContrastSourcesRepeater" ItemsSource="{x:Bind ViewModel.Editor.ContrastSources}">
+                                            <ItemsRepeater.Layout>
+                                                <StackLayout Orientation="Horizontal" Spacing="6" />
+                                            </ItemsRepeater.Layout>
+                                            <ItemsRepeater.ItemTemplate>
+                                                <DataTemplate x:DataType="vm:ContrastSourceItem">
+                                                    <Button
+                                                        Tag="{x:Bind FontId}"
+                                                        AutomationProperties.Name="{x:Bind Label}"
+                                                        ToolTipService.ToolTip="元のフォント設定を開きます。そこで色を直すと、この組み合わせも作り直します"
+                                                        Click="OnContrastSourceClick">
+                                                        <StackPanel Orientation="Horizontal" Spacing="6">
+                                                            <FontIcon Glyph="&#xE72A;" FontSize="12" />
+                                                            <TextBlock Text="{x:Bind Label}" />
+                                                        </StackPanel>
+                                                    </Button>
+                                                </DataTemplate>
+                                            </ItemsRepeater.ItemTemplate>
+                                        </ItemsRepeater>
+                                    </StackPanel>
                                 </InfoBar.Content>
                             </InfoBar>
                             <!-- 8 箇所（上段 = ワイプ後、下段 = ワイプ前）。押した箇所を下の編集欄で編集する -->

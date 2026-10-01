@@ -48,25 +48,61 @@ public class N3ContrastTests
         Assert.Empty(N3Contrast.Check(clear));
     }
 
+    private static N3Brush Mille(params string[] colors) => new()
+    {
+        Type = N3Brush.TypeMilleFeuille,
+        Stops = colors.Select((c, i) => new N3GradientStop { Position = i == colors.Length - 1 ? 1 : (double)i / (colors.Length - 1), Color = c }).ToList(),
+    };
+
     [Fact]
-    public void 判定_多色はマーカーごとに比べる_色の候補は出さない()
+    public void 判定_多色はマーカーごとに比べる_見づらいマーカーの番号も分かる()
     {
         var f = Chara("000000");
-        var mille = new N3Brush
-        {
-            Type = N3Brush.TypeMilleFeuille,
-            Stops = new List<N3GradientStop>
-            {
-                new() { Position = 0, Color = "AE62FF" },
-                new() { Position = 0.5, Color = "FFFF00" },
-                new() { Position = 1, Color = "FFFFFF" }, // 最後のマーカーは塗りに使われない
-            },
-        };
-        f.Detail.Brushes[4] = mille;
+        f.Detail.Brushes[4] = Mille("AE62FF", "FFFF00", "FFFFFF"); // 最後のマーカーは塗りに使われない
         var issue = Assert.Single(N3Contrast.Check(f), i => i.TextSlot == 4);
         Assert.Equal("FFFF00", issue.TextColor);
+        Assert.Equal((1, -1), (issue.TextStop, issue.EdgeStop));
         Assert.False(issue.BothSolid);
-        Assert.Empty(N3Contrast.Suggest(issue));
+        Assert.Empty(N3Contrast.Suggest(issue)); // 塗りが分からなければ、多色の候補は作れない
+    }
+
+    [Fact]
+    public void 候補_文字が多色なら見づらいマーカーの色を暗く_縁はどの色とも比が足りる色()
+    {
+        var f = Chara("000000");
+        f.Detail.Brushes[4] = Mille("AE62FF", "FFFF00", "808080");
+        var issue = N3Contrast.Check(f).Single(i => i.TextSlot == 4);
+        var s = N3Contrast.Suggest(issue, f.Detail);
+
+        var stop = s.First(x => x.Kind == N3ContrastSuggestionKind.StopLightness);
+        Assert.Equal((4, 1, "FFFF00"), (stop.Slot, stop.Stop, stop.OriginalColor));
+        Assert.True(N3Contrast.Ratio(stop.Color, "FFFFFF") >= N3Contrast.TargetRatio, stop.Color);
+        Assert.True(N3Contrast.Luminance(stop.Color) < N3Contrast.Luminance("FFFF00"));
+
+        Assert.Equal("000000", s.Single(x => x.Kind == N3ContrastSuggestionKind.EdgeBlackOrWhite).Color);
+        Assert.All(s.Where(x => x.Slot == 5), x =>
+            Assert.True(N3Contrast.Ratio(x.Color, "AE62FF") >= N3Contrast.TargetRatio && N3Contrast.Ratio(x.Color, "FFFF00") >= N3Contrast.TargetRatio, x.Color));
+    }
+
+    [Fact]
+    public void 候補_縁が多色なら見づらいマーカーの色を暗く_文字は黒か白()
+    {
+        // 手で作ったミルフィーユ（青と黄）のメイン色と、白のベース色。ワイプ後は白の文字に青と黄の縁
+        var f = Chara("000000");
+        var mille = Mille("5383C3", "FAD764", "808080");
+        foreach (int slot in new[] { 1, 4, 7 }) f.Detail.Brushes[slot] = mille.Clone();
+        var issues = N3Contrast.Check(f);
+        Assert.Equal(new[] { (4, 5), (0, 1) }, issues.Select(i => (i.TextSlot, i.EdgeSlot)));
+
+        var after = issues[1];
+        Assert.Equal(("FFFFFF", "FAD764", -1, 1), (after.TextColor, after.EdgeColor, after.TextStop, after.EdgeStop));
+        var s = N3Contrast.Suggest(after, f.Detail);
+        var text = s.Single(x => x.Kind == N3ContrastSuggestionKind.TextBlackOrWhite);
+        Assert.Equal((0, "000000"), (text.Slot, text.Color));
+        var stop = s.Single(x => x.Kind == N3ContrastSuggestionKind.StopLightness);
+        Assert.Equal((1, 1, "FAD764"), (stop.Slot, stop.Stop, stop.OriginalColor));
+        Assert.True(N3Contrast.Ratio(stop.Color, "FFFFFF") >= N3Contrast.TargetRatio, stop.Color);
+        Assert.DoesNotContain(s, x => x.Kind == N3ContrastSuggestionKind.TextLightness); // 白より明るくはできない
     }
 
     [Fact]

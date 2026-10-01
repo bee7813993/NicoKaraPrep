@@ -158,17 +158,27 @@ public sealed partial class FontSettingsViewModel
         if (SelectedFont is not { } font) return;
         var slots = ContrastTargetSlots(font, suggestion.Slot);
         string? pin = font.ColorPatternId is null ? PatternOf(font)?.Pattern.Id : null;
+        bool stop = suggestion.Stop >= 0;
         EditFont(font, null, f =>
         {
             foreach (int s in slots)
             {
                 var b = f.Detail.Brushes[s];
-                f.Detail.Brushes[s] = new N3Brush { Type = N3Brush.TypeSolid, Color = suggestion.Color, AlphaPercent = b.Type == N3Brush.TypeSolid ? b.AlphaPercent : 100 };
+                if (stop)
+                {
+                    // 多色の箇所の、見づらいマーカーの色だけを変える（同じ役割の箇所は同じ塗りの写しなので、同じ番号のマーカー）
+                    if (b.Type is N3Brush.TypeGradient or N3Brush.TypeMilleFeuille && suggestion.Stop < b.Stops.Count) b.Stops[suggestion.Stop].Color = suggestion.Color;
+                }
+                else
+                {
+                    f.Detail.Brushes[s] = new N3Brush { Type = N3Brush.TypeSolid, Color = suggestion.Color, AlphaPercent = b.Type == N3Brush.TypeSolid ? b.AlphaPercent : 100 };
+                }
             }
             if (pin is not null) f.ColorPatternId ??= pin;
         });
         Editor.ReloadBrushes();
-        SetStatus($"{N3ColorPatterns.Describe(slots)}を #{suggestion.Color} にしました（コントラスト比 {suggestion.Ratio:0.0}。Ctrl+Z で戻せます）");
+        string what = stop ? $"{N3ColorPatterns.Describe(slots)}のマーカー {suggestion.Stop + 1}" : N3ColorPatterns.Describe(slots);
+        SetStatus($"{what}を #{suggestion.Color} にしました（コントラスト比 {suggestion.Ratio:0.0}。Ctrl+Z で戻せます）");
     }
 
     /// <summary>見づらい組（文字と縁の明るさが近い）の文字の箇所（編集の前後で比べ、新しくできた組を知らせるのに使う）。</summary>

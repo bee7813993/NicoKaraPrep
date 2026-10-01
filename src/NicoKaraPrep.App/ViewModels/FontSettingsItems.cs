@@ -332,6 +332,14 @@ public sealed class ContrastSuggestionItem
     public override string ToString() => Label;
 }
 
+/// <summary>見づらい配色を直しに行く、組み合わせの元のフォント設定 1 つ（配色の注意の欄の「開く」ボタン）。</summary>
+/// <param name="Label">ボタンの表示（「「（花火）」を開く」など）。</param>
+/// <param name="FontId">開くフォント設定の Id。</param>
+public sealed record ContrastSourceItem(string Label, string FontId)
+{
+    public override string ToString() => Label;
+}
+
 /// <summary>使っている色の一覧の役割 1 つ（配色の編集欄の横。「メイン色」と、その色の見本）。</summary>
 public sealed class PaletteGroupItem
 {

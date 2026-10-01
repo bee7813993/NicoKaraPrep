@@ -81,29 +81,52 @@
                             </DataTemplate>
                         </ListView.ItemTemplate>
                     </ListView>
-                    <StackPanel Orientation="Horizontal" Spacing="8">
-                        <Button x:Name="AddStopButton" Content="マーカーを追加" Click="OnAddStopClick" ToolTipService.ToolTip="選んだマーカーと次のマーカーの間（選んでいなければいちばん広い間）に足します" />
-                        <Button x:Name="DistributeStopsButton" Content="均等に配置" Click="OnDistributeStopsClick" />
-                    </StackPanel>
-                    <!-- 端の帯ほど広く並べ直す（組み合わせのフォント設定と同じ並べ方） -->
-                    <StackPanel Orientation="Horizontal" Spacing="8">
-                        <Button
-                            x:Name="WidenEndsButton"
-                            Content="端を広く配置"
-                            Click="OnWidenEndsClick"
-                            ToolTipService.ToolTip="文字の上下の端は面積が小さいので、端の帯ほど広くなるようにマーカーを並べ直します（色の並びはそのまま。右の % だけ、端の帯を中央の帯より広くします。組み合わせのフォント設定と同じ並べ方）" />
-                        <NumberBox
-                            x:Name="EndWidenBox"
-                            Width="104"
-                            Minimum="0"
-                            Maximum="200"
-                            SmallChange="5"
-                            SpinButtonPlacementMode="Compact"
-                            Value="{x:Bind ViewModel.EndWidenValue, Mode=TwoWay}"
-                            AutomationProperties.Name="端の帯の広さ %"
-                            ToolTipService.ToolTip="端の帯を中央の帯より何 % 広くするか（0 で等分）" />
-                        <TextBlock Text="%" VerticalAlignment="Center" />
-                    </StackPanel>
+                    <!-- マーカーを足す（一覧の操作） -->
+                    <Button x:Name="AddStopButton" Click="OnAddStopClick" ToolTipService.ToolTip="選んだマーカーと次のマーカーの間（選んでいなければいちばん広い間）に足します">
+                        <StackPanel Orientation="Horizontal" Spacing="6">
+                            <FontIcon Glyph="&#xE710;" FontSize="12" />
+                            <TextBlock Text="マーカーを追加" />
+                        </StackPanel>
+                    </Button>
+                    <!-- マーカーの並べ方（どちらも位置だけを並べ直す同じ種類の操作なので、1 つのまとまりに横に並べる。% は端を広くするときだけ使う） -->
+                    <Border
+                        x:Name="ArrangeGroup"
+                        HorizontalAlignment="Left"
+                        Padding="10,8"
+                        CornerRadius="6"
+                        BorderThickness="1"
+                        BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
+                        Background="{ThemeResource CardBackgroundFillColorSecondaryBrush}">
+                        <StackPanel Spacing="6">
+                            <TextBlock Text="マーカーの並べ方（位置だけを並べ直します。色の並びはそのまま）" Style="{StaticResource SmallNote}" />
+                            <StackPanel Orientation="Horizontal" Spacing="8">
+                                <Button
+                                    x:Name="DistributeStopsButton"
+                                    MinWidth="108"
+                                    Content="均等に配置"
+                                    Click="OnDistributeStopsClick"
+                                    ToolTipService.ToolTip="帯をすべて同じ幅にします" />
+                                <Button
+                                    x:Name="WidenEndsButton"
+                                    MinWidth="108"
+                                    Content="端を広く配置"
+                                    Click="OnWidenEndsClick"
+                                    ToolTipService.ToolTip="文字の上下の端は面積が小さいので、端の帯ほど広くします（右の % だけ、端の帯を中央の帯より広く。組み合わせのフォント設定と同じ並べ方）" />
+                                <TextBlock Text="端の広さ" VerticalAlignment="Center" Style="{StaticResource SmallNote}" />
+                                <NumberBox
+                                    x:Name="EndWidenBox"
+                                    Width="96"
+                                    Minimum="0"
+                                    Maximum="200"
+                                    SmallChange="5"
+                                    SpinButtonPlacementMode="Compact"
+                                    Value="{x:Bind ViewModel.EndWidenValue, Mode=TwoWay}"
+                                    AutomationProperties.Name="端の帯の広さ %"
+                                    ToolTipService.ToolTip="「端を広く配置」で、端の帯を中央の帯より何 % 広くするか（0 で等分）" />
+                                <TextBlock Text="%" VerticalAlignment="Center" />
+                            </StackPanel>
+                        </StackPanel>
+                    </Border>
                 </StackPanel>
             </Grid>
         </StackPanel>

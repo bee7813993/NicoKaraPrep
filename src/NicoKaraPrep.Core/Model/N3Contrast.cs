@@ -6,8 +6,15 @@
 /// <param name="TextColor">文字の色（多色なら見づらいマーカーの色）。</param>
 /// <param name="EdgeColor">縁の色（多色なら見づらいマーカーの色）。</param>
 /// <param name="Ratio">明るさの比（コントラスト比。1 = 同じ明るさ、21 = 黒と白）。</param>
-/// <param name="BothSolid">文字と縁がどちらも単色か（色の候補は単色どうしのときだけ出す）。</param>
-public sealed record N3ContrastIssue(int TextSlot, int EdgeSlot, string TextColor, string EdgeColor, double Ratio, bool BothSolid);
+/// <param name="BothSolid">文字と縁がどちらも単色か。</param>
+public sealed record N3ContrastIssue(int TextSlot, int EdgeSlot, string TextColor, string EdgeColor, double Ratio, bool BothSolid)
+{
+    /// <summary>文字が多色のとき、見づらい色のマーカーの番号（<see cref="N3Brush.Stops"/> の添字。単色は -1）。</summary>
+    public int TextStop { get; init; } = -1;
+
+    /// <summary>縁が多色のとき、見づらい色のマーカーの番号（単色は -1）。</summary>
+    public int EdgeStop { get; init; } = -1;
+}
 
 /// <summary>見づらい配色を直す色の候補の種類。</summary>
 public enum N3ContrastSuggestionKind
@@ -20,6 +27,12 @@ public enum N3ContrastSuggestionKind
 
     /// <summary>縁を黒か白にする。</summary>
     EdgeBlackOrWhite,
+
+    /// <summary>文字を黒か白にする（縁が多色のとき）。</summary>
+    TextBlackOrWhite,
+
+    /// <summary>多色の箇所の、見づらいマーカーの色の明るさを変える（色合いはそのまま）。</summary>
+    StopLightness,
 }
 
 /// <summary>見づらい配色を直す色の候補 1 つ。</summary>
@@ -27,7 +40,14 @@ public enum N3ContrastSuggestionKind
 /// <param name="Color">変えたあとの色（16 進 6 桁）。</param>
 /// <param name="Ratio">変えたあとの明るさの比。</param>
 /// <param name="Kind">候補の種類。</param>
-public sealed record N3ContrastSuggestion(int Slot, string Color, double Ratio, N3ContrastSuggestionKind Kind);
+public sealed record N3ContrastSuggestion(int Slot, string Color, double Ratio, N3ContrastSuggestionKind Kind)
+{
+    /// <summary>多色の箇所のマーカーの色を変える候補のとき、そのマーカーの番号（<see cref="N3Brush.Stops"/> の添字。それ以外は -1）。</summary>
+    public int Stop { get; init; } = -1;
+
+    /// <summary>マーカーの色を変える候補のとき、変える前の色。</summary>
+    public string OriginalColor { get; init; } = "";
+}
 
 /// <summary>
 /// 見づらい配色の判定。文字と縁（ワイプ後・ワイプ前のそれぞれ）の明るさの比（ウェブの読みやすさの基準と同じ相対輝度による
@@ -88,16 +108,16 @@ public static class N3Contrast
             var textColors = Colors(d.Brushes[text]);
             var edgeColors = Colors(d.Brushes[edge]);
             N3ContrastIssue? worst = null;
-            foreach (string t in textColors)
+            foreach (var (t, ts) in textColors)
             {
-                foreach (string e in edgeColors)
+                foreach (var (e, es) in edgeColors)
                 {
                     double ratio = Ratio(t, e);
                     if (double.IsNaN(ratio) || ratio >= warnRatio) continue;
                     if (worst is null || ratio < worst.Ratio)
                     {
                         bool solid = d.Brushes[text].Type == N3Brush.TypeSolid && d.Brushes[edge].Type == N3Brush.TypeSolid;
-                        worst = new N3ContrastIssue(text, edge, N3FontSet.NormalizeWeb16(t), N3FontSet.NormalizeWeb16(e), ratio, solid);
+                        worst = new N3ContrastIssue(text, edge, t, e, ratio, solid) { TextStop = ts, EdgeStop = es };
                     }
                 }
             }
@@ -106,34 +126,44 @@ public static class N3Contrast
         return result;
     }
 
-    /// <summary>箇所の塗りで見える色（見ない箇所は空）。</summary>
-    private static List<string> Colors(N3Brush b)
+    /// <summary>
+    /// 箇所の塗りで見える色と、そのマーカーの番号（単色は -1。見ない箇所は空）。不透明度が 50% 未満・未指定の色は除き、
+    /// ミルフィーユの最後のマーカー（塗りに使われない）も除く。
+    /// </summary>
+    private static List<(string Color, int Stop)> Colors(N3Brush b)
     {
+        var result = new List<(string Color, int Stop)>();
         switch (b.Type)
         {
             case N3Brush.TypeSolid:
-                return N3FontSet.IsValidWeb16(b.Color) && b.AlphaPercent >= 50 ? new List<string> { b.Color } : new List<string>();
+                if (N3FontSet.IsValidWeb16(b.Color) && b.AlphaPercent >= 50) result.Add((N3FontSet.NormalizeWeb16(b.Color), -1));
+                break;
             case N3Brush.TypeGradient:
             case N3Brush.TypeMilleFeuille:
-                var stops = b.Stops.ToList();
-                if (b.Type == N3Brush.TypeMilleFeuille && stops.Count > 1) stops.RemoveAt(stops.Count - 1);
-                return stops.Where(s => N3FontSet.IsValidWeb16(s.Color) && s.AlphaPercent >= 50).Select(s => s.Color).ToList();
-            default:
-                return new List<string>();
+                int count = b.Type == N3Brush.TypeMilleFeuille && b.Stops.Count > 1 ? b.Stops.Count - 1 : b.Stops.Count;
+                for (int i = 0; i < count; i++)
+                {
+                    var stop = b.Stops[i];
+                    if (N3FontSet.IsValidWeb16(stop.Color) && stop.AlphaPercent >= 50) result.Add((N3FontSet.NormalizeWeb16(stop.Color), i));
+                }
+                break;
         }
+        return result;
     }
 
     // ------------------------------------------------------------ 色の候補
 
     /// <summary>
-    /// 見づらい組を直す色の候補（文字と縁がどちらも単色のときだけ。多色のときは空）。
+    /// 見づらい組を直す色の候補。文字と縁がどちらも単色なら
     /// ① 文字の色合いのまま明るさを変える ② 縁を文字の色合いの濃い色（文字が暗ければ淡い色）にする ③ 縁を黒か白にする。
+    /// 多色の箇所があるとき（<paramref name="detail"/> が要る。無ければ空）は、多色の側は見づらいマーカーの色の明るさを変え、
+    /// 単色の側は多色のどの色とも比が足りる色（色合いを保った明るさ・黒か白）にする。
     /// どれも比が <paramref name="targetRatio"/> 以上になる色で、作れないものは出さない。同じ色の候補は 1 つにする。
     /// </summary>
-    public static List<N3ContrastSuggestion> Suggest(N3ContrastIssue issue, double targetRatio = TargetRatio)
+    public static List<N3ContrastSuggestion> Suggest(N3ContrastIssue issue, N3FontDetail? detail = null, double targetRatio = TargetRatio)
     {
+        if (!issue.BothSolid) return detail is null ? new List<N3ContrastSuggestion>() : SuggestMulti(issue, detail, targetRatio);
         var result = new List<N3ContrastSuggestion>();
-        if (!issue.BothSolid) return result;
         string text = issue.TextColor;
         string edge = issue.EdgeColor;
 
@@ -158,6 +188,100 @@ public static class N3Contrast
         string bw = Ratio("000000", text) >= Ratio("FFFFFF", text) ? "000000" : "FFFFFF";
         if (Ratio(bw, text) >= targetRatio) Add(issue.EdgeSlot, bw, N3ContrastSuggestionKind.EdgeBlackOrWhite, text);
         return result;
+    }
+
+    /// <summary>多色の箇所がある組の候補（<see cref="Suggest"/>）。</summary>
+    private static List<N3ContrastSuggestion> SuggestMulti(N3ContrastIssue issue, N3FontDetail detail, double targetRatio)
+    {
+        var result = new List<N3ContrastSuggestion>();
+        var textBrush = detail.Brushes[issue.TextSlot];
+        var edgeBrush = detail.Brushes[issue.EdgeSlot];
+        var text = Colors(textBrush);
+        var edge = Colors(edgeBrush);
+        if (text.Count == 0 || edge.Count == 0) return result;
+        var textColors = text.Select(t => t.Color).ToList();
+        var edgeColors = edge.Select(e => e.Color).ToList();
+
+        void Add(int slot, string? color, N3ContrastSuggestionKind kind, IReadOnlyList<string> others, int stop = -1, string original = "")
+        {
+            if (color is null) return;
+            color = N3FontSet.NormalizeWeb16(color);
+            if (result.Any(r => r.Slot == slot && r.Stop == stop && r.Color == color)) return;
+            result.Add(new N3ContrastSuggestion(slot, color, MinRatio(color, others), kind) { Stop = stop, OriginalColor = original });
+        }
+
+        // 多色の側: 見づらいマーカーの色を、相手のどの色とも比が足りる明るさへ
+        void FixStops(int slot, List<(string Color, int Stop)> colors, List<string> others)
+        {
+            foreach (var (c, stop) in colors.Where(x => MinRatio(x.Color, others) < WarnRatio))
+            {
+                string worst = others.MinBy(o => Ratio(c, o))!;
+                bool darker = Luminance(worst) >= Luminance(c);
+                Add(slot, AdjustLightness(c, others, darker, targetRatio), N3ContrastSuggestionKind.StopLightness, others, stop, c);
+            }
+        }
+
+        // 文字の側
+        if (textBrush.Type == N3Brush.TypeSolid)
+        {
+            string t = textColors[0];
+            bool edgeBrighter = Luminance(issue.EdgeColor) >= Luminance(t);
+            Add(issue.TextSlot, AdjustLightness(t, edgeColors, darker: edgeBrighter, targetRatio), N3ContrastSuggestionKind.TextLightness, edgeColors);
+            Add(issue.TextSlot, BlackOrWhite(edgeColors, targetRatio), N3ContrastSuggestionKind.TextBlackOrWhite, edgeColors);
+        }
+        else
+        {
+            FixStops(issue.TextSlot, text, edgeColors);
+        }
+
+        // 縁の側
+        if (edgeBrush.Type == N3Brush.TypeSolid)
+        {
+            bool textBright = Luminance(issue.TextColor) >= 0.2;
+            var (h, s, _) = ToHsl(issue.TextColor);
+            double seedS = s < 0.1 ? 0 : Math.Max(s, 0.6);
+            string seed = FromHsl(h, seedS, textBright ? 0.3 : 0.8);
+            Add(issue.EdgeSlot, AdjustLightness(seed, textColors, darker: textBright, targetRatio), N3ContrastSuggestionKind.EdgeShade, textColors);
+            Add(issue.EdgeSlot, BlackOrWhite(textColors, targetRatio), N3ContrastSuggestionKind.EdgeBlackOrWhite, textColors);
+        }
+        else
+        {
+            FixStops(issue.EdgeSlot, edge, textColors);
+        }
+        return result;
+    }
+
+    /// <summary>いくつかの色とのいちばん小さい比。</summary>
+    private static double MinRatio(string color, IEnumerable<string> others) => others.Select(o => Ratio(color, o)).DefaultIfEmpty(double.NaN).Min();
+
+    /// <summary>いくつかの色のどれとも比が目標以上になる黒か白（いちばん小さい比が大きいほう。どちらも届かなければ null）。</summary>
+    private static string? BlackOrWhite(IReadOnlyList<string> others, double targetRatio)
+    {
+        double black = MinRatio("000000", others);
+        double white = MinRatio("FFFFFF", others);
+        string best = black >= white ? "000000" : "FFFFFF";
+        return Math.Max(black, white) >= targetRatio ? best : null;
+    }
+
+    /// <summary>
+    /// 色合いと鮮やかさはそのままで明るさだけを変え、<paramref name="others"/> のどの色とも比が目標以上になる色のうち、元の色にいちばん近いものを返す
+    /// （darker なら暗くする向き、そうでなければ明るくする向きへ少しずつ動かして探す。相手に明るい色と暗い色の両方があると、
+    /// 答えが途中にしか無いため）。見つからなければ null。
+    /// </summary>
+    public static string? AdjustLightness(string color, IReadOnlyList<string> others, bool darker, double targetRatio = TargetRatio)
+    {
+        if (others.Count == 0) return null;
+        if (MinRatio(color, others) >= targetRatio) return N3FontSet.NormalizeWeb16(color);
+        var (h, s, l) = ToHsl(color);
+        for (int i = 1; i <= 200; i++)
+        {
+            double next = darker ? l - i * 0.005 : l + i * 0.005;
+            if (next < 0 || next > 1) break;
+            string c = FromHsl(h, s, next);
+            if (MinRatio(c, others) >= targetRatio) return c;
+        }
+        string end = FromHsl(h, s, darker ? 0 : 1);
+        return MinRatio(end, others) >= targetRatio ? end : null;
     }
 
     /// <summary>
