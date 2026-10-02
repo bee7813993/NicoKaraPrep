@@ -178,9 +178,11 @@ public sealed class SubtitlePreviewView : Grid
         {
             x = align == 0 ? W / 2 - w : W / 2; // 中心位置揃え: 中央で終わる（左寄せ）・中央から始まる（右寄せ）
         }
-        else if (shortLine && L.SmartHorizon == 2)
+        else if (L.SmartHorizon == 2 && (shortLine || (line.LinesInPage == 1 && align != 1)))
         {
-            x = (W - w) / 2; // 左右余白揃え: 左右の余白を等しく（中央に寄せる）
+            // 左右余白揃え: 左右の余白を等しく（中央に寄せる）。1 行だけのページは、長い行でも中央に置く
+            // （ニコカラメーカー3 の出力で確認: Darling Wanted の最後のページ・アイドゥーミー！の 1 行のページ）
+            x = (W - w) / 2;
         }
         return (x, baseline);
     }

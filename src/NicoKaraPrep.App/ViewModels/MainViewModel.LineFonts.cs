@@ -206,7 +206,7 @@ public partial class MainViewModel
                 int maxRow = Math.Max(layout.LineCount, page.Count);
                 previewLines.Add(new PreviewLine(
                     source, plan.BeginMs, plan.EndMs, t, plan.PageIndex, Math.Min(plan.Row, maxRow), Math.Min(Math.Max(page.Rows, page.Count), maxRow),
-                    layout, N3WipeTimeline.Groups(line)));
+                    page.Count, layout, N3WipeTimeline.Groups(line)));
                 if (t == active)
                 {
                     widths[index] = LineWidthValidator.Evaluate(index, source.GetLayout().Width, screenWidth, layout.HorizontalMarginPx);

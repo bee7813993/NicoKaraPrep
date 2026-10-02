@@ -4,7 +4,8 @@ namespace NicoKaraPrep.App.Services.Subtitles;
 
 /// <summary>
 /// 字幕のプレビューの 1 行。BeginMs〜EndMs（タグの時刻の基準の ms）のあいだ、タブ Tab のページ Page の下から Row 段目に、
-/// レイアウト Layout で出す。Wipe はワイプのまとまり。
+/// レイアウト Layout で出す。RowsInPage はページの段の数、LinesInPage はページの行の数（1 行のページは上の段に上がることがあるので段の数と違う）。
+/// Wipe はワイプのまとまり。
 /// </summary>
 public sealed record PreviewLine(
     LineRenderSource Source,
@@ -14,6 +15,7 @@ public sealed record PreviewLine(
     int Page,
     int Row,
     int RowsInPage,
+    int LinesInPage,
     N3LayoutSettings Layout,
     IReadOnlyList<N3WipeTimeline.Group> Wipe);
 
