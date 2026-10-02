@@ -367,7 +367,7 @@ public sealed partial class MainWindow
                 string row = $"{(ViewModel.Settings.CollisionAlignFromTop ? "上" : "下")}から{plan.Row}行目";
                 string adjusted = plan.Adjusted ? "・前後ページに合わせて調整" : "";
                 string manual = plan.BeginIsManual || plan.EndIsManual ? "（手動指定あり）" : "";
-                string yielded = ViewModel.DescribeEmojiLeadYield(plan); // 絵文字の分だけ遅らせた行・絵文字を縮めた行（手動指定で下限より短くなった行は理由も）
+                string yielded = ViewModel.DescribeEmojiLeadYield(plan, plans); // 絵文字の分だけ遅らせた行・絵文字を縮めた行（下限より短くなった行は理由も）
                 SetN3LineInfo($"自動: {FmtCs(plan.BeginMs / 10)} 〜 {FmtCs(plan.EndMs / 10)}　ページ{plan.PageIndex + 1}・{row}{adjusted}{yielded}{manual}");
             }
         }

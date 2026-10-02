@@ -1782,7 +1782,7 @@ public partial class MainViewModel : ObservableObject
         var collisions = PageRowCollisionValidator.Validate(Document, collisionSettings);
         foreach (var issue in collisions) AddPairIssue(issue);
 
-        // 1') 表示時刻（書き出しと同じ計算で、前の行がワイプの途中で消える組・表示時刻の手動指定で絵文字が下限より短くなる行）。
+        // 1') 表示時刻（書き出しと同じ計算で、前の行がワイプの途中で消える組・絵文字が下限より短くなる行）。
         //     ページ衝突のエラーが出ている組には重ねて出さない
         var collisionErrors = collisions
             .Where(i => i.Severity == IssueSeverity.Error && i.RelatedLineIndex is int)

@@ -38,7 +38,8 @@ public sealed class N3ShowTimeSettings
     /// 前のページの同じ段の行と重なるときは、次の行のワイプ前を絵文字・＿の先行タグではなく本当の歌い出しから測り、
     /// 必要な分だけ次の行の表示を遅らせる（ニコカラメーカー3 には無い NicoKaraPrep の機能。既定はオフ = ニコカラメーカー3 と同じ計算）。
     /// 遅らせた行の絵文字の開始は、書き出しで表示開始まで寄せる（<see cref="N3EmojiLead"/>）。
-    /// 絵文字はワイプ前の表示時間（表示秒数がそれより短い絵文字はその秒数）を残し、それでも重なるときは前の行のワイプ後を削る。
+    /// 絵文字はワイプ前の表示時間（表示秒数がそれより短い絵文字はその秒数）を残し、それでも重なるときは前の行のワイプ後を削る
+    /// （前の行のワイプ終了から歌い出しまでがそれより短い組だけ、前の行をワイプの最後まで見せるため、さらに縮める）。
     /// </summary>
     public bool EmojiLeadYield { get; set; }
 
@@ -77,7 +78,8 @@ public sealed record N3LinePlan(int LineIndex, int BeginMs, int EndMs, bool Begi
 /// <see cref="ResolvePair"/> の規則で間隔を空ける。手動指定の値は動かさない。
 /// <see cref="N3ShowTimeSettings.EmojiLeadYield"/> がオンなら、同じ段の次の行のワイプ前だけを絵文字の先行を除いた歌い出しから測る
 /// （<see cref="ResolvePairYieldingLead"/>。ページの表示開始・段の対応付けはニコカラメーカー3 と同じく絵文字の先行を含めて決める）。
-/// 詰めるときも絵文字の表示秒数の下限（ワイプ前の表示時間と元の表示秒数の短い方）は残し、足りない分は前の行の表示を削る。
+/// 詰めるときも絵文字の表示秒数の下限（ワイプ前の表示時間と元の表示秒数の短い方）は残し、足りない分は前の行のワイプ後を削る
+/// （前の行のワイプを最後まで見せることは下限より優先する。前の行のワイプ終了から歌い出しまでが下限より短い組だけ、絵文字を下限より短くする）。
 /// </summary>
 public static class N3ShowTimePlanner
 {
@@ -214,7 +216,8 @@ public static class N3ShowTimePlanner
     /// 絵文字の先行を譲る規則（<see cref="N3ShowTimeSettings.EmojiLeadYield"/>。ニコカラメーカー3 には無い）で、
     /// 同じ段の前後の行の表示終了・開始を決める。次の行のワイプ前を絵文字・＿の先行タグではなく本当の歌い出しから測り、
     /// 必要な分だけ次の行を遅らせる（足りなければ <see cref="ResolvePair"/> の手順どおりに詰める）。
-    /// 詰めるときも次の行のワイプ前は <paramref name="minPreMs"/> を残す（絵文字の表示秒数の下限を守る。足りない分は前の行の表示を削る）。
+    /// 詰めるときも次の行のワイプ前は <paramref name="minPreMs"/> を残す（絵文字の表示秒数の下限を守る。足りない分は前の行のワイプ後を削る。
+    /// 前の行のワイプ終了から歌い出しまでが下限より短い組だけは、前の行をワイプの最後まで見せるため下限を割る）。
     /// 上段を長めに表示する場合の延長分も、絵文字の先行を譲り切る（表示開始 = 本当の歌い出し − ワイプ前）までは削らない。
     /// 次の行の表示開始が手動指定の組には使わない（<see cref="YieldingFirstMs"/>）。
     /// </summary>
@@ -248,8 +251,10 @@ public static class N3ShowTimePlanner
     /// 　表示間隔の 1/4 を手順 3 まで残すのは実プロジェクトの値から確認した挙動）
     /// 手動指定された側は動かさず、もう一方だけで調整する。
     /// <paramref name="nextMinPreMs"/>（絵文字の先行を譲る規則だけが使う。ニコカラメーカー3 には無い）があれば、次の行のワイプ前を詰める
-    /// 手順 (3) 以降でも、保護時間とこの下限の長い方を残し（(4) まで）、(5)(6) でもこの下限は残す（足りない分は前の行の表示を削る）。
-    /// 前の行の終了が手動指定のときは手動の値を守る（このときだけ下限を割りうる）。0 なら今までの計算と同じ。
+    /// 手順 (3)〜(4) でも保護時間とこの下限の長い方を残す（足りない分は前の行のワイプ後を削る）。
+    /// (5)(6) は今までと同じ（前の行のワイプを最後まで見せることを下限より優先する。(5) では次の行のワイプ前を
+    /// 前の行のワイプ終了から歌い出しまでに縮め、(6) では歌い出しで前の行を消す）。
+    /// 前の行の終了が手動指定のときは手動の値を守る（このときも下限を割りうる）。0 なら今までの計算と同じ。
     /// </summary>
     /// <param name="prevEnd">前の行の表示終了（希望値。上段を長めに表示する場合はページの最後まで延長した値）。</param>
     /// <param name="prevEndShort">前の行の延長しない表示終了（自分の歌唱終了＋ワイプ後）。延長分は表示間隔を保ったまま最初に削る。</param>
@@ -257,7 +262,7 @@ public static class N3ShowTimePlanner
     /// <param name="nextBegin">次の行の表示開始（希望値 = ページ先頭 − ワイプ前）。</param>
     /// <param name="nextFirst">次の行の先頭タグ（ワイプ開始。絵文字の先行タグを含む）。</param>
     /// <param name="nextMinPreMs">
-    /// 次の行のワイプ前（<paramref name="nextFirst"/> − 表示開始）として残す下限（ms。0 = 下限なし = ニコカラメーカー3 と同じ）。
+    /// 次の行のワイプ前（<paramref name="nextFirst"/> − 表示開始）として手順 (3)〜(4) で残す下限（ms。0 = 下限なし = ニコカラメーカー3 と同じ）。
     /// 絵文字の先行を譲る規則で、絵文字の表示秒数の下限を守るために渡す（<see cref="ResolvePairYieldingLead"/>）。
     /// </param>
     internal static (int PrevEnd, int NextBegin) ResolvePair(
@@ -269,9 +274,8 @@ public static class N3ShowTimePlanner
         int minGap = interval / 4;
         int protect = s.EffectiveProtectMs;
         int lead = s.LeadMs;
-        int minPre = Math.Max(0, nextMinPreMs);
         // 次の行のワイプ前を詰める手順 (3)〜(4) で残す時間（保護時間と下限の長い方。下限が無ければ保護時間そのもの）
-        int keepPre = minPre > 0 ? Math.Max(protect, minPre) : protect;
+        int keepPre = nextMinPreMs > 0 ? Math.Max(protect, nextMinPreMs) : protect;
 
         if (prevEnd + interval <= nextBegin) return (prevEnd, nextBegin); // 間隔が十分
         if (prevEndManual && nextBeginManual) return (prevEnd, nextBegin);
@@ -334,16 +338,16 @@ public static class N3ShowTimePlanner
             return (Math.Min(meet, prevEnd), Math.Max(meet, nextBegin));
         }
 
-        // (5) 次の行のワイプ前表示も下限まで（前の行のワイプ終了と同時に切り替える）
-        if (window >= minPre)
+        // (5) 次の行のワイプ前表示も 0 まで（前の行のワイプ終了と同時に切り替える。
+        //     絵文字の下限があっても、前の行をワイプの最後まで見せることを優先して下限を割る）
+        if (window >= 0)
         {
             return (Math.Min(prevLast, prevEnd), Math.Max(prevLast, nextBegin));
         }
 
-        // (6) 次の行の歌い出し（下限があればその分前）で前の行の表示を終える
-        //     （前の行はワイプ途中で消える。ニコカラメーカーでも警告になる）
-        int cut = nextFirst - minPre;
-        return (Math.Min(cut, prevEnd), Math.Max(cut, nextBegin));
+        // (6) 次の行の歌い出しで前の行の表示を終える（前の行はワイプ途中で消える。ニコカラメーカーでも警告になる。
+        //     歌い出しが前の行のワイプ終了より前なので、どう詰めても前の行は途中で消える。絵文字は 0 秒になる）
+        return (Math.Min(nextFirst, prevEnd), Math.Max(nextFirst, nextBegin));
     }
 
     /// <summary>

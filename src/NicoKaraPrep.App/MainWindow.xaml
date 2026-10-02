@@ -713,7 +713,7 @@
                         <RowDefinition Height="Auto" />
                     </Grid.RowDefinitions>
                     <TextBlock Text="表示秒数" FontSize="12" VerticalAlignment="Center"
-                               ToolTipService.ToolTip="アイコン・＿・先行タグ（G）を直後の文字の何秒前から表示するか。新しく挿入する分に適用します（既存のアイコン・＿は 絵文字 > 絵文字タイムタグ再計算 で付け直せます。G の先行タグは再計算では変わりません）。書き出しでは、前のページの同じ段と重なる行だけ、ワイプ前の表示時間まで短くなることがあります（それより短い表示秒数は縮めません。書き出し画面の設定）" />
+                               ToolTipService.ToolTip="アイコン・＿・先行タグ（G）を直後の文字の何秒前から表示するか。新しく挿入する分に適用します（既存のアイコン・＿は 絵文字 > 絵文字タイムタグ再計算 で付け直せます。G の先行タグは再計算では変わりません）。書き出しでは、前のページの同じ段と重なる行だけ短くなることがあります（ふつうはワイプ前の表示時間まで。それより短い表示秒数は、前の行をワイプの最後まで見せるときだけ縮めます。書き出し画面の設定）" />
                     <Grid Grid.Column="1" ColumnSpacing="4">
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="*" />

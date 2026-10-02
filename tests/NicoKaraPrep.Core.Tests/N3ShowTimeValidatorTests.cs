@@ -47,9 +47,9 @@ public class N3ShowTimeValidatorTests
     }
 
     [Fact]
-    public void 絵文字を下限まで縮めても前の行がワイプの途中で消えるならエラーに縮めた秒数を添える()
+    public void 下限まで縮めても前の行のワイプ終了に間に合わない組は前の行を最後まで見せて絵文字を縮めたことを警告する()
     {
-        // 次の行の 2 秒の絵文字を 1.5 秒に縮めても、前の行のワイプ終了（23000）に間に合わない
+        // 次の行の 2 秒の絵文字を 1.5 秒に縮めても、前の行のワイプ終了（23000）に間に合わない → 前の行を最後まで見せ、絵文字は 1.0 秒
         var doc = Lyrics(
             "@Emoji=（花帆）,a.png",
             "[00:20:00]あ[00:23:00]",
@@ -61,10 +61,13 @@ public class N3ShowTimeValidatorTests
         var off = Assert.Single(Validate(doc, Settings(false, "（花帆）")));
         Assert.Equal("4行目（ページ1→2・下から2行目）: 前の行（1行目）がワイプの途中（残り 1.0 秒）で消えます", off.Message);
 
-        var on = Assert.Single(Validate(doc, Settings(true, "（花帆）")));
-        Assert.Equal(IssueSeverity.Error, on.Severity);
+        var s = Settings(true, "（花帆）");
+        var plans = N3ShowTimePlanner.Plan(doc, s);
+        Assert.Equal((23000, 23000), (plans[0].EndMs, plans[3].BeginMs));
+        var on = Assert.Single(N3ShowTimeValidator.Validate(doc, plans, s));
+        Assert.Equal(IssueSeverity.Warning, on.Severity);
         Assert.Equal((3, 0), (on.LineIndex, on.RelatedLineIndex));
-        Assert.Equal("4行目（ページ1→2・下から2行目）: 絵文字を 2.0→1.5 秒に縮めても、前の行（1行目）がワイプの途中（残り 0.5 秒）で消えます", on.Message);
+        Assert.Equal("4行目（ページ1→2・下から2行目）: 前の行（1行目）をワイプの最後まで見せるため、絵文字が 2.0→1.0 秒に縮みます", on.Message);
 
         // 上から対応付ける設定では段の数え方が変わる
         var top = Settings(false, "（花帆）");
@@ -73,9 +76,10 @@ public class N3ShowTimeValidatorTests
     }
 
     [Fact]
-    public void 表示秒数1秒の絵文字は縮めないので前の行が消えるエラーは規則オフと同じ()
+    public void 歌い出しが前の行のワイプ終了より前なら絵文字を0秒まで縮めて前の行を歌い出しまで見せる()
     {
-        // 次の行の歌い出し（23000）自体が前の行のワイプ終了（24000）より前。1 秒の絵文字（22000〜23000）は縮めない
+        // 次の行の歌い出し（23000）自体が前の行のワイプ終了（24000）より前。前の行はどう詰めてもワイプの途中で消えるので、
+        // 歌い出しまで見せる（規則オフは絵文字の開始 22000 で消える）。1 秒の絵文字（22000〜23000）は 0 秒になる
         var doc = Lyrics(
             "@Emoji=（花帆）,a.png",
             "[00:20:00]あ[00:24:00]",
@@ -83,9 +87,12 @@ public class N3ShowTimeValidatorTests
             "",
             "[00:22:00]（花帆）[00:23:00]う[00:26:00]",
             "[00:27:00]え[00:29:00]");
-        const string message = "4行目（ページ1→2・下から2行目）: 前の行（1行目）がワイプの途中（残り 2.0 秒）で消えます";
-        Assert.Equal(message, Assert.Single(Validate(doc, Settings(false, "（花帆）"))).Message);
-        Assert.Equal(message, Assert.Single(Validate(doc, Settings(true, "（花帆）"))).Message);
+        Assert.Equal("4行目（ページ1→2・下から2行目）: 前の行（1行目）がワイプの途中（残り 2.0 秒）で消えます",
+            Assert.Single(Validate(doc, Settings(false, "（花帆）"))).Message);
+        var on = Assert.Single(Validate(doc, Settings(true, "（花帆）")));
+        Assert.Equal(IssueSeverity.Error, on.Severity);
+        Assert.Equal((3, 0), (on.LineIndex, on.RelatedLineIndex));
+        Assert.Equal("4行目（ページ1→2・下から2行目）: 絵文字を 1.0→0.0 秒に縮めても、前の行（1行目）がワイプの途中（残り 1.0 秒）で消えます", on.Message);
     }
 
     [Fact]

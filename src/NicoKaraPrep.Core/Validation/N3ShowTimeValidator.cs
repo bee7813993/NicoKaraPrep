@@ -8,7 +8,8 @@ namespace NicoKaraPrep.Core.Validation;
 /// 前後のページの同じ段の行の組を調べる。
 ///   エラー: 前の行が次の行に場所を譲ってワイプの途中で消える（表示終了 &lt; 歌唱終了）。絵文字の分だけ遅らせる規則のオン・オフにかかわらず出す。
 ///   警告: 規則（オンのとき）で表示開始へ寄せる絵文字・＿の表示秒数が、下限（ワイプ前の表示時間と元の表示秒数の短い方）より短くなった。
-///         規則は下限を守るので、表示時刻の手動指定（次の行の表示開始・前の行の表示終了）のときだけ起きる。
+///         規則は下限を守るので、前の行をワイプの最後まで見せるとき（前の行のワイプ終了から歌い出しまでが下限より短い組）と、
+///         表示時刻の手動指定（次の行の表示開始・前の行の表示終了）のときだけ起きる。
 ///         前のページに同じ段の行が無い行も、表示開始の手動指定で下限より短くなれば警告する。
 /// 規則で解消できた組は出さない。<see cref="PageRowCollisionValidator"/>（計算で詰める前の、希望の表示区間どうしの重なり）とは別の種類。
 /// </summary>
@@ -75,7 +76,7 @@ public static class N3ShowTimeValidator
     /// <summary>
     /// 縮めた絵文字（<see cref="N3EmojiLead.Describe"/>）のうち、表示秒数が下限（ワイプ前の表示時間と元の表示秒数の短い方）より
     /// 短くなったもの（表示開始を 10ms 単位に切り上げた分の差は数えない）。絵文字の分だけ遅らせる規則は下限を守るので、
-    /// 表示時刻の手動指定のときだけ起きる。
+    /// 前の行をワイプの最後まで見せるときと、表示時刻の手動指定のときだけ起きる。
     /// </summary>
     /// <param name="leadMs">ワイプ前の表示時間（ms）。</param>
     public static List<(double FromSec, double ToSec)> BelowFloor(IEnumerable<(double FromSec, double ToSec)> shrinks, int leadMs) =>
@@ -102,13 +103,13 @@ public static class N3ShowTimeValidator
                 RelatedLineIndex: prev.LineIndex);
         }
 
-        // 警告: 絵文字が下限より短くなった（表示時刻の手動指定のときだけ起きる）
+        // 警告: 絵文字が下限より短くなった（前の行をワイプの最後まで見せるときと、表示時刻の手動指定のときだけ起きる）
         var below = BelowFloor(shrinks, s.LeadMs);
         if (below.Count > 0)
         {
             string cause = next.BeginIsManual ? "表示開始の手動指定のため、"
                 : prev.EndIsManual ? $"前の行（{prev.LineIndex + 1}行目）の表示終了の手動指定のため、"
-                : "";
+                : $"前の行（{prev.LineIndex + 1}行目）をワイプの最後まで見せるため、";
             return new ValidationIssue(IssueSeverity.Warning, Category, next.LineIndex,
                 $"{where}: {cause}絵文字が {FormatShrinks(below)} 秒に縮みます",
                 RelatedLineIndex: next.BeginIsManual ? null : prev.LineIndex);

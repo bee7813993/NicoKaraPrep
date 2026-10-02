@@ -510,10 +510,6 @@ public class N3ShowTimePlannerTests
     [InlineData(23300, 22500, 24000, 1500, 22500, 22500)]
     // (5) 下限 300 が保護時間 400 より短い: 前の行のワイプ終了で切り替える（ワイプ前 350）
     [InlineData(23450, 22650, 23000, 300, 22650, 22650)]
-    // (6) 下限を残すと前の行のワイプ終了に間に合わない: 歌い出しの下限の分だけ前で切り替える（前の行はワイプの途中で消える）
-    [InlineData(23550, 22750, 23000, 300, 22700, 22700)]
-    [InlineData(23800, 23000, 24000, 1500, 22500, 22500)]
-    [InlineData(24800, 24000, 23000, 1000, 22000, 22000)]
     public void 下限つき_次の行のワイプ前は下限を残し足りない分は前の行を削る(int prevEnd, int prevLast, int nextFirst, int minPre, int expectedEnd, int expectedBegin)
     {
         var (end, begin) = N3ShowTimePlanner.ResolvePair(prevEnd, prevEnd, prevLast, false, 20000, nextFirst, false, Current, minPre);
@@ -521,6 +517,21 @@ public class N3ShowTimePlannerTests
         Assert.True(nextFirst - begin >= minPre, "次の行のワイプ前が下限を割った");
         // 下限が無いとき（同じ歌い出し）より次の行を遅らせることはない
         Assert.True(begin <= N3ShowTimePlanner.ResolvePair(prevEnd, prevEnd, prevLast, false, 20000, nextFirst, false, Current).NextBegin);
+    }
+
+    [Theory]
+    // (5) 下限を残すと前の行のワイプ終了に間に合わない: 前の行をワイプの最後まで見せ、そのワイプ終了で切り替える
+    //     （次の行のワイプ前は 250・1000 で、下限 300・1500 より短い）
+    [InlineData(23550, 22750, 23000, 300, 22750, 22750)]
+    [InlineData(23800, 23000, 24000, 1500, 23000, 23000)]
+    // (6) 歌い出しが前の行のワイプ終了より前: 歌い出しで切り替える（前の行はワイプの途中で消える。下限が無いときと同じ）
+    [InlineData(24800, 24000, 23000, 1000, 23000, 23000)]
+    public void 下限つき_前の行のワイプ終了に間に合わないときは前の行をワイプの最後まで見せる(int prevEnd, int prevLast, int nextFirst, int minPre, int expectedEnd, int expectedBegin)
+    {
+        var (end, begin) = N3ShowTimePlanner.ResolvePair(prevEnd, prevEnd, prevLast, false, 20000, nextFirst, false, Current, minPre);
+        Assert.Equal((expectedEnd, expectedBegin), (end, begin));
+        Assert.True(nextFirst - begin < minPre, "下限を残せる組");
+        Assert.Equal(Math.Min(prevLast, nextFirst), end); // 前の行はワイプ終了（歌い出しが先ならそこ）まで見せる
     }
 
     [Fact]
@@ -559,11 +570,9 @@ public class N3ShowTimePlannerTests
     [InlineData(2190, 22425, 22500)]
     // (3') 表示間隔を 0 まで（下限がワイプ前の表示時間と同じなので、(3) は (2) と同じ条件になり通らない）
     [InlineData(2205, 22450, 22500)]
-    // (4) 前の行のワイプ後を 0 まで
+    // (4) 前の行のワイプ後を 0 まで（ちょうど 0 になる 2250 まで。2250 より後は 下限つき_前の行のワイプ終了に間に合わない組だけ…）
     [InlineData(2230, 22500, 22500)]
     [InlineData(2250, 22500, 22500)]
-    // (6) 前の行はワイプの途中で消える（絵文字は 1.5 秒のまま）
-    [InlineData(2300, 22500, 22500)]
     public void 下限つき_2秒の絵文字は手順を進めても1点5秒を残す(int prevLastCs, int expectedPrevEnd, int expectedBegin)
     {
         var (plans, clamped) = N3EmojiLead.PrepareTab(FloorExample(prevLastCs, 2400), Yield("（花帆）"));
@@ -572,11 +581,11 @@ public class N3ShowTimePlannerTests
     }
 
     [Theory]
-    // (2) (3) (4) (6)。表示開始は絵文字の開始（22000）より後にならない
+    // (2) (3) (4)。表示開始は絵文字の開始（22000）より後にならない
+    // （前の行のワイプ終了が 22000 より後で間に合わない組は 下限つき_前の行のワイプ終了に間に合わない組だけ… で確かめる）
     [InlineData(2100, 21425, 21500)]
     [InlineData(2150, 21900, 21975)]
     [InlineData(2180, 22000, 22000)]
-    [InlineData(2250, 22000, 22000)]
     public void 下限つき_表示秒数1秒の絵文字は縮めない(int prevLastCs, int expectedPrevEnd, int expectedBegin)
     {
         var doc = FloorExample(prevLastCs, 2300);
@@ -586,11 +595,27 @@ public class N3ShowTimePlannerTests
     }
 
     [Theory]
+    // (5) 2 秒の絵文字: 前の行のワイプ終了（23000・23300）から歌い出し（24000）まで 1.0・0.7 秒。
+    //     前の行をワイプの最後まで見せて、そこで切り替える（絵文字は 1.0・0.7 秒）
+    [InlineData(2300, 2400, 23000)]
+    [InlineData(2330, 2400, 23300)]
+    // (5) 1 秒の絵文字: 前の行のワイプ終了（22500）から歌い出し（23000）まで 0.5 秒（絵文字は 0.5 秒）
+    [InlineData(2250, 2300, 22500)]
+    // (6) 歌い出し（24000）が前の行のワイプ終了（24500）より前: 歌い出しで切り替える（絵文字は 0 秒。前の行はワイプの途中で消える）
+    [InlineData(2450, 2400, 24000)]
+    public void 下限つき_前の行のワイプ終了に間に合わない組だけ絵文字を下限より短くする(int prevLastCs, int tCs, int expected)
+    {
+        var (plans, clamped) = N3EmojiLead.PrepareTab(FloorExample(prevLastCs, tCs), Yield("（花帆）"));
+        Assert.Equal((expected, expected), (plans[0].EndMs, plans[3].BeginMs));
+        Assert.Equal(expected, EmojiStartMs(clamped));
+    }
+
+    [Theory]
     [InlineData(2230)] // 0.3 秒（下限が保護時間より短い。(5) まで進む）
     [InlineData(2300)] // 1 秒
     [InlineData(2400)] // 2 秒
     [InlineData(2500)] // 3 秒
-    public void 下限つき_絵文字は下限を割らず前の行は今より削らない(int tCs)
+    public void 下限つき_絵文字は前の行をワイプの最後まで見せる分しか下限を割らず前の行は今より削らない(int tCs)
     {
         const int e = 22000;
         int t = tCs * 10;
@@ -601,8 +626,10 @@ public class N3ShowTimePlannerTests
             var (plans, clamped) = N3EmojiLead.PrepareTab(doc, Yield("（花帆）"));
             var now = N3ShowTimePlanner.Plan(doc, Current);
             string at = $"前の行のワイプ終了 {prevLastCs * 10}・基準時刻 {t}";
-            Assert.True(t - EmojiStartMs(clamped) >= floor, $"{at}: 絵文字 {t - EmojiStartMs(clamped)}ms が下限 {floor}ms を割った");
-            Assert.True(plans[3].BeginMs <= Math.Max(t - 1500, e), $"{at}: 下限を割らない最も遅い開始より後");
+            // 下限を割るのは、前の行のワイプ終了から歌い出しまでが下限より短い組だけ（そのときはワイプ終了から歌い出しまで残す）
+            int keep = Math.Min(floor, Math.Max(0, t - prevLastCs * 10));
+            Assert.True(t - EmojiStartMs(clamped) >= keep, $"{at}: 絵文字 {t - EmojiStartMs(clamped)}ms が {keep}ms を割った");
+            Assert.True(plans[0].EndMs >= Math.Min(prevLastCs * 10, t), $"{at}: 前の行が避けられるのにワイプの途中で消えた");
             Assert.True(plans[3].BeginMs <= t, $"{at}: 本当の歌い出しより後");
             Assert.True(plans[0].EndMs >= now[0].EndMs, $"{at}: 前の行が今（規則オフ）より削られた");
         }

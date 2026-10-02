@@ -43,7 +43,7 @@ public partial class MainViewModel
     /// 絵文字はワイプ前の表示時間（表示秒数がそれより短い絵文字はその秒数）までしか縮めず、それでも重なるときは前の行のワイプ後を削る。
     /// それより短くなるのは表示時刻の手動指定の行だけなので、そのときは理由を書く（チェックでも警告する）。
     /// </summary>
-    public string DescribeEmojiLeadYield(N3LinePlan plan)
+    public string DescribeEmojiLeadYield(N3LinePlan plan, IReadOnlyDictionary<int, N3LinePlan> plans)
     {
         var show = CreateShowTimeSettings(_activeTab.Name);
         if (!show.YieldsEmojiLead || plan.LineIndex < 0 || plan.LineIndex >= Document.Lines.Count) return "";
@@ -51,8 +51,18 @@ public partial class MainViewModel
         string emoji = N3ShowTimeValidator.FormatShrinks(shrinks);
         if (N3ShowTimeValidator.BelowFloor(shrinks, show.LeadMs).Count > 0)
         {
-            // 表示開始が自動なら、前のページの同じ段の行の表示終了の手動指定で遅れた行
-            return $"・{(plan.BeginIsManual ? "表示開始" : "前の行の表示終了")}の手動指定のため絵文字を縮めた（{emoji} 秒）";
+            // 理由: 表示開始の手動指定／前のページの同じ段の行（前の行）の表示終了の手動指定／
+            // 前の行と歌が重なる（どう詰めても前の行はワイプの途中で消える）／前の行をワイプの最後まで見せる（折衷）
+            var prev = plan.Row > 0
+                ? plans.Values.FirstOrDefault(p => p.PageIndex == plan.PageIndex - 1 && p.Row == plan.Row)
+                : null;
+            string cause = plan.BeginIsManual ? "表示開始の手動指定のため"
+                : prev is { EndIsManual: true } ? "前の行の表示終了の手動指定のため"
+                : prev is not null && prev.LineIndex >= 0 && prev.LineIndex < Document.Lines.Count
+                    && N3ShowTimePlanner.SingEndMs(Document.Lines[prev.LineIndex]) is int prevLast && prev.EndMs < prevLast
+                    ? "前の行と歌が重なるため"
+                : "前の行をワイプの最後まで見せるため";
+            return $"・{cause}絵文字を縮めた（{emoji} 秒）";
         }
         if (plan.EmojiYieldMs > 0)
         {
