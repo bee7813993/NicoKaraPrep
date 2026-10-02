@@ -26,13 +26,12 @@ public sealed class AppSettings
     /// <summary>この重なり秒数を超えたらエラー（以下は警告）。</summary>
     public double CollisionErrorThresholdSeconds { get; set; } = 1.0;
 
-    // ---- 横幅チェック ----
+    // ---- 字幕の既定（ベースの n3proj が無いときの画面の横幅、ニコカラメーカー3 のフォント設定が当たらない行のフォント） ----
     public int ScreenWidthPx { get; set; } = 1920;
     public string FontFamily { get; set; } = "メイリオ";
     public double FontSizePx { get; set; } = 80;
     public bool FontBold { get; set; } = true;
     public bool FontItalic { get; set; }
-    public double SideMarginPercent { get; set; } = 5.0;
 
     /// <summary>
     /// 縁取りサイズ px（片側）。実機レンダリングの実測より、アイコンは
@@ -190,55 +189,6 @@ public sealed class AppSettings
         ExcludeChar = excludeChar,
     };
 
-    /// <param name="effectiveEmoji">実効 @Emoji リスト。</param>
-    /// <param name="baseDir">相対画像パスの基準フォルダ（歌詞ファイルのフォルダ）。</param>
-    public LineWidthSettings ToLineWidthSettings(IEnumerable<EmojiEntry> effectiveEmoji, string? baseDir = null)
-    {
-        var s = new LineWidthSettings
-        {
-            ScreenWidthPx = ScreenWidthPx,
-            FontFamily = FontFamily,
-            FontSizePx = FontSizePx,
-            Bold = FontBold,
-            Italic = FontItalic,
-            SideMarginPercent = SideMarginPercent,
-        };
-        foreach (var e in effectiveEmoji)
-        {
-            if (string.IsNullOrEmpty(e.ReplaceChar)) continue;
-            s.EmojiChars.Add(e.ReplaceChar);
-
-            var opts = e.ParseOptions();
-            s.EmojiZoomPercent[e.ReplaceChar] = opts.ZoomPercent;
-
-            // アイコン表示幅を画像実寸から計算:
-            //   通常: 高さ = フォントサイズ × Zoom%（透明余白込みの画像全体）、幅 = 高さ × 縦横比。
-            //         実機レンダリングの実測より、Zoom の基準に縁取りは含まれない
-            //         （縁取りが影響するのは縦位置のみ）
-            //   Fix : 画像のピクセルサイズをそのまま使用
-            //   左右 Margin を加算
-            string imagePath = e.ImageBefore;
-            if (!string.IsNullOrEmpty(imagePath) && !Path.IsPathRooted(imagePath) && baseDir is not null)
-            {
-                imagePath = Path.Combine(baseDir, imagePath);
-            }
-            double box = FontSizePx * opts.ZoomPercent / 100.0;
-            double width;
-            if (Formats.ImageSizeReader.TryGetSize(imagePath, out int imgW, out int imgH) && imgH > 0 && imgW > 0)
-            {
-                width = opts.Fix
-                    ? imgW
-                    : box * imgW / imgH;
-            }
-            else
-            {
-                width = box; // 画像が読めない場合は正方形近似
-            }
-            s.EmojiWidthPx[e.ReplaceChar] = width + Math.Max(0, opts.MarginLeft) + Math.Max(0, opts.MarginRight);
-        }
-        return s;
-    }
-
     /// <summary>@Emoji オプション文字列から Zoom=n% を取り出す。</summary>
     public static bool TryParseZoom(string? options, out double zoom)
     {
@@ -285,7 +235,6 @@ public sealed class AppSettings
         FontSizePx = other.FontSizePx;
         FontBold = other.FontBold;
         FontItalic = other.FontItalic;
-        SideMarginPercent = other.SideMarginPercent;
         EdgeSizePx = other.EdgeSizePx;
         EmojiLeadSeconds = other.EmojiLeadSeconds;
         EmojiLeadResumeSeconds = other.EmojiLeadResumeSeconds;

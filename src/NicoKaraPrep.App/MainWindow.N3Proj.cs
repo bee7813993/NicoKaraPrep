@@ -133,10 +133,10 @@ public sealed partial class MainWindow
     /// <summary>
     /// n3proj を開いたとき、そのプロジェクトのメインの歌詞ファイル（最初の歌詞設定タブの歌詞ファイル）も開く。
     /// 歌詞を開いていなければそのまま開き、別の歌詞を開いていれば開くか尋ねる。同じ曲の歌詞（同じ名前の rlf なども）を
-    /// 開いていれば何もしない。尋ねた画面でキャンセルされたら Proceed = false（読み込みをやめる）。
+    /// 開いていればそのまま使う。尋ねた画面でキャンセルされたら Proceed = false（読み込みをやめる）。
+    /// コーラスなど 2 つ目以降の歌詞設定の歌詞は、それぞれ自分のファイルを持つタブとして開く
+    /// （上書き保存でそれぞれのファイルへ保存し、メインの歌詞ファイルにはまとめない）。「設定だけ読み込む」では開かない。
     /// Note は歌詞を開いた・開けなかったことの説明（ステータスバーに出す）。
-    /// コーラスなど 2 つ目以降のタブの歌詞は開かない（保存するとメインの歌詞ファイルにまとめて書くため、
-    /// ニコカラメーカー3 のプロジェクトの歌詞ファイルと形が変わってしまう）。
     /// </summary>
     private async Task<(bool Proceed, string? Note)> OpenProjectLyricsAsync(N3ProjImportPreview preview)
     {
@@ -150,7 +150,7 @@ public sealed partial class MainWindow
             string name = Path.GetFileName(main.LyricsRelativePath ?? main.LyricsPath ?? "");
             return (true, blank ? $"このプロジェクトの歌詞ファイル{(name.Length > 0 ? $"（{name}）" : "")}が見つからないため、歌詞は開きませんでした" : null);
         }
-        if (current is not null && N3ProjImport.IsSameLyrics(current, lyrics)) return (true, null);
+        if (current is not null && N3ProjImport.IsSameLyrics(current, lyrics)) return (true, OpenProjectExtraTabs(preview));
 
         if (!blank)
         {
@@ -191,9 +191,25 @@ public sealed partial class MainWindow
         }
         AfterDocumentLoaded();
 
-        var others = preview.Tabs.Skip(1).Select(t => t.Name).Where(n => n.Length > 0).ToList();
-        string otherNote = others.Count > 0 ? $"（{string.Join("・", others)} の歌詞は開いていません）" : "";
-        return (true, $"プロジェクトの歌詞 {Path.GetFileName(lyrics)} を開きました（{ViewModel.Lines.Count} 行）{otherNote}");
+        string opened = $"プロジェクトの歌詞 {Path.GetFileName(lyrics)} を開きました（{ViewModel.Lines.Count} 行）";
+        return (true, OpenProjectExtraTabs(preview) is string extra ? $"{opened}　{extra}" : opened);
+    }
+
+    /// <summary>
+    /// n3proj の 2 つ目以降の歌詞設定の歌詞をタブで開き、開いた・開けなかったことの説明を返す（何もなければ null）。
+    /// </summary>
+    private string? OpenProjectExtraTabs(N3ProjImportPreview preview)
+    {
+        var (opened, missing) = ViewModel.OpenProjectExtraTabs(preview);
+        if (opened.Count > 0)
+        {
+            SyncTabSelection();
+            ScheduleValidation(); // プレビュー・行リストに新しいタブの行を出す
+        }
+        var parts = new List<string>();
+        if (opened.Count > 0) parts.Add($"{string.Join("・", opened)} の歌詞をタブで開きました（上書き保存でそれぞれのファイルへ保存します）");
+        if (missing.Count > 0) parts.Add($"{string.Join("・", missing)} の歌詞ファイルが見つからないため開いていません");
+        return parts.Count > 0 ? string.Join("　", parts) : null;
     }
 
     /// <summary>

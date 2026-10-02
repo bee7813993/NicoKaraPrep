@@ -241,81 +241,47 @@ public class OverlapInfoDetectorTests
 
 public class LineWidthValidatorTests
 {
-    /// <summary>1 文字 = フォントサイズ幅として計測するフェイク。</summary>
-    private sealed class FakeMeasurer : ITextMeasurer
-    {
-        public double MeasureWidth(string text, string fontFamily, double fontSize, bool bold, bool italic)
-        {
-            int count = 0;
-            for (int i = 0; i < text.Length; i++)
-            {
-                count++;
-                if (char.IsHighSurrogate(text[i])) i++;
-            }
-            return count * fontSize;
-        }
-    }
-
-    private static LyricsDocument Doc(string text)
-    {
-        var doc = new LyricsDocument();
-        doc.Lines.Add(LrcFormat.ParseLyricLine(text));
-        return doc;
-    }
-
     [Fact]
     public void 収まる場合は問題なし()
     {
-        // 10 文字 × 80px = 800px、有効幅 = 1920 × 0.9 = 1728px
-        var doc = Doc("[00:01:00]あいうえおかきくけこ");
-        var settings = new LineWidthSettings { ScreenWidthPx = 1920, FontSizePx = 80 };
-        var results = LineWidthValidator.Measure(doc, settings, new FakeMeasurer());
-        Assert.Null(results[0].Severity);
-        Assert.Equal(800, results[0].WidthPx);
+        // 余白 50px ずつ → 余白を除いた幅 1820px。1000px は 54.9%
+        var r = LineWidthValidator.Evaluate(0, 1000, 1920, 50);
+        Assert.Null(r.Severity);
+        Assert.Equal(1820, r.UsableWidthPx);
+        Assert.Equal(1000 / 1820.0 * 100, r.UsagePercent, 6);
     }
 
     [Fact]
-    public void マージン不足で警告()
+    public void 左右余白を確保できないと警告()
     {
-        // 22 文字 × 80px = 1760px > 有効幅 1728px、画面 1920px 以内 → 警告
-        var doc = Doc("[00:01:00]" + new string('あ', 22));
-        var settings = new LineWidthSettings { ScreenWidthPx = 1920, FontSizePx = 80, SideMarginPercent = 5 };
-        var results = LineWidthValidator.Measure(doc, settings, new FakeMeasurer());
-        Assert.Equal(IssueSeverity.Warning, results[0].Severity);
+        // 1850px > 余白を除いた幅 1820px、画面 1920px 以内 → 警告
+        var r = LineWidthValidator.Evaluate(3, 1850, 1920, 50);
+        Assert.Equal(IssueSeverity.Warning, r.Severity);
+        var issue = Assert.Single(LineWidthValidator.ToIssues(new[] { r }));
+        Assert.Equal(3, issue.LineIndex);
+        Assert.Contains("左右余白 50px", issue.Message);
     }
 
     [Fact]
     public void はみ出しでエラー()
     {
-        // 25 文字 × 80px = 2000px > 画面 1920px → エラー
-        var doc = Doc("[00:01:00]" + new string('あ', 25));
-        var settings = new LineWidthSettings { ScreenWidthPx = 1920, FontSizePx = 80 };
-        var results = LineWidthValidator.Measure(doc, settings, new FakeMeasurer());
-        Assert.Equal(IssueSeverity.Error, results[0].Severity);
+        var r = LineWidthValidator.Evaluate(0, 2000, 1920, 50);
+        Assert.Equal(IssueSeverity.Error, r.Severity);
+        Assert.Contains("画面からはみ出します", Assert.Single(LineWidthValidator.ToIssues(new[] { r })).Message);
     }
 
     [Fact]
-    public void 絵文字はZoom付き正方形として加算()
+    public void 余白が負や数でなければ0として扱う()
     {
-        var doc = Doc("[00:01:00]あ★い");
-        var settings = new LineWidthSettings { ScreenWidthPx = 1920, FontSizePx = 100 };
-        settings.EmojiChars.Add("★");
-        settings.EmojiZoomPercent["★"] = 150;
-        var results = LineWidthValidator.Measure(doc, settings, new FakeMeasurer());
-        // あ+い = 200px、★ = 100 × 150% = 150px → 350px
-        Assert.Equal(350, results[0].WidthPx);
+        Assert.Equal(0, LineWidthValidator.Evaluate(0, 100, 1920, -30).SideMarginPx);
+        Assert.Equal(0, LineWidthValidator.Evaluate(0, 100, 1920, double.NaN).SideMarginPx);
+        Assert.Null(LineWidthValidator.Evaluate(0, 1900, 1920, -30).Severity);
     }
 
     [Fact]
-    public void 絵文字の実寸幅が登録されていればそれを使う()
+    public void 問題の無い行は知らせない()
     {
-        var doc = Doc("[00:01:00]あ（花帆）い");
-        var settings = new LineWidthSettings { ScreenWidthPx = 1920, FontSizePx = 100 };
-        settings.EmojiChars.Add("（花帆）");
-        settings.EmojiWidthPx["（花帆）"] = 260; // 横長画像 + Margin の計算値
-        var results = LineWidthValidator.Measure(doc, settings, new FakeMeasurer());
-        // あ+い = 200px + アイコン 260px → 460px
-        Assert.Equal(460, results[0].WidthPx);
+        Assert.Empty(LineWidthValidator.ToIssues(new[] { LineWidthValidator.Evaluate(0, 500, 1920, 50) }));
     }
 }
 
@@ -340,9 +306,9 @@ public class EmojiOptionsTests
     }
 
     [Fact]
-    public void アイコン実寸から幅を計算()
+    public void アイコンの画像の大きさを読める()
     {
-        // 200×100 の PNG（縦横比 2:1）を作る
+        // 200×100 の PNG（縦横比 2:1）を作る（アイコンの幅は字幕の配置で 高さ × 縦横比 として使う）
         string dir = Path.Combine(Path.GetTempPath(), "ttt_test_" + Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(dir);
         string png = Path.Combine(dir, "wide.png");
@@ -353,21 +319,6 @@ public class EmojiOptionsTests
             Assert.True(NicoKaraPrep.Core.Formats.ImageSizeReader.TryGetSize(png, out int w, out int h));
             Assert.Equal(200, w);
             Assert.Equal(100, h);
-
-            var settings = new NicoKaraPrep.Core.Project.AppSettings { FontSizePx = 80, EdgeSizePx = 10 };
-            var emoji = new[]
-            {
-                new NicoKaraPrep.Core.Model.EmojiEntry
-                {
-                    ReplaceChar = "（幅広）",
-                    ImageBefore = png,
-                    Options = "Zoom=150,MarginRight=20",
-                },
-            };
-            var s = settings.ToLineWidthSettings(emoji);
-            // 高さ = フォントサイズ 80 × 150% = 120px（縁取りは Zoom 基準に含まれない）。
-            // 幅 = 120 × (200/100) = 240px、+MarginRight 20 → 260px
-            Assert.Equal(260, s.EmojiWidthPx["（幅広）"], 3);
         }
         finally
         {

@@ -18,6 +18,9 @@ public sealed class N3ProjSourceTab
     /// <summary>表示時刻の自動設定が「上段歌詞を長めに表示する」か。</summary>
     public bool TopLong { get; init; }
 
+    /// <summary>このタブの歌詞行がみな同じレイアウト設定を使っていれば、その名前（ばらばら・不明なら null）。</summary>
+    public string? LayoutName { get; set; }
+
     /// <summary>
     /// 歌詞行（Raw）とページ区切り（空行）から組み立てたドキュメント。
     /// ページ区切り・段落区切りの合成行を空行として扱うので、固定行数の行分けでもページ構成が一致する。
@@ -223,6 +226,7 @@ public static class N3ProjImport
     {
         var result = new List<N3ProjSourceTab>();
         if (root["SourceLyricsInfos"] is not JsonArray infos) return result;
+        var layoutNames = (root["LyricsLayouts"] as JsonArray)?.Select(l => l?["SettingsName"]?.GetValue<string>()).ToList() ?? new List<string?>();
 
         foreach (var node in infos)
         {
@@ -236,6 +240,8 @@ public static class N3ProjImport
             };
 
             bool pendingBreak = false;
+            var usedLayouts = new HashSet<int>();
+            bool layoutUnknown = false;
             foreach (var ln in lines)
             {
                 if (ln is not JsonObject l) continue;
@@ -259,8 +265,14 @@ public static class N3ProjImport
                 int end = l["ShowEndTime"]?.GetValue<int>() ?? -1;
                 tab.Document.Lines.Add(LrcFormat.ParseLyricLine(raw));
                 tab.ShowTimes.Add(begin >= 0 && end >= begin ? (begin, end) : null);
+                if (l["LayoutIndex"] is JsonValue li && li.TryGetValue(out int layoutIndex)) usedLayouts.Add(layoutIndex);
+                else layoutUnknown = true;
             }
 
+            if (!layoutUnknown && usedLayouts.Count == 1 && usedLayouts.First() is int only && only >= 0 && only < layoutNames.Count)
+            {
+                tab.LayoutName = layoutNames[only] is { Length: > 0 } name ? name : null;
+            }
             if (tab.LyricLineCount > 0) result.Add(tab);
         }
         return result;

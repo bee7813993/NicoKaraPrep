@@ -24,13 +24,14 @@
             </ComboBox>
             <NumberBox x:Name="ThresholdBox" Header="エラーとする重なり秒数（以下は警告）" Minimum="0" Maximum="30" SmallChange="0.5" SpinButtonPlacementMode="Inline" />
 
-            <TextBlock Text="横幅チェック" Style="{ThemeResource SubtitleTextBlockStyle}" Margin="0,8,0,0" />
+            <TextBlock Text="字幕の既定（画面・フォント）" Style="{ThemeResource SubtitleTextBlockStyle}" Margin="0,8,0,0" />
+            <TextBlock TextWrapping="Wrap" Style="{ThemeResource CaptionTextBlockStyle}" Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                       Text="行の横幅は字幕のプレビューと同じ並べ方で測り、ページのレイアウト設定の左右余白で判定します。ここの画面の横幅は書き出しのベースの n3proj が無いときに、フォントはニコカラメーカー3 のフォント設定が当たらない行に使います。" />
             <NumberBox x:Name="ScreenWidthBox" Header="画面（動画）の横幅 px" Minimum="320" Maximum="7680" SpinButtonPlacementMode="Inline" />
             <ComboBox x:Name="FontFamilyBox" Header="字幕フォント" IsEditable="True" HorizontalAlignment="Stretch" />
             <NumberBox x:Name="FontSizeBox" Header="フォントサイズ px" Minimum="8" Maximum="400" SpinButtonPlacementMode="Inline" />
             <NumberBox x:Name="EdgeSizeBox" Header="縁取りサイズ px（片側。@Emoji プレビューのアイコン縦位置に反映）" Minimum="0" Maximum="100" SmallChange="1" SpinButtonPlacementMode="Inline" />
             <CheckBox x:Name="BoldBox" Content="太字" />
-            <NumberBox x:Name="MarginBox" Header="左右マージン（片側 %）" Minimum="0" Maximum="40" SmallChange="1" SpinButtonPlacementMode="Inline" />
 
             <TextBlock Text="絵文字挿入" Style="{ThemeResource SubtitleTextBlockStyle}" Margin="0,8,0,0" />
             <NumberBox x:Name="EmojiLeadBox" Header="絵文字の表示秒数（直後の文字の何秒前から）" Minimum="0" Maximum="30" SmallChange="0.5" SpinButtonPlacementMode="Inline" />

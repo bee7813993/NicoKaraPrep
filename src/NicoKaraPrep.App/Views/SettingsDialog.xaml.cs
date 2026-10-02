@@ -14,7 +14,7 @@ public sealed partial class SettingsDialog : ContentDialog
         InitializeComponent();
         _settings = settings;
 
-        foreach (string family in DirectWriteTextMeasurer.GetSystemFontFamilies().OrderBy(f => f))
+        foreach (string family in SystemFontList.GetFamilies().OrderBy(f => f))
         {
             FontFamilyBox.Items.Add(family);
         }
@@ -30,7 +30,6 @@ public sealed partial class SettingsDialog : ContentDialog
         FontSizeBox.Value = settings.FontSizePx;
         EdgeSizeBox.Value = settings.EdgeSizePx;
         BoldBox.IsChecked = settings.FontBold;
-        MarginBox.Value = settings.SideMarginPercent;
         EmojiLeadBox.Value = settings.EmojiLeadSeconds;
         EmojiModeBox.SelectedIndex = settings.EmojiTagPerEmoji ? 0 : 1;
         PlaceholderBox.Text = settings.PlaceholderChar;
@@ -52,7 +51,6 @@ public sealed partial class SettingsDialog : ContentDialog
         _settings.FontSizePx = ToDouble(FontSizeBox.Value, 80);
         _settings.EdgeSizePx = ToDouble(EdgeSizeBox.Value, 0);
         _settings.FontBold = BoldBox.IsChecked == true;
-        _settings.SideMarginPercent = ToDouble(MarginBox.Value, 5.0);
         _settings.EmojiLeadSeconds = ToDouble(EmojiLeadBox.Value, 2.0);
         if (_settings.EmojiLeadSeconds > 0) _settings.EmojiLeadResumeSeconds = _settings.EmojiLeadSeconds;
         _settings.EmojiTagPerEmoji = EmojiModeBox.SelectedIndex == 0;

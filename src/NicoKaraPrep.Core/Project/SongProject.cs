@@ -114,6 +114,12 @@ public sealed class SongProjectTab
     /// <summary>このタブを別ファイルへ保存した先（タブの上書き保存の対象）。</summary>
     public string? FilePath { get; set; }
 
+    /// <summary>
+    /// 自分の歌詞ファイル（<see cref="FilePath"/>）を持つタブか（ニコカラメーカー3 のプロジェクトの 2 つ目以降の歌詞設定の歌詞など）。
+    /// メインの歌詞ファイルには含めず、開き直したときは <see cref="FilePath"/> から読み込む。false は分離タブ。
+    /// </summary>
+    public bool OwnFile { get; set; }
+
     /// <summary>行ごとのニコカラメーカー3 書き出し設定。</summary>
     public List<LineExportSettings> LineSettings { get; set; } = new();
 }

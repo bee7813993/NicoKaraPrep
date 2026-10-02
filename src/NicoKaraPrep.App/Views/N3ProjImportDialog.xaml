@@ -32,7 +32,7 @@
             <TextBlock Text="チェック・プレビュー" Style="{StaticResource SectionTitle}" />
             <CheckBox x:Name="CheckFontBox">
                 <StackPanel>
-                    <TextBlock Text="字幕フォントと画面サイズを、横幅チェックとプレビューに使う" TextWrapping="Wrap" />
+                    <TextBlock Text="字幕フォントと画面サイズを、既定にする（フォント設定が当たらない行の見た目・横幅と、ベースが無いときの画面の横幅）" TextWrapping="Wrap" />
                     <TextBlock x:Name="CheckFontDetail" Style="{StaticResource ItemDetail}" />
                 </StackPanel>
             </CheckBox>

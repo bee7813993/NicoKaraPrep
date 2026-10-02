@@ -45,21 +45,14 @@ public partial class LineViewModel : ObservableObject
         }
     }
 
-    // 横幅を測るフォント（全行共通。横幅の欄のツールチップに出す。n3proj 取り込み結果の確認用）
-    private string _widthFont = "";
-
-    public void SetFontInfo(string family, double sizePx)
-    {
-        string text = Model.IsEmpty ? "" : $"{family} {sizePx:F0}px";
-        if (_widthFont == text) return;
-        _widthFont = text;
-        OnPropertyChanged(nameof(WidthToolTip));
-    }
+    // 横幅の判定（横幅の欄のツールチップに画面の横幅・左右余白を出す）
+    private LineWidthResult? _widthResult;
 
     /// <summary>横幅の欄のツールチップ。</summary>
     public string WidthToolTip =>
-        "横幅 px と有効幅（マージン除き）に対する使用率。90% 超はオレンジで予告"
-        + (_widthFont.Length > 0 ? $"\n横幅を測るフォント（全行共通。ファイル > 設定 の字幕フォント）: {_widthFont}" : "");
+        "横幅 px（字幕のプレビューと同じ並べ方で、この行に当たるフォント設定で測った幅）と、" +
+        "ページのレイアウト設定の左右余白を除いた幅に対する使用率。90% 超はオレンジで予告"
+        + (_widthResult is { } r ? $"\n画面 {r.ScreenWidthPx}px・左右余白 {r.SideMarginPx:F0}px（余白を除いた幅 {r.UsableWidthPx:F0}px）" : "");
 
     /// <summary>この行に当たるフォント設定（n3proj の書き出しと同じ決め方。チェックのたびに更新する）。</summary>
     [ObservableProperty]
@@ -160,7 +153,13 @@ public partial class LineViewModel : ObservableObject
 
     public void SetWidthResult(LineWidthResult? result)
     {
-        if (result is null || Model.IsEmpty)
+        if (result is null || Model.IsEmpty) result = null;
+        if (!Equals(_widthResult, result))
+        {
+            _widthResult = result;
+            OnPropertyChanged(nameof(WidthToolTip));
+        }
+        if (result is null)
         {
             WidthText = "";
             WidthGlyph = "";

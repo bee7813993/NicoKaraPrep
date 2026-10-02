@@ -44,6 +44,75 @@ public partial class MainViewModel
         return N3ProjImport.Analyze(path, intervalHint);
     }
 
+    /// <summary>
+    /// n3proj の 2 つ目以降の歌詞設定（コーラスなど）の歌詞ファイルを、自分のファイルを持つタブとして開く
+    /// （上書き保存ではそれぞれのファイルへ保存し、メインの歌詞ファイルには含めない）。
+    /// 同じ名前のタブ・同じファイルを開いているタブがあれば開かない。タブの歌詞行がみな同じレイアウト設定なら、
+    /// そのタブのレイアウト（n3proj の書き出しの設定）にする（決めていなければ）。
+    /// 戻り値は開いたタブの名前と、歌詞ファイルが見つからない・読めなかったタブの名前。
+    /// </summary>
+    public (List<string> Opened, List<string> Missing) OpenProjectExtraTabs(N3ProjImportPreview preview)
+    {
+        StoreActiveTab();
+        var opened = new List<string>();
+        var missing = new List<string>();
+        foreach (var source in preview.Tabs.Skip(1))
+        {
+            string? path = N3ProjImport.FindLyricsFile(preview.Path, source);
+            string name = source.Name.Length > 0 ? source.Name
+                : Path.GetFileNameWithoutExtension(source.LyricsRelativePath ?? source.LyricsPath ?? "") is { Length: > 0 } fileName ? fileName
+                : $"パート{Tabs.Count}";
+            if (path is null)
+            {
+                missing.Add(name);
+                continue;
+            }
+            bool already = Tabs.Any(t => t.Name == name
+                || SameFile(t.CopyFilePath, path)
+                || (t.IsMain && SameFile(t.FilePath, path)));
+            if (already) continue;
+
+            LyricsDocument doc;
+            try
+            {
+                doc = ReadLyricsFile(path);
+            }
+            catch (Exception)
+            {
+                missing.Add(name); // 読めないファイルは開かない（ほかのタブは開く）
+                continue;
+            }
+            Tabs.Add(new TabState
+            {
+                Name = name,
+                Document = doc,
+                Format = FormatFromExtension(path),
+                CopyFilePath = path,
+                OwnFile = true,
+            });
+            if (source.LayoutName is { Length: > 0 } layout && !N3ProjSettings.TabLayouts.ContainsKey(name))
+            {
+                N3ProjSettings.TabLayouts[name] = layout;
+            }
+            opened.Add(name);
+        }
+        if (opened.Count > 0) SaveProject();
+        return (opened, missing);
+    }
+
+    private static bool SameFile(string? a, string? b)
+    {
+        if (string.IsNullOrEmpty(a) || string.IsNullOrEmpty(b)) return false;
+        try
+        {
+            return string.Equals(Path.GetFullPath(a), Path.GetFullPath(b), StringComparison.OrdinalIgnoreCase);
+        }
+        catch (Exception e) when (e is ArgumentException or NotSupportedException or PathTooLongException)
+        {
+            return string.Equals(a, b, StringComparison.OrdinalIgnoreCase);
+        }
+    }
+
     /// <summary>表示時刻の設定値を取り込んだ場合の、タブごとの表示時刻計算の設定。</summary>
     private N3ShowTimeSettings EstimatedShowTimeSettings(N3ProjImportPreview preview, N3ProjSourceTab? source)
     {

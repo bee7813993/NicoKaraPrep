@@ -316,7 +316,7 @@
                     DoubleTapped="OnTabDoubleTapped">
                     <TabView.TabItemTemplate>
                         <DataTemplate x:DataType="vm:TabState">
-                            <TabViewItem Header="{x:Bind Name, Mode=OneWay}" IsClosable="{x:Bind IsClosable}" />
+                            <TabViewItem Header="{x:Bind Name, Mode=OneWay}" IsClosable="{x:Bind IsClosable}" ToolTipService.ToolTip="{x:Bind ToolTipText}" />
                         </DataTemplate>
                     </TabView.TabItemTemplate>
                     <TabView.TabStripFooter>

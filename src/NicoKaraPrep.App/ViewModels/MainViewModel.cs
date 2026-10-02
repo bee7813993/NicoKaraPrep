@@ -97,9 +97,9 @@ public partial class MainViewModel : ObservableObject
             return null;
         }
 
-        // 元の位置へ戻すためのキーが未設定なら振っておく（他のタブが無いときだけ。
-        // タブがあるときに振り直すと既存タブのキーと整合しなくなる）
-        if (Tabs.Count == 1 && Document.Lines.Any(l => l.SplitOrderKey is null))
+        // 元の位置へ戻すためのキーが未設定なら振っておく（他の分離タブが無いときだけ。
+        // 分離タブがあるときに振り直すと既存タブのキーと整合しなくなる。自分のファイルを持つタブの行はメインへ戻さないので関係しない）
+        if (!HasSplitTabs && Document.Lines.Any(l => l.SplitOrderKey is null))
         {
             Document.AssignSplitOrderKeys();
         }
@@ -167,40 +167,94 @@ public partial class MainViewModel : ObservableObject
         return true;
     }
 
-    /// <summary>タブを閉じて、行をメインへ時刻順にマージして戻す。</summary>
+    /// <summary>メインの歌詞ファイルの行を分けた分離タブがあるか（自分のファイルを持つタブは数えない）。</summary>
+    private bool HasSplitTabs => Tabs.Any(t => !t.IsMain && !t.OwnFile);
+
+    /// <summary>
+    /// タブを閉じる。分離タブは行をメインへ時刻順にマージして戻す。自分のファイルを持つタブはそのまま閉じる
+    /// （保存していない変更は捨てる。保存するかは画面側で尋ねる）。
+    /// </summary>
     public void CloseTab(TabState tab)
     {
         if (tab.IsMain || !Tabs.Contains(tab)) return;
         StoreActiveTab();
 
         var main = Tabs.First(t => t.IsMain);
-        MergeLinesByTime(main.Document, tab.Document);
-        main.IsModified = true;
-        main.UndoStack.Clear();
-        main.RedoStack.Clear();
+        if (!tab.OwnFile)
+        {
+            MergeLinesByTime(main.Document, tab.Document);
+            main.IsModified = true;
+            main.UndoStack.Clear();
+            main.RedoStack.Clear();
+        }
         Tabs.Remove(tab);
 
         if (_activeTab == tab)
         {
             ActivateTab(main);
         }
-        else if (_activeTab == main)
+        else if (_activeTab == main && !tab.OwnFile)
         {
             RebuildLines();
             MarkModified();
         }
         SaveProject();
-        StatusText = $"タブ「{tab.Name}」の行をメインへ時刻順に戻しました";
+        StatusText = tab.OwnFile
+            ? $"タブ「{tab.Name}」を閉じました（{Path.GetFileName(tab.CopyFilePath)} の歌詞はメインへは戻していません）"
+            : $"タブ「{tab.Name}」の行をメインへ時刻順に戻しました";
+    }
+
+    /// <summary>タブに保存していない変更があるか（表示中のタブは今の状態で見る）。</summary>
+    public bool IsTabModified(TabState tab) => tab == _activeTab ? IsModified : tab.IsModified;
+
+    /// <summary>自分のファイルを持つタブを、そのファイルへ保存する（表示中かどうかに関係なく）。</summary>
+    public void SaveOwnFileTab(TabState tab)
+    {
+        if (!tab.OwnFile || tab.CopyFilePath is not string path) return;
+        StoreActiveTab();
+        WriteLyricsFile(path, tab.Document, FormatFromExtension(path));
+        tab.IsModified = false;
+        if (tab == _activeTab)
+        {
+            IsModified = false;
+            UpdateTitle();
+        }
+        SaveProject();
+        StatusText = $"タブ「{tab.Name}」を保存しました: {Path.GetFileName(path)}（{tab.Document.Lines.Count} 行）";
+    }
+
+    /// <summary>歌詞ファイル（rlf / lrc・テキスト）を読む。</summary>
+    private static LyricsDocument ReadLyricsFile(string path)
+    {
+        if (Path.GetExtension(path).Equals(".rlf", StringComparison.OrdinalIgnoreCase)) return RlfFormat.ReadFile(path);
+        string text = EncodingDetector.ReadAllText(path, out _);
+        return TextEditModeFormat.Parse(text);
+    }
+
+    /// <summary>歌詞ファイルを書く（rlf / lrc）。</summary>
+    private void WriteLyricsFile(string path, LyricsDocument doc, DocumentFormat format)
+    {
+        if (format == DocumentFormat.Rlf)
+        {
+            RlfFormat.WriteFile(path, doc);
+        }
+        else
+        {
+            File.WriteAllText(path, LrcFormat.Write(doc, LrcOptionsWithEffectiveEmoji(path)), LrcEncoding);
+        }
     }
 
     /// <summary>タブの行をメインへ挿入して戻す（元の行位置キー優先、無ければ時刻順）。</summary>
     private static void MergeLinesByTime(LyricsDocument main, LyricsDocument part) =>
         LineOperations.MergeLines(main, part);
 
-    /// <summary>すべての分離タブを閉じて、行をメインへ時刻順に戻す（タブ分離の初期化）。</summary>
+    /// <summary>分離タブ（自分のファイルを持つタブは除く）の数。</summary>
+    public int SplitTabCount => Tabs.Count(t => !t.IsMain && !t.OwnFile);
+
+    /// <summary>すべての分離タブを閉じて、行をメインへ時刻順に戻す（タブ分離の初期化。自分のファイルを持つタブはそのまま）。</summary>
     public void ResetAllTabs()
     {
-        if (Tabs.Count <= 1)
+        if (!HasSplitTabs)
         {
             StatusText = "分離タブはありません";
             return;
@@ -209,7 +263,7 @@ public partial class MainViewModel : ObservableObject
 
         var main = Tabs.First(t => t.IsMain);
         int lineCount = 0;
-        foreach (var tab in Tabs.Where(t => !t.IsMain).ToList())
+        foreach (var tab in Tabs.Where(t => !t.IsMain && !t.OwnFile).ToList())
         {
             lineCount += tab.Document.Lines.Count;
             MergeLinesByTime(main.Document, tab.Document);
@@ -244,9 +298,6 @@ public partial class MainViewModel : ObservableObject
 
     /// <summary>アプリ設定（検証・絵文字）。</summary>
     public AppSettings Settings { get; } = AppSettings.Load();
-
-    /// <summary>テキスト幅の実測器（App 起動時に DirectWrite 実装を設定）。</summary>
-    public ITextMeasurer? TextMeasurer { get; set; }
 
     public string? CurrentFilePath { get; private set; }
 
@@ -286,7 +337,8 @@ public partial class MainViewModel : ObservableObject
             // 分離はファイル自体を書き換えないため、分離後のメインは MainText から復元する。
             // 歌詞ファイルが外部で変更されていたら（フィンガープリント不一致）、
             // 古いタブ状態は破棄してファイルの内容をそのまま表示する。
-            bool restoreTabs = project.Tabs.Count > 0 && project.MainText.Length > 0;
+            // 自分のファイルを持つタブ（ニコカラメーカー3 のプロジェクトのコーラスなど）は、これとは別にそのファイルから開く。
+            bool restoreTabs = project.Tabs.Any(t => !t.OwnFile) && project.MainText.Length > 0;
             if (restoreTabs && project.FileFingerprint != SongProject.ComputeFingerprint(path))
             {
                 restoreTabs = false;
@@ -312,25 +364,52 @@ public partial class MainViewModel : ObservableObject
             SongFontSets = project.FontSets;
             LineExportSettings.Apply(Document, project.LineSettings);
 
-            if (restoreTabs)
+            var missing = new List<string>();
+            foreach (var pt in project.Tabs)
             {
-                foreach (var pt in project.Tabs)
+                LyricsDocument tabDoc;
+                if (pt.OwnFile)
                 {
-                    var tabDoc = TextEditModeFormat.Parse(pt.Text);
-                    ApplySavedLineKeys(tabDoc, pt.LineKeys);
-                    LineExportSettings.Apply(tabDoc, pt.LineSettings);
-                    foreach (int i in pt.ExportedLines)
+                    // 自分のファイルを持つタブは、そのファイルから読み込む（ほかのアプリで直されていても今の内容になる）
+                    if (pt.FilePath is not { Length: > 0 } own || !File.Exists(own))
                     {
-                        if (i >= 0 && i < tabDoc.Lines.Count) tabDoc.Lines[i].Exported = true;
+                        missing.Add(pt.Name);
+                        continue;
                     }
-                    Tabs.Add(new TabState
+                    try
                     {
-                        Name = pt.Name,
-                        Document = tabDoc,
-                        Format = CurrentFormat,
-                        CopyFilePath = pt.FilePath,
-                    });
+                        tabDoc = ReadLyricsFile(own);
+                    }
+                    catch (Exception)
+                    {
+                        // 読めないファイルがあっても、メインの歌詞は開く
+                        missing.Add(pt.Name);
+                        continue;
+                    }
                 }
+                else
+                {
+                    if (!restoreTabs) continue;
+                    tabDoc = TextEditModeFormat.Parse(pt.Text);
+                    ApplySavedLineKeys(tabDoc, pt.LineKeys);
+                }
+                LineExportSettings.Apply(tabDoc, pt.LineSettings);
+                foreach (int i in pt.ExportedLines)
+                {
+                    if (i >= 0 && i < tabDoc.Lines.Count) tabDoc.Lines[i].Exported = true;
+                }
+                Tabs.Add(new TabState
+                {
+                    Name = pt.Name,
+                    Document = tabDoc,
+                    Format = pt.OwnFile ? FormatFromExtension(pt.FilePath!) : CurrentFormat,
+                    CopyFilePath = pt.FilePath,
+                    OwnFile = pt.OwnFile,
+                });
+            }
+            if (missing.Count > 0)
+            {
+                tabRestoreNote = (tabRestoreNote ?? "") + $"（タブ {string.Join("・", missing)} の歌詞ファイルが見つからないため開いていません）";
             }
         }
         else
@@ -494,13 +573,13 @@ public partial class MainViewModel : ObservableObject
         }
     }
 
-    /// <summary>全タブを時刻順に統合した全行ドキュメントを作る（タブ構成は変更しない）。</summary>
+    /// <summary>メインと分離タブを時刻順に統合した全行ドキュメントを作る（タブ構成は変更しない。自分のファイルを持つタブは含めない）。</summary>
     public LyricsDocument BuildMergedDocument()
     {
         StoreActiveTab();
         var main = Tabs.First(t => t.IsMain);
         var merged = main.Document.Clone();
-        foreach (var tab in Tabs.Where(t => !t.IsMain))
+        foreach (var tab in Tabs.Where(t => !t.IsMain && !t.OwnFile))
         {
             var carrier = new LyricsDocument();
             carrier.Lines.AddRange(tab.Document.Lines.Select(l => l.Clone()));
@@ -511,19 +590,20 @@ public partial class MainViewModel : ObservableObject
 
     /// <summary>
     /// タブ含む全行を時刻順に統合してファイルへ保存する（マスター保存）。
-    /// 画面上のタブ分離はそのまま維持される。
+    /// 画面上のタブ分離はそのまま維持される。自分のファイルを持つタブは、変更があればそれぞれのファイルへ保存する。
     /// </summary>
     public void SaveFullTo(string path, DocumentFormat? format = null)
     {
         var f = format ?? FormatFromExtension(path);
         var merged = BuildMergedDocument();
-        if (f == DocumentFormat.Rlf)
+        WriteLyricsFile(path, merged, f);
+
+        // 自分のファイルを持つタブ（ニコカラメーカー3 のプロジェクトのコーラスなど）は、それぞれのファイルへ
+        var ownSaved = new List<string>();
+        foreach (var tab in Tabs.Where(t => t.OwnFile && t.IsModified && t.CopyFilePath is not null))
         {
-            RlfFormat.WriteFile(path, merged);
-        }
-        else
-        {
-            File.WriteAllText(path, LrcFormat.Write(merged, LrcOptionsWithEffectiveEmoji(path)), LrcEncoding);
+            WriteLyricsFile(tab.CopyFilePath!, tab.Document, FormatFromExtension(tab.CopyFilePath!));
+            ownSaved.Add(Path.GetFileName(tab.CopyFilePath!));
         }
 
         var main = Tabs.First(t => t.IsMain);
@@ -542,10 +622,10 @@ public partial class MainViewModel : ObservableObject
         Settings.AddRecentFile(path);
         Settings.Save();
 
-        int tabCount = Tabs.Count - 1;
-        StatusText = tabCount > 0
-            ? $"タブ含む全 {merged.Lines.Count} 行を保存しました: {Path.GetFileName(path)}（タブ分離は維持）"
-            : $"保存しました: {Path.GetFileName(path)}";
+        string own = ownSaved.Count > 0 ? $"　＋ 別ファイルのタブ: {string.Join("・", ownSaved)}" : "";
+        StatusText = HasSplitTabs
+            ? $"タブ含む全 {merged.Lines.Count} 行を保存しました: {Path.GetFileName(path)}（タブ分離は維持）{own}"
+            : $"保存しました: {Path.GetFileName(path)}{own}";
     }
 
     /// <summary>
@@ -554,16 +634,7 @@ public partial class MainViewModel : ObservableObject
     /// </summary>
     public void ReloadActiveTabFromFile(string path)
     {
-        LyricsDocument doc;
-        if (Path.GetExtension(path).Equals(".rlf", StringComparison.OrdinalIgnoreCase))
-        {
-            doc = RlfFormat.ReadFile(path);
-        }
-        else
-        {
-            string text = EncodingDetector.ReadAllText(path, out _);
-            doc = TextEditModeFormat.Parse(text);
-        }
+        var doc = ReadLyricsFile(path);
 
         PushUndo();
         // 行数が変わっていなければ元の行位置キーを引き継ぐ（分離解除で元の位置へ戻すため）
@@ -590,17 +661,16 @@ public partial class MainViewModel : ObservableObject
     /// </summary>
     public void SaveActiveTabCopyTo(string path, DocumentFormat? format = null)
     {
-        var f = format ?? FormatFromExtension(path);
-        if (f == DocumentFormat.Rlf)
-        {
-            RlfFormat.WriteFile(path, Document);
-        }
-        else
-        {
-            File.WriteAllText(path, LrcFormat.Write(Document, LrcOptionsWithEffectiveEmoji(path)), LrcEncoding);
-        }
+        WriteLyricsFile(path, Document, format ?? FormatFromExtension(path));
         RememberSaveFolder(path);
         _activeTab.CopyFilePath = path; // 次回から「表示中のタブを上書き保存」の対象になる
+        if (_activeTab.OwnFile)
+        {
+            // 自分のファイルを持つタブは、このファイルが保存先なので保存済みにする
+            _activeTab.IsModified = false;
+            IsModified = false;
+            UpdateTitle();
+        }
         SaveProject();
         StatusText = $"表示中のタブ「{_activeTab.Name}」を保存しました: {Path.GetFileName(path)}（{Document.Lines.Count} 行）";
     }
@@ -677,6 +747,7 @@ public partial class MainViewModel : ObservableObject
             {
                 Name = tab.Name,
                 FilePath = tab.CopyFilePath,
+                OwnFile = tab.OwnFile,
                 Text = TextEditModeFormat.Write(tab.Document),
                 ExportedLines = tab.Document.Lines
                     .Select((l, i) => (Line: l, Index: i))
@@ -689,8 +760,8 @@ public partial class MainViewModel : ObservableObject
         }
 
         // 分離タブがあるときは、分離後のメインの内容も保存する
-        // （分離は歌詞ファイル自体を書き換えないため、これが無いと開き直しで行が重複する）
-        if (project.Tabs.Count > 0)
+        // （分離は歌詞ファイル自体を書き換えないため、これが無いと開き直しで行が重複する。自分のファイルを持つタブは関係しない）
+        if (project.Tabs.Any(t => !t.OwnFile))
         {
             project.MainText = TextEditModeFormat.Write(main.Document);
             project.MainLineKeys = main.Document.Lines.Select(l => l.SplitOrderKey).ToList();
@@ -1690,7 +1761,6 @@ public partial class MainViewModel : ObservableObject
     /// <summary>全チェックを実行して検証パネルと行リストの表示を更新する。</summary>
     public void RunValidation()
     {
-        var emoji = GetEffectiveEmojiList();
         var matcher = CreateEmojiMatcher(); // プレースホルダ（＿）も除外対象に含む
         Func<CharUnit, bool>? exclude = null;
         if (!matcher.IsEmpty)
@@ -1724,24 +1794,17 @@ public partial class MainViewModel : ObservableObject
             }
         }
 
-        // 2) 横幅（ピクセル実測）
-        if (TextMeasurer is not null)
+        // 2) 各行に当たるフォント設定・字幕の見た目・プレビュー・横幅（横幅は字幕のプレビューと同じ並べ方で測り、
+        //    ページのレイアウト設定の左右余白で判定する）
+        UpdateLineFonts();
+        var widthResults = _lineWidths.Values.OrderBy(r => r.LineIndex).ToList();
+        foreach (var issue in LineWidthValidator.ToIssues(widthResults))
         {
-            string? baseDir = CurrentFilePath is string p ? Path.GetDirectoryName(p) : null;
-            var widthSettings = Settings.ToLineWidthSettings(emoji, baseDir);
-            var results = LineWidthValidator.Measure(Document, widthSettings, TextMeasurer);
-            foreach (var issue in LineWidthValidator.ToIssues(results, widthSettings))
-            {
-                Issues.Add(issue);
-            }
-            for (int i = 0; i < Lines.Count && i < results.Count; i++)
-            {
-                Lines[i].SetWidthResult(results[i]);
-                if (results[i].Severity is IssueSeverity s)
-                {
-                    Lines[i].SetRowIssue(s);
-                }
-            }
+            Issues.Add(issue);
+        }
+        foreach (var r in widthResults)
+        {
+            if (r.Severity is IssueSeverity s && r.LineIndex < Lines.Count) Lines[r.LineIndex].SetRowIssue(s);
         }
 
         // 3) 同時歌唱などの重なり情報（正常ケースの目印）
@@ -1750,13 +1813,6 @@ public partial class MainViewModel : ObservableObject
         {
             Lines[i].SetOverlapInfo(overlapped.Contains(i));
         }
-
-        // 4) 横幅を測るフォント（横幅の欄のツールチップ。n3proj 取り込み結果の確認用）と、各行に当たるフォント設定
-        foreach (var line in Lines)
-        {
-            line.SetFontInfo(Settings.FontFamily, Settings.FontSizePx);
-        }
-        UpdateLineFonts();
 
         int errors = Issues.Count(i => i.Severity == IssueSeverity.Error);
         int warnings = Issues.Count(i => i.Severity == IssueSeverity.Warning);

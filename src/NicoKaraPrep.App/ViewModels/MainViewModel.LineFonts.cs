@@ -4,6 +4,7 @@ using NicoKaraPrep.App.Services;
 using NicoKaraPrep.App.Services.Subtitles;
 using NicoKaraPrep.Core.Formats;
 using NicoKaraPrep.Core.Model;
+using NicoKaraPrep.Core.Validation;
 
 namespace NicoKaraPrep.App.ViewModels;
 
@@ -32,6 +33,12 @@ public partial class MainViewModel
 
     /// <summary><see cref="PreviewModel"/> を作り直した。</summary>
     public event EventHandler? PreviewModelChanged;
+
+    /// <summary>
+    /// 表示中のタブの行の横幅の判定（行の番号ごと）。字幕のプレビューと同じ並べ方で測り、ページのレイアウト設定の左右余白で判定する。
+    /// <see cref="UpdateLineFonts"/> で作り直す（チェックのたびに呼ばれる）。
+    /// </summary>
+    private Dictionary<int, LineWidthResult> _lineWidths = new();
 
     /// <summary>
     /// 書き出しのベースにする n3proj（<see cref="SuggestN3ProjBasePath"/>）の中身。ベースが無い・読めなければ null。
@@ -80,7 +87,11 @@ public partial class MainViewModel
         {
             if (ReferenceEquals(tabs[i], _activeTab)) active = i;
         }
-        if (active < 0) return;
+        if (active < 0)
+        {
+            _lineWidths = new();
+            return;
+        }
 
         var baseProject = GetBaseProject();
         var baseSets = baseProject?.FontSets ?? new List<N3FontSet>();
@@ -149,17 +160,20 @@ public partial class MainViewModel
             line.SetRenderSource(Source(line.Model, fonts, SubtitleSpacing.Default));
         }
 
-        // 字幕のプレビュー（全タブ。書き出しと同じ表示時刻・ページ・レイアウト）と、行リストのレイアウトの表示
+        // 字幕のプレビュー（全タブ。書き出しと同じ表示時刻・ページ・レイアウト）と、行リストのレイアウト・横幅の表示
         var (screenWidth, screenHeight) = GetScreenSize();
         var layouts = GetEffectiveLayouts();
         var infos = layouts.Select(l => l.Info).ToList();
         var layoutTexts = new Dictionary<int, (string Text, string Tip)>();
         var previewLines = new List<PreviewLine>();
+        var widths = new Dictionary<int, LineWidthResult>();
+        static SubtitleSpacing SpacingOf(N3LayoutSettings layout) =>
+            new((float)layout.LyricsIntervalPx, (float)layout.RubyIntervalPx, (float)layout.LyricsAndRubyIntervalPx, layout.RubyAlignment, layout.AllowBiting);
         for (int t = 0; t < tabs.Count; t++)
         {
             var doc = tabs[t].Document;
             var plans = N3ShowTimePlanner.Plan(doc, CreateShowTimeSettings(tabs[t].Name));
-            if (plans.Count == 0) continue;
+            if (plans.Count == 0 && t != active) continue;
             string? fixedLayout = N3ProjSettings.TabLayouts.GetValueOrDefault(tabs[t].Name) is { Length: > 0 } fl ? fl : null;
             var resolver = new N3ProjWriter.LayoutResolver(infos, fixedLayout, Nkm3Env?.LayoutSelectableBegin, Nkm3Env?.LayoutSelectableEnd, new List<string>(), tabs[t].Name);
             var pages = plans.GroupBy(p => p.Value.PageIndex).ToDictionary(g => g.Key, g =>
@@ -186,20 +200,44 @@ public partial class MainViewModel
                 if (line.IsEmpty || line.GetDisplayText().Length == 0 || index >= resolved[t].Count) continue;
                 var fonts = resolved[t][index];
                 if (fonts.Runs.Count == 0) continue;
-                var spacing = new SubtitleSpacing((float)layout.LyricsIntervalPx, (float)layout.RubyIntervalPx, (float)layout.LyricsAndRubyIntervalPx, layout.RubyAlignment, layout.AllowBiting);
+                var source = Source(line, fonts, SpacingOf(layout));
                 previewLines.Add(new PreviewLine(
-                    Source(line, fonts, spacing), plan.BeginMs, plan.EndMs, t, plan.PageIndex, plan.Row, Math.Max(page.Rows, page.Count),
+                    source, plan.BeginMs, plan.EndMs, t, plan.PageIndex, plan.Row, Math.Max(page.Rows, page.Count),
                     layout, N3WipeTimeline.Groups(line)));
+                if (t == active)
+                {
+                    widths[index] = LineWidthValidator.Evaluate(index, source.GetLayout().Width, screenWidth, layout.HorizontalMarginPx);
+                }
+            }
+
+            if (t == active)
+            {
+                // 表示時刻の決まらない行（タイムタグの無い行など）も、手動指定のレイアウト（無ければ 1 行のページのレイアウト）で測る
+                var single = layouts[Math.Clamp(resolver.Resolve(1), 0, layouts.Count - 1)];
+                for (int i = 0; i < doc.Lines.Count && i < resolved[t].Count; i++)
+                {
+                    if (widths.ContainsKey(i)) continue;
+                    var line = doc.Lines[i];
+                    if (line.IsEmpty || line.GetDisplayText().Length == 0) continue;
+                    var fonts = resolved[t][i];
+                    if (fonts.Runs.Count == 0) continue;
+                    var layout = line.LayoutName is { Length: > 0 } name && resolver.FindIndex(name) is int li
+                        ? layouts[Math.Clamp(li, 0, layouts.Count - 1)]
+                        : single;
+                    widths[i] = LineWidthValidator.Evaluate(i, Source(line, fonts, SpacingOf(layout)).GetLayout().Width, screenWidth, layout.HorizontalMarginPx);
+                }
             }
         }
         PreviewModel = new SubtitlePreviewModel(screenWidth, screenHeight, previewLines);
         PreviewModelChanged?.Invoke(this, EventArgs.Empty);
 
+        _lineWidths = widths;
         for (int i = 0; i < Lines.Count; i++)
         {
             var (text, tip) = layoutTexts.TryGetValue(i, out var lt) ? lt : ("", "");
             Lines[i].LayoutText = text;
             Lines[i].LayoutToolTip = tip;
+            Lines[i].SetWidthResult(widths.GetValueOrDefault(i));
         }
     }
 

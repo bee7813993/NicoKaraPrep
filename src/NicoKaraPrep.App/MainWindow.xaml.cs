@@ -27,7 +27,6 @@ public sealed partial class MainWindow : Window
         string icon = Path.Combine(AppContext.BaseDirectory, "Assets", "app.ico");
         if (File.Exists(icon)) AppWindow.SetIcon(icon);
 
-        ViewModel.TextMeasurer = new DirectWriteTextMeasurer();
         ViewModel.PropertyChanged += (_, e) =>
         {
             if (e.PropertyName == nameof(MainViewModel.WindowTitle))
@@ -882,9 +881,44 @@ public sealed partial class MainWindow : Window
         RefreshAfterTabChange();
     }
 
-    private void OnTabCloseRequested(TabView sender, TabViewTabCloseRequestedEventArgs args)
+    private async void OnTabCloseRequested(TabView sender, TabViewTabCloseRequestedEventArgs args)
     {
         if (args.Item is not ViewModels.TabState tab || tab.IsMain) return;
+
+        // 自分のファイルを持つタブ（ニコカラメーカー3 のプロジェクトのコーラスなど）は、閉じてもメインへ戻さないので、
+        // 保存していない変更があれば保存するか尋ねる
+        if (tab.OwnFile && ViewModel.IsTabModified(tab))
+        {
+            var ask = new ContentDialog
+            {
+                XamlRoot = Content.XamlRoot,
+                Title = $"タブ「{tab.Name}」を閉じます",
+                Content = new TextBlock
+                {
+                    Text = $"保存していない変更があります。閉じる前に {Path.GetFileName(tab.CopyFilePath)} へ保存しますか？",
+                    TextWrapping = TextWrapping.Wrap,
+                },
+                PrimaryButtonText = "保存して閉じる",
+                SecondaryButtonText = "保存しないで閉じる",
+                CloseButtonText = "キャンセル",
+                DefaultButton = ContentDialogButton.Primary,
+            };
+            var answer = await ask.ShowAsync();
+            if (answer == ContentDialogResult.None) return;
+            if (answer == ContentDialogResult.Primary)
+            {
+                try
+                {
+                    ViewModel.SaveOwnFileTab(tab);
+                }
+                catch (Exception ex)
+                {
+                    ViewModel.StatusText = $"エラー: {ex.Message}（保存できなかったため、タブは閉じていません）";
+                    return;
+                }
+            }
+        }
+
         TryRun(() => ViewModel.CloseTab(tab));
         SyncTabSelection();
         RefreshAfterTabChange();
@@ -961,16 +995,19 @@ public sealed partial class MainWindow : Window
 
     private async void OnResetTabsClick(object sender, RoutedEventArgs e)
     {
-        if (ViewModel.Tabs.Count <= 1)
+        int count = ViewModel.SplitTabCount;
+        if (count == 0)
         {
             ViewModel.StatusText = "分離タブはありません";
             return;
         }
 
+        bool ownFiles = ViewModel.Tabs.Any(t => t.OwnFile);
         var dialog = new ContentDialog
         {
             Title = "タブ分離の解除",
-            Content = $"分離タブ {ViewModel.Tabs.Count - 1} 個をすべて閉じて、行をメインへ時刻順に戻します。よろしいですか？",
+            Content = $"分離タブ {count} 個をすべて閉じて、行をメインへ時刻順に戻します。よろしいですか？" +
+                      (ownFiles ? "\n（別の歌詞ファイルのタブはそのまま残ります）" : ""),
             PrimaryButtonText = "戻す",
             CloseButtonText = "キャンセル",
             DefaultButton = ContentDialogButton.Primary,
