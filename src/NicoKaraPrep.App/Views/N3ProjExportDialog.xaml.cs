@@ -83,6 +83,7 @@ public sealed partial class N3ProjExportDialog : ContentDialog
         TailBox.Value = vm.Settings.DisplayTailSeconds;
         IntervalBox.Value = vm.Settings.N3IntervalSeconds;
         ProtectBox.Value = vm.Settings.N3ProtectSeconds;
+        OverlapBox.Value = vm.Settings.N3OverlapSeconds;
         TopLongCheck.IsChecked = vm.Settings.N3TopLong;
         EmojiLeadYieldCheck.IsChecked = vm.Settings.N3EmojiLeadYield;
         if (vm.Nkm3Env is { PreTimeMs: not null })
@@ -95,6 +96,7 @@ public sealed partial class N3ProjExportDialog : ContentDialog
         DefaultFontBox.Text = current.DefaultFontSetName;
 
         PrimaryButtonClick += (_, _) => Apply();
+        SecondaryButtonClick += (_, _) => Apply(); // 「適用」: 書き出さずに設定だけ保存する（画面の作り直しは呼び出し側）
     }
 
     private void SetBasePath(string? path)
@@ -177,6 +179,7 @@ public sealed partial class N3ProjExportDialog : ContentDialog
         s.DisplayTailSeconds = Value(TailBox, s.DisplayTailSeconds);
         s.N3IntervalSeconds = Value(IntervalBox, s.N3IntervalSeconds);
         s.N3ProtectSeconds = Value(ProtectBox, 0);
+        s.N3OverlapSeconds = Math.Max(0, Value(OverlapBox, 0));
         s.N3TopLong = TopLongCheck.IsChecked == true;
         s.N3EmojiLeadYield = EmojiLeadYieldCheck.IsChecked == true;
         s.Save();

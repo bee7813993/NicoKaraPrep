@@ -170,6 +170,25 @@ public class AppSettingsTests
     }
 
     [Fact]
+    public void テンプレート_同じ段の行を重ねてよい秒数も取り込む()
+    {
+        var settings = new AppSettings();
+        Assert.Equal(0, settings.N3OverlapSeconds); // 既定は重ねない
+        Assert.Equal(0, settings.ToCollisionSettings(null).AllowedOverlapCs);
+
+        settings.CopyFrom(new AppSettings { N3OverlapSeconds = 0.5 });
+        Assert.Equal(0.5, settings.N3OverlapSeconds);
+        Assert.Equal(50, settings.ToCollisionSettings(null).AllowedOverlapCs);
+
+        InTempDir(dir =>
+        {
+            string path = Path.Combine(dir, "settings.json");
+            settings.Save(path);
+            Assert.Equal(0.5, AppSettings.LoadStrict(path).N3OverlapSeconds);
+        });
+    }
+
+    [Fact]
     public void テンプレート_写しにはフォント設定が入らず古いテンプレートのフォント設定は無視される()
     {
         InTempDir(dir =>

@@ -610,6 +610,7 @@ public static class N3ProjWriter
         TailMs = s.TailMs,
         IntervalMs = s.IntervalMs,
         ProtectMs = s.ProtectMs,
+        OverlapMs = s.OverlapMs,
         TopLong = s.TopLong,
         AlignFromTop = s.AlignFromTop,
         SingleLinePromoteGapMs = s.SingleLinePromoteGapMs,

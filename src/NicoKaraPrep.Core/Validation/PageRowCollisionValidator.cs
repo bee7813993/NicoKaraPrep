@@ -27,6 +27,13 @@ public sealed class PageCollisionSettings
     public int ErrorThresholdCs { get; set; } = 100;
 
     /// <summary>
+    /// 同じ段の行を重ねてよい時間（10ms 単位。0 = 重ねない）。この時間までの重なりは知らせない
+    /// （表示時刻の計算で重ねて表示するため。<see cref="Formats.N3ShowTimeSettings.OverlapMs"/>）。
+    /// エラーと警告の分かれ目（<see cref="ErrorThresholdCs"/>）は、この時間を超えた分で比べる。
+    /// </summary>
+    public int AllowedOverlapCs { get; set; }
+
+    /// <summary>
     /// 1 行だけのページが「下から 2 行目」に昇格するために必要な、
     /// 次ページの上段行の表示開始までの余裕（10ms 単位。0 = 重ならなければ昇格）。
     /// </summary>
@@ -161,16 +168,18 @@ public static class PageRowCollisionValidator
                 if (DisplayStart(nextLineIdx) is not int displayStart) continue;
 
                 int overlap = displayEnd - displayStart;
-                if (overlap <= 0) continue;
+                int allowed = Math.Max(0, settings.AllowedOverlapCs);
+                if (overlap <= allowed) continue; // 重ねてよい時間まで（重ねない設定なら、重ならない組）
 
                 string rowLabel = settings.AlignFromTop ? $"上から{pos}行目" : $"下から{pos}行目";
-                var severity = overlap > settings.ErrorThresholdCs ? IssueSeverity.Error : IssueSeverity.Warning;
+                var severity = overlap - allowed > settings.ErrorThresholdCs ? IssueSeverity.Error : IssueSeverity.Warning;
+                string allowedNote = allowed > 0 ? $"・重ねてよいのは {allowed / 100.0:0.0#} 秒まで" : "";
                 issues.Add(new ValidationIssue(
                     severity,
                     "ページ衝突",
                     nextLineIdx,
                     $"ページ{p + 1}→{p + 2} {rowLabel}: 前行の表示終了 {TimeTag.Format(displayEnd)} > " +
-                    $"次行の表示開始 {TimeTag.Format(displayStart)}（重なり {overlap / 100.0:F2} 秒、" +
+                    $"次行の表示開始 {TimeTag.Format(displayStart)}（重なり {overlap / 100.0:F2} 秒{allowedNote}、" +
                     $"{prevLineIdx + 1}行目 と {nextLineIdx + 1}行目）",
                     RelatedLineIndex: prevLineIdx));
             }

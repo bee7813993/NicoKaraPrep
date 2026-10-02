@@ -489,6 +489,7 @@ public static class N3ProjImport
     /// 絵文字の先行を譲る規則（<see cref="N3ShowTimeSettings.EmojiLeadYield"/>）がオンなら、規則なし（ニコカラメーカー3 と同じ計算）の値と
     /// 一致する値も自動のままにする（ニコカラメーカー3 が自動設定したプロジェクトを読んでも、詰められた行が手動指定にならないように）。
     /// 規則オンで書き出した後にニコカラメーカー3 で自動設定をやり直した値（寄せた歌詞を規則なしで計算した値）も自動のままにする。
+    /// 同じ段の行を重ねてよい時間（<see cref="N3ShowTimeSettings.OverlapMs"/>）があるときも同じく、重ねない計算（ニコカラメーカー3 と同じ）の値と比べる。
     /// 戻り値は手動指定を設定（変更）した行の集合。
     /// </summary>
     public static HashSet<int> ApplyShowTimes(
@@ -496,11 +497,13 @@ public static class N3ProjImport
         IReadOnlyDictionary<int, (int BeginMs, int EndMs)> actual,
         N3ShowTimeSettings settings)
     {
-        N3ShowTimeSettings? plain = null; // 規則なしの設定（規則がオンのときだけ）
-        if (settings.YieldsEmojiLead)
+        // ニコカラメーカー3 と同じ計算の設定（絵文字の先行を譲る規則か、同じ段の行を重ねる設定がオンのときだけ）
+        N3ShowTimeSettings? plain = null;
+        if (settings.YieldsEmojiLead || settings.OverlapMs > 0)
         {
             plain = N3ProjWriter.CloneShowSettings(settings);
             plain.EmojiLeadYield = false;
+            plain.OverlapMs = 0;
         }
 
         var touched = new HashSet<int>();
@@ -510,7 +513,7 @@ public static class N3ProjImport
             var plainPlan = plain is null ? null : N3ShowTimePlanner.Plan(doc, plain);
             // 規則オンで書き出したプロジェクトでニコカラメーカー3 が表示時刻の自動設定をやり直した値
             // （絵文字の開始を寄せた歌詞＝書き出しと同じ写しを、規則なしで計算した値）
-            var clampedPlan = plain is null ? null : N3ShowTimePlanner.Plan(N3EmojiLead.ClampDocument(doc, plan, settings.LeadMatcher), plain);
+            var clampedPlan = plain is null || !settings.YieldsEmojiLead ? null : N3ShowTimePlanner.Plan(N3EmojiLead.ClampDocument(doc, plan, settings.LeadMatcher), plain);
             bool changed = false;
             foreach (var (i, (begin, end)) in actual)
             {

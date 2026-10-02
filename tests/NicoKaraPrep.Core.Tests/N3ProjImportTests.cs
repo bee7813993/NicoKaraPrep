@@ -220,6 +220,29 @@ public class N3ProjImportTests : IDisposable
     }
 
     [Fact]
+    public void 重ねてよい時間_ニコカラメーカー3と同じ計算のプロジェクトを重ねる設定で取り込んでも手動指定にならない()
+    {
+        var doc = CircleOfLove();
+        var preview = N3ProjImport.Analyze(ExportAndEdit(doc, YieldShow(on: false)));
+        var show = YieldShow(on: false);
+        show.OverlapMs = 500;
+        var (_, matched) = N3ProjImport.FindSource(doc, "メイン", preview.Tabs, show.LeadMatcher);
+        Assert.Equal(6, matched.Count);
+        // 重ねる設定の計算は、ニコカラメーカー3 が詰めた値（重ねない計算）と違う
+        Assert.Equal((20780, 25800), matched[3]);
+        Assert.Equal(20555, N3ShowTimePlanner.Plan(doc, show)[3].BeginMs);
+        Assert.Empty(N3ProjImport.ApplyShowTimes(doc.Clone(), matched, show));
+
+        // 重ねる設定（絵文字の先行を譲る規則もオン）で書き出したものを、同じ設定で取り込んでも手動指定にならない
+        var both = YieldShow(on: true);
+        both.OverlapMs = 500;
+        var preview2 = N3ProjImport.Analyze(ExportAndEdit(doc, both));
+        var (_, matched2) = N3ProjImport.FindSource(doc, "メイン", preview2.Tabs, both.LeadMatcher);
+        Assert.Equal(6, matched2.Count);
+        Assert.Empty(N3ProjImport.ApplyShowTimes(doc.Clone(), matched2, both));
+    }
+
+    [Fact]
     public void 絵文字の先行を譲る_絵文字の開始を寄せた行も照合で対応する()
     {
         var doc = CircleOfLove();

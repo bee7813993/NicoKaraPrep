@@ -107,20 +107,62 @@ public sealed class SubtitlePreviewView : Grid
         {
             using var clip = ds.CreateLayer(1f, screen);
             double t = _timeMs;
+            var visible = new List<PreviewLine>();
             foreach (var line in model.Lines)
             {
-                if (t < line.BeginMs || t >= line.EndMs) continue;
+                if (t >= line.BeginMs && t < line.EndMs) visible.Add(line);
+            }
+            foreach (var line in visible)
+            {
                 var layout = line.Source.GetLayout();
                 if (layout.Tokens.Count == 0) continue;
+                float alpha = CrossFadeAlpha(line, visible, t);
+                if (alpha <= 0f) continue;
                 var (x, baseline) = Position(line, layout, W, H);
                 var transform = Matrix3x2.CreateTranslation(x, baseline) * Matrix3x2.CreateScale(scale) * Matrix3x2.CreateTranslation(ox, oy);
-                SubtitleRenderer.Draw(ds, layout, transform, scale, Wiped(line, layout, t / 10));
+                if (alpha >= 1f)
+                {
+                    SubtitleRenderer.Draw(ds, layout, transform, scale, Wiped(line, layout, t / 10));
+                }
+                else
+                {
+                    using var fade = ds.CreateLayer(alpha);
+                    SubtitleRenderer.Draw(ds, layout, transform, scale, Wiped(line, layout, t / 10));
+                }
             }
         }
         catch (Exception ex) when (!sender.Device.IsDeviceLost(ex.HResult))
         {
             // 描けない値があっても再生は止めない
         }
+    }
+
+    /// <summary>
+    /// 同じタブの同じ段で、前後のページの行が同時に出ている（表示時刻が重なっている）ときの濃さ（0〜1。重ならなければ 1）。
+    /// 重なりのあいだ、前の行は消えるまでにだんだん薄く、次の行は前の行が消えるまでにだんだん濃くする
+    /// （同じ段の行を重ねてよい設定や手動指定で重ねたとき、2 行が同じ位置に重なって読めなくならないように。
+    /// 　ニコカラメーカー3 の字幕アクション「文字単位フェード」の見え方の近似で、文字ごとのフェードまでは再現しない）。
+    /// </summary>
+    internal static float CrossFadeAlpha(PreviewLine line, IReadOnlyList<PreviewLine> visible, double t)
+    {
+        float alpha = 1f;
+        foreach (var other in visible)
+        {
+            if (ReferenceEquals(other, line) || other.Tab != line.Tab || other.Row != line.Row || other.Page == line.Page) continue;
+            if (other.Page > line.Page)
+            {
+                // この行が前の行: 次の行が出てから、この行が消えるまでに薄くなる
+                double span = line.EndMs - other.BeginMs;
+                if (span > 0) alpha = Math.Min(alpha, (float)Math.Clamp((line.EndMs - t) / span, 0, 1));
+            }
+            else
+            {
+                // この行が次の行: この行が出てから、前の行が消えるまでに濃くなる
+                double span = other.EndMs - line.BeginMs;
+                if (span > 0) alpha = Math.Min(alpha, (float)Math.Clamp((t - line.BeginMs) / span, 0, 1));
+            }
+        }
+        return alpha;
     }
 
     /// <summary>

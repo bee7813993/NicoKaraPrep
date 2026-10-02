@@ -35,22 +35,32 @@ public sealed partial class MainWindow
         }
 
         var dialog = new N3ProjExportDialog(ViewModel) { XamlRoot = Content.XamlRoot };
-        if (await dialog.ShowAsync() != ContentDialogResult.Primary) return;
+        var choice = await dialog.ShowAsync();
+        if (choice == ContentDialogResult.None) return;
         var settings = dialog.Result;
 
-        // 「書き出し...」を押した時点で、行の表示時刻の設定（ワイプ前・絵文字の分だけ遅らせるなど）は保存済み。
-        // 保存先を選ばずにやめても、プレビュー・行設定パネル・チェックは新しい設定で作り直す
-        string? suggestedPath = ViewModel.SuggestN3ProjOutputPath();
-        string? folder = Path.GetDirectoryName(suggestedPath ?? "") is { Length: > 0 } d ? d : ViewModel.GetDefaultSaveFolder();
-        string suggested = Path.GetFileNameWithoutExtension(suggestedPath ?? "lyrics");
-        string? path = SaveFileDialog.Show(Hwnd, folder, suggested, N3ProjFileTypes, "n3proj");
-        if (path is null)
+        if (choice == ContentDialogResult.Secondary)
         {
-            ViewModel.StatusText = "n3proj は書き出しませんでした（行の表示時刻の設定は保存しました）";
+            // 「適用」: 書き出さずに設定（行の表示時刻・ベース・タブごとの設定など）だけ保存し、プレビュー・行設定パネル・チェックを作り直す
+            TryRun(() => ViewModel.ApplyN3ProjSongSettings(settings));
+            ViewModel.StatusText = "書き出しの設定を適用しました（n3proj は書き出していません）";
         }
         else
         {
-            TryRun(() => ViewModel.ExportN3Proj(path, settings));
+            // 「書き出し...」を押した時点で、行の表示時刻の設定（ワイプ前・絵文字の分だけ遅らせるなど）は保存済み。
+            // 保存先を選ばずにやめても、プレビュー・行設定パネル・チェックは新しい設定で作り直す
+            string? suggestedPath = ViewModel.SuggestN3ProjOutputPath();
+            string? folder = Path.GetDirectoryName(suggestedPath ?? "") is { Length: > 0 } d ? d : ViewModel.GetDefaultSaveFolder();
+            string suggested = Path.GetFileNameWithoutExtension(suggestedPath ?? "lyrics");
+            string? path = SaveFileDialog.Show(Hwnd, folder, suggested, N3ProjFileTypes, "n3proj");
+            if (path is null)
+            {
+                ViewModel.StatusText = "n3proj は書き出しませんでした（行の表示時刻の設定は保存しました）";
+            }
+            else
+            {
+                TryRun(() => ViewModel.ExportN3Proj(path, settings));
+            }
         }
         _n3FontNamesKey = null;
         RefreshN3LinePanel();

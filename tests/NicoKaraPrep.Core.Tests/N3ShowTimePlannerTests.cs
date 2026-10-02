@@ -646,4 +646,107 @@ public class N3ShowTimePlannerTests
         Assert.Equal(23000, plans[3].BeginMs);
         Assert.Equal("[00:23:00]（花帆）[00:24:00]う[00:30:00]", LrcFormat.WriteLyricLine(clamped.Lines[3])); // 絵文字は 1.0 秒（下限 1.5 秒より短い）
     }
+
+    // ------------------------------------------------------------ 同じ段の行を重ねてよい時間（OverlapMs）
+
+    private static N3ShowTimeSettings WithOverlap(N3ShowTimeSettings s, int overlapMs)
+    {
+        var c = N3ProjWriter.CloneShowSettings(s);
+        c.OverlapMs = overlapMs;
+        return c;
+    }
+
+    [Theory]
+    // 前の行: ワイプ終了 22200・表示終了 23000（ワイプ後 800）。重ねてよい時間 500ms（表示間隔 300・その 1/4 は 75・保護時間 400）
+    // (1) 前の行のワイプ後 800・次の行のワイプ前 1500 のまま 200ms 重ねる（重ねなければ (2) で前の行を 22725 で消す）
+    [InlineData(24300, 23000, 22800)]
+    // (2) 前の行のワイプ後を 625 に（425ms 重ねる）
+    [InlineData(23900, 22825, 22400)]
+    // (3) 次の行のワイプ前を 825 に（前の行のワイプ後は保護時間 400）
+    [InlineData(23000, 22600, 22175)]
+    // (3') ワイプ後・ワイプ前とも保護時間 400（450ms 重ねる）
+    [InlineData(22550, 22600, 22150)]
+    // (4) 前の行のワイプ後を 200・50 に（次の行のワイプ前は保護時間 400）
+    [InlineData(22300, 22400, 21900)]
+    [InlineData(22150, 22250, 21750)]
+    // (5) 前の行はワイプ終了で消え、次の行はその 500ms 前から
+    [InlineData(22000, 22200, 21700)]
+    // (6) 歌い出し（21600）の 500ms 後まで前の行を残す（前の行はワイプの途中で消える）
+    [InlineData(21600, 22100, 21600)]
+    public void 重ねてよい時間_手順ごとに前の行と次の行の間隔をその分だけ減らす(int nextFirst, int expectedEnd, int expectedBegin)
+    {
+        var s = WithOverlap(Current, 500);
+        var (end, begin) = N3ShowTimePlanner.ResolvePair(23000, 23000, 22200, false, 20000, nextFirst, false, s);
+        Assert.Equal((expectedEnd, expectedBegin), (end, begin));
+        Assert.True(end - begin <= 500, "重ねてよい時間より長く重なった");
+        // 重ねない計算（ニコカラメーカー3 と同じ）より、前の行を削ったり次の行を遅らせたりはしない
+        var (end0, begin0) = N3ShowTimePlanner.ResolvePair(23000, 23000, 22200, false, 20000, nextFirst, false, Current);
+        Assert.True(end >= end0 && begin <= begin0, $"重ねない計算 ({end0}, {begin0}) より削った・遅らせた");
+    }
+
+    [Fact]
+    public void 重ねてよい時間_重ならずに済む組は今と同じ()
+    {
+        var s = WithOverlap(Current, 500);
+        // (0) 前の行の終了＋表示間隔まで次の行を遅らせるだけで足りる組は、重ねない
+        Assert.Equal((23000, 23300), N3ShowTimePlanner.ResolvePair(23000, 23000, 22200, false, 20000, 24900, false, s));
+        // 重ならない組はそのまま
+        Assert.Equal((23000, 23500), N3ShowTimePlanner.ResolvePair(23000, 23000, 22200, false, 23500, 25000, false, s));
+    }
+
+    [Fact]
+    public void 重ねてよい時間_手動指定の側は動かさず重ねてよい分まで重ねる()
+    {
+        var s = WithOverlap(Current, 500);
+        // 次の行の開始が手動（22500）: 前の行は 22925 まで残る（重ねなければ 22500 で消える）
+        Assert.Equal((22925, 22500), N3ShowTimePlanner.ResolvePair(23000, 23000, 22200, false, 22500, 24000, true, s));
+        Assert.Equal((22500, 22500), N3ShowTimePlanner.ResolvePair(23000, 23000, 22200, false, 22500, 24000, true, Current));
+        // 前の行の終了が手動（23000）: 次の行は 22575 から出る（重ねなければ 23075）
+        Assert.Equal((23000, 22575), N3ShowTimePlanner.ResolvePair(23000, 23000, 22200, true, 20000, 24000, false, s));
+        Assert.Equal((23000, 23075), N3ShowTimePlanner.ResolvePair(23000, 23000, 22200, true, 20000, 24000, false, Current));
+    }
+
+    [Fact]
+    public void 重ねてよい時間_増やすほど前の行は残り次の行は早く出て_重なりは許した分まで()
+    {
+        var settings = new[]
+        {
+            Current,
+            new N3ShowTimeSettings { LeadMs = 1800, TailMs = 1000, IntervalMs = 300, ProtectMs = 600 },
+            new N3ShowTimeSettings { LeadMs = 1000, TailMs = 500, IntervalMs = 0 },
+        };
+        var rng = new Random(20261003);
+        for (int n = 0; n < 20000; n++)
+        {
+            var s = settings[n % settings.Length];
+            int prevLast = rng.Next(0, 60000);
+            int prevEndShort = prevLast + rng.Next(0, 1500);
+            int prevEnd = prevEndShort + (rng.Next(3) == 0 ? rng.Next(0, 3000) : 0);
+            int nextFirst = prevLast + rng.Next(-3000, 4000);
+            int nextBegin = nextFirst - s.LeadMs - rng.Next(0, 3000);
+            int minPre = rng.Next(3) == 0 ? rng.Next(0, s.LeadMs + 1) : 0;
+            int x1 = rng.Next(0, 1500), x2 = x1 + rng.Next(0, 1500);
+            var a = N3ShowTimePlanner.ResolvePair(prevEnd, prevEndShort, prevLast, false, nextBegin, nextFirst, false, WithOverlap(s, x1), minPre);
+            var b = N3ShowTimePlanner.ResolvePair(prevEnd, prevEndShort, prevLast, false, nextBegin, nextFirst, false, WithOverlap(s, x2), minPre);
+            string at = $"n={n} prevEnd={prevEnd} short={prevEndShort} last={prevLast} nextBegin={nextBegin} first={nextFirst} minPre={minPre} x={x1}/{x2}";
+            Assert.True(b.PrevEnd >= a.PrevEnd, $"{at}: 前の行の終了が早まった {a} → {b}");
+            Assert.True(b.NextBegin <= a.NextBegin, $"{at}: 次の行の開始が遅れた {a} → {b}");
+            Assert.True(b.PrevEnd - b.NextBegin <= x2, $"{at}: 重なり {b.PrevEnd - b.NextBegin} が {x2} を超えた");
+        }
+    }
+
+    [Fact]
+    public void 重ねてよい時間_絵文字の行でも前の行のワイプ後を残して重ねる()
+    {
+        // 例 3: 前の行のワイプ終了 22500、次の行の絵文字 22000〜24000。重ねなければ前の行はワイプ終了ちょうど（22500）で消える
+        var doc = FloorExample(2250, 2400);
+        var (plans0, _) = N3EmojiLead.PrepareTab(doc, Yield("（花帆）"));
+        Assert.Equal((22500, 22500), (plans0[0].EndMs, plans0[3].BeginMs));
+
+        var s = Yield("（花帆）");
+        s.OverlapMs = 500;
+        var (plans, clamped) = N3EmojiLead.PrepareTab(doc, s);
+        Assert.Equal((22925, 22500), (plans[0].EndMs, plans[3].BeginMs)); // 前の行のワイプ後 425ms を残し、425ms 重ねる
+        Assert.Equal(22500, EmojiStartMs(clamped)); // 絵文字はワイプ前の表示時間 1.5 秒を残す
+    }
 }

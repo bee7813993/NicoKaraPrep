@@ -25,6 +25,13 @@ public sealed class N3ShowTimeSettings
     /// </summary>
     public int? ProtectMs { get; set; }
 
+    /// <summary>
+    /// 前後のページの同じ段の行を重ねてよい時間（ms。0 = 重ねない = ニコカラメーカー3 と同じ計算。NicoKaraPrep の機能）。
+    /// 字幕アクションが「文字単位フェード」のときなど、前の行が消えきる前に次の行が出ても見づらくない場合に使う。
+    /// 詰めるときは、前の行のワイプ後・次の行のワイプ前を削るより先に、この時間まで重ねる（<see cref="N3ShowTimePlanner.ResolvePair"/>）。
+    /// </summary>
+    public int OverlapMs { get; set; }
+
     /// <summary>上段の行をページの最終行が消えるまで表示する（TopLong）。false は各行が自分の最終タグ後に消える（TopShort）。</summary>
     public bool TopLong { get; set; }
 
@@ -255,6 +262,11 @@ public static class N3ShowTimePlanner
     /// (5)(6) は今までと同じ（前の行のワイプを最後まで見せることを下限より優先する。(5) では次の行のワイプ前を
     /// 前の行のワイプ終了から歌い出しまでに縮め、(6) では歌い出しで前の行を消す）。
     /// 前の行の終了が手動指定のときは手動の値を守る（このときも下限を割りうる）。0 なら今までの計算と同じ。
+    /// <see cref="N3ShowTimeSettings.OverlapMs"/>（重ねてよい時間 X。ニコカラメーカー3 には無い）があれば、手順 (1) 以降の
+    /// 「前の行の表示終了と次の行の表示開始の間隔」をすべて X だけ減らす（間隔がマイナス = 同じ段で重なって表示される）。
+    /// (1) で間隔の 1/4 を残す代わりに X − 1/4 まで重ね、前の行のワイプ後・次の行のワイプ前を削るのはそれでも足りないときだけになる。
+    /// (5) では次の行を前の行のワイプ終了の X 前から出し、(6) では前の行を歌い出しの X 後まで残す。
+    /// 重ならずに済む組（(0) まで）と上段を長めにの延長分は今までと同じ（必要のない重なりは作らない）。X = 0 なら今までの計算と同じ。
     /// </summary>
     /// <param name="prevEnd">前の行の表示終了（希望値。上段を長めに表示する場合はページの最後まで延長した値）。</param>
     /// <param name="prevEndShort">前の行の延長しない表示終了（自分の歌唱終了＋ワイプ後）。延長分は表示間隔を保ったまま最初に削る。</param>
@@ -276,6 +288,8 @@ public static class N3ShowTimePlanner
         int lead = s.LeadMs;
         // 次の行のワイプ前を詰める手順 (3)〜(4) で残す時間（保護時間と下限の長い方。下限が無ければ保護時間そのもの）
         int keepPre = nextMinPreMs > 0 ? Math.Max(protect, nextMinPreMs) : protect;
+        // 同じ段の行を重ねてよい時間（手順 (1) 以降の間隔をこの分だけ減らす。0 = ニコカラメーカー3 と同じ）
+        int overlap = Math.Max(0, s.OverlapMs);
 
         if (prevEnd + interval <= nextBegin) return (prevEnd, nextBegin); // 間隔が十分
         if (prevEndManual && nextBeginManual) return (prevEnd, nextBegin);
@@ -289,10 +303,10 @@ public static class N3ShowTimePlanner
 
         if (nextBeginManual)
         {
-            // 次の行の開始は動かせない: 前の行の終了だけで間隔を空ける（ワイプ後表示は保護時間まで）
+            // 次の行の開始は動かせない: 前の行の終了だけで間隔を空ける（ワイプ後表示は保護時間まで。重ねてよい分は重ねる）
             int pe = prevEnd;
-            if (pe + minGap > nextBegin) pe = Math.Max(nextBegin - minGap, prevLast + protect);
-            if (pe > nextBegin) pe = Math.Max(nextBegin, prevLast);
+            if (pe + minGap - overlap > nextBegin) pe = Math.Max(nextBegin - minGap + overlap, prevLast + protect);
+            if (pe > nextBegin + overlap) pe = Math.Max(nextBegin + overlap, prevLast);
             return (Math.Min(pe, prevEnd), nextBegin);
         }
 
@@ -301,8 +315,8 @@ public static class N3ShowTimePlanner
             // 前の行の終了は動かせない: 次の行の開始だけで調整する（ワイプ前表示は保護時間（と下限の長い方）まで。
             // それでも重なるときは前の行の終了まで遅らせる＝手動の終了を守り、下限は割りうる）
             int nb = prevEnd + interval;
-            if (nb > nextFirst - lead) nb = Math.Max(nextFirst - lead, prevEnd + minGap);
-            if (nb > nextFirst - keepPre) nb = Math.Max(nextFirst - keepPre, prevEnd);
+            if (nb > nextFirst - lead) nb = Math.Max(nextFirst - lead, prevEnd + minGap - overlap);
+            if (nb > nextFirst - keepPre) nb = Math.Max(nextFirst - keepPre, prevEnd - overlap);
             return (prevEnd, Math.Max(nb, nextBegin));
         }
 
@@ -310,44 +324,46 @@ public static class N3ShowTimePlanner
         int desired = prevEnd + interval;
         if (desired <= nextFirst - lead) return (prevEnd, desired);
 
-        // (1) 表示間隔を詰める（1/4 まで）。次の行はワイプ前表示を確保した位置から
+        // (1) 表示間隔を詰める（1/4 まで。重ねてよいなら、その分まで重ねる）。次の行はワイプ前表示を確保した位置から
         int begin = nextFirst - lead;
-        if (prevEnd + minGap <= begin) return (prevEnd, Math.Max(begin, nextBegin));
+        if (prevEnd + minGap - overlap <= begin) return (prevEnd, Math.Max(begin, nextBegin));
 
         // (2) 前の行のワイプ後表示を保護時間まで縮める
-        int end = begin - minGap;
+        int end = begin - minGap + overlap;
         if (end >= prevLast + protect) return (Math.Min(end, prevEnd), Math.Max(begin, nextBegin));
 
         // (3) 次の行のワイプ前表示を保護時間（と下限の長い方）まで縮める
         end = prevLast + protect;
-        begin = end + minGap;
+        begin = end + minGap - overlap;
         if (nextFirst - begin >= keepPre) return (Math.Min(end, prevEnd), Math.Max(begin, nextBegin));
 
         int window = nextFirst - prevLast;
 
-        // (3') 残りの表示間隔を 0 まで詰める（ワイプ後は保護時間、ワイプ前は保護時間と下限の長い方を残す）
-        if (window >= protect + keepPre)
+        // (3') 残りの表示間隔を 0 まで詰める（重ねてよいなら、その分まで重ねる。ワイプ後は保護時間、ワイプ前は保護時間と下限の長い方を残す）
+        if (window + overlap >= protect + keepPre)
         {
             return (Math.Min(prevLast + protect, prevEnd), Math.Max(nextFirst - keepPre, nextBegin));
         }
 
-        // (4) 前の行のワイプ後表示を 0 まで（次の行のワイプ前表示は保護時間と下限の長い方を残す）
-        if (window >= keepPre)
+        // (4) 前の行のワイプ後表示を 0 まで（次の行のワイプ前表示は保護時間と下限の長い方を残す。前の行は重ねてよい分だけ残す）
+        if (window + overlap >= keepPre)
         {
             int meet = nextFirst - keepPre;
-            return (Math.Min(meet, prevEnd), Math.Max(meet, nextBegin));
+            return (Math.Min(meet + overlap, prevEnd), Math.Max(meet, nextBegin));
         }
 
         // (5) 次の行のワイプ前表示も 0 まで（前の行のワイプ終了と同時に切り替える。
-        //     絵文字の下限があっても、前の行をワイプの最後まで見せることを優先して下限を割る）
-        if (window >= 0)
+        //     絵文字の下限があっても、前の行をワイプの最後まで見せることを優先して下限を割る。
+        //     重ねてよいなら、次の行は前の行のワイプ終了のその分前から出す）
+        if (window + overlap >= 0)
         {
-            return (Math.Min(prevLast, prevEnd), Math.Max(prevLast, nextBegin));
+            return (Math.Min(prevLast, prevEnd), Math.Max(prevLast - overlap, nextBegin));
         }
 
         // (6) 次の行の歌い出しで前の行の表示を終える（前の行はワイプ途中で消える。ニコカラメーカーでも警告になる。
-        //     歌い出しが前の行のワイプ終了より前なので、どう詰めても前の行は途中で消える。絵文字は 0 秒になる）
-        return (Math.Min(nextFirst, prevEnd), Math.Max(nextFirst, nextBegin));
+        //     歌い出しが前の行のワイプ終了より前なので、どう詰めても前の行は途中で消える。絵文字は 0 秒になる。
+        //     重ねてよいなら、前の行は歌い出しのその分後まで残す）
+        return (Math.Min(nextFirst + overlap, prevEnd), Math.Max(nextFirst, nextBegin));
     }
 
     /// <summary>

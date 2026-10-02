@@ -27,6 +27,7 @@ public partial class MainViewModel
         TailMs = (int)Math.Round(Settings.DisplayTailSeconds * 1000),
         IntervalMs = (int)Math.Round(Settings.N3IntervalSeconds * 1000),
         ProtectMs = Settings.N3ProtectSeconds > 0 ? (int)Math.Round(Settings.N3ProtectSeconds * 1000) : null,
+        OverlapMs = Math.Max(0, (int)Math.Round(Settings.N3OverlapSeconds * 1000)),
         TopLong = tabName is not null && N3ProjSettings.TabTopLong.TryGetValue(tabName, out bool topLong) ? topLong : Settings.N3TopLong,
         AlignFromTop = Settings.CollisionAlignFromTop,
         EmojiLeadYield = Settings.N3EmojiLeadYield,
@@ -299,6 +300,20 @@ public partial class MainViewModel
         StatusText = $"ニコカラメーカー3 プロジェクトを書き出しました: {Path.GetFileName(projectPath)}" +
                      $"（歌詞 {result.LyricsLineCount} 行・歌詞ファイル {result.LyricsPaths.Count} 件・フォント設定 {result.FontSetCount} 件{sized}）{warn}";
         return result;
+    }
+
+    /// <summary>
+    /// 書き出し画面の曲の設定（ベース・タブごとのレイアウトと上段の表示・既定のフォント設定など）を、書き出さずに曲へ保存する
+    /// （書き出し画面の「適用」。書き出し先は今のまま）。表示時刻の設定値（ワイプ前など）は書き出し画面がアプリの設定へ保存済み。
+    /// </summary>
+    public void ApplyN3ProjSongSettings(N3ProjSongSettings settings)
+    {
+        settings.OutputPath = N3ProjSettings.OutputPath;
+        N3ProjSettings = settings;
+        string? basePath = settings.BasePath is { Length: > 0 } bp && File.Exists(bp) ? bp : null;
+        Settings.N3LastBasePath = basePath ?? "";
+        Settings.Save();
+        SaveProject();
     }
 
     private static string SafeFileName(string name)
