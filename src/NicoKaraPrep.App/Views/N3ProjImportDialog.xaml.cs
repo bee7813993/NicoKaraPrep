@@ -6,6 +6,7 @@ using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Media;
 using Microsoft.UI.Xaml.Media.Imaging;
+using NicoKaraPrep.App.Services;
 using NicoKaraPrep.App.ViewModels;
 using NicoKaraPrep.Core.Formats;
 using NicoKaraPrep.Core.Model;
@@ -18,7 +19,7 @@ public enum N3ProjImportFocus
     /// <summary>チェック用の設定と書き出しのベース（従来の「設定を読み込み」と同じ）。</summary>
     Default,
 
-    /// <summary>フォント設定だけ（フォント設定の編集画面の「n3proj から取り込み」から）。</summary>
+    /// <summary>フォント設定だけ（フォント設定ビューの「取り込み > n3proj から...」から）。</summary>
     FontSets,
 }
 
@@ -50,20 +51,13 @@ public partial class N3ImportFontRow : ObservableObject
         Name = f.Name,
         FontText = f.FontFamily.Length > 0 ? $"{f.FontFamily}{(f.FontFace.Length > 0 ? $"（{f.FontFace}）" : "")}" : "（フォント指定なし）",
         SizeText = f.SizePx > 0 ? $"{f.SizePx:0.#}px" : "",
-        AfterBrush = ToBrush(f.TextColorAfter),
-        BeforeBrush = ToBrush(f.TextColorBefore),
-        AfterTip = ColorTip("ワイプ後の文字色", f.TextColorAfter),
-        BeforeTip = ColorTip("ワイプ前の文字色", f.TextColorBefore),
+        AfterBrush = N3BrushPreview.Create(f.Detail.Brushes[0]),
+        BeforeBrush = N3BrushPreview.Create(f.Detail.Brushes[N3FontDetail.BeforeOffset]),
+        AfterTip = N3BrushPreview.Describe("ワイプ後の文字", f.Detail.Brushes[0]),
+        BeforeTip = N3BrushPreview.Describe("ワイプ前の文字", f.Detail.Brushes[N3FontDetail.BeforeOffset]),
         ActionText = exists ? "置き換え" : "追加",
     };
 
-    private static Brush ToBrush(string web16) =>
-        N3FontSet.TryParseWeb16(web16, out byte r, out byte g, out byte b)
-            ? new SolidColorBrush(Windows.UI.Color.FromArgb(255, r, g, b))
-            : new SolidColorBrush(Colors.Transparent);
-
-    private static string ColorTip(string label, string web16) =>
-        N3FontSet.IsValidWeb16(web16) ? $"{label} #{web16.ToUpperInvariant()}" : $"{label}: 単色以外（取り込まれません）";
 }
 
 /// <summary>読み込み確認画面のアイコン 1 行分。</summary>
@@ -137,9 +131,12 @@ public sealed partial class N3ProjImportDialog : ContentDialog
         _preview = preview;
 
         var existing = new HashSet<string>(vm.Settings.N3FontSets.Select(f => f.Name));
+        var projectNames = new HashSet<string>(preview.FontSets.Select(f => f.Name));
         foreach (var f in preview.FontSets.Where(f => f.Name.Length > 0))
         {
             var row = N3ImportFontRow.From(f, existing.Contains(f.Name));
+            // ページの文字の大きさのために書き出しで作ったフォント設定（「（麻衣）+4」など）は、最初は選ばない（書き出すたびに作り直すため）
+            if (N3PageFontSize.IsDerivedName(f.Name, projectNames)) row.IsSelected = false;
             row.PropertyChanged += OnFontRowChanged;
             FontRows.Add(row);
         }
@@ -227,6 +224,17 @@ public sealed partial class N3ProjImportDialog : ContentDialog
         _lineShowEstimated = matched > 0 && preview.Timing is not null ? vm.CountLineShowTimeImports(preview, withEstimatedTiming: true) : 0;
         LineShowBox.IsEnabled = matched > 0;
 
+        // ---- レイアウト ----
+        int layoutPages = matched > 0 ? vm.CountPageLayoutImports(preview) : 0;
+        PageLayoutDetail.Text = matched == 0
+            ? "開いている歌詞と一致する行がありません"
+            : layoutPages == 0
+                ? "NicoKaraPrep が自動で選ぶレイアウトと違うページはありません（取り込むページはありません）"
+                : $"NicoKaraPrep が自動で選ぶレイアウトと違う {layoutPages} ページを、ページごとの手動指定にします（歌詞が同じ行のページだけ）。" +
+                  "行リストのレイアウトの欄に ✎ が付き、字幕のプレビュー・n3proj 書き出しもそのレイアウトになります" +
+                  "（ニコカラメーカー3 の「適用対象レイアウト」の範囲が、このプロジェクトを作ったときと今とで違うと、自動で選ぶレイアウトが変わります）";
+        PageLayoutBox.IsEnabled = layoutPages > 0;
+
         // ---- 書き出しのベース ----
         string? currentBase = vm.N3ProjSettings.BasePath;
         bool sameBase = currentBase is { Length: > 0 } && string.Equals(Path.GetFullPath(currentBase), Path.GetFullPath(preview.Path), StringComparison.OrdinalIgnoreCase);
@@ -251,6 +259,7 @@ public sealed partial class N3ProjImportDialog : ContentDialog
             BaseBox.IsChecked = currentBase is not { Length: > 0 } || sameBase;
             IconsBox.IsChecked = IconRows.Any(r => r.IsSelected);
             MediaBox.IsChecked = MediaBox.IsEnabled && !sameMedia && (currentMedia is not { Length: > 0 } || !File.Exists(currentMedia));
+            PageLayoutBox.IsChecked = PageLayoutBox.IsEnabled; // 違うページがあれば、ニコカラメーカーと同じレイアウトにする
         }
 
         UpdateLineShowDetail();
@@ -360,6 +369,7 @@ public sealed partial class N3ProjImportDialog : ContentDialog
             LineTimes = LineTimesBox.IsChecked == true && LineTimesBox.IsEnabled,
             Timing = TimingBox.IsChecked == true && TimingBox.IsEnabled,
             LineShowTimes = LineShowBox.IsChecked == true && LineShowBox.IsEnabled,
+            PageLayouts = PageLayoutBox.IsChecked == true && PageLayoutBox.IsEnabled,
             ExportBase = BaseBox.IsChecked == true,
             FontSetNames = FontSetsBox.IsChecked == true
                 ? FontRows.Where(r => r.IsSelected).Select(r => r.Name).ToList()

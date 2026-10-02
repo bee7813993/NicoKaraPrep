@@ -19,6 +19,10 @@ public sealed partial class MainWindow
 
     private bool _n3PanelLoading;
     private string? _n3FontNamesKey;
+    private string? _n3LayoutNamesKey;
+
+    /// <summary>行設定のレイアウトの欄の「自動」の項目。</summary>
+    private const string AutoLayoutItem = "（自動）";
 
     // ------------------------------------------------------------ メニュー
 
@@ -43,33 +47,15 @@ public sealed partial class MainWindow
         TryRun(() => ViewModel.ExportN3Proj(path, settings));
         _n3FontNamesKey = null;
         RefreshN3LinePanel();
-    }
-
-    private async void OnN3FontSetsClick(object sender, RoutedEventArgs e)
-    {
-        while (true)
-        {
-            var dialog = new N3FontSetDialog(ViewModel.Settings) { XamlRoot = Content.XamlRoot };
-            var result = await dialog.ShowAsync();
-            if (dialog.ImportRequested)
-            {
-                // 取り込みは読み込み確認画面（フォント設定を選択した状態）で行い、終わったら編集画面へ戻る
-                await ImportN3ProjAsync(null, N3ProjImportFocus.FontSets);
-                continue;
-            }
-            if (result == ContentDialogResult.Primary)
-            {
-                _n3FontNamesKey = null;
-                ViewModel.StatusText = $"ニコカラメーカー3 のフォント設定を保存しました（{ViewModel.Settings.N3FontSets.Count} 件）";
-                RefreshN3LinePanel();
-            }
-            break;
-        }
+        // 書き出し設定（ベース・既定のフォント設定・合わせるか）で、行に当たるフォント設定が変わることがある（書き出しの知らせは残す）
+        TryRun(ViewModel.UpdateLineFonts);
+        RefreshLineFontPlaceholder();
     }
 
     /// <summary>
-    /// ニコカラメーカー3 プロジェクトの読み込み（メニュー・ドラッグ＆ドロップ・フォント設定の取り込みの共通入口）。
+    /// ニコカラメーカー3 プロジェクトの読み込み（メニュー・ドラッグ＆ドロップ・フォント設定ビューの取り込みの共通入口）。
     /// 内容を調べて確認画面を出し、選んだ項目だけを取り込む。path が null ならファイルを選ばせる。
+    /// フォント設定ビューの取り込み以外では、確認画面の前にプロジェクトの歌詞ファイルも開く（<see cref="OpenProjectLyricsAsync"/>）。
     /// </summary>
     private async Task ImportN3ProjAsync(string? path, N3ProjImportFocus focus = N3ProjImportFocus.Default)
     {
@@ -97,12 +83,26 @@ public sealed partial class MainWindow
                 return;
             }
 
+            // 過去にニコカラメーカー3 で作ったプロジェクトを開いたときは、そのプロジェクトの歌詞も開く
+            // （開いた歌詞と行を照らし合わせるので、行ごとの表示時刻もそのまま取り込める）
+            string? lyricsNote = null;
+            if (focus == N3ProjImportFocus.Default)
+            {
+                var (proceed, note) = await OpenProjectLyricsAsync(preview);
+                if (!proceed) return;
+                lyricsNote = note;
+            }
+
             var dialog = new N3ProjImportDialog(ViewModel, preview, focus) { XamlRoot = Content.XamlRoot };
-            if (await dialog.ShowAsync() != ContentDialogResult.Primary) return;
+            if (await dialog.ShowAsync() != ContentDialogResult.Primary)
+            {
+                if (lyricsNote is not null) ViewModel.StatusText = $"{lyricsNote}（プロジェクトの設定は読み込みませんでした）";
+                return;
+            }
 
             var choices = dialog.Result;
             TryRun(() => ViewModel.ApplyN3ProjImport(preview, choices));
-            string summary = ViewModel.StatusText;
+            string summary = lyricsNote is null ? ViewModel.StatusText : $"{lyricsNote}　／　{ViewModel.StatusText}";
             if (choices.Media && ViewModel.MediaPath is string media && File.Exists(media))
             {
                 OpenMedia(media);
@@ -117,6 +117,7 @@ public sealed partial class MainWindow
             _validateTimer.Stop();
             TryRun(ViewModel.RunValidation);
             RefreshInsertGutter();
+            RefreshLineFontPlaceholder();
             ViewModel.StatusText = $"{summary}　／　{ViewModel.StatusText}";
         }
         catch (Exception ex)
@@ -127,6 +128,88 @@ public sealed partial class MainWindow
             await ShowMessageAsync("ニコカラメーカー3 プロジェクトの読み込み中にエラーが発生しました",
                 $"{(path is null ? "" : Path.GetFileName(path) + "\n\n")}{detail}");
         }
+    }
+
+    /// <summary>
+    /// n3proj を開いたとき、そのプロジェクトのメインの歌詞ファイル（最初の歌詞設定タブの歌詞ファイル）も開く。
+    /// 歌詞を開いていなければそのまま開き、別の歌詞を開いていれば開くか尋ねる。同じ曲の歌詞（同じ名前の rlf なども）を
+    /// 開いていればそのまま使う。尋ねた画面でキャンセルされたら Proceed = false（読み込みをやめる）。
+    /// コーラスなど 2 つ目以降の歌詞設定の歌詞は、それぞれ自分のファイルを持つタブとして開く
+    /// （上書き保存でそれぞれのファイルへ保存し、メインの歌詞ファイルにはまとめない）。「設定だけ読み込む」では開かない。
+    /// Note は歌詞を開いた・開けなかったことの説明（ステータスバーに出す）。
+    /// </summary>
+    private async Task<(bool Proceed, string? Note)> OpenProjectLyricsAsync(N3ProjImportPreview preview)
+    {
+        if (preview.Tabs.FirstOrDefault() is not { } main) return (true, null); // 歌詞の無いプロジェクト
+        string? lyrics = N3ProjImport.FindLyricsFile(preview.Path, main);
+        string? current = ViewModel.MainFilePath;
+        bool blank = ViewModel.IsDocumentBlank;
+        if (lyrics is null)
+        {
+            // 歌詞を開いていないときだけ知らせる（開いている歌詞に設定を読み込むときは、今までどおり）
+            string name = Path.GetFileName(main.LyricsRelativePath ?? main.LyricsPath ?? "");
+            return (true, blank ? $"このプロジェクトの歌詞ファイル{(name.Length > 0 ? $"（{name}）" : "")}が見つからないため、歌詞は開きませんでした" : null);
+        }
+        if (current is not null && N3ProjImport.IsSameLyrics(current, lyrics)) return (true, OpenProjectExtraTabs(preview));
+
+        if (!blank)
+        {
+            string currentName = current is null ? "（無題）" : Path.GetFileName(current);
+            bool unsaved = ViewModel.HasUnsavedChanges;
+            var ask = new ContentDialog
+            {
+                XamlRoot = Content.XamlRoot,
+                Title = "プロジェクトの歌詞も開きますか？",
+                Content = new TextBlock
+                {
+                    Text = $"このプロジェクトの歌詞ファイル「{Path.GetFileName(lyrics)}」も開きますか？今開いている「{currentName}」は閉じます。" +
+                           (unsaved ? "\n開いている歌詞には保存していない変更があります。歌詞も開くと、その変更は失われます。" : "") +
+                           "\n\n「設定だけ読み込む」では、今開いている歌詞にプロジェクトの設定を読み込みます。",
+                    TextWrapping = TextWrapping.Wrap,
+                },
+                PrimaryButtonText = "歌詞も開く",
+                SecondaryButtonText = "設定だけ読み込む",
+                CloseButtonText = "キャンセル",
+                DefaultButton = unsaved ? ContentDialogButton.Secondary : ContentDialogButton.Primary,
+            };
+            var answer = await ask.ShowAsync();
+            if (answer == ContentDialogResult.None) return (false, null);
+            if (answer == ContentDialogResult.Secondary) return (true, null);
+        }
+
+        try
+        {
+            ViewModel.OpenFile(lyrics, autoImportNearby: false);
+        }
+        catch (Exception ex)
+        {
+            DebugLog($"プロジェクトの歌詞を開けませんでした: {lyrics}: {ex}");
+            string detail = ErrorText.Describe(ex);
+            ViewModel.StatusText = $"エラー: {detail}";
+            await ShowMessageAsync("プロジェクトの歌詞を開けませんでした", $"{lyrics}\n\n{detail}");
+            return (true, $"プロジェクトの歌詞 {Path.GetFileName(lyrics)} を開けませんでした");
+        }
+        AfterDocumentLoaded();
+
+        string opened = $"プロジェクトの歌詞 {Path.GetFileName(lyrics)} を開きました（{ViewModel.Lines.Count} 行）";
+        return (true, OpenProjectExtraTabs(preview) is string extra ? $"{opened}　{extra}" : opened);
+    }
+
+    /// <summary>
+    /// n3proj の 2 つ目以降の歌詞設定の歌詞をタブで開き、開いた・開けなかったことの説明を返す（何もなければ null）。
+    /// </summary>
+    private string? OpenProjectExtraTabs(N3ProjImportPreview preview)
+    {
+        var (opened, missing) = ViewModel.OpenProjectExtraTabs(preview);
+        if (opened.Count > 0)
+        {
+            SyncTabSelection();
+            ScheduleValidation(); // プレビュー・行リストに新しいタブの行を出す
+        }
+        var parts = new List<string>();
+        if (opened.Count > 0) parts.Add($"{string.Join("・", opened)} の歌詞をタブで開きました（上書き保存でそれぞれのファイルへ保存します）");
+        if (missing.Count > 0) parts.Add($"{string.Join("・", missing)} の歌詞ファイルが見つからないため開いていません");
+        return parts.Count > 0 ? string.Join("　", parts) : null;
     }
 
     /// <summary>
@@ -194,6 +277,7 @@ public sealed partial class MainWindow
 
     private void OnClearN3OverridesClick(object sender, RoutedEventArgs e)
     {
+        if (LineOperationBlocked()) return;
         var indexes = SelectedIndexes;
         if (indexes.Count == 0)
         {
@@ -203,7 +287,7 @@ public sealed partial class MainWindow
         TryRun(() =>
         {
             int n = ViewModel.ClearLineOverrides(indexes);
-            ViewModel.StatusText = n > 0 ? $"{n} 行の表示時刻・フォント指定を解除しました" : "手動指定のある行はありません";
+            ViewModel.StatusText = n > 0 ? $"{n} 行の表示時刻・フォント・レイアウト・文字の大きさの指定を解除しました" : "手動指定のある行はありません";
         });
         foreach (var line in ViewModel.Lines) line.RaiseOverrideMark();
         RefreshN3LinePanel();
@@ -229,7 +313,13 @@ public sealed partial class MainWindow
                 ShowBeginBox.PlaceholderText = "--:--:--";
                 ShowEndBox.PlaceholderText = "--:--:--";
                 LineFontBox.Text = "";
-                N3LineInfo.Text = "";
+                SetN3LineInfo("");
+                LineFontLabel.Text = "フォント";
+                LineLayoutBox.SelectedIndex = -1;
+                LineLayoutBox.PlaceholderText = "（自動）";
+                PageFontSizeBox.Value = 0;
+                UpdateSideTarget();
+                RefreshLineFontPlaceholder();
                 return;
             }
 
@@ -244,17 +334,20 @@ public sealed partial class MainWindow
 
             EnsureN3FontNames();
             LineFontBox.Text = model.FontSetName ?? "";
+            RefreshLineFontForSelection();
+            RefreshLineLayoutBox(line);
+            PageFontSizeBox.Value = ViewModel.PageFontSizeDelta(line.Index);
 
             if (plan is null)
             {
-                N3LineInfo.Text = "タイムタグが無いため表示時刻を計算できません";
+                SetN3LineInfo("タイムタグが無いため表示時刻を計算できません");
             }
             else
             {
                 string row = $"{(ViewModel.Settings.CollisionAlignFromTop ? "上" : "下")}から{plan.Row}行目";
                 string adjusted = plan.Adjusted ? "・前後ページに合わせて調整" : "";
                 string manual = plan.BeginIsManual || plan.EndIsManual ? "（手動指定あり）" : "";
-                N3LineInfo.Text = $"自動: {FmtCs(plan.BeginMs / 10)} 〜 {FmtCs(plan.EndMs / 10)}　ページ{plan.PageIndex + 1}・{row}{adjusted}{manual}";
+                SetN3LineInfo($"自動: {FmtCs(plan.BeginMs / 10)} 〜 {FmtCs(plan.EndMs / 10)}　ページ{plan.PageIndex + 1}・{row}{adjusted}{manual}");
             }
         }
         finally
@@ -263,13 +356,171 @@ public sealed partial class MainWindow
         }
     }
 
+    /// <summary>行設定の右の説明（自動の表示時刻など）。欄が狭いと … で切れるので、全文をツールチップにも出す。</summary>
+    private void SetN3LineInfo(string text)
+    {
+        N3LineInfo.Text = text;
+        ToolTipService.SetToolTip(N3LineInfo, text.Length > 0 ? text : null);
+    }
+
+    /// <summary>
+    /// 行設定のフォントの欄の薄字（手動指定が無いときに当たるフォント設定）を、選択行の今のチェック結果にする。
+    /// 手動指定のある行は、その名前が欄に入っているので「（自動）」のまま。
+    /// </summary>
+    private void RefreshLineFontPlaceholder()
+    {
+        if (CharSelectionActive())
+        {
+            LineFontBox.PlaceholderText = "（自動）";
+            return;
+        }
+        var font = ViewModel.SelectedLine is { Model.IsEmpty: false } line ? line.AppliedFont : ViewModels.LineFontDisplay.None;
+        LineFontBox.PlaceholderText = font.IsVisible && !font.IsManual ? $"自動: {font.Summary}" : "（自動）";
+    }
+
+    /// <summary>選択行の中で文字を選んでいるか（行設定のフォントの欄は、選んだ文字だけに指定する）。</summary>
+    private bool CharSelectionActive() =>
+        ViewModel.SelectedLine is { } line && ReferenceEquals(ViewModel.CharSelectionLine, line) && line.CharSelection is not null;
+
+    /// <summary>行設定のフォントの欄の見出しと中身を、文字の選択に合わせる（選んでいれば、選んだ文字の指定）。</summary>
+    private void RefreshLineFontForSelection()
+    {
+        bool chars = CharSelectionActive();
+        bool loading = _n3PanelLoading;
+        _n3PanelLoading = true;
+        try
+        {
+            if (chars)
+            {
+                LineFontLabel.Text = $"フォント（選んだ {ViewModel.CharSelectionCount()} 文字）";
+                LineFontBox.Text = ViewModel.CharSelectionFontName() ?? "";
+            }
+            else
+            {
+                LineFontLabel.Text = "フォント";
+                LineFontBox.Text = ViewModel.SelectedLine?.Model.FontSetName ?? "";
+            }
+        }
+        finally
+        {
+            _n3PanelLoading = loading;
+        }
+        RefreshLineFontPlaceholder();
+        UpdateSideTarget();
+    }
+
+    /// <summary>行リストの歌詞の文字を選んだ（押した・ドラッグした）。その行だけを選び、文字の範囲を覚える。</summary>
+    private void OnLyricCharSelecting(object? sender, Views.LyricCharSelectEventArgs e)
+    {
+        if (e.StartUnit < 0)
+        {
+            ViewModel.ClearCharSelection(); // 文字の無いところを押した
+            RefreshLineFontForSelection();
+            return;
+        }
+        if (e.Started && (LineList.SelectedItems.Count != 1 || !ReferenceEquals(LineList.SelectedItem, e.Line)))
+        {
+            LineList.SelectedItem = e.Line;
+        }
+        ViewModel.SetCharSelection(e.Line, e.StartUnit, e.EndUnit);
+        RefreshLineFontForSelection();
+    }
+
+    /// <summary>行設定のレイアウトの欄（候補はベース＋編集したレイアウト。手動指定が無ければ薄字に自動で選ぶレイアウト）。</summary>
+    private void RefreshLineLayoutBox(ViewModels.LineViewModel line)
+    {
+        bool loading = _n3PanelLoading;
+        _n3PanelLoading = true;
+        try
+        {
+            var names = ViewModel.GetEffectiveLayouts().Select(l => l.Name).Where(n => n.Length > 0).Distinct().ToList();
+            string key = string.Join("\n", names);
+            if (_n3LayoutNamesKey != key)
+            {
+                _n3LayoutNamesKey = key;
+                LineLayoutBox.Items.Clear();
+                LineLayoutBox.Items.Add(AutoLayoutItem);
+                foreach (string n in names) LineLayoutBox.Items.Add(n);
+            }
+            string? manual = line.Model.LayoutName;
+            int index = manual is { Length: > 0 } ? LineLayoutBox.Items.IndexOf(manual) : -1;
+            LineLayoutBox.SelectedIndex = index;
+            string auto = line.LayoutText.TrimStart('✎');
+            LineLayoutBox.PlaceholderText = index < 0 && auto.Length > 0 && !line.LayoutText.StartsWith('✎') ? $"自動: {auto}" : "（自動）";
+        }
+        finally
+        {
+            _n3PanelLoading = loading;
+        }
+    }
+
+    /// <summary>行設定のレイアウトの欄で選んだ（選んだ行のページすべてに指定。「（自動）」で戻す）。</summary>
+    private void OnLineLayoutChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (_n3PanelLoading || ViewModel.SelectedLine is not { } line || line.Model.IsEmpty) return;
+        if (LineLayoutBox.SelectedItem is not string choice) return;
+        ApplyLineLayout(choice == AutoLayoutItem ? null : choice);
+    }
+
+    /// <summary>選んだ行のページにレイアウトを指定する（null で自動に戻す）。</summary>
+    private void ApplyLineLayout(string? name)
+    {
+        if (ViewModel.SelectedLine is not { } line || line.Model.IsEmpty) return;
+        var indexes = SelectedIndexes;
+        if (indexes.Count == 0) indexes = new List<int> { line.Index };
+        int n = 0;
+        TryRun(() => n = ViewModel.SetLinesLayout(indexes, name));
+        if (n > 0)
+        {
+            foreach (var l in ViewModel.Lines) l.RaiseOverrideMark();
+            ViewModel.StatusText = name is null
+                ? $"選んだ行のページ（{n} 行）のレイアウト指定を自動に戻しました"
+                : $"選んだ行のページ（{n} 行）にレイアウト設定「{name}」を指定しました";
+        }
+        // 行リストのレイアウトの表示とプレビューを作り直す（チェックはしないので、上の知らせは消えない）
+        TryRun(ViewModel.UpdateLineFonts);
+        RefreshLineLayoutBox(line);
+    }
+
+    /// <summary>行設定の文字の大きさの欄（選んだ行のページすべてに、文字の大きさの増減 px を指定する。0 でそのまま）。</summary>
+    private void OnPageFontSizeChanged(NumberBox sender, NumberBoxValueChangedEventArgs args)
+    {
+        if (_n3PanelLoading || ViewModel.SelectedLine is not { } line || line.Model.IsEmpty) return;
+        double value = double.IsNaN(args.NewValue) ? 0 : args.NewValue;
+        int delta = (int)Math.Round(Math.Clamp(value, N3PageFontSize.MinDelta, N3PageFontSize.MaxDelta), MidpointRounding.AwayFromZero);
+        var indexes = SelectedIndexes;
+        if (indexes.Count == 0) indexes = new List<int> { line.Index };
+        int n = 0;
+        TryRun(() => n = ViewModel.SetLinesFontSizeDelta(indexes, delta));
+        if (n > 0)
+        {
+            foreach (var l in ViewModel.Lines) l.RaiseOverrideMark();
+            ViewModel.StatusText = delta == 0
+                ? $"選んだ行のページ（{n} 行）の文字の大きさを元に戻しました"
+                : $"選んだ行のページ（{n} 行）の文字の大きさを {N3PageFontSize.Signed(delta)} px にしました（n3proj の書き出しで、文字の大きさだけを変えたフォント設定を作って当てます）";
+        }
+        // 行リスト・字幕のプレビュー・横幅を作り直す（チェックはしないので、上の知らせは消えない）。欄は整数・範囲内の値に直す
+        TryRun(ViewModel.UpdateLineFonts);
+        bool loading = _n3PanelLoading;
+        _n3PanelLoading = true;
+        try
+        {
+            sender.Value = ViewModel.PageFontSizeDelta(line.Index);
+        }
+        finally
+        {
+            _n3PanelLoading = loading;
+        }
+    }
+
     private static string FmtCs(int cs) => TimeTag.Format(cs).Trim('[', ']');
 
-    /// <summary>フォント設定名の候補（ベース n3proj のフォント設定 ＋ NicoKaraPrep のフォント設定）を作る。</summary>
+    /// <summary>フォント設定名の候補（ベース n3proj のフォント設定 ＋ NicoKaraPrep のフォント設定（アプリ共通・この曲専用））を作る。</summary>
     private void EnsureN3FontNames()
     {
         string? basePath = ViewModel.SuggestN3ProjBasePath();
-        string key = (basePath ?? "") + "|" + string.Join(",", ViewModel.Settings.N3FontSets.Select(f => f.Name));
+        var own = ViewModel.ExportFontSets;
+        string key = (basePath ?? "") + "|" + string.Join(",", own.Select(f => f.Name));
         if (_n3FontNamesKey == key) return;
         _n3FontNamesKey = key;
 
@@ -285,7 +536,7 @@ public sealed partial class MainWindow
                 // ベースが読めなくても候補無しで続行
             }
         }
-        names.AddRange(ViewModel.Settings.N3FontSets.Select(f => f.Name));
+        names.AddRange(own.Select(f => f.Name));
 
         string text = LineFontBox.Text;
         LineFontBox.Items.Clear();
@@ -371,12 +622,62 @@ public sealed partial class MainWindow
     private void ApplyLineFont(string? name)
     {
         if (_n3PanelLoading || ViewModel.SelectedLine is not { } line || line.Model.IsEmpty) return;
-        bool changed = false;
-        TryRun(() => changed = ViewModel.SetLineFontSet(line.Index, name));
-        if (!changed) return;
-        line.RaiseOverrideMark();
-        ViewModel.StatusText = string.IsNullOrWhiteSpace(name)
-            ? $"{line.Index + 1} 行目のフォント指定を自動に戻しました"
-            : $"{line.Index + 1} 行目にフォント設定「{name.Trim()}」を指定しました";
+        string label = string.IsNullOrWhiteSpace(name) ? "" : name.Trim();
+        var indexes = SelectedIndexes;
+        if (CharSelectionActive() && line.CharSelection is (int start, int end))
+        {
+            // 選んだ文字だけ
+            int count = ViewModel.CharSelectionCount();
+            int changedChars = 0;
+            TryRun(() => changedChars = ViewModel.SetCharFontSet(line.Index, start, end, name));
+            if (changedChars == 0) return;
+            line.RaiseOverrideMark();
+            ViewModel.StatusText = label.Length == 0
+                ? $"{line.Index + 1} 行目の選んだ {count} 文字のフォント指定を自動に戻しました"
+                : $"{line.Index + 1} 行目の選んだ {count} 文字にフォント設定「{label}」を指定しました";
+        }
+        else if (indexes.Count > 1)
+        {
+            // 選んだ行すべて（ニコカラメーカー3 でチェックした行に指定するのと同じ）
+            int n = 0;
+            TryRun(() => n = ViewModel.SetLinesFontSet(indexes, name));
+            if (n == 0) return;
+            foreach (var l in ViewModel.Lines) l.RaiseOverrideMark();
+            ViewModel.StatusText = label.Length == 0
+                ? $"選んだ {n} 行のフォント指定を自動に戻しました"
+                : $"選んだ {n} 行にフォント設定「{label}」を指定しました";
+        }
+        else
+        {
+            bool changed = false;
+            TryRun(() => changed = ViewModel.SetLineFontSet(line.Index, name));
+            if (!changed) return;
+            line.RaiseOverrideMark();
+            ViewModel.StatusText = label.Length == 0
+                ? $"{line.Index + 1} 行目のフォント指定を自動に戻しました"
+                : $"{line.Index + 1} 行目にフォント設定「{label}」を指定しました";
+        }
+        // 行リストのフォント設定の欄（この行と、引き継ぐ後ろの行）を作り直す（チェックはしないので、上の知らせは消えない）
+        TryRun(ViewModel.UpdateLineFonts);
+        RefreshLineFontPlaceholder();
+    }
+
+    /// <summary>
+    /// フォントの欄を空にして Enter を押したら、自動に戻す。編集できる ComboBox は、空の文字を確定しても TextSubmitted を出さず、
+    /// 選んでいた名前に戻してしまうため、ComboBox が Enter を処理する前にここで受ける。
+    /// </summary>
+    private void OnLineFontPreviewKeyDown(object sender, KeyRoutedEventArgs e)
+    {
+        if (e.Key != Windows.System.VirtualKey.Enter || e.OriginalSource is not TextBox box || !string.IsNullOrWhiteSpace(box.Text)) return;
+        _n3PanelLoading = true;
+        try
+        {
+            LineFontBox.SelectedIndex = -1; // このあとの ComboBox の確定で、前の名前に戻さないように
+        }
+        finally
+        {
+            _n3PanelLoading = false;
+        }
+        ApplyLineFont(null);
     }
 }

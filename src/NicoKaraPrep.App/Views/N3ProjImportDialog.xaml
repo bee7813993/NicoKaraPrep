@@ -32,7 +32,7 @@
             <TextBlock Text="チェック・プレビュー" Style="{StaticResource SectionTitle}" />
             <CheckBox x:Name="CheckFontBox">
                 <StackPanel>
-                    <TextBlock Text="字幕フォントと画面サイズを、横幅チェックとプレビューに使う" TextWrapping="Wrap" />
+                    <TextBlock Text="字幕フォントと画面サイズを、既定にする（フォント設定が当たらない行の見た目・横幅と、ベースが無いときの画面の横幅）" TextWrapping="Wrap" />
                     <TextBlock x:Name="CheckFontDetail" Style="{StaticResource ItemDetail}" />
                 </StackPanel>
             </CheckBox>
@@ -111,6 +111,15 @@
                 </StackPanel>
             </CheckBox>
 
+            <!-- レイアウト -->
+            <TextBlock Text="レイアウト" Style="{StaticResource SectionTitle}" />
+            <CheckBox x:Name="PageLayoutBox">
+                <StackPanel>
+                    <TextBlock Text="ニコカラメーカーで設定したページのレイアウトを、ページごとの手動指定として取り込む" TextWrapping="Wrap" />
+                    <TextBlock x:Name="PageLayoutDetail" Style="{StaticResource ItemDetail}" />
+                </StackPanel>
+            </CheckBox>
+
             <!-- n3proj 書き出し -->
             <TextBlock Text="n3proj 書き出し" Style="{StaticResource SectionTitle}" />
             <CheckBox x:Name="BaseBox">
@@ -127,7 +136,7 @@
                     <TextBlock x:Name="FontSetsTitle" Text="フォント設定を NicoKaraPrep に取り込む" TextWrapping="Wrap" />
                     <TextBlock
                         Style="{StaticResource ItemDetail}"
-                        Text="同じ名前の設定は置き換え、それ以外は追加します。取り込めるのは単色の配色・フォント・サイズ・縁取り・文字飾りです（グラデーションなどは書き出し時にベースの配色が残ります）。" />
+                        Text="アプリ共通のフォント設定に取り込みます（同じ名前の設定は置き換え、それ以外は追加）。配色（単色・グラデーション・ミルフィーユ・画像と不透明度）・6 種類の文字のフォント・縁取り・文字飾り・テンプレートとの連動をすべて取り込みます。取り込んだあとはフォント設定ビュー（F3）で編集できます。" />
                 </StackPanel>
             </CheckBox>
             <StackPanel x:Name="FontSetPanel" Margin="28,0,0,0" Spacing="4">

@@ -3,7 +3,10 @@ using NicoKaraPrep.Core.Model;
 
 namespace NicoKaraPrep.Core.Project;
 
-/// <summary>行ごとのニコカラメーカー3 書き出し設定（表示時刻の手動指定・フォント設定名）。行インデックスで保存する。</summary>
+/// <summary>
+/// 行ごとのニコカラメーカー3 書き出し設定（表示時刻の手動指定・フォント設定名・文字単位のフォント設定名）。行インデックスで保存する。
+/// 文字単位の指定は、保存したときの行の表示文字列と今の行が同じときだけ当てる（歌詞を外で直したときに別の文字へ付かないように）。
+/// </summary>
 public sealed class LineExportSettings
 {
     public int Index { get; set; }
@@ -17,6 +20,18 @@ public sealed class LineExportSettings
     /// <summary>フォント設定名の手動指定。null は自動。</summary>
     public string? FontSetName { get; set; }
 
+    /// <summary>行のページのレイアウト設定名の手動指定。null は自動。</summary>
+    public string? LayoutName { get; set; }
+
+    /// <summary>行のページの文字の大きさの増減 px（0 = そのまま）。</summary>
+    public int FontSizeDelta { get; set; }
+
+    /// <summary>文字単位のフォント設定名の手動指定（表示文字の位置の範囲）。無ければ null。</summary>
+    public List<CharFontRange>? CharFonts { get; set; }
+
+    /// <summary><see cref="CharFonts"/> を保存したときの行の表示文字列（スペーサーを除く）。</summary>
+    public string? CharText { get; set; }
+
     /// <summary>ドキュメントの行から手動設定を持つ行だけを集める。</summary>
     public static List<LineExportSettings> Collect(LyricsDocument doc)
     {
@@ -25,12 +40,17 @@ public sealed class LineExportSettings
         {
             var l = doc.Lines[i];
             if (!l.HasN3Overrides) continue;
+            var ranges = CharFontOperations.Ranges(l);
             result.Add(new LineExportSettings
             {
                 Index = i,
                 ShowBeginCs = l.ShowBeginCs,
                 ShowEndCs = l.ShowEndCs,
                 FontSetName = l.FontSetName,
+                LayoutName = l.LayoutName,
+                FontSizeDelta = l.FontSizeDelta,
+                CharFonts = ranges.Count > 0 ? ranges : null,
+                CharText = ranges.Count > 0 ? l.GetDisplayText() : null,
             });
         }
         return result;
@@ -47,6 +67,9 @@ public sealed class LineExportSettings
             l.ShowBeginCs = s.ShowBeginCs;
             l.ShowEndCs = s.ShowEndCs;
             l.FontSetName = string.IsNullOrEmpty(s.FontSetName) ? null : s.FontSetName;
+            l.LayoutName = string.IsNullOrEmpty(s.LayoutName) ? null : s.LayoutName;
+            l.FontSizeDelta = s.FontSizeDelta;
+            if (s.CharFonts is { Count: > 0 } && s.CharText == l.GetDisplayText()) CharFontOperations.ApplyRanges(l, s.CharFonts);
         }
     }
 }
@@ -74,6 +97,9 @@ public sealed class N3ProjSongSettings
 
     /// <summary>NicoKaraPrep 側のフォント設定をベースへマージするか。</summary>
     public bool MergeFontSets { get; set; } = true;
+
+    /// <summary>NicoKaraPrep で編集したレイアウト設定を、ベースの同じ名前のレイアウト設定に上書き・無い名前は追加するか。</summary>
+    public bool MergeLayouts { get; set; } = true;
 }
 
 /// <summary>分離タブ 1 つ分の保存データ。</summary>
@@ -92,6 +118,12 @@ public sealed class SongProjectTab
 
     /// <summary>このタブを別ファイルへ保存した先（タブの上書き保存の対象）。</summary>
     public string? FilePath { get; set; }
+
+    /// <summary>
+    /// 自分の歌詞ファイル（<see cref="FilePath"/>）を持つタブか（ニコカラメーカー3 のプロジェクトの 2 つ目以降の歌詞設定の歌詞など）。
+    /// メインの歌詞ファイルには含めず、開き直したときは <see cref="FilePath"/> から読み込む。false は分離タブ。
+    /// </summary>
+    public bool OwnFile { get; set; }
 
     /// <summary>行ごとのニコカラメーカー3 書き出し設定。</summary>
     public List<LineExportSettings> LineSettings { get; set; } = new();
@@ -133,6 +165,23 @@ public sealed class SongProject
 
     /// <summary>ニコカラメーカー3 プロジェクト書き出しの設定。</summary>
     public N3ProjSongSettings N3Proj { get; set; } = new();
+
+    private List<N3FontSet> _fontSets = new();
+
+    /// <summary>
+    /// この曲専用のフォント設定。書き出しでは同じ名前のアプリ共通のフォント設定より優先する
+    /// （<see cref="N3FontLibrary.ResolveForExport"/>）。
+    /// null は空の一覧に、一覧の中の null は取り除く（手で編集したファイルなど）。
+    /// </summary>
+    public List<N3FontSet> FontSets
+    {
+        get => _fontSets;
+        set
+        {
+            _fontSets = value ?? new();
+            _fontSets.RemoveAll(f => f is null);
+        }
+    }
 
     /// <summary>歌詞ファイルのフィンガープリント（サイズ＋更新時刻）を計算する。</summary>
     public static string ComputeFingerprint(string filePath)

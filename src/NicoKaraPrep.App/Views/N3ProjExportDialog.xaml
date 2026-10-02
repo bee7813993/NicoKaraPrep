@@ -40,6 +40,7 @@
             </Grid>
             <TextBlock x:Name="MediaText" FontSize="12" Foreground="{ThemeResource TextFillColorSecondaryBrush}" TextWrapping="Wrap" />
             <CheckBox x:Name="MergeFontsCheck" Content="NicoKaraPrep のフォント設定をベースへ反映する（同名は上書き、無い名前は追加）" />
+            <CheckBox x:Name="MergeLayoutsCheck" Content="NicoKaraPrep で編集したレイアウト設定をベースへ反映する（同名は上書き、無い名前は追加）" />
 
             <TextBlock Text="行の表示時刻（ニコカラメーカーの「自動で表示開始時刻・表示終了時刻を設定」と同じ意味）" Style="{ThemeResource BodyStrongTextBlockStyle}" Margin="0,6,0,0" />
             <Grid ColumnSpacing="8">

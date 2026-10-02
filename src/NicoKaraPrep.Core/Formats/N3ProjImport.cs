@@ -12,8 +12,14 @@ public sealed class N3ProjSourceTab
     /// <summary>歌詞ファイルのパス（未設定なら null）。</summary>
     public string? LyricsPath { get; init; }
 
+    /// <summary>プロジェクトのフォルダから見た歌詞ファイルの相対パス（未設定・空なら null）。</summary>
+    public string? LyricsRelativePath { get; init; }
+
     /// <summary>表示時刻の自動設定が「上段歌詞を長めに表示する」か。</summary>
     public bool TopLong { get; init; }
+
+    /// <summary>このタブの歌詞行がみな同じレイアウト設定を使っていれば、その名前（ばらばら・不明なら null）。</summary>
+    public string? LayoutName { get; set; }
 
     /// <summary>
     /// 歌詞行（Raw）とページ区切り（空行）から組み立てたドキュメント。
@@ -23,6 +29,9 @@ public sealed class N3ProjSourceTab
 
     /// <summary><see cref="Document"/> の各行の実際の表示時刻（ms）。空行・未設定は null。</summary>
     public List<(int BeginMs, int EndMs)?> ShowTimes { get; } = new();
+
+    /// <summary><see cref="Document"/> の各行にニコカラメーカーが設定したレイアウト設定の名前。空行・不明は null。</summary>
+    public List<string?> LayoutNames { get; } = new();
 
     /// <summary>歌詞行の数。</summary>
     public int LyricLineCount => Document.Lines.Count(l => !l.IsEmpty);
@@ -176,11 +185,51 @@ public static class N3ProjImport
         }
     }
 
+    /// <summary>
+    /// 歌詞設定タブの歌詞ファイルを探す。プロジェクトのフォルダからの相対パスを先に、次に保存されている絶対パスを見る
+    /// （プロジェクトをフォルダごと移した・別のドライブ名で開いたときも見つかるように）。見つからなければ null。
+    /// </summary>
+    public static string? FindLyricsFile(string projectPath, N3ProjSourceTab tab)
+    {
+        var candidates = new List<string>();
+        try
+        {
+            string? dir = Path.GetDirectoryName(Path.GetFullPath(projectPath));
+            if (dir is not null && tab.LyricsRelativePath is { } rel) candidates.Add(Path.GetFullPath(Path.Combine(dir, rel)));
+        }
+        catch (Exception e) when (e is ArgumentException or NotSupportedException or PathTooLongException)
+        {
+            // 相対パスが壊れていれば絶対パスだけを見る
+        }
+        if (tab.LyricsPath is { Length: > 0 } abs) candidates.Add(abs);
+        return candidates.FirstOrDefault(File.Exists);
+    }
+
+    /// <summary>
+    /// 2 つのパスが同じ曲の歌詞か（同じファイル、または同じフォルダで拡張子だけが違う。rlf と、そこから作った lrc など）。
+    /// </summary>
+    public static bool IsSameLyrics(string a, string b)
+    {
+        try
+        {
+            string fa = Path.GetFullPath(a);
+            string fb = Path.GetFullPath(b);
+            if (string.Equals(fa, fb, StringComparison.OrdinalIgnoreCase)) return true;
+            return string.Equals(Path.GetDirectoryName(fa), Path.GetDirectoryName(fb), StringComparison.OrdinalIgnoreCase)
+                && string.Equals(Path.GetFileNameWithoutExtension(fa), Path.GetFileNameWithoutExtension(fb), StringComparison.OrdinalIgnoreCase);
+        }
+        catch (Exception e) when (e is ArgumentException or NotSupportedException or PathTooLongException)
+        {
+            return string.Equals(a, b, StringComparison.OrdinalIgnoreCase);
+        }
+    }
+
     /// <summary>歌詞設定タブを読み出す（歌詞行の無いタブは除く）。</summary>
     public static List<N3ProjSourceTab> ReadSourceTabs(JsonObject root)
     {
         var result = new List<N3ProjSourceTab>();
         if (root["SourceLyricsInfos"] is not JsonArray infos) return result;
+        var layoutNames = (root["LyricsLayouts"] as JsonArray)?.Select(l => l?["SettingsName"]?.GetValue<string>()).ToList() ?? new List<string?>();
 
         foreach (var node in infos)
         {
@@ -189,10 +238,13 @@ public static class N3ProjImport
             {
                 Name = info["SettingsName"]?.GetValue<string>() ?? "",
                 LyricsPath = info["SourceLyricsPath"]?.GetValue<string>(),
+                LyricsRelativePath = info["SourceLyricsRelativePath"]?.GetValue<string>() is { Length: > 0 } rel ? rel : null,
                 TopLong = info["LastSelectedAddOns"]?["ShowTimeAdjusterId"]?.GetValue<string>() == "SHINTA.TopLongAdjuster",
             };
 
             bool pendingBreak = false;
+            var usedLayouts = new HashSet<int>();
+            bool layoutUnknown = false;
             foreach (var ln in lines)
             {
                 if (ln is not JsonObject l) continue;
@@ -208,6 +260,7 @@ public static class N3ProjImport
                 {
                     tab.Document.Lines.Add(new LyricsLine());
                     tab.ShowTimes.Add(null);
+                    tab.LayoutNames.Add(null);
                 }
                 pendingBreak = false;
 
@@ -216,8 +269,22 @@ public static class N3ProjImport
                 int end = l["ShowEndTime"]?.GetValue<int>() ?? -1;
                 tab.Document.Lines.Add(LrcFormat.ParseLyricLine(raw));
                 tab.ShowTimes.Add(begin >= 0 && end >= begin ? (begin, end) : null);
+                if (l["LayoutIndex"] is JsonValue li && li.TryGetValue(out int layoutIndex))
+                {
+                    usedLayouts.Add(layoutIndex);
+                    tab.LayoutNames.Add(layoutIndex >= 0 && layoutIndex < layoutNames.Count && layoutNames[layoutIndex] is { Length: > 0 } layoutName ? layoutName : null);
+                }
+                else
+                {
+                    layoutUnknown = true;
+                    tab.LayoutNames.Add(null);
+                }
             }
 
+            if (!layoutUnknown && usedLayouts.Count == 1 && usedLayouts.First() is int only && only >= 0 && only < layoutNames.Count)
+            {
+                tab.LayoutName = layoutNames[only] is { Length: > 0 } name ? name : null;
+            }
             if (tab.LyricLineCount > 0) result.Add(tab);
         }
         return result;
@@ -307,7 +374,14 @@ public static class N3ProjImport
     /// 順序を保って対応付ける（最長共通部分列）。歌詞を直した行は対応しない。
     /// 戻り値は ドキュメントの行インデックス → ニコカラメーカーの表示時刻（ms）。
     /// </summary>
-    public static Dictionary<int, (int BeginMs, int EndMs)> MatchLines(LyricsDocument doc, N3ProjSourceTab source)
+    public static Dictionary<int, (int BeginMs, int EndMs)> MatchLines(LyricsDocument doc, N3ProjSourceTab source) =>
+        MatchLineIndexes(doc, source).ToDictionary(kv => kv.Key, kv => source.ShowTimes[kv.Value]!.Value);
+
+    /// <summary>
+    /// <see cref="MatchLines"/> と同じ対応付けで、ドキュメントの行インデックス → n3proj の歌詞設定タブの行インデックス（<see cref="N3ProjSourceTab.Document"/> の添字）を返す
+    /// （表示時刻が設定された行だけ）。
+    /// </summary>
+    public static Dictionary<int, int> MatchLineIndexes(LyricsDocument doc, N3ProjSourceTab source)
     {
         var docRows = new List<(int Index, string Key)>();
         for (int i = 0; i < doc.Lines.Count; i++)
@@ -332,13 +406,13 @@ public static class N3ProjImport
             }
         }
 
-        var result = new Dictionary<int, (int, int)>();
+        var result = new Dictionary<int, int>();
         int a = 0, c = 0;
         while (a < n && c < m)
         {
             if (docRows[a].Key == srcRows[c].Key)
             {
-                result[docRows[a].Index] = source.ShowTimes[srcRows[c].Index]!.Value;
+                result[docRows[a].Index] = srcRows[c].Index;
                 a++;
                 c++;
             }

@@ -25,15 +25,17 @@ public sealed record Nkm3Environment(
     string? LayoutSelectableEnd,
     JsonObject? CharFadeSettings)
 {
+    /// <summary>フォント設定テンプレート（.tpl）を置くフォルダの名前（設定フォルダの下）。</summary>
+    public const string TemplateFontFolderName = "TemplateFont";
+
+    /// <summary>この設定フォルダのフォント設定テンプレートのフォルダ（存在するかは確かめない）。</summary>
+    public string TemplateFontFolder => Path.Combine(SettingsFolder, TemplateFontFolderName);
+
     public static Nkm3Environment? Detect()
     {
         try
         {
-            string packages = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Packages");
-            if (!Directory.Exists(packages)) return null;
-            string? folder = Directory.GetDirectories(packages, "22724SHINTA.NicokaraMaker3_*")
-                .Select(d => Path.Combine(d, "Settings"))
-                .FirstOrDefault(Directory.Exists);
+            string? folder = StoreSettingsFolders().FirstOrDefault(Directory.Exists);
             if (folder is null) return null;
             return Load(folder);
         }
@@ -41,6 +43,36 @@ public sealed record Nkm3Environment(
         {
             return null;
         }
+    }
+
+    /// <summary>
+    /// このマシンにあるニコカラメーカー3 のフォント設定テンプレートのフォルダ（存在するものだけ）。
+    /// Microsoft Store 版（%LOCALAPPDATA%\Packages\22724SHINTA.NicokaraMaker3_*\Settings\TemplateFont）を先に、
+    /// zip 版（%APPDATA%\SHINTA\NicoKaraMaker3 の下）を後に並べる。読み取り専用で使う。
+    /// </summary>
+    public static List<string> FindTemplateFontFolders()
+    {
+        var candidates = new List<string>();
+        try
+        {
+            candidates.AddRange(StoreSettingsFolders().Select(s => Path.Combine(s, TemplateFontFolderName)));
+            string zipRoot = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "SHINTA", "NicoKaraMaker3");
+            candidates.Add(Path.Combine(zipRoot, TemplateFontFolderName));
+            candidates.Add(Path.Combine(zipRoot, "Settings", TemplateFontFolderName));
+        }
+        catch (Exception)
+        {
+            // フォルダを列挙できなければ見つかった分だけ返す
+        }
+        return candidates.Where(Directory.Exists).Distinct(StringComparer.OrdinalIgnoreCase).ToList();
+    }
+
+    /// <summary>Microsoft Store 版の設定フォルダの候補。</summary>
+    private static IEnumerable<string> StoreSettingsFolders()
+    {
+        string packages = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Packages");
+        if (!Directory.Exists(packages)) return Array.Empty<string>();
+        return Directory.GetDirectories(packages, "22724SHINTA.NicokaraMaker3_*").Select(d => Path.Combine(d, "Settings"));
     }
 
     /// <summary>設定フォルダから読み取る（テスト用に公開）。</summary>

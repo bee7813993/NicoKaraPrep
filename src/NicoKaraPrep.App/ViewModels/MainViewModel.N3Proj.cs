@@ -47,18 +47,63 @@ public partial class MainViewModel
         return true;
     }
 
-    /// <summary>行に適用するフォント設定名の手動指定を設定する（null / 空 = 自動）。</summary>
+    /// <summary>
+    /// 行に適用するフォント設定名の手動指定を設定する（null / 空 = 自動）。ニコカラメーカー3 で行のフォントを選んだときと同じく、
+    /// その行の文字ごとの手動指定は消す（行全体が 1 つのフォント設定になる。自動に戻すときも文字の指定ごと戻す）。
+    /// </summary>
     public bool SetLineFontSet(int index, string? name)
     {
         if (index < 0 || index >= Document.Lines.Count) return false;
         string? value = string.IsNullOrWhiteSpace(name) ? null : name.Trim();
         var line = Document.Lines[index];
-        if (line.FontSetName == value) return false;
+        if (line.FontSetName == value && !line.HasCharFonts) return false;
         PushUndo();
         line.FontSetName = value;
+        CharFontOperations.Clear(line);
         MarkModified();
         SaveProject();
         return true;
+    }
+
+    /// <summary>
+    /// 行の文字の範囲（<see cref="LyricsLine.Chars"/> の添字、両端を含む）にフォント設定名を手動指定する（null / 空 = その文字を自動に戻す）。
+    /// 元に戻す（Ctrl+Z）は 1 回で戻る。変わった文字の数を返す。
+    /// </summary>
+    public int SetCharFontSet(int index, int startUnit, int endUnit, string? name)
+    {
+        if (index < 0 || index >= Document.Lines.Count) return 0;
+        var line = Document.Lines[index];
+        if (line.IsEmpty) return 0;
+        var probe = line.Clone();
+        if (CharFontOperations.SetRange(probe, startUnit, endUnit, name) == 0) return 0;
+        PushUndo();
+        int changed = CharFontOperations.SetRange(line, startUnit, endUnit, name);
+        MarkModified();
+        SaveProject();
+        return changed;
+    }
+
+    /// <summary>
+    /// 複数の行に適用するフォント設定名の手動指定をまとめて設定する（null / 空 = 自動）。元に戻す（Ctrl+Z）は 1 回で全部戻る。
+    /// 空行と、すでにその指定になっている行は変えない。変えた行の数を返す。
+    /// </summary>
+    public int SetLinesFontSet(IReadOnlyList<int> indexes, string? name)
+    {
+        string? value = string.IsNullOrWhiteSpace(name) ? null : name;
+        var targets = indexes.Distinct()
+            .Where(i => i >= 0 && i < Document.Lines.Count && !Document.Lines[i].IsEmpty &&
+                        (Document.Lines[i].FontSetName != value || Document.Lines[i].HasCharFonts))
+            .ToList();
+        if (targets.Count == 0) return 0;
+        PushUndo();
+        foreach (int i in targets)
+        {
+            Document.Lines[i].FontSetName = value;
+            CharFontOperations.Clear(Document.Lines[i]); // 行全体を 1 つのフォント設定にする（文字ごとの指定は消す）
+        }
+        MarkModified();
+        SaveProject();
+        return targets.Count;
     }
 
     /// <summary>選択行の手動指定（表示時刻・フォント）をすべて解除する。</summary>
@@ -73,6 +118,9 @@ public partial class MainViewModel
             line.ShowBeginCs = null;
             line.ShowEndCs = null;
             line.FontSetName = null;
+            line.LayoutName = null;
+            line.FontSizeDelta = 0;
+            CharFontOperations.Clear(line);
         }
         MarkModified();
         SaveProject();
@@ -174,8 +222,10 @@ public partial class MainViewModel
             ScreenHeight = width == 1920 ? 1080 : (int)Math.Round(width * 9.0 / 16),
             ShowTime = CreateShowTimeSettings(),
             EmojiEntries = GetEffectiveEmojiList(),
-            FontSets = Settings.N3FontSets,
+            FontSets = ExportFontSets,
             MergeFontSets = settings.MergeFontSets,
+            Layouts = Settings.N3Layouts,
+            MergeLayouts = settings.MergeLayouts,
             DefaultFont = new N3FontSet
             {
                 Name = "標準",
@@ -202,8 +252,11 @@ public partial class MainViewModel
         RememberSaveFolder(projectPath);
 
         string warn = result.Warnings.Count > 0 ? $"　⚠ {string.Join(" / ", result.Warnings)}" : "";
+        string sized = result.SizedFontSets is { Count: > 0 } names
+            ? $"。ページの文字の大きさのために作ったフォント設定 {names.Count} 件（{string.Join("・", names.Take(3))}{(names.Count > 3 ? " など" : "")}）"
+            : "";
         StatusText = $"ニコカラメーカー3 プロジェクトを書き出しました: {Path.GetFileName(projectPath)}" +
-                     $"（歌詞 {result.LyricsLineCount} 行・歌詞ファイル {result.LyricsPaths.Count} 件・フォント設定 {result.FontSetCount} 件）{warn}";
+                     $"（歌詞 {result.LyricsLineCount} 行・歌詞ファイル {result.LyricsPaths.Count} 件・フォント設定 {result.FontSetCount} 件{sized}）{warn}";
         return result;
     }
 

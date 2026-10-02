@@ -238,4 +238,129 @@ public class N3ProjImportTests : IDisposable
         Assert.True(ratio >= threshold,
             $"一致 {timing.Matched}/{timing.Total}（{ratio:P1}）ワイプ前 {timing.LeadMs} / ワイプ後 {timing.TailMs} / 間隔 {timing.IntervalMs}");
     }
+    // ------------------------------------------------------------ プロジェクトの歌詞ファイル
+
+    [Fact]
+    public void 歌詞ファイル_プロジェクトの相対パスで探し_無ければ絶対パス()
+    {
+        string sub = Path.Combine(_dir, "moved");
+        Directory.CreateDirectory(sub);
+        string project = Path.Combine(sub, "song.n3proj");
+        string lrc = Path.Combine(sub, "song.lrc");
+        File.WriteAllText(lrc, "[00:01:00]あ[00:02:00]");
+        string elsewhere = Path.Combine(_dir, "other.lrc");
+        File.WriteAllText(elsewhere, "[00:01:00]い[00:02:00]");
+
+        // フォルダごと移した: 保存されている絶対パスは古い場所でも、相対パスで見つかる
+        var moved = new N3ProjSourceTab { Name = "メイン", LyricsPath = @"W:\old\song.lrc", LyricsRelativePath = "song.lrc" };
+        Assert.Equal(lrc, N3ProjImport.FindLyricsFile(project, moved));
+
+        // 相対パスに無ければ絶対パス
+        var absolute = new N3ProjSourceTab { Name = "メイン", LyricsPath = elsewhere, LyricsRelativePath = "missing.lrc" };
+        Assert.Equal(elsewhere, N3ProjImport.FindLyricsFile(project, absolute));
+
+        // どちらにも無い・未設定
+        Assert.Null(N3ProjImport.FindLyricsFile(project, new N3ProjSourceTab { Name = "メイン", LyricsPath = @"W:\old\song.lrc", LyricsRelativePath = "missing.lrc" }));
+        Assert.Null(N3ProjImport.FindLyricsFile(project, new N3ProjSourceTab { Name = "メイン" }));
+    }
+
+    [Fact]
+    public void 歌詞ファイル_書き出したプロジェクトから読み出せる()
+    {
+        string lrc = Path.Combine(_dir, "song.lrc");
+        File.WriteAllText(lrc, "[00:10:00]あ[00:12:00]");
+        string path = ExportAndEdit(Song(), new N3ShowTimeSettings());
+        var preview = N3ProjImport.Analyze(path);
+        var main = Assert.Single(preview.Tabs);
+        Assert.Equal("song.lrc", main.LyricsRelativePath);
+        Assert.Equal(lrc, N3ProjImport.FindLyricsFile(path, main));
+    }
+
+    [Fact]
+    public void 歌詞ファイル_同じ曲か()
+    {
+        Assert.True(N3ProjImport.IsSameLyrics(@"C:\songs\a.lrc", @"c:\SONGS\A.lrc"));
+        Assert.True(N3ProjImport.IsSameLyrics(@"C:\songs\a.rlf", @"C:\songs\a.lrc")); // rlf と、そこから作った lrc
+        Assert.False(N3ProjImport.IsSameLyrics(@"C:\songs\a.lrc", @"C:\songs\b.lrc"));
+        Assert.False(N3ProjImport.IsSameLyrics(@"C:\songs\a.lrc", @"C:\other\a.lrc"));
+    }
+
+    [Fact]
+    public void 歌詞設定タブ_2つ目以降の歌詞とそろったレイアウトの名前を読む()
+    {
+        static JsonObject Line(string raw, int? layout)
+        {
+            var o = new JsonObject { ["Kind"] = 1, ["Raw"] = raw, ["ShowBeginTime"] = 0, ["ShowEndTime"] = 5000 };
+            if (layout is int l) o["LayoutIndex"] = l;
+            return o;
+        }
+        var root = new JsonObject
+        {
+            ["LyricsLayouts"] = new JsonArray(new JsonObject { ["SettingsName"] = "下寄せ2行" }, new JsonObject { ["SettingsName"] = "コーラス1行" }),
+            ["SourceLyricsInfos"] = new JsonArray(
+                new JsonObject
+                {
+                    ["SettingsName"] = "メイン",
+                    ["SourceLyricsRelativePath"] = "song.lrc",
+                    ["LineInfos"] = new JsonArray(Line("[00:01:00]あ[00:02:00]", 0), Line("[00:02:00]い[00:03:00]", 0)),
+                },
+                new JsonObject
+                {
+                    ["SettingsName"] = "コーラス2",
+                    ["SourceLyricsRelativePath"] = "song_パート1.lrc",
+                    ["LineInfos"] = new JsonArray(Line("[00:05:00]（コーラス）う[00:06:00]", 1), new JsonObject { ["Kind"] = 2 }, Line("[00:09:00]（コーラス）え[00:10:00]", 1)),
+                },
+                new JsonObject
+                {
+                    ["SettingsName"] = "まぜこぜ",
+                    ["LineInfos"] = new JsonArray(Line("[00:11:00]お[00:12:00]", 0), Line("[00:12:00]か[00:13:00]", 1)),
+                },
+                new JsonObject
+                {
+                    ["SettingsName"] = "不明",
+                    ["LineInfos"] = new JsonArray(Line("[00:14:00]き[00:15:00]", null)),
+                }),
+        };
+
+        var tabs = N3ProjImport.ReadSourceTabs(root);
+        Assert.Equal(new[] { "メイン", "コーラス2", "まぜこぜ", "不明" }, tabs.Select(t => t.Name));
+        Assert.Equal("下寄せ2行", tabs[0].LayoutName);
+        Assert.Equal("コーラス1行", tabs[1].LayoutName);
+        Assert.Equal(2, tabs[1].LyricLineCount);
+        Assert.Null(tabs[2].LayoutName); // 行ごとにばらばら
+        Assert.Null(tabs[3].LayoutName); // レイアウトの番号が無い
+
+        // 行ごとのレイアウトの名前（ページ区切りの空行は null）
+        Assert.Equal(new string?[] { "コーラス1行", null, "コーラス1行" }, tabs[1].LayoutNames);
+        Assert.Equal(new string?[] { "下寄せ2行", "コーラス1行" }, tabs[2].LayoutNames);
+        Assert.Equal(new string?[] { null }, tabs[3].LayoutNames);
+
+        // 歌詞の行の対応付け（ドキュメントの行 → タブの行）
+        var doc = LrcFormat.Parse(string.Join("\r\n", "[00:05:00]（コーラス）う[00:06:00]", "", "[00:09:00]（コーラス）え[00:10:00]"));
+        var map = N3ProjImport.MatchLineIndexes(doc, tabs[1]);
+        Assert.Equal(0, map[0]);
+        Assert.Equal(2, map[2]);
+        Assert.Equal(new[] { 0, 2 }, map.Keys.OrderBy(k => k));
+
+        // コーラスの歌詞ファイルもプロジェクトのフォルダから見つかる
+        string chorus = Path.Combine(_dir, "song_パート1.lrc");
+        File.WriteAllText(chorus, "[00:05:00]（コーラス）う[00:06:00]");
+        Assert.Equal(chorus, N3ProjImport.FindLyricsFile(Path.Combine(_dir, "song.n3proj"), tabs[1]));
+    }
+
+    [Fact]
+    public void 曲プロジェクト_自分の歌詞ファイルを持つタブを保存して読み戻せる()
+    {
+        string song = Path.Combine(_dir, "song.lrc");
+        var project = new NicoKaraPrep.Core.Project.SongProject();
+        project.Tabs.Add(new NicoKaraPrep.Core.Project.SongProjectTab { Name = "コーラス2", FilePath = Path.Combine(_dir, "song_パート1.lrc"), OwnFile = true });
+        project.Tabs.Add(new NicoKaraPrep.Core.Project.SongProjectTab { Name = "パート2", Text = "[00:01:00]あ[00:02:00]" });
+        project.Save(song);
+
+        var back = NicoKaraPrep.Core.Project.SongProject.TryLoad(song)!;
+        Assert.Equal(2, back.Tabs.Count);
+        Assert.True(back.Tabs[0].OwnFile);
+        Assert.Equal(Path.Combine(_dir, "song_パート1.lrc"), back.Tabs[0].FilePath);
+        Assert.False(back.Tabs[1].OwnFile); // 前からの分離タブ（旧形式も false で読む）
+    }
 }

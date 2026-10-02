@@ -70,7 +70,11 @@ public sealed partial class N3ProjExportDialog : ContentDialog
         ProjectNameBox.Text = current.ProjectName;
         ProjectNameBox.PlaceholderText = Path.GetFileNameWithoutExtension(vm.SuggestN3ProjOutputPath() ?? "lyrics");
         MergeFontsCheck.IsChecked = current.MergeFontSets;
-        MergeFontsCheck.Content = $"NicoKaraPrep のフォント設定（{vm.Settings.N3FontSets.Count} 件）をベースへ反映する（同名は上書き、無い名前は追加）";
+        MergeLayoutsCheck.IsChecked = current.MergeLayouts;
+        var fonts = vm.ExportFontSets;
+        int songFonts = vm.SongFontSets.Count;
+        string songNote = songFonts > 0 ? $"。この曲専用 {songFonts} 件を含む" : "";
+        MergeFontsCheck.Content = $"NicoKaraPrep のフォント設定（{fonts.Count} 件{songNote}）をベースへ反映する（同名は上書き、無い名前は追加）";
         MediaText.Text = vm.MediaPath is { Length: > 0 } m
             ? $"背景素材: {m}（メディア再生パネルのファイル）"
             : "背景素材: 未設定（ベースのまま。メディア再生パネルに動画を読み込むと設定されます）";
@@ -121,6 +125,10 @@ public sealed partial class N3ProjExportDialog : ContentDialog
         }
         BaseInfoText.Text = info;
 
+        // ベースが無ければ書き出しの既定のレイアウト、どちらにも NicoKaraPrep で足したレイアウトを加える
+        if (_basePath is null) layoutNames = N3LayoutReader.Defaults(1080).Select(l => l.Name).ToList();
+        layoutNames.AddRange(_vm.Settings.N3Layouts.Select(l => l.Name).Where(n => n.Length > 0));
+
         // レイアウト候補（自動 + ベースのレイアウト名）を差し替える（行の選択は維持）
         var selected = Rows.Select(r => r.LayoutChoice).ToList();
         _layoutChoices.Clear();
@@ -134,7 +142,7 @@ public sealed partial class N3ProjExportDialog : ContentDialog
         // 既定フォント設定の候補
         string text = DefaultFontBox.Text;
         DefaultFontBox.Items.Clear();
-        foreach (string n in _baseFontNames.Concat(_vm.Settings.N3FontSets.Select(f => f.Name)).Where(n => n.Length > 0).Distinct())
+        foreach (string n in _baseFontNames.Concat(_vm.ExportFontSets.Select(f => f.Name)).Where(n => n.Length > 0).Distinct())
         {
             DefaultFontBox.Items.Add(n);
         }
@@ -178,6 +186,7 @@ public sealed partial class N3ProjExportDialog : ContentDialog
             ProjectName = ProjectNameBox.Text.Trim(),
             DefaultFontSetName = DefaultFontBox.Text.Trim(),
             MergeFontSets = MergeFontsCheck.IsChecked == true,
+            MergeLayouts = MergeLayoutsCheck.IsChecked == true,
         };
         foreach (var row in Rows)
         {

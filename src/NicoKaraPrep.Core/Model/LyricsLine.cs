@@ -33,8 +33,23 @@ public sealed class LyricsLine
     /// <summary>行に適用するニコカラメーカーのフォント設定名の手動指定。null は自動（パート記号で判定）。</summary>
     public string? FontSetName { get; set; }
 
-    /// <summary>ニコカラメーカー3 書き出し用の手動設定を 1 つでも持つか。</summary>
-    public bool HasN3Overrides => ShowBeginCs is not null || ShowEndCs is not null || FontSetName is not null;
+    /// <summary>
+    /// 行のページに適用するニコカラメーカーのレイアウト設定名の手動指定。null は自動（ページの行数から選ぶ）。
+    /// ニコカラメーカー3 と同じくページ単位で効く（ページの中で最初に指定のある行のもの）。
+    /// </summary>
+    public string? LayoutName { get; set; }
+
+    /// <summary>
+    /// 行のページの文字の大きさの増減 px（0 = そのまま。ニコカラメーカー3 には無い NicoKaraPrep の機能）。ページ単位で効く（ページの中で最初に 0 以外を持つ行のもの）。
+    /// 書き出しでは、ページの文字に当たるフォント設定を、文字の大きさだけを変えたもの（<see cref="N3PageFontSize"/>）に置き換える。
+    /// </summary>
+    public int FontSizeDelta { get; set; }
+
+    /// <summary>文字単位のフォント設定名の手動指定（<see cref="CharUnit.FontSetName"/>）を 1 つでも持つか。</summary>
+    public bool HasCharFonts => Chars.Any(c => c.FontSetName is not null);
+
+    /// <summary>ニコカラメーカー3 書き出し用の手動設定（表示時刻・行のフォント・文字のフォント）を 1 つでも持つか。</summary>
+    public bool HasN3Overrides => ShowBeginCs is not null || ShowEndCs is not null || FontSetName is not null || LayoutName is not null || FontSizeDelta != 0 || HasCharFonts;
 
     /// <summary>空行（ページ区切り）かどうか。</summary>
     public bool IsEmpty => Chars.Count == 0 && EndTimeCs is null;
@@ -90,6 +105,8 @@ public sealed class LyricsLine
             ShowBeginCs = ShowBeginCs,
             ShowEndCs = ShowEndCs,
             FontSetName = FontSetName,
+            LayoutName = LayoutName,
+            FontSizeDelta = FontSizeDelta,
         };
         foreach (var c in Chars) l.Chars.Add(c.Clone());
         return l;

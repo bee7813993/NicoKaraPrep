@@ -1,0 +1,106 @@
+﻿<UserControl
+    x:Class="NicoKaraPrep.App.Views.FontSettings.FaceTable"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:vm="using:NicoKaraPrep.App.ViewModels">
+
+    <UserControl.Resources>
+        <!-- 数値の欄を 3 桁が入る幅まで詰めるため、入力欄の最小幅（既定 64px）を外す -->
+        <x:Double x:Key="TextControlThemeMinWidth">0</x:Double>
+        <Style x:Key="FaceHeader" TargetType="TextBlock">
+            <Setter Property="FontSize" Value="12" />
+            <Setter Property="Foreground" Value="{ThemeResource TextFillColorSecondaryBrush}" />
+            <Setter Property="VerticalAlignment" Value="Bottom" />
+        </Style>
+        <Style x:Key="FaceNumber" TargetType="NumberBox">
+            <Setter Property="FontSize" Value="12" />
+            <Setter Property="SpinButtonPlacementMode" Value="Hidden" />
+            <Setter Property="MinWidth" Value="0" />
+            <Setter Property="VerticalAlignment" Value="Center" />
+        </Style>
+    </UserControl.Resources>
+
+    <!--
+        文字種別フォント 6 行の表。列の幅は中身に合わせて詰める（フォントの列だけ 120〜260px で伸び縮みする）。
+        表が入りきらない狭い画面では横にスクロールする（幅は FaceTable.xaml.cs で合わせる）。
+    -->
+    <ScrollViewer
+        x:Name="TableScroll"
+        HorizontalScrollBarVisibility="Auto"
+        VerticalScrollBarVisibility="Disabled"
+        HorizontalScrollMode="Auto"
+        VerticalScrollMode="Disabled"
+        SizeChanged="OnTableScrollSizeChanged">
+        <StackPanel x:Name="TableRoot" Spacing="2" HorizontalAlignment="Left">
+            <Grid ColumnSpacing="4">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="60" />
+                    <ColumnDefinition Width="*" MinWidth="120" MaxWidth="260" />
+                    <ColumnDefinition Width="60" />
+                    <ColumnDefinition Width="60" />
+                    <ColumnDefinition Width="60" />
+                    <ColumnDefinition Width="32" />
+                    <ColumnDefinition Width="60" />
+                </Grid.ColumnDefinitions>
+                <TextBlock Text="種別" Style="{StaticResource FaceHeader}" />
+                <TextBlock Grid.Column="1" Text="フォント（押して選ぶ）" Style="{StaticResource FaceHeader}" />
+                <TextBlock Grid.Column="2" Text="サイズ" Style="{StaticResource FaceHeader}" />
+                <TextBlock Grid.Column="3" Text="横倍率" Style="{StaticResource FaceHeader}" />
+                <TextBlock Grid.Column="4" Text="縁" Style="{StaticResource FaceHeader}" />
+                <TextBlock Grid.Column="5" Text="縁 2" Style="{StaticResource FaceHeader}" />
+                <TextBlock Grid.Column="6" Text="縁 2 幅" Style="{StaticResource FaceHeader}" />
+            </Grid>
+            <ItemsControl x:Name="FaceRows" ItemsSource="{x:Bind ViewModel.Faces}" IsTabStop="False">
+                <ItemsControl.ItemTemplate>
+                    <DataTemplate x:DataType="vm:FaceRowViewModel">
+                        <Grid ColumnSpacing="4" Margin="0,2">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="60" />
+                                <ColumnDefinition Width="*" MinWidth="120" MaxWidth="260" />
+                                <ColumnDefinition Width="60" />
+                                <ColumnDefinition Width="60" />
+                                <ColumnDefinition Width="60" />
+                                <ColumnDefinition Width="32" />
+                                <ColumnDefinition Width="60" />
+                            </Grid.ColumnDefinitions>
+                            <TextBlock Text="{x:Bind Label}" FontSize="12" VerticalAlignment="Center" />
+                            <Button
+                                Grid.Column="1"
+                                HorizontalAlignment="Stretch"
+                                HorizontalContentAlignment="Left"
+                                Padding="8,2"
+                                Click="OnFontButtonClick"
+                                AutomationProperties.Name="{x:Bind FontLabel}"
+                                ToolTipService.ToolTip="{x:Bind FontToolTip, Mode=OneWay}">
+                                <StackPanel>
+                                    <TextBlock Text="{x:Bind FontLine, Mode=OneWay}" Opacity="{x:Bind FontLineOpacity, Mode=OneWay}" FontSize="12" TextTrimming="CharacterEllipsis" />
+                                    <TextBlock Text="{x:Bind FaceLine, Mode=OneWay}" FontSize="11" TextTrimming="CharacterEllipsis" Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+                                </StackPanel>
+                            </Button>
+                            <NumberBox Loaded="OnNumberBoxLoaded" Grid.Column="2" Style="{StaticResource FaceNumber}" AutomationProperties.Name="{x:Bind SizeLabel}" ToolTipService.ToolTip="{x:Bind SizeToolTip, Mode=OneWay}" Value="{x:Bind SizeValue, Mode=TwoWay}" PlaceholderText="{x:Bind SizePlaceholder, Mode=OneWay}" />
+                            <NumberBox Loaded="OnNumberBoxLoaded" Grid.Column="3" Style="{StaticResource FaceNumber}" AutomationProperties.Name="{x:Bind XScaleLabel}" ToolTipService.ToolTip="{x:Bind XScaleToolTip, Mode=OneWay}" Value="{x:Bind XScaleValue, Mode=TwoWay}" PlaceholderText="{x:Bind XScalePlaceholder, Mode=OneWay}" />
+                            <NumberBox Loaded="OnNumberBoxLoaded" Grid.Column="4" Style="{StaticResource FaceNumber}" AutomationProperties.Name="{x:Bind EdgeLabel}" ToolTipService.ToolTip="{x:Bind EdgeToolTip, Mode=OneWay}" Value="{x:Bind EdgeValue, Mode=TwoWay}" PlaceholderText="{x:Bind EdgePlaceholder, Mode=OneWay}" />
+                            <CheckBox
+                                Grid.Column="5"
+                                MinWidth="0"
+                                Width="32"
+                                Padding="0"
+                                HorizontalAlignment="Center"
+                                IsThreeState="True"
+                                IsChecked="{x:Bind Edge2State, Mode=TwoWay}"
+                                AutomationProperties.Name="{x:Bind Edge2Label}"
+                                ToolTipService.ToolTip="{x:Bind Edge2ToolTip, Mode=OneWay}" />
+                            <NumberBox Loaded="OnNumberBoxLoaded" Grid.Column="6" Style="{StaticResource FaceNumber}" AutomationProperties.Name="{x:Bind Edge2WidthLabel}" ToolTipService.ToolTip="{x:Bind Edge2WidthToolTip, Mode=OneWay}" Value="{x:Bind Edge2Value, Mode=TwoWay}" PlaceholderText="{x:Bind Edge2WidthPlaceholder, Mode=OneWay}" />
+                        </Grid>
+                    </DataTemplate>
+                </ItemsControl.ItemTemplate>
+            </ItemsControl>
+            <TextBlock
+                Margin="0,6,0,0"
+                TextWrapping="Wrap"
+                FontSize="12"
+                Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                Text="空欄は継承です（薄字が継承した値）。歌詞／かな・英数とルビ／漢字は歌詞／漢字を、ルビ／かな・英数はルビ／漢字を継承します。サイズ・縁・縁 2 幅は px（画面の高さ 1080 基準）、横倍率は %。縁 2 は ✓ が付ける、空欄が付けない、━ が継承です。ルビ／漢字のサイズ・縁・縁 2 幅の空欄は、NicoKaraPrep では歌詞の半分として書き出します（ニコカラメーカー3 の「継承」は歌詞と同じ大きさです）。" />
+        </StackPanel>
+    </ScrollViewer>
+</UserControl>

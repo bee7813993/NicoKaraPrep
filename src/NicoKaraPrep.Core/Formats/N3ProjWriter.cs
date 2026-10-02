@@ -54,6 +54,12 @@ public sealed class N3ProjExportOptions
 
     public bool MergeFontSets { get; set; } = true;
 
+    /// <summary>NicoKaraPrep で編集したレイアウト設定（同じ名前のベースのレイアウト設定に上書き、無い名前は追加）。</summary>
+    public IReadOnlyList<N3Layout> Layouts { get; set; } = Array.Empty<N3Layout>();
+
+    /// <summary><see cref="Layouts"/> をベースに合わせるか（false ならベースのレイアウト設定のまま）。</summary>
+    public bool MergeLayouts { get; set; } = true;
+
     /// <summary>ベース無し・フォント設定無しのときに作る唯一のフォント設定。</summary>
     public N3FontSet? DefaultFont { get; set; }
 
@@ -84,7 +90,8 @@ public sealed record N3ProjExportResult(
     IReadOnlyList<string> LyricsPaths,
     int LyricsLineCount,
     int FontSetCount,
-    IReadOnlyList<string> Warnings);
+    IReadOnlyList<string> Warnings,
+    IReadOnlyList<string>? SizedFontSets = null);
 
 /// <summary>
 /// ニコカラメーカー3 のプロジェクト（.n3proj）を書き出す。
@@ -137,9 +144,10 @@ public static class N3ProjWriter
             lrcPaths.Add(lrcPath);
         }
 
-        var root = BuildProjectJson(projectPath, sources, options, baseRoot, warnings, out int lineCount, out int fontCount);
+        var sized = new List<string>();
+        var root = BuildProjectJson(projectPath, sources, options, baseRoot, warnings, out int lineCount, out int fontCount, sized);
         SaveZip(projectPath, root);
-        return new N3ProjExportResult(projectPath, lrcPaths, lineCount, fontCount, warnings);
+        return new N3ProjExportResult(projectPath, lrcPaths, lineCount, fontCount, warnings, sized);
     }
 
     /// <summary>n3proj の ZIP を書く（エントリ "0" に BOM 付き UTF-8 の JSON）。</summary>
@@ -157,7 +165,29 @@ public static class N3ProjWriter
     /// <summary>歌詞設定タブと、書き出した lrc の内容。</summary>
     internal sealed record TabSource(N3ProjExportTab Tab, string LyricsPath, string LrcText, DateTime LyricsLastModified);
 
+    /// <summary>
+    /// 書き出すプロジェクトのフォント設定名の並び（<see cref="BuildProjectJson"/> が作る LyricsFonts と同じ順）。
+    /// ベースのフォント設定の順に、ベースに無い名前を後ろへ足す（合わせない設定ならベースのまま）。どちらも無ければ既定のフォント設定 1 件。
+    /// 行のフォントを決める <see cref="N3FontResolver"/> にはこの並びを渡す（書き出す前に、行ごとに当たるフォント設定を書き出しと同じに出すため）。
+    /// </summary>
+    public static List<string> ExportFontNames(IEnumerable<string> baseNames, IEnumerable<N3FontSet> fontSets, bool mergeFontSets, string defaultName = "標準")
+    {
+        var names = baseNames.ToList();
+        if (mergeFontSets)
+        {
+            var known = new HashSet<string>(names, StringComparer.Ordinal);
+            foreach (var f in fontSets)
+            {
+                if (string.IsNullOrWhiteSpace(f.Name) || !known.Add(f.Name)) continue;
+                names.Add(f.Name);
+            }
+        }
+        if (names.Count == 0) names.Add(defaultName);
+        return names;
+    }
+
     /// <summary>プロジェクト全体の JSON を組み立てる（ファイルは書かない）。</summary>
+    /// <param name="sizedFontSets">ページの文字の大きさの増減のために足した（置き直した）フォント設定の名前を入れる（null なら入れない）。</param>
     internal static JsonObject BuildProjectJson(
         string projectPath,
         IReadOnlyList<TabSource> sources,
@@ -165,7 +195,8 @@ public static class N3ProjWriter
         JsonObject? baseRoot,
         List<string> warnings,
         out int lineCount,
-        out int fontCount)
+        out int fontCount,
+        List<string>? sizedFontSets = null)
     {
         string ver = string.IsNullOrWhiteSpace(options.AppVersion) ? DefaultAppVersion : options.AppVersion;
         string projectDir = Path.GetDirectoryName(Path.GetFullPath(projectPath)) ?? "";
@@ -205,6 +236,10 @@ public static class N3ProjWriter
             layouts = NewDefaultLayouts(height, ver);
             root["LyricsLayouts"] = layouts;
         }
+        if (options.MergeLayouts)
+        {
+            foreach (var l in options.Layouts) MergeLayout(layouts, l, height, ver);
+        }
         RenumberSettings(layouts);
         var layoutInfos = layouts.Select((n, i) => new N3ProjLayoutInfo(
             n?["SettingsName"]?.GetValue<string>() ?? "",
@@ -220,18 +255,23 @@ public static class N3ProjWriter
         // ---- 歌詞設定 ----
         var infos = new JsonArray();
         lineCount = 0;
-        var fontResolver = new FontResolver(fontNames, options.DefaultFontSetName, options.ContinueFontAcrossLines);
+        // 全タブで 1 つを共有する（前のタブの最後のフォントを次のタブへ引き継ぐ。ニコカラメーカー3 の動作は未確認）
+        var fontResolver = new N3FontResolver(fontNames.Select(f => f.Name).ToList(), options.DefaultFontSetName, options.ContinueFontAcrossLines);
         var action = ResolveSubtitleAction(baseRoot, options.CharFadeSettings, ver);
+        // ページの文字の大きさの増減: 大きさだけを変えたフォント設定を、使うものだけ後ろへ足す（フォントを決める並びには入れない）
+        var sizeVariants = new FontSizeVariants(fonts, height, ver);
         for (int t = 0; t < sources.Count; t++)
         {
             var src = sources[t];
             var show = CloneShowSettings(options.ShowTime);
             show.TopLong = src.Tab.TopLong ?? options.ShowTime.TopLong;
             var layoutResolver = new LayoutResolver(layoutInfos, src.Tab.LayoutName, options.LayoutSelectableBegin, options.LayoutSelectableEnd, warnings, src.Tab.Name);
-            var lines = BuildLineInfos(src.Tab.Document, show, options.EmojiEntries, fontResolver, layoutResolver, action, ver, out int count);
+            var lines = BuildLineInfos(src.Tab.Document, show, options.EmojiEntries, fontResolver, layoutResolver, action, ver, out int count, sizeVariants);
             lineCount += count;
             infos.Add(BuildLyricsInfo(src, t, projectDir, lines, show, ver));
         }
+        fontCount = fonts.Count;
+        sizedFontSets?.AddRange(sizeVariants.Names);
         for (int t = sources.Count; t < 3; t++)
         {
             infos.Add(EmptyLyricsInfo(t, options.ShowTime, ver));
@@ -306,23 +346,36 @@ public static class N3ProjWriter
     /// 歌詞行（LineInfos）を生成する。空行の直前にページ区切り／段落区切りの合成行を挿入し、
     /// 各歌詞行に文字の時刻・フォント・レイアウト・表示時刻・字幕アクションを付ける。
     /// </summary>
+    /// <param name="sizeVariants">ページの文字の大きさの増減に使う、大きさを変えたフォント設定（null なら増減しない）。</param>
     internal static JsonArray BuildLineInfos(
         LyricsDocument doc,
         N3ShowTimeSettings show,
         IReadOnlyList<EmojiEntry> emoji,
-        FontResolver fonts,
+        N3FontResolver fonts,
         LayoutResolver layouts,
         (string Id, JsonObject Settings) action,
         string ver,
-        out int lyricCount)
+        out int lyricCount,
+        FontSizeVariants? sizeVariants = null)
     {
         var arr = new JsonArray();
         var plans = N3ShowTimePlanner.Plan(doc, show);
         var pages = doc.GetPages(show.PageMode, show.FixedLineCount);
+        var sizeDeltas = sizeVariants is null ? new Dictionary<int, int>() : N3PageFontSize.LineDeltas(doc, show.PageMode, show.FixedLineCount);
         var layoutOfLine = new Dictionary<int, int>();
         foreach (var page in pages)
         {
-            int layout = layouts.Resolve(page.Count);
+            // ページの中で最初に手動指定のある行のレイアウト（無い名前なら行数から選ぶ）
+            int? manual = null;
+            foreach (int i in page)
+            {
+                if (doc.Lines[i].LayoutName is { Length: > 0 } name && layouts.FindIndex(name) is int found)
+                {
+                    manual = found;
+                    break;
+                }
+            }
+            int layout = manual ?? layouts.Resolve(page.Count);
             foreach (int i in page) layoutOfLine[i] = layout;
         }
         var matcher = new EmojiMatcher(emoji.Select(e => e.ReplaceChar));
@@ -365,6 +418,10 @@ public static class N3ProjWriter
 
             var tokens = Tokenize(line, matcher);
             var fontByUnit = fonts.Resolve(line);
+            if (sizeVariants is not null && sizeDeltas.TryGetValue(i, out int delta))
+            {
+                for (int u = 0; u < fontByUnit.Length; u++) fontByUnit[u] = sizeVariants.Get(fontByUnit[u], delta);
+            }
             var chars = BuildCharInfos(tokens, fontByUnit, line.EndTimeCs);
             plans.TryGetValue(i, out var plan);
             arr.Add(LineInfo(
@@ -542,65 +599,10 @@ public static class N3ProjWriter
         SingleLinePromoteGapMs = s.SingleLinePromoteGapMs,
     };
 
-    // ------------------------------------------------------------ フォント選択（パート記号）
-
-    /// <summary>
-    /// ニコカラメーカーの「パート別にフォントを設定（歌詞の文字と同じ名称のフォント設定を適用する）」相当。
-    /// 行内にフォント設定名と同じ文字列（絵文字の置き換え文字列など）が現れると、そこから先の文字に
-    /// そのフォント設定を適用する。行ごとの手動指定（FontSetName）があればその行はそれで統一する。
-    /// </summary>
-    internal sealed class FontResolver
-    {
-        private readonly Dictionary<string, int> _byName = new(StringComparer.Ordinal);
-        private readonly EmojiMatcher _matcher;
-        private readonly int _default;
-        private readonly bool _continue;
-        private int _current;
-
-        public FontResolver(IEnumerable<(string Name, int Index)> names, string? defaultName, bool continueAcrossLines)
-        {
-            foreach (var (n, i) in names)
-            {
-                if (n.Length > 0 && !_byName.ContainsKey(n)) _byName[n] = i;
-            }
-            _matcher = new EmojiMatcher(_byName.Keys);
-            _default = defaultName is not null && _byName.TryGetValue(defaultName, out int d) ? d : 0;
-            _current = _default;
-            _continue = continueAcrossLines;
-        }
-
-        /// <summary>行の各 CharUnit に適用するフォント設定のインデックス。</summary>
-        public int[] Resolve(LyricsLine line)
-        {
-            var result = new int[line.Chars.Count];
-            if (!_continue) _current = _default;
-
-            var changes = new Dictionary<int, int>();
-            if (!_matcher.IsEmpty)
-            {
-                foreach (var occ in _matcher.FindOccurrences(line.Chars))
-                {
-                    changes[occ.Start] = _byName[occ.Value];
-                }
-            }
-            for (int i = 0; i < result.Length; i++)
-            {
-                if (changes.TryGetValue(i, out int idx)) _current = idx;
-                result[i] = _current;
-            }
-
-            if (line.FontSetName is string manual && _byName.TryGetValue(manual, out int m))
-            {
-                Array.Fill(result, m);
-            }
-            return result;
-        }
-    }
-
     // ------------------------------------------------------------ レイアウト選択（行数）
 
-    /// <summary>ニコカラメーカーの「行数に応じてレイアウトを設定」相当（固定名の指定も可）。</summary>
-    internal sealed class LayoutResolver
+    /// <summary>ニコカラメーカーの「行数に応じてレイアウトを設定」相当（固定名の指定も可）。字幕のプレビューも同じ選び方を使う。</summary>
+    public sealed class LayoutResolver
     {
         private readonly List<N3ProjLayoutInfo> _layouts;
         private readonly int? _fixed;
@@ -634,6 +636,14 @@ public static class N3ProjWriter
             }
         }
 
+        /// <summary>名前のレイアウト設定の番号（無ければ null）。</summary>
+        public int? FindIndex(string name) => _layouts.FirstOrDefault(l => l.Name == name)?.Index;
+
+        /// <summary>
+        /// ページの行数に応じたレイアウトの番号。ニコカラメーカー3 の「行数に応じてレイアウトを設定」と同じく、適用対象の範囲（環境設定）の中から、
+        /// ページの行数と同じ行数のものを選ぶ。範囲の中に無ければ、範囲の中で行数が多いもののうち最も少ないもの、それも無ければ範囲の中で最も行数の多いもの
+        /// （範囲の外のレイアウトは選ばない。範囲の外の 1 行のレイアウトがあっても、1 行のページは範囲の中の 2 行のレイアウトになる）。
+        /// </summary>
         public int Resolve(int lineCount)
         {
             if (_fixed is int f) return f;
@@ -641,11 +651,10 @@ public static class N3ProjWriter
             if (_cache.TryGetValue(lineCount, out int cached)) return cached;
 
             var inRange = _layouts.Where(l => l.Index >= _rangeBegin && l.Index <= _rangeEnd).ToList();
-            var pick = inRange.FirstOrDefault(l => l.LineCount == lineCount)
-                ?? _layouts.FirstOrDefault(l => l.LineCount == lineCount)
-                ?? inRange.Where(l => l.LineCount > lineCount).OrderBy(l => l.LineCount).FirstOrDefault()
-                ?? _layouts.Where(l => l.LineCount > lineCount).OrderBy(l => l.LineCount).FirstOrDefault()
-                ?? _layouts.OrderByDescending(l => l.LineCount).First();
+            var candidates = inRange.Count > 0 ? inRange : _layouts;
+            var pick = candidates.FirstOrDefault(l => l.LineCount == lineCount)
+                ?? candidates.Where(l => l.LineCount > lineCount).OrderBy(l => l.LineCount).FirstOrDefault()
+                ?? candidates.OrderByDescending(l => l.LineCount).First();
             _cache[lineCount] = pick.Index;
             return pick.Index;
         }
@@ -711,121 +720,259 @@ public static class N3ProjWriter
         "ワイプ前／文字色", "縁取り色", "縁取り 2 色", "飾り色",
     };
 
-    /// <summary>同名のフォント設定があればフォント・単色・文字飾りを上書きし、無ければ追加する。</summary>
+    /// <summary>新規のフォント設定で単色の色が未指定の箇所に入れる色。</summary>
+    private static readonly string[] DefaultBrushColors =
+    {
+        "FFFFFF", "000000", "FFFFFF", "000000",
+        "4DA3FF", "FFFFFF", "000000", "000000",
+    };
+
+    /// <summary>文字種別フォント 6 種の設定名と継承元の名前（ニコカラメーカーが保存する値と同じ）。</summary>
+    private static readonly (string Name, string Fallback)[] FaceNames =
+    {
+        ("歌詞／漢字", "デフォルトフォント"), ("かな", "歌詞／漢字"), ("英数", "歌詞／漢字"),
+        ("ルビ／漢字", "歌詞／漢字"), ("かな", "ルビ／漢字"), ("英数", "ルビ／漢字"),
+    };
+
+    /// <summary>
+    /// 同名のフォント設定があれば NicoKaraPrep 側の値で上書きし、無ければ追加する。
+    /// 上書きは値が変わる項目だけ書き換え、下位の Guid などはベースの値を残す。
+    /// 配色は未指定（<see cref="N3Brush.IsUnset"/>）の箇所を、歌詞／ルビのかな・英数は全項目が継承の行をベースのまま残す。
+    /// 歌詞／漢字・ルビ／漢字は全項目を書く。ただし全項目を持たないフォント（<see cref="N3FontSet.HasFullDetail"/> が false）は、
+    /// 従来の項目を必ず書き、それ以外の項目は継承ならベースのまま残す（<see cref="MergeFace"/>）。
+    /// テンプレート連動は、ベースが連動中で NicoKaraPrep 側でも連動中（編集していない同じ Guid のフォント）のときだけ残す。
+    /// </summary>
     private static void MergeFontSet(JsonArray fonts, N3FontSet f, int reference, string ver)
     {
         if (string.IsNullOrWhiteSpace(f.Name)) return;
         var existing = fonts.OfType<JsonObject>().FirstOrDefault(s => s["SettingsName"]?.GetValue<string>() == f.Name);
         if (existing is null)
         {
-            fonts.Add(NewFontSet(f, reference, ver));
+            fonts.Add(NewFontSet(f, reference, ver, fonts));
             return;
         }
 
+        var d = f.Detail;
         if (existing["FontInfos"] is JsonArray fis)
         {
-            if (fis.Count > 0 && fis[0] is JsonObject main)
+            for (int i = 0; i < N3FontDetail.FaceCount && i < fis.Count; i++)
             {
-                main["FontName"] = f.FontFamily;
-                main["FontFaceName"] = f.FontFace;
-                main["CharSize"] = SizeAndRatio(f.SizePx, reference);
-                main["EdgeSize"] = SizeAndRatio(f.EdgePx, reference);
-                main["UseEdge2"] = f.UseEdge2;
-                main["EdgeSize2"] = SizeAndRatio(f.Edge2Px, reference);
-                main["ModifyAppVer"] = ver;
-                main["LastModified"] = DateTime.UtcNow;
-            }
-            if (fis.Count > 3 && fis[3] is JsonObject ruby)
-            {
-                ruby["CharSize"] = SizeAndRatio(f.RubySizePx > 0 ? f.RubySizePx : f.SizePx / 2, reference);
-                ruby["EdgeSize"] = SizeAndRatio(f.RubyEdgePx > 0 ? f.RubyEdgePx : f.EdgePx / 2, reference);
+                if (fis[i] is not JsonObject face) continue;
+                if (i != 0 && i != 3 && d.Faces[i].IsInherited) continue;
+                if (MergeFace(face, d.Faces[i], FaceForExport(f, i), i, f.HasFullDetail, reference)) Touch(face, ver);
             }
         }
         if (existing["BrushInfos"] is JsonArray brushes)
         {
-            string[] colors =
+            for (int i = 0; i < N3FontDetail.BrushCount && i < brushes.Count; i++)
             {
-                f.TextColorAfter, f.EdgeColorAfter, f.Edge2ColorAfter, f.DecorColorAfter,
-                f.TextColorBefore, f.EdgeColorBefore, f.Edge2ColorBefore, f.DecorColorBefore,
-            };
-            for (int i = 0; i < colors.Length && i < brushes.Count; i++)
-            {
-                if (!N3FontSet.IsValidWeb16(colors[i]) || brushes[i] is not JsonObject b) continue;
-                b["SelectedBrushTypeIndex"] = 0;
-                b["SolidColor"] = ColorBind(colors[i], ver);
-                b["ModifyAppVer"] = ver;
+                if (d.Brushes[i].IsUnset || brushes[i] is not JsonObject b) continue;
+                if (MergeBrush(b, d.Brushes[i], DefaultBrushColors[i], ver)) Touch(b, ver);
             }
         }
-        existing["DecorKind"] = f.DecorKind;
-        existing["DecorSize"] = SizeAndRatio(f.DecorSizePx, reference);
-        existing["BlurLevel"] = f.BlurLevel;
-        existing["ModifyAppVer"] = ver;
-        existing["LastModified"] = DateTime.UtcNow;
+        SetInt(existing, "DecorKind", d.DecorKind, 0);
+        SetSize(existing, "DecorSize", d.DecorSizePx, reference, blankWhenZero: false);
+        SetInt(existing, "BlurLevel", d.BlurLevel, 2);
+        if (existing.ContainsKey("Synchronize"))
+        {
+            string baseGuid = N3FontJson.Str(existing["Guid"]) ?? "";
+            existing["Synchronize"] = (N3FontJson.Bool(existing["Synchronize"]) ?? false)
+                && f.NkmSynchronize
+                && string.Equals(f.NkmGuid, baseGuid, StringComparison.OrdinalIgnoreCase);
+        }
+        Touch(existing, ver);
+    }
+
+    /// <summary>
+    /// 文字種別フォント 1 行をマージする。変わった項目があれば true。
+    /// かな・英数（呼び出し側で全項目が継承の行を飛ばしたもの）と、全項目を持つフォントの歌詞／漢字・ルビ／漢字は全項目を書く。
+    /// 全項目を持たないフォント（旧版の設定・フォント設定ダイアログで作ったもの）の歌詞／漢字・ルビ／漢字は、
+    /// 従来の N3FontSet が持っていた項目（歌詞: フォント名・フェイス・サイズ・縁・縁 2 の有無・縁 2 の幅、ルビ: サイズ・縁）を必ず書き、
+    /// それ以外の項目（歌詞の横倍率、ルビのフォント名・フェイス・横倍率・縁 2 の有無・縁 2 の幅）は継承（空・0・null）ならベースのまま残す。
+    /// そのようなフォントの継承は「値を持っていない」だけなので、ニコカラメーカー側で設定したルビのフォントなどを消さないため。
+    /// </summary>
+    /// <param name="raw">NicoKaraPrep 側の値（継承かどうかの判定に使う）。</param>
+    /// <param name="src">書き出す値（<see cref="FaceForExport"/>。ルビ／漢字の 0 を歌詞の半分にしたもの）。</param>
+    /// <param name="fullDetail">全項目を持つフォントか（<see cref="N3FontSet.HasFullDetail"/>）。</param>
+    private static bool MergeFace(JsonObject face, N3FontFace raw, N3FontFace src, int index, bool fullDetail, int reference)
+    {
+        bool writeAll = fullDetail || index is not (0 or 3);
+        bool lyric = index == 0;
+        bool ShouldWrite(bool legacy, bool inherited) => writeAll || legacy || !inherited;
+
+        bool changed = false;
+        if (ShouldWrite(lyric, raw.FontName.Length == 0)) changed |= SetString(face, "FontName", src.FontName);
+        if (ShouldWrite(lyric, raw.FaceName.Length == 0)) changed |= SetString(face, "FontFaceName", src.FaceName);
+        changed |= SetSize(face, "CharSize", src.SizePx, reference, blankWhenZero: true);
+        if (ShouldWrite(false, raw.XScale == 0)) changed |= SetInt(face, "XScale", src.XScale, 0);
+        changed |= SetSize(face, "EdgeSize", src.EdgePx, reference, blankWhenZero: true);
+        if (ShouldWrite(lyric, raw.UseEdge2 is null) && N3FontJson.Bool(face["UseEdge2"]) != src.UseEdge2)
+        {
+            face["UseEdge2"] = src.UseEdge2;
+            changed = true;
+        }
+        if (ShouldWrite(lyric, raw.Edge2Px <= 0)) changed |= SetSize(face, "EdgeSize2", src.Edge2Px, reference, blankWhenZero: true);
+        return changed;
+    }
+
+    /// <summary>
+    /// 配色 1 箇所をマージする（塗りの種類・単色・マーカー・画像を丸ごと）。変わった項目があれば true。
+    /// 未指定の項目（単色の色が空、マーカーが空、塗りの種類が画像でない箇所の画像のパスが空）はベースのまま残す。
+    /// 単色の色が空で不透明度が 100% でなければ、ベースの色のまま不透明度だけを書く。
+    /// ニコカラメーカーは塗りの種類を戻すと前のマーカー・画像を使うので、見えていないデータも消さない。
+    /// </summary>
+    /// <param name="defaultColor">ベースに単色が無いときに使う色（新規の既定色）。</param>
+    private static bool MergeBrush(JsonObject b, N3Brush src, string defaultColor, string ver)
+    {
+        bool changed = SetInt(b, "SelectedBrushTypeIndex", src.Type, 0);
+
+        // 単色の色が未指定ならベースの単色を残す（不透明度だけ指定されていれば、それだけ書く）
+        string color = N3FontSet.NormalizeWeb16(src.Color);
+        int alpha = Math.Clamp(src.AlphaPercent, 0, 100);
+        if (color.Length == 0)
+        {
+            if (alpha != 100) changed |= SetSolidAlpha(b, alpha, defaultColor, ver);
+        }
+        else
+        {
+            if (b["SolidColor"] is not JsonObject sc)
+            {
+                b["SolidColor"] = ColorBind(color, ver, alpha);
+                changed = true;
+            }
+            else if (N3FontJson.SolidColorOf(sc) != (color, alpha))
+            {
+                N3FontSet.TryParseWeb16(color, out byte r, out byte g, out byte bl);
+                sc["DxColor"] = Color4(r / 255f, g / 255f, bl / 255f, alpha / 100f);
+                sc["Web16"] = color;
+                Touch(sc, ver);
+                changed = true;
+            }
+        }
+
+        // マーカーが空（未指定）ならベースのマーカーを残す（既定 3 点を書くのは新規だけ）
+        if (src.Stops.Count > 0 && !SameStops(N3FontJson.ParseStops(b["GradientStops"]), src.Stops))
+        {
+            b["GradientStops"] = GradientStops(src.Stops);
+            changed = true;
+        }
+
+        // 画像のパスが空で塗りの種類も画像でなければ、画像の設定（パス・拡大率）はベースのまま残す
+        if (src.BitmapPath.Length > 0 || src.Type == N3Brush.TypeBitmap)
+        {
+            changed |= SetString(b, "BitmapPath", src.BitmapPath);
+            changed |= SetInt(b, "BitmapScale", src.BitmapScale, 100);
+        }
+        return changed;
+    }
+
+    /// <summary>単色の不透明度だけを書く（色はベースのまま。ベースに単色が無ければ <paramref name="defaultColor"/>）。書いたら true。</summary>
+    private static bool SetSolidAlpha(JsonObject b, int alpha, string defaultColor, string ver)
+    {
+        if (b["SolidColor"] is not JsonObject sc)
+        {
+            b["SolidColor"] = ColorBind(defaultColor, ver, alpha);
+            return true;
+        }
+        var (baseColor, baseAlpha) = N3FontJson.SolidColorOf(sc);
+        if (baseAlpha == alpha) return false;
+        if (sc["DxColor"] is JsonObject dx)
+        {
+            dx["A"] = alpha / 100f;
+        }
+        else
+        {
+            N3FontSet.TryParseWeb16(baseColor.Length > 0 ? baseColor : defaultColor, out byte r, out byte g, out byte bl);
+            sc["DxColor"] = Color4(r / 255f, g / 255f, bl / 255f, alpha / 100f);
+        }
+        Touch(sc, ver);
+        return true;
     }
 
     /// <summary>フォント設定タブ 1 つ分を新規に作る（配色 8 件・フォントフェース 6 件）。</summary>
-    internal static JsonObject NewFontSet(N3FontSet f, int reference, string ver)
+    /// <param name="fonts">書き出し先のフォント設定（Guid が重なるときは新しい Guid にするため。null なら確かめない）。</param>
+    internal static JsonObject NewFontSet(N3FontSet f, int reference, string ver, JsonArray? fonts = null)
     {
-        string[] colors =
-        {
-            Or(f.TextColorAfter, "FFFFFF"), Or(f.EdgeColorAfter, "000000"), Or(f.Edge2ColorAfter, "FFFFFF"), Or(f.DecorColorAfter, "000000"),
-            Or(f.TextColorBefore, "4DA3FF"), Or(f.EdgeColorBefore, "FFFFFF"), Or(f.Edge2ColorBefore, "000000"), Or(f.DecorColorBefore, "000000"),
-        };
+        var d = f.Detail;
         var brushes = new JsonArray();
-        for (int i = 0; i < 8; i++)
+        for (int i = 0; i < N3FontDetail.BrushCount; i++)
         {
+            var src = d.Brushes[i];
+            string color = N3FontSet.NormalizeWeb16(src.Color);
             var b = new JsonObject
             {
-                ["SelectedBrushTypeIndex"] = 0,
-                ["SolidColor"] = ColorBind(colors[i], ver),
-                ["GradientStops"] = new JsonArray(
-                    GradientStop(0, 1f, 1f, 1f),
-                    GradientStop(0.5f, 0.5019608f, 0.5019608f, 0.5019608f),
-                    GradientStop(1, 0.5019608f, 0.5019608f, 0.5019608f)),
-                ["BitmapPath"] = "",
-                ["BitmapScale"] = 100,
+                ["SelectedBrushTypeIndex"] = src.Type,
+                ["SolidColor"] = ColorBind(color.Length > 0 ? color : DefaultBrushColors[i], ver, Math.Clamp(src.AlphaPercent, 0, 100)),
+                ["GradientStops"] = GradientStops(StopsForExport(src)),
+                ["BitmapPath"] = src.BitmapPath,
+                ["BitmapScale"] = src.BitmapScale,
             };
             AddSettingsName(b, BrushNames[i], 0);
             AddIdentity(b, ver, NoTime, "");
             brushes.Add(b);
         }
 
-        double rubySize = f.RubySizePx > 0 ? f.RubySizePx : f.SizePx / 2;
-        double rubyEdge = f.RubyEdgePx > 0 ? f.RubyEdgePx : f.EdgePx / 2;
-        var fontInfos = new JsonArray(
-            FontInfo("歌詞／漢字", f.FontFamily, f.FontFace, f.SizePx, f.EdgePx, f.UseEdge2, f.Edge2Px, "デフォルトフォント", reference, ver),
-            FontInfo("かな", "", "", null, null, null, null, "歌詞／漢字", reference, ver),
-            FontInfo("英数", "", "", null, null, null, null, "歌詞／漢字", reference, ver),
-            FontInfo("ルビ／漢字", "", "", rubySize, rubyEdge, null, f.Edge2Px / 2, "歌詞／漢字", reference, ver),
-            FontInfo("かな", "", "", null, null, null, null, "ルビ／漢字", reference, ver),
-            FontInfo("英数", "", "", null, null, null, null, "ルビ／漢字", reference, ver));
+        var fontInfos = new JsonArray();
+        for (int i = 0; i < N3FontDetail.FaceCount; i++)
+        {
+            fontInfos.Add(FontInfo(FaceNames[i].Name, FaceForExport(f, i), FaceNames[i].Fallback, reference, ver));
+        }
 
         var set = new JsonObject
         {
             ["BrushInfos"] = brushes,
             ["FontInfos"] = fontInfos,
-            ["DecorKind"] = f.DecorKind,
-            ["DecorSize"] = SizeAndRatio(f.DecorSizePx, reference),
-            ["BlurLevel"] = f.BlurLevel,
+            ["DecorKind"] = d.DecorKind,
+            ["DecorSize"] = SizeAndRatio(d.DecorSizePx, reference),
+            ["BlurLevel"] = d.BlurLevel,
         };
         AddSettingsName(set, f.Name, 0);
         AddIdentity(set, ver, DateTime.UtcNow, "");
+
+        // 取り込んだフォントはニコカラメーカーの Guid を引き継ぐ（テンプレート連動は Guid で行われる）
+        if (Guid.TryParse(f.NkmGuid, out var nkmGuid))
+        {
+            string guid = nkmGuid.ToString();
+            bool used = fonts is not null && fonts.OfType<JsonObject>()
+                .Any(o => string.Equals(N3FontJson.Str(o["Guid"]), guid, StringComparison.OrdinalIgnoreCase));
+            if (!used)
+            {
+                set["Guid"] = guid;
+                set["Synchronize"] = f.NkmSynchronize;
+            }
+        }
         return set;
     }
 
-    private static string Or(string value, string fallback) => N3FontSet.IsValidWeb16(value) ? value.Trim().TrimStart('#').ToUpperInvariant() : fallback;
+    /// <summary>
+    /// 書き出す文字種別フォント 1 行。ルビ／漢字のサイズ・縁・縁 2 の 0 は歌詞／漢字（実効値）の半分にする（NicoKaraPrep の従来仕様）。
+    /// それ以外の 0・空・null は継承のまま書く。ただし全項目を持たないフォントのマージでは、ルビ／漢字の縁 2 の 0 はベースのまま残す
+    /// （<see cref="MergeFace"/>。従来どおり）。
+    /// </summary>
+    private static N3FontFace FaceForExport(N3FontSet f, int index)
+    {
+        var face = f.Detail.Faces[index].Clone();
+        if (index == 3)
+        {
+            var lyric = N3FontLibrary.EffectiveFace(f, 0);
+            if (face.SizePx <= 0) face.SizePx = lyric.SizePx / 2;
+            if (face.EdgePx <= 0) face.EdgePx = lyric.EdgePx / 2;
+            if (face.Edge2Px <= 0) face.Edge2Px = lyric.Edge2Px / 2;
+        }
+        return face;
+    }
 
-    private static JsonObject FontInfo(string name, string fontName, string face, double? sizePx, double? edgePx, bool? useEdge2, double? edge2Px, string fallback, int reference, string ver)
+    private static JsonObject FontInfo(string name, N3FontFace face, string fallback, int reference, string ver)
     {
         var o = new JsonObject
         {
-            ["FontName"] = fontName,
-            ["FontFaceName"] = face,
-            ["CharSize"] = sizePx is double s ? SizeAndRatio(s, reference) : BlankSize(),
-            ["XScale"] = 0,
-            ["EdgeSize"] = edgePx is double e ? SizeAndRatio(e, reference) : BlankSize(),
-            ["UseEdge2"] = useEdge2,
-            ["EdgeSize2"] = edge2Px is double e2 ? SizeAndRatio(e2, reference) : BlankSize(),
+            ["FontName"] = face.FontName,
+            ["FontFaceName"] = face.FaceName,
+            ["CharSize"] = FaceSize(face.SizePx, reference),
+            ["XScale"] = face.XScale,
+            ["EdgeSize"] = FaceSize(face.EdgePx, reference),
+            ["UseEdge2"] = face.UseEdge2,
+            ["EdgeSize2"] = FaceSize(face.Edge2Px, reference),
             ["FallbackName"] = fallback,
         };
         AddSettingsName(o, name, 0);
@@ -833,9 +980,152 @@ public static class N3ProjWriter
         return o;
     }
 
+    /// <summary>文字種別フォントのサイズ（0 以下は継承を表す空のサイズ）。</summary>
+    private static JsonObject FaceSize(double px, int reference) => px > 0 ? SizeAndRatio(px, reference) : BlankSize();
+
+    /// <summary>書き出すマーカー（未指定ならニコカラメーカーの既定 3 点）。</summary>
+    private static List<N3GradientStop> StopsForExport(N3Brush b) => b.Stops.Count > 0 ? b.Stops : N3Brush.DefaultStops();
+
+    private static JsonArray GradientStops(IEnumerable<N3GradientStop> stops)
+    {
+        var arr = new JsonArray();
+        foreach (var s in stops) arr.Add(GradientStop((float)s.Position, s.Color, s.AlphaPercent));
+        return arr;
+    }
+
+    private static bool SameStops(List<N3GradientStop> a, List<N3GradientStop> b)
+    {
+        if (a.Count != b.Count) return false;
+        for (int i = 0; i < a.Count; i++)
+        {
+            if (Math.Abs(a[i].Position - b[i].Position) > 1e-6 ||
+                a[i].Color != N3FontSet.NormalizeWeb16(b[i].Color) ||
+                a[i].AlphaPercent != Math.Clamp(b[i].AlphaPercent, 0, 100))
+            {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    /// <summary>文字列の項目を書く（同じ値なら書かず、ベースに無い項目を空で足すこともしない）。書いたら true。</summary>
+    private static bool SetString(JsonObject o, string key, string value)
+    {
+        string? current = N3FontJson.Str(o[key]);
+        if (current == value || (current is null && !o.ContainsKey(key) && value.Length == 0)) return false;
+        o[key] = value;
+        return true;
+    }
+
+    /// <summary>整数の項目を書く（同じ値なら書かず、ベースに無い項目を既定値で足すこともしない）。書いたら true。</summary>
+    private static bool SetInt(JsonObject o, string key, int value, int valueWhenMissing)
+    {
+        if (!o.ContainsKey(key) ? value == valueWhenMissing : N3FontJson.Int(o[key]) == value) return false;
+        o[key] = value;
+        return true;
+    }
+
+    /// <summary>SizeAndRatio の項目を書く（読み取ると同じ px になるなら書かない）。書いたら true。</summary>
+    private static bool SetSize(JsonObject o, string key, double px, int reference, bool blankWhenZero)
+    {
+        px = Math.Max(0, px);
+        if (Math.Abs(N3FontJson.SizePx(o[key], reference) - px) < 1e-6) return false;
+        o[key] = blankWhenZero ? FaceSize(px, reference) : SizeAndRatio(px, reference);
+        return true;
+    }
+
+    /// <summary>変更した項目の LastModified / ModifyAppVer を更新する。</summary>
+    private static void Touch(JsonObject o, string ver)
+    {
+        o["ModifyAppVer"] = ver;
+        o["LastModified"] = DateTime.UtcNow;
+    }
+
     // ------------------------------------------------------------ レイアウト・タイトル
 
-    private static JsonArray NewDefaultLayouts(int reference, string ver)
+    /// <summary>
+    /// 編集したレイアウト設定 1 件をベースのレイアウト設定（LyricsLayouts）へ合わせる。同じ名前があればその項目を書き換え（Guid などはそのまま）、
+    /// 無ければ足す。行ごとの左右配置は、ある行の Guid を残して数と値を合わせる。
+    /// </summary>
+    private static void MergeLayout(JsonArray layouts, N3Layout l, int reference, string ver)
+    {
+        if (string.IsNullOrWhiteSpace(l.Name)) return;
+        var existing = layouts.OfType<JsonObject>().FirstOrDefault(o => o["SettingsName"]?.GetValue<string>() == l.Name);
+        if (existing is null)
+        {
+            var o = Layout(l.Name, l.VerticalAlignment, l.HorizontalAlignments.ToArray(), reference, ver);
+            ApplyLayout(o, l, reference);
+            layouts.Add(o);
+            return;
+        }
+        if (ApplyLayout(existing, l, reference)) Touch(existing, ver);
+        if (existing["HorizontalAlignments"] is not JsonArray aligns)
+        {
+            aligns = new JsonArray();
+            existing["HorizontalAlignments"] = aligns;
+        }
+        bool changed = false;
+        for (int i = 0; i < l.HorizontalAlignments.Count; i++)
+        {
+            int value = l.HorizontalAlignments[i];
+            if (i < aligns.Count && aligns[i] is JsonObject a)
+            {
+                if (N3FontJson.Int(a["HorizontalLayoutAlignment"]) == value) continue;
+                a["HorizontalLayoutAlignment"] = value;
+                Touch(a, ver);
+                changed = true;
+            }
+            else
+            {
+                var a2 = new JsonObject { ["HorizontalLayoutAlignment"] = value };
+                AddIdentity(a2, ver, NoTime, "");
+                aligns.Add(a2);
+                changed = true;
+            }
+        }
+        while (aligns.Count > l.HorizontalAlignments.Count)
+        {
+            aligns.RemoveAt(aligns.Count - 1);
+            changed = true;
+        }
+        if (changed) Touch(existing, ver);
+    }
+
+    /// <summary>レイアウト設定の項目（行ごとの左右配置以外）を書く。変わった項目があれば true。</summary>
+    private static bool ApplyLayout(JsonObject o, N3Layout l, int reference)
+    {
+        bool changed = SetInt(o, "SelectedVerticalAlignmentIndex", Math.Clamp(l.VerticalAlignment, 0, 2), 2);
+        changed |= SetLayoutSize(o, "LineSpace", l.LineSpacePx, reference);
+        changed |= SetInt(o, "SmartHorizon", Math.Clamp(l.SmartHorizon, 0, 2), 0);
+        changed |= SetLayoutSize(o, "VerticalMargin", l.VerticalMarginPx, reference);
+        changed |= SetLayoutSize(o, "HorizontalMargin", l.HorizontalMarginPx, reference);
+        changed |= SetLayoutSize(o, "LyricsInterval", l.LyricsIntervalPx, reference);
+        if (N3FontJson.Bool(o["AllowBiting"]) != l.AllowBiting)
+        {
+            o["AllowBiting"] = l.AllowBiting;
+            changed = true;
+        }
+        changed |= SetLayoutSize(o, "RubyInterval", l.RubyIntervalPx, reference);
+        changed |= SetInt(o, "RubyAlignment", Math.Clamp(l.RubyAlignment, 0, 2), 0);
+        changed |= SetLayoutSize(o, "LyricsAndRubyInterval", l.LyricsAndRubyIntervalPx, reference);
+        return changed;
+    }
+
+    /// <summary>レイアウト設定の大きさ（マイナスも可）を書く。変わったら true。</summary>
+    private static bool SetLayoutSize(JsonObject o, string key, double px, int reference)
+    {
+        if (!double.IsFinite(px)) px = 0;
+        if (o.ContainsKey(key) && Math.Abs(N3FontJson.SizePx(o[key], reference) - px) < 0.05) return false;
+        o[key] = new JsonObject
+        {
+            ["Size"] = (int)Math.Round(px),
+            ["Reference"] = reference,
+            ["Ratio"] = reference > 0 ? px / reference : 0.0,
+        };
+        return true;
+    }
+
+    internal static JsonArray NewDefaultLayouts(int reference, string ver)
     {
         var arr = new JsonArray
         {
@@ -973,8 +1263,102 @@ public static class N3ProjWriter
     /// <summary>未指定（継承）を表す SizeAndRatio。</summary>
     private static JsonObject BlankSize() => new() { ["Size"] = 0, ["Reference"] = 0, ["Ratio"] = 0 };
 
-    /// <summary>ColorBindModel（DxColor + Web16）。</summary>
-    internal static JsonObject ColorBind(string web16, string ver)
+    /// <summary>
+    /// ページの文字の大きさの増減のための、文字の大きさだけを変えたフォント設定（<see cref="N3PageFontSize"/>）。
+    /// 書き出すフォント設定（LyricsFonts）の 1 件を複製して文字サイズだけを変え、「（麻衣）+4」のような名前で後ろへ足す。
+    /// 同じ名前が既にあれば（前の書き出しをベースにしたとき）、その位置に作り直して置く。テンプレート連動は外す。
+    /// </summary>
+    internal sealed class FontSizeVariants
+    {
+        private readonly JsonArray _fonts;
+        private readonly int _reference;
+        private readonly string _ver;
+        private readonly Dictionary<(int Index, int Delta), int> _made = new();
+
+        public FontSizeVariants(JsonArray fonts, int reference, string ver)
+        {
+            _fonts = fonts;
+            _reference = reference;
+            _ver = ver;
+        }
+
+        /// <summary>足した（置き直した）フォント設定の名前（作った順）。</summary>
+        public List<string> Names { get; } = new();
+
+        /// <summary>フォント設定 <paramref name="index"/> の文字の大きさを <paramref name="delta"/> px 変えたフォント設定の番号（作っていなければ作る）。</summary>
+        public int Get(int index, int delta)
+        {
+            if (delta == 0 || index < 0 || index >= _fonts.Count || _fonts[index] is not JsonObject source) return index;
+            if (_made.TryGetValue((index, delta), out int made)) return made;
+
+            string name = N3PageFontSize.DerivedName(N3FontJson.Str(source["SettingsName"]) ?? "", delta);
+            var sizes = N3PageFontSize.OffsetFaceSizes(N3FontJson.ParseFontSet(source, _reference), delta);
+            var derived = (JsonObject)source.DeepClone();
+            if (derived["FontInfos"] is JsonArray faces)
+            {
+                for (int i = 0; i < faces.Count && i < sizes.Length; i++)
+                {
+                    if (sizes[i] > 0 && faces[i] is JsonObject face) face["CharSize"] = SizeAndRatio(sizes[i], _reference);
+                }
+            }
+            NewGuids(derived);
+            derived["SettingsName"] = name;
+            derived["Synchronize"] = false;
+            derived["SynchronizedTime"] = NoTime;
+            derived["LastModified"] = DateTime.UtcNow;
+            derived["ModifyAppVer"] = _ver;
+
+            int existing = -1;
+            for (int i = 0; i < _fonts.Count; i++)
+            {
+                if (i != index && _fonts[i] is JsonObject o && N3FontJson.Str(o["SettingsName"]) == name)
+                {
+                    existing = i;
+                    break;
+                }
+            }
+            int result = existing >= 0 ? existing : _fonts.Count;
+            derived["Index"] = result;
+            if (existing >= 0)
+            {
+                _fonts[existing] = derived;
+            }
+            else
+            {
+                _fonts.Add(derived);
+            }
+            _made[(index, delta)] = result;
+            Names.Add(name);
+            return result;
+        }
+
+        /// <summary>複製の中の Guid をすべて新しくする（元のフォント設定と同じ Guid を持たせない）。</summary>
+        private static void NewGuids(JsonNode? node)
+        {
+            switch (node)
+            {
+                case JsonObject o:
+                    foreach (var key in o.Select(p => p.Key).ToList())
+                    {
+                        if (key == "Guid" && o[key] is JsonValue)
+                        {
+                            o[key] = Guid.NewGuid().ToString();
+                        }
+                        else
+                        {
+                            NewGuids(o[key]);
+                        }
+                    }
+                    break;
+                case JsonArray a:
+                    foreach (var item in a) NewGuids(item);
+                    break;
+            }
+        }
+    }
+
+    /// <summary>ColorBindModel（DxColor + Web16）。R/G/B は byte/255、A は不透明度 % / 100。</summary>
+    internal static JsonObject ColorBind(string web16, string ver, int alphaPercent = 100)
     {
         if (!N3FontSet.TryParseWeb16(web16, out byte r, out byte g, out byte b))
         {
@@ -982,14 +1366,14 @@ public static class N3ProjWriter
         }
         var o = new JsonObject
         {
-            ["DxColor"] = Color4(r / 255f, g / 255f, b / 255f),
+            ["DxColor"] = Color4(r / 255f, g / 255f, b / 255f, Math.Clamp(alphaPercent, 0, 100) / 100f),
             ["Web16"] = $"{r:X2}{g:X2}{b:X2}",
         };
         AddIdentity(o, ver, NoTime, "");
         return o;
     }
 
-    private static JsonObject Color4(float r, float g, float b)
+    private static JsonObject Color4(float r, float g, float b, float a)
     {
         float sum = r + g + b;
         return new JsonObject
@@ -997,18 +1381,25 @@ public static class N3ProjWriter
             ["R"] = r,
             ["G"] = g,
             ["B"] = b,
-            ["A"] = 1f,
+            ["A"] = a,
             ["SumRGB"] = sum,
             ["Average"] = sum / 3f,
             ["Luma"] = 0.299f * r + 0.587f * g + 0.114f * b,
         };
     }
 
-    private static JsonObject GradientStop(float position, float r, float g, float b) => new()
+    private static JsonObject GradientStop(float position, string web16, int alphaPercent)
     {
-        ["Position"] = position,
-        ["Color"] = Color4(r, g, b),
-    };
+        if (!N3FontSet.TryParseWeb16(web16, out byte r, out byte g, out byte b))
+        {
+            r = g = b = 0;
+        }
+        return new JsonObject
+        {
+            ["Position"] = position,
+            ["Color"] = Color4(r / 255f, g / 255f, b / 255f, Math.Clamp(alphaPercent, 0, 100) / 100f),
+        };
+    }
 
     private static string RelativePath(string baseDir, string path)
     {

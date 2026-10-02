@@ -45,24 +45,56 @@ public partial class LineViewModel : ObservableObject
         }
     }
 
-    // 幅チェックに適用中のフォント（全行共通。n3proj 取り込み結果の確認用）
-    [ObservableProperty]
-    private string fontText = "";
+    // 横幅の判定（横幅の欄のツールチップに画面の横幅・左右余白を出す）
+    private LineWidthResult? _widthResult;
 
-    [ObservableProperty]
-    private string fontSizeText = "";
+    /// <summary>横幅の欄のツールチップ。</summary>
+    public string WidthToolTip =>
+        "横幅 px（字幕のプレビューと同じ並べ方で、この行に当たるフォント設定で測った幅）と、" +
+        "ページのレイアウト設定の左右余白を除いた幅に対する使用率。90% 超はオレンジで予告"
+        + (_widthResult is { } r ? $"\n画面 {r.ScreenWidthPx}px・左右余白 {r.SideMarginPx:F0}px（余白を除いた幅 {r.UsableWidthPx:F0}px）" : "");
 
-    public void SetFontInfo(string family, double sizePx)
+    /// <summary>この行に当たるフォント設定（n3proj の書き出しと同じ決め方。チェックのたびに更新する）。</summary>
+    [ObservableProperty]
+    private LineFontDisplay appliedFont = LineFontDisplay.None;
+
+    /// <summary>この行のページのレイアウト設定名（手動指定なら先頭に ✎。チェックのたびに更新する）。表示時刻が決まらない行は空。</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(HasLayoutText))]
+    private string layoutText = "";
+
+    /// <summary>レイアウトの決まり方の説明（ツールチップ）。</summary>
+    [ObservableProperty]
+    private string layoutToolTip = "";
+
+    public bool HasLayoutText => LayoutText.Length > 0;
+
+    /// <summary>歌詞を字幕の見た目で描く材料（null なら文字のまま表示する）。チェックのたびに更新する。</summary>
+    public Services.Subtitles.LineRenderSource? RenderSource { get; private set; }
+
+    /// <summary>歌詞を字幕の見た目で描くか。</summary>
+    public bool ShowStyledText => RenderSource is not null;
+
+    /// <summary>歌詞を文字のまま表示するか。</summary>
+    public bool ShowPlainText => RenderSource is null;
+
+    /// <summary>字幕の見た目で描く材料を設定する（描く内容が同じなら何もしない）。</summary>
+    public void SetRenderSource(Services.Subtitles.LineRenderSource? source)
     {
-        if (Model.IsEmpty)
+        if (source is null ? RenderSource is null : RenderSource is not null && RenderSource.Key == source.Key && ReferenceEquals(RenderSource.Line, source.Line)) return;
+        bool styledChanged = (source is null) != (RenderSource is null);
+        RenderSource = source;
+        OnPropertyChanged(nameof(RenderSource));
+        if (styledChanged)
         {
-            FontText = "";
-            FontSizeText = "";
-            return;
+            OnPropertyChanged(nameof(ShowStyledText));
+            OnPropertyChanged(nameof(ShowPlainText));
         }
-        FontText = family;
-        FontSizeText = $"{sizePx:F0}";
     }
+
+    /// <summary>行リストで選んでいる文字（<see cref="LyricsLine.Chars"/> の添字の範囲、両端を含む）。無ければ null。</summary>
+    [ObservableProperty]
+    private (int Start, int End)? charSelection;
 
     /// <summary>表示テキスト（空行は視認用の記号。タグだけが残った行は注意書きを出す）。</summary>
     public string DisplayText
@@ -121,7 +153,13 @@ public partial class LineViewModel : ObservableObject
 
     public void SetWidthResult(LineWidthResult? result)
     {
-        if (result is null || Model.IsEmpty)
+        if (result is null || Model.IsEmpty) result = null;
+        if (!Equals(_widthResult, result))
+        {
+            _widthResult = result;
+            OnPropertyChanged(nameof(WidthToolTip));
+        }
+        if (result is null)
         {
             WidthText = "";
             WidthGlyph = "";
@@ -280,6 +318,7 @@ public partial class LineViewModel : ObservableObject
         newModel.ShowBeginCs = Model.ShowBeginCs;
         newModel.ShowEndCs = Model.ShowEndCs;
         newModel.FontSetName = Model.FontSetName;
+        newModel.LayoutName = Model.LayoutName;
         Model = newModel;
         RaiseAllChanged();
     }

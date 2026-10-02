@@ -18,6 +18,9 @@ public sealed class N3ProjImportChoices
     /// <summary>ニコカラメーカーで調整された表示時刻を、行ごとの手動指定として取り込む。</summary>
     public bool LineShowTimes { get; set; }
 
+    /// <summary>ニコカラメーカーで設定したページのレイアウトを、自動で選ぶものと違うページだけ、ページの手動指定として取り込む。</summary>
+    public bool PageLayouts { get; set; }
+
     /// <summary>n3proj 書き出しのベースにする。</summary>
     public bool ExportBase { get; set; }
 
@@ -42,6 +45,75 @@ public partial class MainViewModel
     {
         int intervalHint = Nkm3Env?.IntervalMs ?? (int)Math.Round(Settings.N3IntervalSeconds * 1000);
         return N3ProjImport.Analyze(path, intervalHint);
+    }
+
+    /// <summary>
+    /// n3proj の 2 つ目以降の歌詞設定（コーラスなど）の歌詞ファイルを、自分のファイルを持つタブとして開く
+    /// （上書き保存ではそれぞれのファイルへ保存し、メインの歌詞ファイルには含めない）。
+    /// 同じ名前のタブ・同じファイルを開いているタブがあれば開かない。タブの歌詞行がみな同じレイアウト設定なら、
+    /// そのタブのレイアウト（n3proj の書き出しの設定）にする（決めていなければ）。
+    /// 戻り値は開いたタブの名前と、歌詞ファイルが見つからない・読めなかったタブの名前。
+    /// </summary>
+    public (List<string> Opened, List<string> Missing) OpenProjectExtraTabs(N3ProjImportPreview preview)
+    {
+        StoreActiveTab();
+        var opened = new List<string>();
+        var missing = new List<string>();
+        foreach (var source in preview.Tabs.Skip(1))
+        {
+            string? path = N3ProjImport.FindLyricsFile(preview.Path, source);
+            string name = source.Name.Length > 0 ? source.Name
+                : Path.GetFileNameWithoutExtension(source.LyricsRelativePath ?? source.LyricsPath ?? "") is { Length: > 0 } fileName ? fileName
+                : $"パート{Tabs.Count}";
+            if (path is null)
+            {
+                missing.Add(name);
+                continue;
+            }
+            bool already = Tabs.Any(t => t.Name == name
+                || SameFile(t.CopyFilePath, path)
+                || (t.IsMain && SameFile(t.FilePath, path)));
+            if (already) continue;
+
+            LyricsDocument doc;
+            try
+            {
+                doc = ReadLyricsFile(path);
+            }
+            catch (Exception)
+            {
+                missing.Add(name); // 読めないファイルは開かない（ほかのタブは開く）
+                continue;
+            }
+            Tabs.Add(new TabState
+            {
+                Name = name,
+                Document = doc,
+                Format = FormatFromExtension(path),
+                CopyFilePath = path,
+                OwnFile = true,
+            });
+            if (source.LayoutName is { Length: > 0 } layout && !N3ProjSettings.TabLayouts.ContainsKey(name))
+            {
+                N3ProjSettings.TabLayouts[name] = layout;
+            }
+            opened.Add(name);
+        }
+        if (opened.Count > 0) SaveProject();
+        return (opened, missing);
+    }
+
+    private static bool SameFile(string? a, string? b)
+    {
+        if (string.IsNullOrEmpty(a) || string.IsNullOrEmpty(b)) return false;
+        try
+        {
+            return string.Equals(Path.GetFullPath(a), Path.GetFullPath(b), StringComparison.OrdinalIgnoreCase);
+        }
+        catch (Exception e) when (e is ArgumentException or NotSupportedException or PathTooLongException)
+        {
+            return string.Equals(a, b, StringComparison.OrdinalIgnoreCase);
+        }
     }
 
     /// <summary>表示時刻の設定値を取り込んだ場合の、タブごとの表示時刻計算の設定。</summary>
@@ -74,6 +146,67 @@ public partial class MainViewModel
             count += N3ProjImport.ApplyShowTimes(tab.Document.Clone(), matched, settings).Count;
         }
         return count;
+    }
+
+    /// <summary>
+    /// 「ページのレイアウトを取り込む」を選んだときに手動指定になるページの数（試算。読み込むプロジェクトを書き出しのベースにした場合のレイアウトの並びで比べる）。
+    /// </summary>
+    public int CountPageLayoutImports(N3ProjImportPreview preview)
+    {
+        StoreActiveTab();
+        var layouts = EffectiveLayoutsFor(preview.Path);
+        int count = 0;
+        foreach (var tab in Tabs)
+        {
+            var (source, _) = N3ProjImport.FindSource(tab.Document, tab.Name, preview.Tabs);
+            if (source is not null) count += PageLayoutDifferences(tab, source, layouts).Count;
+        }
+        return count;
+    }
+
+    /// <summary>
+    /// ニコカラメーカーで設定したページのレイアウトが、NicoKaraPrep が自動で選ぶもの（行数に応じたレイアウト・タブに固定したレイアウト）と違うページ
+    /// （ページの行の添字と、ニコカラメーカーのレイアウト名）。手動で指定したページ・歌詞が一致しないページ・ベースに無い名前は含めない。
+    /// </summary>
+    private List<(List<int> Lines, string Layout)> PageLayoutDifferences(TabState tab, N3ProjSourceTab source, List<N3LayoutSettings> layouts)
+    {
+        var result = new List<(List<int>, string)>();
+        if (layouts.Count == 0) return result;
+        var map = N3ProjImport.MatchLineIndexes(tab.Document, source);
+        if (map.Count == 0) return result;
+        var plans = N3ShowTimePlanner.Plan(tab.Document, CreateShowTimeSettings(tab.Name));
+        string? fixedLayout = N3ProjSettings.TabLayouts.GetValueOrDefault(tab.Name) is { Length: > 0 } fl ? fl : null;
+        var resolver = new N3ProjWriter.LayoutResolver(layouts.Select(l => l.Info).ToList(), fixedLayout,
+            Nkm3Env?.LayoutSelectableBegin, Nkm3Env?.LayoutSelectableEnd, new List<string>(), tab.Name);
+        foreach (var page in plans.GroupBy(p => p.Value.PageIndex))
+        {
+            var lines = page.Select(p => p.Key).OrderBy(i => i).ToList();
+            if (lines.Any(i => tab.Document.Lines[i].LayoutName is { Length: > 0 } n && resolver.FindIndex(n) is not null)) continue; // 手動の指定はそのまま
+            string? nkm3 = lines
+                .Select(i => map.TryGetValue(i, out int s) && s < source.LayoutNames.Count ? source.LayoutNames[s] : null)
+                .FirstOrDefault(n => n is not null);
+            if (nkm3 is null || resolver.FindIndex(nkm3) is null) continue;
+            string auto = layouts[Math.Clamp(resolver.Resolve(lines.Count), 0, layouts.Count - 1)].Name;
+            if (auto != nkm3) result.Add((lines, nkm3));
+        }
+        return result;
+    }
+
+    /// <summary>n3proj を書き出しのベースにした場合のレイアウト設定の並び（読めなければ今の並び）。</summary>
+    private List<N3LayoutSettings> EffectiveLayoutsFor(string projectPath)
+    {
+        try
+        {
+            var root = N3ProjFormat.ReadJsonObject(projectPath);
+            var (_, height) = N3LayoutReader.ScreenSize(root);
+            var baseLayouts = N3LayoutReader.Read(root, height);
+            if (baseLayouts.Count == 0) baseLayouts = N3LayoutReader.Defaults(height);
+            return N3LayoutLibrary.Effective(baseLayouts, Settings.N3Layouts, N3ProjSettings.MergeLayouts);
+        }
+        catch (Exception)
+        {
+            return GetEffectiveLayouts();
+        }
     }
 
     /// <summary>歌詞行が n3proj の歌詞行に対応する数（全タブの合計）と歌詞行の総数。</summary>
@@ -165,6 +298,35 @@ public partial class MainViewModel
             done.Add("書き出しのベース");
         }
 
+        // 5') ページのレイアウト（ニコカラメーカーで設定したもの）→ 自動で選ぶものと違うページだけ、ページの手動指定に
+        //     （ベースを変えたあとのレイアウトの並びで比べる。ニコカラメーカーの「適用対象レイアウト」の範囲は曲ごとに違うことがあるため）
+        if (choices.PageLayouts)
+        {
+            var layouts = GetEffectiveLayouts();
+            int pages = 0;
+            foreach (var tab in Tabs)
+            {
+                var (source, _) = N3ProjImport.FindSource(tab.Document, tab.Name, preview.Tabs);
+                if (source is null) continue;
+                var diffs = PageLayoutDifferences(tab, source, layouts);
+                if (diffs.Count == 0) continue;
+                tab.UndoStack.Add(tab.Document.Clone());
+                tab.RedoStack.Clear();
+                foreach (var (lines, name) in diffs)
+                {
+                    foreach (int i in lines) tab.Document.Lines[i].LayoutName = name;
+                }
+                tab.IsModified = true;
+                pages += diffs.Count;
+            }
+            if (pages > 0)
+            {
+                IsModified = _activeTab.IsModified;
+                UpdateTitle();
+            }
+            done.Add($"ページのレイアウト {pages} ページ");
+        }
+
         // 6) アイコン（@Emoji）
         if (choices.IconNames.Count > 0)
         {
@@ -182,17 +344,32 @@ public partial class MainViewModel
             done.Add($"動画 {Path.GetFileName(preview.MediaPath)}");
         }
 
-        // 8) フォント設定
+        // 8) フォント設定（アプリ共通へ。同じ名前は置き換え、それ以外は末尾に追加）
         if (choices.FontSetNames.Count > 0)
         {
             var names = new HashSet<string>(choices.FontSetNames);
             int added = 0, replaced = 0;
-            foreach (var f in preview.FontSets.Where(f => names.Contains(f.Name)))
+            ReplaceCommonFontSets(() =>
             {
-                int i = Settings.N3FontSets.FindIndex(x => x.Name == f.Name);
-                if (i >= 0) { Settings.N3FontSets[i] = f.Clone(); replaced++; }
-                else { Settings.N3FontSets.Add(f.Clone()); added++; }
-            }
+                foreach (var f in preview.FontSets.Where(f => names.Contains(f.Name)))
+                {
+                    var copy = f.Clone();
+                    int i = Settings.N3FontSets.FindIndex(x => x.Name == f.Name);
+                    if (i >= 0)
+                    {
+                        // フォント設定ビューで選んでいたものが置き換わっても選択が外れないよう、識別子は引き継ぐ
+                        copy.Id = Settings.N3FontSets[i].Id;
+                        Settings.N3FontSets[i] = copy;
+                        replaced++;
+                    }
+                    else
+                    {
+                        Settings.N3FontSets.Add(copy);
+                        added++;
+                    }
+                }
+                N3FontLibrary.EnsureIds(Settings.N3FontSets);
+            });
             settingsChanged = true;
             done.Add($"フォント設定 {added + replaced} 件（追加 {added}・置き換え {replaced}）");
         }

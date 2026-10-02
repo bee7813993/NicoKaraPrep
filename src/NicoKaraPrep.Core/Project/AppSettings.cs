@@ -5,6 +5,19 @@ using NicoKaraPrep.Core.Validation;
 
 namespace NicoKaraPrep.Core.Project;
 
+/// <summary>メディア再生の置き場所（<see cref="AppSettings.PlayerPlacement"/>）。</summary>
+public enum PlayerPlacementMode
+{
+    /// <summary>窓が低いとき（FHD 以下の高さ）は右の列、そうでなければ上の段。</summary>
+    Auto,
+
+    /// <summary>上の段の横いっぱい。</summary>
+    Top,
+
+    /// <summary>右の列（右のパネルの上）。</summary>
+    Right,
+}
+
 /// <summary>
 /// アプリ全体の設定（%APPDATA%\NicoKaraPrep\settings.json に保存）。
 /// </summary>
@@ -26,13 +39,12 @@ public sealed class AppSettings
     /// <summary>この重なり秒数を超えたらエラー（以下は警告）。</summary>
     public double CollisionErrorThresholdSeconds { get; set; } = 1.0;
 
-    // ---- 横幅チェック ----
+    // ---- 字幕の既定（ベースの n3proj が無いときの画面の横幅、ニコカラメーカー3 のフォント設定が当たらない行のフォント） ----
     public int ScreenWidthPx { get; set; } = 1920;
     public string FontFamily { get; set; } = "メイリオ";
     public double FontSizePx { get; set; } = 80;
     public bool FontBold { get; set; } = true;
     public bool FontItalic { get; set; }
-    public double SideMarginPercent { get; set; } = 5.0;
 
     /// <summary>
     /// 縁取りサイズ px（片側）。実機レンダリングの実測より、アイコンは
@@ -88,15 +100,79 @@ public sealed class AppSettings
     /// <summary>最後に使ったベース n3proj（曲ごとの指定が無いときの既定）。</summary>
     public string N3LastBasePath { get; set; } = "";
 
-    /// <summary>NicoKaraPrep 側で定義するニコカラメーカー3 のフォント設定（テンプレートに含まれる）。</summary>
+    /// <summary>NicoKaraPrep 側で定義するニコカラメーカー3 のフォント設定（テンプレートには含めない。<see cref="CopyFrom"/> 参照）。</summary>
     public List<N3FontSet> N3FontSets { get; set; } = new();
+
+    /// <summary>
+    /// アプリ共通のフォント設定の階層（フォルダと並び。<see cref="N3FontTreeNode"/> の一覧 = 最上位）。
+    /// null はまだ作っていない（フォント設定ビューを開いたときに、全部を最上位に今の順で並べて作る）。
+    /// テンプレートには含めない（<see cref="CopyFrom"/> 参照）。
+    /// </summary>
+    public List<N3FontTreeNode>? N3FontHierarchy { get; set; }
+
+    /// <summary>ユーザーが作った配色パターン（標準のパターンは <see cref="N3ColorPatterns.BuiltIns"/>。テンプレートには含めない）。</summary>
+    public List<N3ColorPattern> N3UserColorPatterns { get; set; } = new();
+
+    /// <summary>新しいフォント設定に使う配色パターンの識別子（<see cref="N3ColorPatterns.NoneId"/> は使わない）。</summary>
+    public string N3DefaultColorPatternId { get; set; } = N3ColorPatterns.CharaInverseId;
+
+    /// <summary>絵文字を 2 種類以上続けて入れたとき、その組み合わせのフォント設定（2 人用など）を自動で作るか。</summary>
+    public bool N3AutoComposeFonts { get; set; } = true;
+
+    /// <summary>組み合わせフォントの塗りの種類の既定（ミルフィーユかグラデーション）。</summary>
+    public int N3ComposeBrushType { get; set; } = N3Brush.TypeMilleFeuille;
+
+    /// <summary>組み合わせフォントの、端の帯の広さの既定（%。端の帯を中央の帯より何 % 広くするか）。</summary>
+    public double N3ComposeEndWidenPercent { get; set; } = N3FontComposer.DefaultEndWidenPercent;
+
+    /// <summary>
+    /// フォント設定ビューの最近使った色（ColorPicker・16 進・不透明度で指定した色。新しい順。<see cref="N3RecentColors"/> の形式）。
+    /// テンプレートには含めない。
+    /// </summary>
+    public List<string> N3RecentColorHistory { get; set; } = new();
 
     // ---- メディア再生 ----
     /// <summary>Z / X（および Ctrl+←/→）でシークする秒数。</summary>
     public double SeekSeconds { get; set; } = 3.0;
 
-    /// <summary>メディアプレイヤーの表示高さ px（ドラッグハンドルで変更）。</summary>
+    /// <summary>
+    /// メディアプレイヤーの表示高さ px（ドラッグハンドルで変更）。ウィンドウが低くて行リストが見えなくなるときは、
+    /// 表示ではこれより縮める（この値は変えない）。
+    /// </summary>
     public double PlayerHeightPx { get; set; } = 260;
+
+    /// <summary>
+    /// NicoKaraPrep で編集したニコカラメーカー3 のレイアウト設定（アプリ共通）。書き出しでは、ベースの n3proj の同じ名前のレイアウト設定に上書きし、
+    /// 無い名前は足す。字幕のプレビューと行リストのレイアウトの表示も同じ合わせ方で使う。
+    /// </summary>
+    public List<N3Layout> N3Layouts { get; set; } = new();
+
+    /// <summary>行リストの歌詞を字幕の見た目（フォント設定の書体・配色・ルビ・アイコン）で描くか。</summary>
+    public bool LineListStyledLyrics { get; set; } = true;
+
+    /// <summary>メディア再生パネルの動画の上に、字幕のプレビューを重ねるか。</summary>
+    public bool PlayerSubtitlePreview { get; set; } = true;
+
+    /// <summary>フォント設定ビューの左の一覧の幅 px（一覧と編集欄のあいだのつまみで変更）。</summary>
+    public double FontListWidthPx { get; set; } = 300;
+
+    /// <summary>
+    /// 行リスト・絵文字挿入ビューの右のパネル（フォント・レイアウト、絵文字のパレット）の幅 px（左との境のつまみで変更）。
+    /// ウィンドウが狭くて左が狭くなりすぎるときは、表示ではこれより狭める（この値は変えない）。
+    /// </summary>
+    public double SidePanelWidthPx { get; set; } = 300;
+
+    /// <summary>行リスト・絵文字挿入ビューの右のパネルを出すか（表示メニューで切り替え）。</summary>
+    public bool SidePanelVisible { get; set; } = true;
+
+    /// <summary>
+    /// メディア再生の置き場所（表示メニューで切り替え）。右の列（右のパネルの上）に置くと行リストが縦いっぱいになるので、
+    /// FHD のような低い画面で行を多く見られる（プレイヤーの高さは列の幅から決める）。既定は自動（窓が低いときだけ右の列）。
+    /// </summary>
+    public PlayerPlacementMode PlayerPlacement { get; set; } = PlayerPlacementMode.Auto;
+
+    /// <summary>メディア再生を右の列に置くときの、右の列の幅 px（<see cref="SidePanelWidthPx"/> とは別に覚える）。</summary>
+    public double SidePlayerWidthPx { get; set; } = 560;
 
     /// <summary>前回ファイルを保存（エクスポート）したフォルダ。</summary>
     public string LastSaveFolder { get; set; } = "";
@@ -147,55 +223,6 @@ public sealed class AppSettings
         ExcludeChar = excludeChar,
     };
 
-    /// <param name="effectiveEmoji">実効 @Emoji リスト。</param>
-    /// <param name="baseDir">相対画像パスの基準フォルダ（歌詞ファイルのフォルダ）。</param>
-    public LineWidthSettings ToLineWidthSettings(IEnumerable<EmojiEntry> effectiveEmoji, string? baseDir = null)
-    {
-        var s = new LineWidthSettings
-        {
-            ScreenWidthPx = ScreenWidthPx,
-            FontFamily = FontFamily,
-            FontSizePx = FontSizePx,
-            Bold = FontBold,
-            Italic = FontItalic,
-            SideMarginPercent = SideMarginPercent,
-        };
-        foreach (var e in effectiveEmoji)
-        {
-            if (string.IsNullOrEmpty(e.ReplaceChar)) continue;
-            s.EmojiChars.Add(e.ReplaceChar);
-
-            var opts = e.ParseOptions();
-            s.EmojiZoomPercent[e.ReplaceChar] = opts.ZoomPercent;
-
-            // アイコン表示幅を画像実寸から計算:
-            //   通常: 高さ = フォントサイズ × Zoom%（透明余白込みの画像全体）、幅 = 高さ × 縦横比。
-            //         実機レンダリングの実測より、Zoom の基準に縁取りは含まれない
-            //         （縁取りが影響するのは縦位置のみ）
-            //   Fix : 画像のピクセルサイズをそのまま使用
-            //   左右 Margin を加算
-            string imagePath = e.ImageBefore;
-            if (!string.IsNullOrEmpty(imagePath) && !Path.IsPathRooted(imagePath) && baseDir is not null)
-            {
-                imagePath = Path.Combine(baseDir, imagePath);
-            }
-            double box = FontSizePx * opts.ZoomPercent / 100.0;
-            double width;
-            if (Formats.ImageSizeReader.TryGetSize(imagePath, out int imgW, out int imgH) && imgH > 0 && imgW > 0)
-            {
-                width = opts.Fix
-                    ? imgW
-                    : box * imgW / imgH;
-            }
-            else
-            {
-                width = box; // 画像が読めない場合は正方形近似
-            }
-            s.EmojiWidthPx[e.ReplaceChar] = width + Math.Max(0, opts.MarginLeft) + Math.Max(0, opts.MarginRight);
-        }
-        return s;
-    }
-
     /// <summary>@Emoji オプション文字列から Zoom=n% を取り出す。</summary>
     public static bool TryParseZoom(string? options, out double zoom)
     {
@@ -228,7 +255,7 @@ public sealed class AppSettings
     public static string DefaultPath =>
         Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "NicoKaraPrep", "settings.json");
 
-    /// <summary>別の設定（テンプレート）の内容をこのインスタンスへ取り込む。</summary>
+    /// <summary>別の設定（テンプレート）の内容をこのインスタンスへ取り込む（ニコカラメーカー3 のフォント設定は除く）。</summary>
     public void CopyFrom(AppSettings other)
     {
         PageMode = other.PageMode;
@@ -242,7 +269,6 @@ public sealed class AppSettings
         FontSizePx = other.FontSizePx;
         FontBold = other.FontBold;
         FontItalic = other.FontItalic;
-        SideMarginPercent = other.SideMarginPercent;
         EdgeSizePx = other.EdgeSizePx;
         EmojiLeadSeconds = other.EmojiLeadSeconds;
         EmojiLeadResumeSeconds = other.EmojiLeadResumeSeconds;
@@ -253,25 +279,117 @@ public sealed class AppSettings
         N3IntervalSeconds = other.N3IntervalSeconds;
         N3ProtectSeconds = other.N3ProtectSeconds;
         N3TopLong = other.N3TopLong;
-        N3FontSets = other.N3FontSets.Select(f => f.Clone()).ToList();
+        // N3FontSets（ニコカラメーカー3 のフォント設定）とその階層 N3FontHierarchy・配色パターンはテンプレートとは独立したライブラリなので取り込まない
+        // （テンプレートの適用でライブラリが置き換わらないように。古いテンプレートに入っていても無視する）
     }
 
+    /// <summary>
+    /// 設定ファイルを読み込めなかった（壊れていた）ため、既定値で動いている。
+    /// このときは <see cref="Save"/> で上書きしない（元のファイルをそのまま残す）。
+    /// </summary>
+    [JsonIgnore]
+    public bool LoadFailed { get; private set; }
+
+    /// <summary>読み込めなかった設定ファイルを残した写しのパス（写しを作れなかったときは null）。</summary>
+    [JsonIgnore]
+    public string? BrokenCopyPath { get; private set; }
+
+    /// <summary>読み込めなかった理由（例外のメッセージ）。</summary>
+    [JsonIgnore]
+    public string LoadError { get; private set; } = "";
+
+    /// <summary>設定ファイルを読み込めなかったときにステータスバーへ出す説明。読み込めていれば null。</summary>
+    [JsonIgnore]
+    public string? LoadFailureMessage => !LoadFailed
+        ? null
+        : BrokenCopyPath is string copy
+            ? $"設定ファイルを読み込めなかったため、設定は保存されません（{copy} を確認してください）"
+            : $"設定ファイルを読み込めなかったため、設定は保存されません（{LoadError}）";
+
+    /// <summary>
+    /// 設定を読み込む。ファイルが無ければ既定値を返す。
+    /// 壊れていて読めないときも既定値を返すが、<see cref="LoadFailed"/> を立てて保存を止め、
+    /// 元のファイルの写しを「settings.json.broken-日時」として残す（全設定が既定値で上書きされて消えるのを防ぐ）。
+    /// </summary>
     public static AppSettings Load(string? path = null)
     {
         path ??= DefaultPath;
         try
         {
             MigrateLegacySettings(path);
-            if (File.Exists(path))
-            {
-                return JsonSerializer.Deserialize<AppSettings>(File.ReadAllText(path), JsonOptions) ?? new AppSettings();
-            }
         }
         catch (Exception)
         {
-            // 壊れた設定ファイルはデフォルトで起動する
+            // 旧設定を引き継げなくても、新しい設定で起動する
         }
-        return new AppSettings();
+        if (!File.Exists(path)) return new AppSettings();
+
+        try
+        {
+            return LoadStrict(path);
+        }
+        catch (Exception ex)
+        {
+            return new AppSettings
+            {
+                LoadFailed = true,
+                LoadError = ex.Message,
+                BrokenCopyPath = KeepBrokenCopy(path),
+            };
+        }
+    }
+
+    /// <summary>
+    /// 設定（テンプレート）を読み込む。既定値に置き換えずに例外を投げるので、「ファイルが無い」と「壊れている」を区別できる。
+    /// ファイルが無いときは <see cref="FileNotFoundException"/>、形式が正しくないときは <see cref="InvalidDataException"/>、
+    /// 読み取れないときは <see cref="IOException"/> などをそのまま投げる。
+    /// </summary>
+    public static AppSettings LoadStrict(string path)
+    {
+        if (!File.Exists(path)) throw new FileNotFoundException($"ファイルが見つかりません: {path}", path);
+        string json = File.ReadAllText(path);
+        AppSettings? settings;
+        try
+        {
+            settings = JsonSerializer.Deserialize<AppSettings>(json, JsonOptions);
+        }
+        catch (JsonException ex)
+        {
+            throw new InvalidDataException($"ファイルの形式が正しくありません: {Path.GetFileName(path)}（{ex.Message}）", ex);
+        }
+        return settings ?? throw new InvalidDataException($"ファイルに設定が入っていません: {Path.GetFileName(path)}");
+    }
+
+    /// <summary>
+    /// 読み込めなかった設定ファイルの写しを、同じフォルダに「元の名前.broken-yyyyMMdd-HHmmss」で残す。
+    /// 同じ内容の写しが既にあればそれを返す（起動のたびに写しを増やさない）。写しを作れなければ null。
+    /// </summary>
+    private static string? KeepBrokenCopy(string path)
+    {
+        try
+        {
+            string full = Path.GetFullPath(path);
+            string dir = Path.GetDirectoryName(full)!;
+            string name = Path.GetFileName(full);
+            byte[] content = File.ReadAllBytes(full);
+            foreach (string existing in Directory.GetFiles(dir, name + ".broken-*").OrderByDescending(p => p, StringComparer.Ordinal))
+            {
+                if (File.ReadAllBytes(existing).AsSpan().SequenceEqual(content)) return existing;
+            }
+
+            string stem = Path.Combine(dir, $"{name}.broken-{DateTime.Now.ToString("yyyyMMdd-HHmmss", System.Globalization.CultureInfo.InvariantCulture)}");
+            string copy = stem;
+            for (int n = 2; File.Exists(copy); n++)
+            {
+                copy = $"{stem}-{n}";
+            }
+            File.WriteAllBytes(copy, content);
+            return copy;
+        }
+        catch (Exception)
+        {
+            return null;
+        }
     }
 
     /// <summary>旧称（TimeTagTool）時代の設定フォルダから設定を引き継ぐ。</summary>
@@ -285,8 +403,13 @@ public sealed class AppSettings
         File.Copy(legacy, newPath);
     }
 
+    /// <summary>
+    /// 設定を保存する。読み込みに失敗した設定（<see cref="LoadFailed"/>）は何もしない
+    /// （壊れた元のファイルを既定値で上書きしない）。
+    /// </summary>
     public void Save(string? path = null)
     {
+        if (LoadFailed) return;
         path ??= DefaultPath;
         Directory.CreateDirectory(Path.GetDirectoryName(path)!);
         File.WriteAllText(path, JsonSerializer.Serialize(this, JsonOptions));

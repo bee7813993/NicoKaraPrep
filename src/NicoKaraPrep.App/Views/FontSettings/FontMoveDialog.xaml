@@ -1,0 +1,44 @@
+﻿<ContentDialog
+    x:Class="NicoKaraPrep.App.Views.FontSettings.FontMoveDialog"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:vm="using:NicoKaraPrep.App.ViewModels"
+    Title="移動先を選ぶ"
+    PrimaryButtonText="ここへ移す"
+    CloseButtonText="キャンセル"
+    DefaultButton="Primary"
+    IsPrimaryButtonEnabled="False">
+
+    <!-- アプリ共通の階層の移し先（いちばん上の階層・フォルダ・フォント設定）。選んだ節の中の末尾へ移す -->
+    <Grid Width="440" RowSpacing="8">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+        </Grid.RowDefinitions>
+        <TextBlock
+            x:Name="IntroText"
+            TextWrapping="Wrap"
+            FontSize="12"
+            Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+            Text="選んだところの中の末尾へ移します（フォルダのほか、フォント設定の中にも入れられます）。ダブルクリックでもすぐに移せます。" />
+        <TextBox x:Name="TargetSearchBox" Grid.Row="1" PlaceholderText="名前で検索" TextChanged="OnSearchChanged" />
+        <ListView
+            x:Name="TargetList"
+            Grid.Row="2"
+            Height="380"
+            SelectionMode="Single"
+            SelectionChanged="OnTargetSelectionChanged"
+            DoubleTapped="OnTargetDoubleTapped">
+            <ListView.ItemTemplate>
+                <DataTemplate x:DataType="vm:FontMoveTarget">
+                    <StackPanel Orientation="Horizontal" Spacing="6" Margin="{x:Bind Indent}" Padding="0,2">
+                        <FontIcon Glyph="{x:Bind Glyph}" FontSize="13" VerticalAlignment="Center" Foreground="{ThemeResource AccentTextFillColorPrimaryBrush}" />
+                        <TextBlock Text="{x:Bind Label}" VerticalAlignment="Center" />
+                        <TextBlock Text="{x:Bind Path}" FontSize="11" VerticalAlignment="Center" Foreground="{ThemeResource TextFillColorSecondaryBrush}" Visibility="{x:Bind ShowPath}" />
+                    </StackPanel>
+                </DataTemplate>
+            </ListView.ItemTemplate>
+        </ListView>
+    </Grid>
+</ContentDialog>

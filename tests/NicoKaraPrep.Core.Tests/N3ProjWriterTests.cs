@@ -8,8 +8,7 @@ public class N3ProjWriterTests
 {
     private static LyricsDocument Doc(params string[] lines) => LrcFormat.Parse(string.Join("\r\n", lines) + "\r\n");
 
-    private static N3ProjWriter.FontResolver Fonts(params string[] names) =>
-        new(names.Select((n, i) => (n, i)), null, true);
+    private static N3FontResolver Fonts(params string[] names) => new(names, null, true);
 
     private static N3ProjWriter.LayoutResolver Layouts(params (string Name, int Count)[] layouts) =>
         new(layouts.Select((l, i) => new N3ProjLayoutInfo(l.Name, i, l.Count)).ToList(), null, null, null, new List<string>(), "t");
@@ -17,7 +16,7 @@ public class N3ProjWriterTests
     private static (string, JsonObject) Action() =>
         ("SHINTA.CharFadeInFadeOut", new JsonObject { ["$type"] = "CharFadeInFadeOutSettingsModel", ["FadeInTime"] = 250 });
 
-    private static JsonArray Build(LyricsDocument doc, N3ShowTimeSettings? show = null, N3ProjWriter.FontResolver? fonts = null, N3ProjWriter.LayoutResolver? layouts = null)
+    private static JsonArray Build(LyricsDocument doc, N3ShowTimeSettings? show = null, N3FontResolver? fonts = null, N3ProjWriter.LayoutResolver? layouts = null)
     {
         return N3ProjWriter.BuildLineInfos(
             doc,
@@ -264,6 +263,23 @@ public class N3ProjWriterTests
     }
 
     [Fact]
+    public void レイアウト_適用対象の範囲の外は選ばない()
+    {
+        // 範囲は「2行」〜「3行」。1 行のページは、範囲の外の「1行」ではなく範囲の中の「2行」（ニコカラメーカー3 の自動設定と同じ）
+        var infos = new List<N3ProjLayoutInfo> { new("2行", 0, 2), new("3行", 1, 3), new("コーラス1行", 2, 1), new("4行", 3, 4) };
+        var resolver = new N3ProjWriter.LayoutResolver(infos, null, "2行", "3行", new List<string>(), "t");
+        Assert.Equal(0, resolver.Resolve(1));
+        Assert.Equal(0, resolver.Resolve(2));
+        Assert.Equal(1, resolver.Resolve(3));
+        Assert.Equal(1, resolver.Resolve(4)); // 範囲の中に無ければ範囲の中で最も行数の多いもの（範囲の外の「4行」は選ばない）
+
+        // 範囲の名前がプロジェクトに無ければ、すべてが対象
+        var all = new N3ProjWriter.LayoutResolver(infos, null, "無い", "無い", new List<string>(), "t");
+        Assert.Equal(2, all.Resolve(1));
+        Assert.Equal(3, all.Resolve(4));
+    }
+
+    [Fact]
     public void レイアウト_固定名の指定()
     {
         var infos = new List<N3ProjLayoutInfo> { new("2行", 0, 2), new("コーラス", 1, 1) };
@@ -358,6 +374,36 @@ public class N3ProjWriterTests
     }
 
     [Fact]
+    public void プロジェクト全体_フォント設定名の並びは書き出すプロジェクトと同じ()
+    {
+        var doc = Doc("[00:01:00]あ[00:02:00]");
+        static List<string> NamesOf(JsonObject root) => root["LyricsFonts"]!.AsArray().Select(n => n!["SettingsName"]!.GetValue<string>()).ToList();
+        var scratch = new N3ProjExportOptions
+        {
+            DefaultFont = new N3FontSet { Name = "標準" },
+            FontSets = new[] { new N3FontSet { Name = "標準" }, new N3FontSet { Name = "（花帆）" } },
+        };
+        var baseRoot = N3ProjWriter.BuildProjectJson(@"C:\v\a.n3proj", new[] { Tab("メイン", doc, @"C:\v\a.lrc") }, scratch, null, new List<string>(), out _, out _);
+        var baseNames = NamesOf(baseRoot);
+        Assert.Equal(new[] { "標準", "（花帆）" }, baseNames);
+
+        var sets = new[] { new N3FontSet { Name = "（麻衣）" }, new N3FontSet { Name = "（花帆）" }, new N3FontSet { Name = " " }, new N3FontSet { Name = "（麻衣）" } };
+        foreach (bool merge in new[] { true, false })
+        {
+            foreach (bool withBase in new[] { true, false })
+            {
+                var root = withBase ? baseRoot.DeepClone().AsObject() : null;
+                var options = new N3ProjExportOptions { BaseProject = root, FontSets = sets, MergeFontSets = merge, DefaultFont = new N3FontSet { Name = "標準" } };
+                var built = N3ProjWriter.BuildProjectJson(@"C:\v\b.n3proj", new[] { Tab("メイン", doc, @"C:\v\b.lrc") }, options, root, new List<string>(), out _, out _);
+                Assert.Equal(NamesOf(built), N3ProjWriter.ExportFontNames(withBase ? baseNames : Array.Empty<string>(), sets, merge));
+            }
+        }
+        Assert.Equal(new[] { "標準", "（花帆）", "（麻衣）" }, N3ProjWriter.ExportFontNames(baseNames, sets, true));
+        Assert.Equal(new[] { "（麻衣）", "（花帆）" }, N3ProjWriter.ExportFontNames(Array.Empty<string>(), sets, true));
+        Assert.Equal(new[] { "標準" }, N3ProjWriter.ExportFontNames(Array.Empty<string>(), sets, false));
+    }
+
+    [Fact]
     public void プロジェクト全体_ZIPに保存して読み戻せる()
     {
         string dir = Path.Combine(Path.GetTempPath(), "NicoKaraPrepTests", Guid.NewGuid().ToString("N"));
@@ -395,7 +441,7 @@ public class N3ProjWriterTests
     }
 
     /// <summary>
-    /// ニコカラメーカー3 が保存した実プロジェクトと同じ行構造・文字時刻を生成できることを確認する。
+    /// ニコカラメーカー3 が保存した実プロジェクトと同じ行構造・文字時刻・文字ごとのフォントを生成できることを確認する。
     /// 環境変数 TTT_N3PROJ_SAMPLE に n3proj のパス（歌詞ファイルが同じ場所にあること）を設定して実行する。
     /// </summary>
     [Fact]
@@ -406,19 +452,19 @@ public class N3ProjWriterTests
 
         var baseRoot = N3ProjFormat.ReadJsonObject(sample);
         var infos = baseRoot["SourceLyricsInfos"]!.AsArray();
-        var fontNames = baseRoot["LyricsFonts"]!.AsArray().Select((n, i) => (n!["SettingsName"]!.GetValue<string>(), i)).ToList();
+        var fontNames = baseRoot["LyricsFonts"]!.AsArray().Select(n => n!["SettingsName"]!.GetValue<string>()).ToList();
         var mismatches = new List<string>();
         int compared = 0;
 
         foreach (var info in infos)
         {
-            string? lyricsPath = info!["SourceLyricsPath"]?.GetValue<string>();
-            if (string.IsNullOrEmpty(lyricsPath) || !File.Exists(lyricsPath)) continue;
-            var expected = info["LineInfos"]!.AsArray();
+            string? lyricsPath = LyricsPathOf(info!, sample);
+            if (lyricsPath is null) continue;
+            var expected = info!["LineInfos"]!.AsArray();
             if (expected.Count == 0) continue;
 
             var doc = LrcFormat.Parse(EncodingDetector.ReadAllText(lyricsPath, out _));
-            var fonts = new N3ProjWriter.FontResolver(fontNames, null, true);
+            var fonts = new N3FontResolver(fontNames, null, true);
             var lines = N3ProjWriter.BuildLineInfos(doc, new N3ShowTimeSettings(), doc.EmojiEntries, fonts, Layouts(("下寄せ2行", 2)), Action(), "Ver 13.79", out _);
 
             var expectedKinds = Kinds(expected);
@@ -438,6 +484,14 @@ public class N3ProjWriterTests
                 if (Fmt(ec) != Fmt(ac))
                 {
                     mismatches.Add($"{Path.GetFileName(lyricsPath)} 行{i}: {expected[i]!["Raw"]}\n  期待 {Fmt(ec)}\n  実際 {Fmt(ac)}");
+                }
+                // 文字ごとのフォント（パート記号による自動設定）。ニコカラメーカー3 の「コーラス自動色分け」
+                // （括弧で括られた部分をコーラス用フォントにする。NicoKaraPrep には無い）で説明できる文字の
+                // 食い違いだけは失敗にしない（同じ行でも、それ以外の文字は比べる）
+                string FmtFont(JsonArray a) => string.Join(" ", a.Select(c => $"{c!["Char"]}:{c["FontIndex"]}"));
+                if (FmtFont(ec) != FmtFont(ac) && !OnlyAutoChorusDiffers(ec, ac, fontNames))
+                {
+                    mismatches.Add($"{Path.GetFileName(lyricsPath)} 行{i} フォント: {expected[i]!["Raw"]}\n  期待 {FmtFont(ec)}\n  実際 {FmtFont(ac)}");
                 }
                 if (mismatches.Count > 12) break;
             }
@@ -469,10 +523,10 @@ public class N3ProjWriterTests
 
         foreach (var info in sourceInfos)
         {
-            string? lyricsPath = info!["SourceLyricsPath"]?.GetValue<string>();
-            if (string.IsNullOrEmpty(lyricsPath) || !File.Exists(lyricsPath)) continue;
+            string? lyricsPath = LyricsPathOf(info!, sample);
+            if (lyricsPath is null) continue;
             var doc = LrcFormat.Parse(EncodingDetector.ReadAllText(lyricsPath, out _));
-            string name = info["SettingsName"]?.GetValue<string>() ?? $"タブ{tabs.Count + 1}";
+            string name = info!["SettingsName"]?.GetValue<string>() ?? $"タブ{tabs.Count + 1}";
             tabs.Add(new N3ProjExportTab
             {
                 Name = name,
@@ -515,6 +569,80 @@ public class N3ProjWriterTests
         {
             if (string.IsNullOrEmpty(outEnv)) Directory.Delete(outDir, recursive: true);
         }
+    }
+
+    /// <summary>コーラス自動色分けのコーラス開始文字・終了文字（ニコカラメーカー3 の既定）。</summary>
+    private static readonly char[] ChorusBeginChars = { '（', '(', '[' };
+    private static readonly char[] ChorusEndChars = { '）', ')', ']' };
+
+    /// <summary>
+    /// 文字ごとのフォントの食い違いが、ニコカラメーカー3 の「歌詞のコーラス部分を自動色分けする」で説明できる文字だけにあるか。
+    /// 説明できるのは次の文字だけ:
+    /// ・括弧（コーラス開始文字から対応する終了文字まで。行内で閉じなければ行末まで）の中。ただし期待のフォントが
+    ///   括弧全体で 1 種類（コーラス用フォント）のときだけ
+    /// ・その括弧の前にある、コーラス用フォントと同じ名前のパート記号から括弧の手前まで
+    ///   （NicoKaraPrep はパート記号から切り替えるが、ニコカラメーカー3 は括弧から切り替えている）
+    /// フォント設定名と同じ文字（パート記号の絵文字）は括弧に数えない。
+    /// </summary>
+    private static bool OnlyAutoChorusDiffers(JsonArray expected, JsonArray actual, IReadOnlyList<string> fontNames)
+    {
+        if (expected.Count != actual.Count) return false;
+        string CharAt(int i) => expected[i]!["Char"]!.GetValue<string>();
+        int ExpectedFont(int i) => expected[i]!["FontIndex"]!.GetValue<int>();
+        int FontIndexOfName(string name)
+        {
+            for (int n = 0; n < fontNames.Count; n++)
+            {
+                if (fontNames[n] == name) return n;
+            }
+            return -1;
+        }
+
+        var allowed = new bool[expected.Count];
+        int marker = -1; // 直前のパート記号の位置
+        for (int i = 0; i < expected.Count; i++)
+        {
+            string c = CharAt(i);
+            if (FontIndexOfName(c) >= 0)
+            {
+                marker = i;
+                continue;
+            }
+            if (c.IndexOfAny(ChorusBeginChars) < 0) continue;
+
+            int end = i;
+            while (end + 1 < expected.Count && CharAt(end).IndexOfAny(ChorusEndChars) < 0) end++;
+            int chorus = ExpectedFont(i);
+            bool uniform = true;
+            for (int k = i; k <= end; k++) uniform &= ExpectedFont(k) == chorus;
+            if (uniform)
+            {
+                int from = marker >= 0 && FontIndexOfName(CharAt(marker)) == chorus ? marker : i;
+                for (int k = from; k <= end; k++) allowed[k] = true;
+            }
+            marker = -1;
+            i = end;
+        }
+
+        for (int i = 0; i < expected.Count; i++)
+        {
+            if (ExpectedFont(i) != actual[i]!["FontIndex"]!.GetValue<int>() && !allowed[i]) return false;
+        }
+        return true;
+    }
+
+    /// <summary>
+    /// 歌詞設定タブの歌詞ファイル。記録された絶対パスに無ければ、n3proj と同じフォルダから相対パスで探す
+    /// （サンプルを別の場所へ複製したとき用）。どちらにも無ければ null。
+    /// </summary>
+    private static string? LyricsPathOf(JsonNode info, string projectPath)
+    {
+        string? path = info["SourceLyricsPath"]?.GetValue<string>();
+        if (!string.IsNullOrEmpty(path) && File.Exists(path)) return path;
+        string? relative = info["SourceLyricsRelativePath"]?.GetValue<string>();
+        if (string.IsNullOrEmpty(relative)) return null;
+        string near = Path.Combine(Path.GetDirectoryName(Path.GetFullPath(projectPath))!, relative);
+        return File.Exists(near) ? near : null;
     }
 
     private static void CollectPaths(JsonNode? node, string path, SortedSet<string> result)

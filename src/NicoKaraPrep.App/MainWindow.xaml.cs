@@ -27,7 +27,6 @@ public sealed partial class MainWindow : Window
         string icon = Path.Combine(AppContext.BaseDirectory, "Assets", "app.ico");
         if (File.Exists(icon)) AppWindow.SetIcon(icon);
 
-        ViewModel.TextMeasurer = new DirectWriteTextMeasurer();
         ViewModel.PropertyChanged += (_, e) =>
         {
             if (e.PropertyName == nameof(MainViewModel.WindowTitle))
@@ -36,18 +35,26 @@ public sealed partial class MainWindow : Window
             }
         };
 
-        Player.Height = Math.Clamp(ViewModel.Settings.PlayerHeightPx, 120, 1200);
+        StyledLyricsMenuItem.IsChecked = ViewModel.Settings.LineListStyledLyrics;
+        InitializeAdaptiveLayout();
+        InitializePlayerBar();
+        InitializeLineSide();
 
         RestoreWindowBounds();
         Closed += (_, _) => SaveWindowBounds();
+        InitializeViewSwitching();
 
         _validateTimer = DispatcherQueue.GetForCurrentThread().CreateTimer();
         _validateTimer.Interval = TimeSpan.FromMilliseconds(400);
         _validateTimer.IsRepeating = false;
         _validateTimer.Tick += (_, _) =>
         {
+            // フォント設定ビューでは行もチェック結果も見えないので、チェックしない（ステータスバーの案内をチェック結果で消さない）。
+            // 戻るときに ExitFontSettingsView がチェックを予約し直す
+            if (ViewModel.ViewMode == MainViewMode.FontSettings) return;
             TryRun(ViewModel.RunValidation);
             RefreshInsertGutter(); // 挿入ビュー表示中なら横幅などの再計算結果を行情報欄へ反映
+            RefreshLineFontPlaceholder(); // 行設定のフォントの欄の薄字（当たるフォント設定）も新しい結果に
         };
 
         // パレットのドラッグ＆ドロップ並び替え → スロット番号を振り直す
@@ -97,6 +104,14 @@ public sealed partial class MainWindow : Window
         RefreshRecentFilesMenu();
         LoadQuickEmojiSettings();
         RebuildInsertKeyBindings();
+        if (ViewModel.Settings.LoadFailureMessage is string settingsError)
+        {
+            // 引数で開いたファイルの読み込みやチェックがステータスの 1 行を上書きしても見えるように、消えない警告で出す
+            // （この間は絵文字リストの編集・設定・テンプレートの適用などが保存されない）
+            SettingsLoadFailedBar.Message = settingsError;
+            SettingsLoadFailedBar.IsOpen = true;
+            SettingsLoadFailedBar.Visibility = Visibility.Visible;
+        }
 
         // デバッグ用: 起動直後に絵文字リスト編集を自動で開く
         if (args.Contains("--debug-emoji-dialog"))
@@ -122,7 +137,7 @@ public sealed partial class MainWindow : Window
             timer.Tick += (_, _) =>
             {
                 DebugLog("絵文字挿入ビューを自動オープンします");
-                EmojiModeToggle.IsChecked = true;
+                SwitchView(MainViewMode.EmojiInsert);
             };
             timer.Start();
         }
@@ -152,13 +167,13 @@ public sealed partial class MainWindow : Window
                 switch (step)
                 {
                     case 1:
-                        EmojiModeToggle.IsChecked = true;
+                        SwitchView(MainViewMode.EmojiInsert);
                         break;
                     case 2:
                         InsertEmojiStringInView(ViewModel.Settings.PlaceholderChar);
                         break;
                     case 3:
-                        EmojiModeToggle.IsChecked = false;
+                        SwitchView(MainViewMode.Lines);
                         break;
                     case 4:
                         SelectLineAt(0);
@@ -187,6 +202,9 @@ public sealed partial class MainWindow : Window
             };
             timer.Start();
         }
+
+        // デバッグ用: フォントのプレビューを確かめる画面を開く（--debug-font-preview [n3proj のパス]）
+        StartFontPreviewDebugIfRequested(args);
     }
 
     private static void DebugLog(string message)
@@ -294,7 +312,7 @@ public sealed partial class MainWindow : Window
             if (await dialog.ShowAsync() != ContentDialogResult.Primary) return;
         }
 
-        if (InsertViewActive) EmojiModeToggle.IsChecked = false;
+        if (InsertViewActive) SwitchView(MainViewMode.Lines);
         TryRun(ViewModel.NewDocument);
         CloseMedia();
         LineEditor.Text = "";
@@ -306,7 +324,11 @@ public sealed partial class MainWindow : Window
     private void CloseMedia()
     {
         _mediaTimer?.Stop();
+        HookFrames(false);
         Player.Source = null;
+        SubtitlePreview.HasVideo = false;
+        PlayerTimeText.Text = "0:00.00";
+        PlayerDurationText.Text = "0:00";
         MediaPanel.IsExpanded = false;
     }
 
@@ -553,6 +575,12 @@ public sealed partial class MainWindow : Window
     private void OnLineSelectionChanged(object sender, SelectionChangedEventArgs e)
     {
         ViewModel.SelectedLine = LineList.SelectedItem as LineViewModel;
+        // 文字を選んでいた行だけを選んでいるのでなくなったら、文字の選択を外す
+        if (ViewModel.CharSelectionLine is { } charLine && !(LineList.SelectedItems.Count == 1 && ReferenceEquals(LineList.SelectedItem, charLine)))
+        {
+            ViewModel.ClearCharSelection();
+        }
+        LineSide.SelectLayoutOfLine(ViewModel.SelectedLine);
         LineEditor.Text = ViewModel.SelectedLine?.RawText ?? "";
         RenderPreview();
         RefreshN3LinePanel();
@@ -584,6 +612,7 @@ public sealed partial class MainWindow : Window
 
     private void OnApplyLineClick(object sender, RoutedEventArgs e)
     {
+        if (LineEditorOperationBlocked()) return;
         ApplyLineEditor();
     }
 
@@ -611,9 +640,19 @@ public sealed partial class MainWindow : Window
 
     // ------------------------------------------------------------ チェック
 
+    /// <summary>表示 > 行リストの歌詞を字幕の見た目で表示。</summary>
+    private void OnStyledLyricsMenuClick(object sender, RoutedEventArgs e)
+    {
+        ViewModel.Settings.LineListStyledLyrics = StyledLyricsMenuItem.IsChecked;
+        ViewModel.Settings.Save();
+        TryRun(ViewModel.UpdateLineFonts);
+    }
+
     private void OnValidateClick(object sender, RoutedEventArgs e)
     {
+        if (ValidationBlocked()) return;
         TryRun(ViewModel.RunValidation);
+        RefreshLineFontPlaceholder();
         IssuePanel.IsExpanded = ViewModel.Issues.Count > 0;
     }
 
@@ -668,6 +707,7 @@ public sealed partial class MainWindow : Window
         {
             LoadQuickEmojiSettings();
             TryRun(ViewModel.RunValidation);
+            RefreshLineFontPlaceholder();
         }
     }
 
@@ -764,6 +804,10 @@ public sealed partial class MainWindow : Window
 
     private void PerformUndo()
     {
+        // フォント設定ビューでは、ビューの中の操作（フォント設定の編集）を戻す
+        if (FontViewUndoRedo(redo: false)) return;
+        // フォント設定ビューでは歌詞の変更を戻さない（見えない行が変わるため。ビューの中の操作はビュー側で扱う）
+        if (LyricsUndoRedoBlocked()) return;
         if (!DebounceUndoRedo()) return;
         if (!ViewModel.Undo()) return;
         AfterUndoRedo();
@@ -771,6 +815,8 @@ public sealed partial class MainWindow : Window
 
     private void PerformRedo()
     {
+        if (FontViewUndoRedo(redo: true)) return; // PerformUndo と同じ
+        if (LyricsUndoRedoBlocked()) return;
         if (!DebounceUndoRedo()) return;
         if (!ViewModel.Redo()) return;
         AfterUndoRedo();
@@ -835,9 +881,44 @@ public sealed partial class MainWindow : Window
         RefreshAfterTabChange();
     }
 
-    private void OnTabCloseRequested(TabView sender, TabViewTabCloseRequestedEventArgs args)
+    private async void OnTabCloseRequested(TabView sender, TabViewTabCloseRequestedEventArgs args)
     {
         if (args.Item is not ViewModels.TabState tab || tab.IsMain) return;
+
+        // 自分のファイルを持つタブ（ニコカラメーカー3 のプロジェクトのコーラスなど）は、閉じてもメインへ戻さないので、
+        // 保存していない変更があれば保存するか尋ねる
+        if (tab.OwnFile && ViewModel.IsTabModified(tab))
+        {
+            var ask = new ContentDialog
+            {
+                XamlRoot = Content.XamlRoot,
+                Title = $"タブ「{tab.Name}」を閉じます",
+                Content = new TextBlock
+                {
+                    Text = $"保存していない変更があります。閉じる前に {Path.GetFileName(tab.CopyFilePath)} へ保存しますか？",
+                    TextWrapping = TextWrapping.Wrap,
+                },
+                PrimaryButtonText = "保存して閉じる",
+                SecondaryButtonText = "保存しないで閉じる",
+                CloseButtonText = "キャンセル",
+                DefaultButton = ContentDialogButton.Primary,
+            };
+            var answer = await ask.ShowAsync();
+            if (answer == ContentDialogResult.None) return;
+            if (answer == ContentDialogResult.Primary)
+            {
+                try
+                {
+                    ViewModel.SaveOwnFileTab(tab);
+                }
+                catch (Exception ex)
+                {
+                    ViewModel.StatusText = $"エラー: {ex.Message}（保存できなかったため、タブは閉じていません）";
+                    return;
+                }
+            }
+        }
+
         TryRun(() => ViewModel.CloseTab(tab));
         SyncTabSelection();
         RefreshAfterTabChange();
@@ -845,6 +926,7 @@ public sealed partial class MainWindow : Window
 
     private void OnSplitToTabClick(object sender, RoutedEventArgs e)
     {
+        if (LineOperationBlocked()) return;
         var indexes = SelectedIndexes;
         if (indexes.Count == 0)
         {
@@ -895,6 +977,7 @@ public sealed partial class MainWindow : Window
 
     private void MoveSelectedToTab(ViewModels.TabState target)
     {
+        if (LineOperationBlocked()) return;
         var indexes = SelectedIndexes;
         if (indexes.Count == 0)
         {
@@ -912,16 +995,19 @@ public sealed partial class MainWindow : Window
 
     private async void OnResetTabsClick(object sender, RoutedEventArgs e)
     {
-        if (ViewModel.Tabs.Count <= 1)
+        int count = ViewModel.SplitTabCount;
+        if (count == 0)
         {
             ViewModel.StatusText = "分離タブはありません";
             return;
         }
 
+        bool ownFiles = ViewModel.Tabs.Any(t => t.OwnFile);
         var dialog = new ContentDialog
         {
             Title = "タブ分離の解除",
-            Content = $"分離タブ {ViewModel.Tabs.Count - 1} 個をすべて閉じて、行をメインへ時刻順に戻します。よろしいですか？",
+            Content = $"分離タブ {count} 個をすべて閉じて、行をメインへ時刻順に戻します。よろしいですか？" +
+                      (ownFiles ? "\n（別の歌詞ファイルのタブはそのまま残ります）" : ""),
             PrimaryButtonText = "戻す",
             CloseButtonText = "キャンセル",
             DefaultButton = ContentDialogButton.Primary,
@@ -971,7 +1057,7 @@ public sealed partial class MainWindow : Window
 
     private void OnSplitLineClick(object sender, RoutedEventArgs e)
     {
-        if (InsertViewActive) return; // 挿入ビューでは Ctrl+Enter を PreviewKeyDown で処理
+        if (LineEditorOperationBlocked()) return; // 挿入ビューでは Ctrl+Enter を PreviewKeyDown で処理
         if (ViewModel.SelectedLine is null) return;
         TryRun(() =>
         {
@@ -987,7 +1073,7 @@ public sealed partial class MainWindow : Window
 
     private void JoinLineFromMenu(bool insertSpace)
     {
-        if (InsertViewActive) return; // 挿入ビューでは Ctrl+J / Ctrl+Shift+J を PreviewKeyDown で処理
+        if (LineEditorOperationBlocked()) return; // 挿入ビューでは Ctrl+J / Ctrl+Shift+J を PreviewKeyDown で処理
         if (ViewModel.SelectedLine is null) return;
         int index = ViewModel.SelectedLine.Index;
         TryRun(() =>
@@ -999,12 +1085,14 @@ public sealed partial class MainWindow : Window
 
     private void OnInsertEmptyLineClick(object sender, RoutedEventArgs e)
     {
+        if (LineOperationBlocked()) return;
         TryRun(ViewModel.InsertEmptyLineBelowSelection);
         ScheduleValidation();
     }
 
     private void OnDeleteLinesClick(object sender, RoutedEventArgs e)
     {
+        if (LineOperationBlocked()) return;
         var indexes = SelectedIndexes;
         if (indexes.Count == 0) return;
         TryRun(() => ViewModel.DeleteLines(indexes));
@@ -1022,6 +1110,7 @@ public sealed partial class MainWindow : Window
 
     private void OnExportFileClick(object sender, RoutedEventArgs e)
     {
+        if (LineOperationBlocked()) return;
         var indexes = SelectedIndexes;
         if (indexes.Count == 0)
         {
@@ -1039,6 +1128,7 @@ public sealed partial class MainWindow : Window
 
     private void OnExportClipboardClick(object sender, RoutedEventArgs e)
     {
+        if (LineOperationBlocked()) return;
         var indexes = SelectedIndexes;
         if (indexes.Count == 0)
         {
@@ -1058,6 +1148,7 @@ public sealed partial class MainWindow : Window
 
     private void OnSelectUnexportedClick(object sender, RoutedEventArgs e)
     {
+        if (LineOperationBlocked()) return;
         LineList.SelectedItems.Clear();
         foreach (var line in ViewModel.Lines)
         {
@@ -1071,6 +1162,7 @@ public sealed partial class MainWindow : Window
 
     private void OnClearMarksClick(object sender, RoutedEventArgs e)
     {
+        if (LineOperationBlocked()) return;
         var indexes = SelectedIndexes;
         if (indexes.Count == 0) return;
         ViewModel.MarkExported(indexes, false);
@@ -1100,10 +1192,12 @@ public sealed partial class MainWindow : Window
     {
         TryRun(() =>
         {
+            SubtitlePreview.HasVideo = false; // 開き終わったら動画の有無で決め直す
             Player.Source = Windows.Media.Core.MediaSource.CreateFromUri(new Uri(path));
+            ObservePlayer();
             ViewModel.MediaPath = path;
             ViewModel.SaveProject();
-            MediaPanel.Visibility = Visibility.Visible;
+            if (ViewModel.ViewMode != MainViewMode.FontSettings) MediaPanel.Visibility = Visibility.Visible; // フォント設定ビューでは隠したまま
             MediaPanel.IsExpanded = true;
             ViewModel.StatusText = $"メディアを開きました: {Path.GetFileName(path)}（Ctrl+Space で再生/一時停止）";
 
@@ -1122,6 +1216,7 @@ public sealed partial class MainWindow : Window
     {
         var session = Player.MediaPlayer?.PlaybackSession;
         if (session is null) return;
+        if (session.PlaybackState != Windows.Media.Playback.MediaPlaybackState.Playing) UpdatePlayerTime(); // 止めているあいだに動かした位置
         if (session.PlaybackState != Windows.Media.Playback.MediaPlaybackState.Playing &&
             _lastCurrentLine >= 0)
         {
@@ -1183,19 +1278,7 @@ public sealed partial class MainWindow : Window
 
     private void OnPlayPauseClick(object sender, RoutedEventArgs e) => TogglePlayPause();
 
-    // ------------------------------------------------ プレイヤーの高さ変更
-
-    private void OnPlayerResizeDelta(object sender, ManipulationDeltaRoutedEventArgs e)
-    {
-        double current = double.IsNaN(Player.Height) ? Player.ActualHeight : Player.Height;
-        Player.Height = Math.Clamp(current + e.Delta.Translation.Y, 120, 1200);
-    }
-
-    private void OnPlayerResizeCompleted(object sender, ManipulationCompletedRoutedEventArgs e)
-    {
-        ViewModel.Settings.PlayerHeightPx = Player.Height;
-        ViewModel.Settings.Save();
-    }
+    // プレイヤーの高さ変更（つまみ）は MainWindow.Layout.cs
 
     private void SeekBy(double seconds)
     {
@@ -1204,6 +1287,7 @@ public sealed partial class MainWindow : Window
         var target = session.Position + TimeSpan.FromSeconds(seconds);
         if (target < TimeSpan.Zero) target = TimeSpan.Zero;
         session.Position = target;
+        UpdatePlayerTime();
     }
 
     private void OnSeekBackClick(object sender, RoutedEventArgs e) => SeekBy(-ViewModel.Settings.SeekSeconds);
@@ -1216,21 +1300,14 @@ public sealed partial class MainWindow : Window
         var session = Player.MediaPlayer?.PlaybackSession;
         if (session is null || Player.MediaPlayer?.Source is null) return;
         session.Position = TimeSpan.FromSeconds(ViewModel.TagCsToMediaSeconds(cs));
+        UpdatePlayerTime();
         ViewModel.StatusText = $"再生位置を {TimeTag.Format(cs)} へ移動しました";
     }
 
     // ------------------------------------------------ 絵文字挿入ビュー
 
-    private bool InsertViewActive => InsertView.Visibility == Visibility.Visible;
-
     private bool _insertFollow;
     private int _lastInsertCaret = -1;
-
-    private void OnEmojiModeChanged(object sender, RoutedEventArgs e)
-    {
-        if (EmojiModeToggle.IsChecked == true) EnterInsertView();
-        else ExitInsertView();
-    }
 
     private bool _allowInsertViewTextChange;
     private string _insertViewText = "";
@@ -1271,11 +1348,10 @@ public sealed partial class MainWindow : Window
         }
     }
 
+    /// <summary>絵文字挿入ビューに入る（SwitchView から、表示を入れ替えたあとに呼ぶ）。</summary>
     private void EnterInsertView()
     {
         SetInsertEditorText(ViewModel.BuildInsertViewText());
-        NormalView.Visibility = Visibility.Collapsed;
-        InsertView.Visibility = Visibility.Visible;
 
         int caret = ViewModel.SelectedLine is { } sel ? ViewModel.GetInsertViewLineStart(sel.Index) : 0;
         InsertEditor.Focus(FocusState.Programmatic);
@@ -1285,22 +1361,18 @@ public sealed partial class MainWindow : Window
         ViewModel.StatusText = "絵文字挿入ビュー: 1–0 / Q–P で挿入。キー操作は上部の凡例参照（ファイル > キー割り当て で変更可）、Esc で終了";
     }
 
+    /// <summary>絵文字挿入ビューを抜ける（SwitchView から、表示を入れ替えたあとに呼ぶ）。</summary>
     private void ExitInsertView()
     {
-        if (!InsertViewActive) return;
-
         // カーソルのあった行を行リストの選択に引き継ぐ
         int caretLine = ViewModel.MapInsertViewOffset(InsertEditor.SelectionStart) is var (li, _) ? li : -1;
 
-        InsertView.Visibility = Visibility.Collapsed;
-        NormalView.Visibility = Visibility.Visible;
         _insertFollow = false;
         UpdateFollowIndicator();
         if (caretLine >= 0) SelectLineAt(caretLine);
         LineEditor.Text = ViewModel.SelectedLine?.RawText ?? "";
         RenderPreview();
         ScheduleValidation();
-        ViewModel.StatusText = "絵文字挿入ビューを終了しました";
     }
 
     // ------------------------------------------------ 挿入ビューのキー割り当て
@@ -1434,7 +1506,7 @@ public sealed partial class MainWindow : Window
         switch (e.Key)
         {
             case Windows.System.VirtualKey.Escape:
-                EmojiModeToggle.IsChecked = false;
+                SwitchView(MainViewMode.Lines);
                 e.Handled = true;
                 return;
             case Windows.System.VirtualKey.Back:
@@ -2054,6 +2126,7 @@ public sealed partial class MainWindow : Window
 
     private void InsertEmojiSlot(int slot)
     {
+        if (LineEditorOperationBlocked()) return;
         if (ViewModel.GetSlotEmojiString(slot) is not string emoji)
         {
             ViewModel.StatusText = $"スロット {ViewModels.EmojiSlotViewModel.KeyLabels[slot - 1]} は未設定です（絵文字 > 絵文字リスト編集）";
@@ -2064,6 +2137,7 @@ public sealed partial class MainWindow : Window
 
     private void InsertEmojiStringIntoLineEditor(string emoji)
     {
+        if (LineEditorOperationBlocked()) return;
         if (ViewModel.SelectedLine is null)
         {
             ViewModel.StatusText = "行を選択してください";
