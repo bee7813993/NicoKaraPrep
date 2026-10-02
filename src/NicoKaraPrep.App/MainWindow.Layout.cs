@@ -1,17 +1,21 @@
 ﻿using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Input;
+using Microsoft.UI.Xaml.Media;
 using NicoKaraPrep.App.ViewModels;
+using NicoKaraPrep.Core.Project;
+using Windows.Foundation;
 
 namespace NicoKaraPrep.App;
 
 /// <summary>
 /// 画面の大きさに合わせた並べ方。FHD（1920×1080）や、125%・150% 表示のような低く狭い画面でも、行リストが見えるようにする。
-/// ・メディア再生: ふつうは上の段の横いっぱいで、高さは設定の高さ（つまみで変える）まで。行リスト（絵文字挿入ビューでは編集欄）の高さが
-///   残らないときは、残るまで縮める。表示メニューで右の列（右のパネルの上）にも置ける（行リストが縦いっぱいになる。高さは列の幅から決める）
+/// ・メディア再生: 上の段の横いっぱいか、右の列（右のパネルの上。行リストが縦いっぱいになる。高さは列の幅から決める）に置く。
+///   表示メニューで選ぶ（既定の自動は、窓が低いとき（FHD の画面など）だけ右の列）。上の段の高さは設定の高さ（つまみで変える）まで使い、
+///   行リスト（絵文字挿入ビューでは編集欄）の高さが残らないときは、残るまで縮める
 /// ・右の列: 境のつまみで幅を変える（メディア再生を右に置くときと置かないときで別に覚える）。左が狭くなりすぎるときは狭める。
 ///   右のパネル（フォント・レイアウト、絵文字のパレット）は表示メニューで隠せる
-/// ・行リスト: 狭いときは時間と横幅を 2 段にして、歌詞の欄を広く取る（<see cref="LineListLayout"/>）
+/// ・行リスト: フォント・レイアウトの欄を行の中身に合わせる。狭いときは時間と横幅を 2 段にして、歌詞の欄を広く取る（<see cref="LineListLayout"/>）
 /// ・ニコカラメーカー用の行設定: 1 行に収まらないときは、フォント・レイアウトを 2 段目に回す
 /// </summary>
 public sealed partial class MainWindow
@@ -50,8 +54,30 @@ public sealed partial class MainWindow
 
     private const double VolumeSliderWidthNarrow = 72;
 
-    /// <summary>行リストの幅がこれより狭いと、列を詰めた並べ方にする px（ふつうの並べ方で歌詞の欄が 480px ほど残る幅）。</summary>
-    private const double CompactLineListWidth = 1200;
+    /// <summary>
+    /// 置き場所が自動のとき、メディア再生を右の列に置く窓の高さ・幅（中身の論理 px）。FHD（1920×1080）の画面の窓は高さが 1000 前後。
+    /// 幅は、右の列を最小の幅にして行リストを詰めた並べ方にしても、歌詞の欄が 370px ほど残る幅から（FHD の 150% 表示の 1280 も含める）。
+    /// </summary>
+    private const double AutoRightBelowHeight = 1100;
+
+    private const double AutoRightMinWidth = 1200;
+
+    /// <summary>行リストの項目の左右の余白（選択の印・スクロールバーの分）px。</summary>
+    private const double LineItemChromeWidth = 28;
+
+    /// <summary>ふつうの並べ方で歌詞の欄にこれだけ残らないときは、行リストの列を詰める px。</summary>
+    private const double MinLyricsWidth = 480;
+
+    /// <summary>フォント・レイアウトの欄の中身の大きさ（テンプレートと同じ）: 色見本 2 つ（8＋2＋8）・すき間 4、2 つ目の名前の最大の幅、文字の大きさ。</summary>
+    private const double FontSwatchesWidth = 18;
+
+    private const double FontCellGap = 4;
+
+    private const double FontLastNameMaxWidth = 72;
+
+    private const double FontNameSize = 12;
+
+    private const double LayoutNameSize = 11;
 
     /// <summary>行設定を 1 行に並べるときに、右の説明（自動の表示時刻など）に最低限残す幅 px（足りない分は … で切り、全文はツールチップ）。</summary>
     private const double MinN3InfoWidth = 40;
@@ -62,16 +88,22 @@ public sealed partial class MainWindow
     private bool _playerOnRight;
     private double _sideWidthAtDragStart;
     private bool _n3PanelWrapped;
+    private TextBlock? _measureBlock;
+    private readonly Dictionary<(string Text, double Size), double> _textWidths = new();
 
     private void InitializeAdaptiveLayout()
     {
         var s = ViewModel.Settings;
         PlayerHost.Height = Math.Clamp(s.PlayerHeightPx, MinPlayerHeight, MaxPlayerHeight);
         SidePanelMenuItem.IsChecked = s.SidePanelVisible;
-        PlayerOnRightMenuItem.IsChecked = s.PlayerOnRight;
-        ApplyPlayerPlacement(s.PlayerOnRight);
+        SyncPlayerPlacementMenu();
+        ApplyPlayerPlacement(WantsPlayerOnRight());
 
-        RootGrid.SizeChanged += (_, _) => FitPlayerHeight();
+        RootGrid.SizeChanged += (_, _) =>
+        {
+            FitPlayerPlacement();
+            FitPlayerHeight();
+        };
         MainArea.SizeChanged += (_, _) =>
         {
             FitSidePanelWidth();
@@ -92,6 +124,7 @@ public sealed partial class MainWindow
         N3LinePanel.SizeChanged += (_, _) => FitN3LinePanel();
         N3TimeGroup.SizeChanged += (_, _) => FitN3LinePanel();
         N3FontGroup.SizeChanged += (_, _) => FitN3LinePanel();
+        ViewModel.LineFontsUpdated += (_, _) => FitLineListFontColumn();
 
         // 右の列の境のつまみ（右へ動かすと右の列が狭くなる）
         SideResizeGrip.DragStarted += (_, _) => _sideWidthAtDragStart = SideColumn.Width.Value;
@@ -103,12 +136,41 @@ public sealed partial class MainWindow
 
     // ------------------------------------------------ メディア再生の置き場所と高さ
 
-    /// <summary>表示 > メディア再生を右の列に置く。</summary>
-    private void OnPlayerOnRightMenuClick(object sender, RoutedEventArgs e)
+    /// <summary>表示 > メディア再生の置き場所（自動・上の段・右の列）。</summary>
+    private void OnPlayerPlacementMenuClick(object sender, RoutedEventArgs e)
     {
-        ViewModel.Settings.PlayerOnRight = PlayerOnRightMenuItem.IsChecked;
+        ViewModel.Settings.PlayerPlacement = ReferenceEquals(sender, PlayerPlacementTopItem) ? PlayerPlacementMode.Top
+            : ReferenceEquals(sender, PlayerPlacementRightItem) ? PlayerPlacementMode.Right
+            : PlayerPlacementMode.Auto;
         ViewModel.Settings.Save();
-        ApplyPlayerPlacement(ViewModel.Settings.PlayerOnRight);
+        SyncPlayerPlacementMenu();
+        FitPlayerPlacement();
+    }
+
+    private void SyncPlayerPlacementMenu()
+    {
+        var mode = ViewModel.Settings.PlayerPlacement;
+        PlayerPlacementAutoItem.IsChecked = mode == PlayerPlacementMode.Auto;
+        PlayerPlacementTopItem.IsChecked = mode == PlayerPlacementMode.Top;
+        PlayerPlacementRightItem.IsChecked = mode == PlayerPlacementMode.Right;
+    }
+
+    /// <summary>
+    /// メディア再生を右の列に置くか。自動は、窓が低い（<see cref="AutoRightBelowHeight"/> 未満）ときだけ右の列
+    /// （窓が狭くて右の列に置くと行リストの幅が残らないときは上の段）。窓の大きさが決まる前は上の段。
+    /// </summary>
+    private bool WantsPlayerOnRight() => ViewModel.Settings.PlayerPlacement switch
+    {
+        PlayerPlacementMode.Right => true,
+        PlayerPlacementMode.Top => false,
+        _ => RootGrid.ActualHeight > 0 && RootGrid.ActualHeight < AutoRightBelowHeight && RootGrid.ActualWidth >= AutoRightMinWidth,
+    };
+
+    /// <summary>メディア再生の置き場所を、表示メニューの選択と窓の大きさに合わせる（変わるときだけ置き直す）。</summary>
+    private void FitPlayerPlacement()
+    {
+        bool right = WantsPlayerOnRight();
+        if (right != _playerOnRight) ApplyPlayerPlacement(right);
     }
 
     /// <summary>
@@ -312,11 +374,61 @@ public sealed partial class MainWindow
 
     // ------------------------------------------------ 行リストの列・行設定の段
 
-    /// <summary>行リストが狭いときは、列を詰めた並べ方にする。</summary>
+    /// <summary>ふつうの並べ方で歌詞の欄に <see cref="MinLyricsWidth"/> が残らないときは、行リストの列を詰めた並べ方にする。</summary>
     private void FitLineListColumns()
     {
         if (LineList.ActualWidth <= 0) return;
-        LineListLayout.Current.Compact = LineList.ActualWidth < CompactLineListWidth;
+        var layout = LineListLayout.Current;
+        layout.Compact = LineList.ActualWidth - LineItemChromeWidth - layout.FixedWidth(compact: false) < MinLyricsWidth;
+    }
+
+    /// <summary>
+    /// 行リストのフォント・レイアウトの欄の幅を、すべての行の中身（フォント設定の名前・レイアウト名）が入る幅にする
+    /// （行のフォント設定・レイアウトを作り直すたびに呼ぶ）。
+    /// </summary>
+    private void FitLineListFontColumn()
+    {
+        double width = 0;
+        foreach (var line in ViewModel.Lines) width = Math.Max(width, FontCellWidth(line));
+        LineListLayout.Current.FontContentWidth = width;
+        FitLineListColumns();
+    }
+
+    /// <summary>行のフォント・レイアウトの欄の中身の幅 px（テンプレートの並べ方と同じに測る）。</summary>
+    private double FontCellWidth(LineViewModel line)
+    {
+        double width = 0;
+        var font = line.AppliedFont;
+        if (font.IsVisible)
+        {
+            // [色見本][名前]（途中で切り替わる行は [→][色見本][2 つ目の名前（72px まで）] を足す）
+            width = FontSwatchesWidth + FontCellGap + TextWidth(font.First.Name, FontNameSize);
+            if (font.HasLast)
+            {
+                width += FontCellGap + TextWidth(font.Arrow, FontNameSize) + FontCellGap + FontSwatchesWidth + FontCellGap
+                    + Math.Min(FontLastNameMaxWidth, TextWidth(font.Last.Name, FontNameSize));
+            }
+        }
+        if (line.HasLayoutText) width = Math.Max(width, TextWidth(line.LayoutText, LayoutNameSize));
+        return width;
+    }
+
+    /// <summary>行リストと同じ書体で、文字の幅を測る（同じ文字と大きさは覚えておく）。</summary>
+    private double TextWidth(string text, double size)
+    {
+        if (text.Length == 0) return 0;
+        if (_textWidths.TryGetValue((text, size), out double width)) return width;
+        _measureBlock ??= new TextBlock
+        {
+            FontFamily = (FontFamily)Application.Current.Resources["ContentControlThemeFontFamily"],
+        };
+        _measureBlock.FontSize = size;
+        _measureBlock.Text = text;
+        _measureBlock.Measure(new Size(double.PositiveInfinity, double.PositiveInfinity));
+        width = Math.Ceiling(_measureBlock.DesiredSize.Width);
+        if (width <= 0) width = text.Length * size; // 測れなかったときは全角の幅で見積もる
+        _textWidths[(text, size)] = width;
+        return width;
     }
 
     /// <summary>

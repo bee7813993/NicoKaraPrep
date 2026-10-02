@@ -5,6 +5,19 @@ using NicoKaraPrep.Core.Validation;
 
 namespace NicoKaraPrep.Core.Project;
 
+/// <summary>メディア再生の置き場所（<see cref="AppSettings.PlayerPlacement"/>）。</summary>
+public enum PlayerPlacementMode
+{
+    /// <summary>窓が低いとき（FHD 以下の高さ）は右の列、そうでなければ上の段。</summary>
+    Auto,
+
+    /// <summary>上の段の横いっぱい。</summary>
+    Top,
+
+    /// <summary>右の列（右のパネルの上）。</summary>
+    Right,
+}
+
 /// <summary>
 /// アプリ全体の設定（%APPDATA%\NicoKaraPrep\settings.json に保存）。
 /// </summary>
@@ -153,10 +166,10 @@ public sealed class AppSettings
     public bool SidePanelVisible { get; set; } = true;
 
     /// <summary>
-    /// メディア再生を右の列（右のパネルの上）に置くか（表示メニューで切り替え）。置くと行リストが縦いっぱいになるので、
-    /// FHD のような低い画面で行を多く見られる。プレイヤーの高さは列の幅から決める。
+    /// メディア再生の置き場所（表示メニューで切り替え）。右の列（右のパネルの上）に置くと行リストが縦いっぱいになるので、
+    /// FHD のような低い画面で行を多く見られる（プレイヤーの高さは列の幅から決める）。既定は自動（窓が低いときだけ右の列）。
     /// </summary>
-    public bool PlayerOnRight { get; set; }
+    public PlayerPlacementMode PlayerPlacement { get; set; } = PlayerPlacementMode.Auto;
 
     /// <summary>メディア再生を右の列に置くときの、右の列の幅 px（<see cref="SidePanelWidthPx"/> とは別に覚える）。</summary>
     public double SidePlayerWidthPx { get; set; } = 560;

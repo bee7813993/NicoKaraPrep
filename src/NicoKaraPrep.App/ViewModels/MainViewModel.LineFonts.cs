@@ -34,6 +34,9 @@ public partial class MainViewModel
     /// <summary><see cref="PreviewModel"/> を作り直した。</summary>
     public event EventHandler? PreviewModelChanged;
 
+    /// <summary>行のフォント設定・レイアウト・横幅の表示（<see cref="UpdateLineFonts"/>）を作り直した。</summary>
+    public event EventHandler? LineFontsUpdated;
+
     /// <summary>
     /// 表示中のタブの行の横幅の判定（行の番号ごと）。字幕のプレビューと同じ並べ方で測り、ページのレイアウト設定の左右余白で判定する。
     /// <see cref="UpdateLineFonts"/> で作り直す（チェックのたびに呼ばれる）。
@@ -242,6 +245,7 @@ public partial class MainViewModel
             Lines[i].LayoutToolTip = tip;
             Lines[i].SetWidthResult(widths.GetValueOrDefault(i));
         }
+        LineFontsUpdated?.Invoke(this, EventArgs.Empty);
     }
 
     /// <summary>行リストで文字を選んでいる行（無ければ null）。選んでいる範囲は <see cref="LineViewModel.CharSelection"/>。</summary>

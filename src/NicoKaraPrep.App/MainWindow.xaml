@@ -148,11 +148,25 @@
                         Text="行リストの歌詞を字幕の見た目で表示"
                         Click="OnStyledLyricsMenuClick" />
                     <MenuFlyoutSeparator />
-                    <!-- 画面の並べ方（低い画面では、メディア再生を右に置くと行リストを縦に広く使える） -->
-                    <ToggleMenuFlyoutItem
-                        x:Name="PlayerOnRightMenuItem"
-                        Text="メディア再生を右の列に置く（行リストを縦に広く）"
-                        Click="OnPlayerOnRightMenuClick" />
+                    <!-- 画面の並べ方（低い画面では、メディア再生を右に置くと行リストを縦に広く使える。自動は窓の高さで決める） -->
+                    <MenuFlyoutSubItem x:Name="PlayerPlacementMenu" Text="メディア再生の置き場所">
+                        <RadioMenuFlyoutItem
+                            x:Name="PlayerPlacementAutoItem"
+                            Text="自動（窓が低いときは右の列）"
+                            GroupName="PlayerPlacement"
+                            Click="OnPlayerPlacementMenuClick"
+                            ToolTipService.ToolTip="窓の高さが 1100 より低いとき（FHD の画面など）は右の列、高いときは上の段に置きます。窓の大きさを変えると切り替わります" />
+                        <RadioMenuFlyoutItem
+                            x:Name="PlayerPlacementTopItem"
+                            Text="上の段（横いっぱい）"
+                            GroupName="PlayerPlacement"
+                            Click="OnPlayerPlacementMenuClick" />
+                        <RadioMenuFlyoutItem
+                            x:Name="PlayerPlacementRightItem"
+                            Text="右の列（行リストを縦に広く）"
+                            GroupName="PlayerPlacement"
+                            Click="OnPlayerPlacementMenuClick" />
+                    </MenuFlyoutSubItem>
                     <ToggleMenuFlyoutItem
                         x:Name="SidePanelMenuItem"
                         Text="右のパネル（フォント・レイアウト／絵文字のパレット）を表示"
@@ -394,33 +408,40 @@
                     </ListView.ContextFlyout>
                     <ListView.ItemTemplate>
                         <DataTemplate x:DataType="vm:LineViewModel">
-                            <!-- 行リストが狭いときは、時間と横幅を 2 段にし、フォントの欄を狭めて歌詞の欄を広く取る（列の幅は vm:LineListLayout） -->
-                            <Grid Opacity="{x:Bind Opacity, Mode=OneWay}" ColumnSpacing="8" Background="{x:Bind RowBrush, Mode=OneWay}">
+                            <!-- 列: 選択 / 済・行番号 / 開始・終了時間 / 印（♪ 重なり・横幅の判定）/ 横幅 / 手動指定 / フォント・レイアウト / 歌詞。
+                                 列の幅は vm:LineListLayout（MainWindow.Layout.cs）。フォント・レイアウトの欄は行の中身に合わせ、
+                                 行リストが狭いときは時間と横幅を 2 段にし、フォントの欄を狭めて歌詞の欄を広く取る -->
+                            <Grid Opacity="{x:Bind Opacity, Mode=OneWay}" ColumnSpacing="6" Background="{x:Bind RowBrush, Mode=OneWay}">
                                 <Grid.ColumnDefinitions>
-                                    <ColumnDefinition Width="28" />
-                                    <ColumnDefinition Width="22" />
+                                    <ColumnDefinition Width="24" />
                                     <ColumnDefinition Width="36" />
                                     <ColumnDefinition Width="{x:Bind vm:LineListLayout.Current.TimeColumnWidth, Mode=OneWay}" />
-                                    <ColumnDefinition Width="22" />
-                                    <ColumnDefinition Width="22" />
-                                    <ColumnDefinition Width="{x:Bind vm:LineListLayout.Current.WidthColumnWidth, Mode=OneWay}" />
                                     <ColumnDefinition Width="18" />
+                                    <ColumnDefinition Width="{x:Bind vm:LineListLayout.Current.WidthColumnWidth, Mode=OneWay}" />
+                                    <ColumnDefinition Width="14" />
                                     <ColumnDefinition Width="{x:Bind vm:LineListLayout.Current.FontColumnWidth, Mode=OneWay}" />
                                     <ColumnDefinition Width="*" />
                                 </Grid.ColumnDefinitions>
                                 <CheckBox Grid.Column="0" MinWidth="0" Padding="0" IsChecked="{x:Bind IsSelected, Mode=OneWay}" Click="OnRowCheckClick" Tag="{x:Bind}" ToolTipService.ToolTip="選択（複数選択してエクスポートなどに使用）" />
-                                <TextBlock Grid.Column="1" Text="{x:Bind ExportedMark, Mode=OneWay}" Foreground="{ThemeResource AccentTextFillColorPrimaryBrush}" ToolTipService.ToolTip="エクスポート済み" />
-                                <TextBlock Grid.Column="2" Text="{x:Bind IndexText, Mode=OneWay}" Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
-                                <StackPanel Grid.Column="3" Orientation="{x:Bind vm:LineListLayout.Current.TimeOrientation, Mode=OneWay}" Spacing="{x:Bind vm:LineListLayout.Current.TimeSpacing, Mode=OneWay}">
-                                    <TextBlock Width="76" Text="{x:Bind TimeText, Mode=OneWay}" FontFamily="Consolas" Foreground="{x:Bind StartTimeBrush, Mode=OneWay}" ToolTipService.ToolTip="開始時間（ページ衝突時は色付き）" />
-                                    <TextBlock Width="76" Text="{x:Bind EndTimeText, Mode=OneWay}" FontFamily="Consolas" Foreground="{x:Bind EndTimeBrush, Mode=OneWay}" ToolTipService.ToolTip="終了時間（ページ衝突時は色付き）" />
+                                <!-- 済（エクスポート済み）は左、行番号は右寄せ（時間のすぐ左にそろえる） -->
+                                <Grid Grid.Column="1">
+                                    <TextBlock Text="{x:Bind ExportedMark, Mode=OneWay}" Foreground="{ThemeResource AccentTextFillColorPrimaryBrush}" ToolTipService.ToolTip="エクスポート済み" />
+                                    <TextBlock Text="{x:Bind IndexText, Mode=OneWay}" HorizontalAlignment="Right" Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+                                </Grid>
+                                <StackPanel Grid.Column="2" Orientation="{x:Bind vm:LineListLayout.Current.TimeOrientation, Mode=OneWay}" Spacing="{x:Bind vm:LineListLayout.Current.TimeSpacing, Mode=OneWay}">
+                                    <TextBlock Width="64" Text="{x:Bind TimeText, Mode=OneWay}" FontFamily="Consolas" Foreground="{x:Bind StartTimeBrush, Mode=OneWay}" ToolTipService.ToolTip="開始時間（ページ衝突時は色付き）" />
+                                    <TextBlock Width="64" Text="{x:Bind EndTimeText, Mode=OneWay}" FontFamily="Consolas" Foreground="{x:Bind EndTimeBrush, Mode=OneWay}" ToolTipService.ToolTip="終了時間（ページ衝突時は色付き）" />
                                 </StackPanel>
-                                <TextBlock Grid.Column="4" Text="{x:Bind OverlapGlyph, Mode=OneWay}" ToolTipService.ToolTip="同時歌唱などのタイムタグ重なりあり（正常）" />
-                                <TextBlock Grid.Column="5" Text="{x:Bind WidthGlyph, Mode=OneWay}" ToolTipService.ToolTip="横幅チェック結果" />
-                                <TextBlock Grid.Column="6" Text="{x:Bind WidthText, Mode=OneWay}" FontSize="12" TextWrapping="Wrap" Foreground="{x:Bind WidthBrush, Mode=OneWay}" VerticalAlignment="Center" ToolTipService.ToolTip="{x:Bind WidthToolTip, Mode=OneWay}" />
-                                <TextBlock Grid.Column="7" Text="{x:Bind OverrideMark, Mode=OneWay}" FontSize="12" VerticalAlignment="Center" Foreground="{ThemeResource AccentTextFillColorPrimaryBrush}" ToolTipService.ToolTip="ニコカラメーカー用の手動指定（表示時刻・フォント）あり" />
-                                <!-- この行に当たるフォント設定（書き出しと同じ決め方。途中で切り替わる行は最初と最後を → でつなぐ）と、下の段にこの行のページのレイアウト -->
-                                <StackPanel Grid.Column="8" VerticalAlignment="Center" Spacing="1">
+                                <!-- 印: 上に ♪（タイムタグの重なり）、下に横幅の判定（どちらも出ないことが多いので 1 つの欄にまとめる） -->
+                                <StackPanel Grid.Column="3">
+                                    <TextBlock Text="{x:Bind OverlapGlyph, Mode=OneWay}" ToolTipService.ToolTip="同時歌唱などのタイムタグ重なりあり（正常）" />
+                                    <TextBlock Text="{x:Bind WidthGlyph, Mode=OneWay}" ToolTipService.ToolTip="横幅チェック結果" />
+                                </StackPanel>
+                                <TextBlock Grid.Column="4" Text="{x:Bind WidthText, Mode=OneWay}" FontSize="12" TextWrapping="Wrap" Foreground="{x:Bind WidthBrush, Mode=OneWay}" VerticalAlignment="Center" ToolTipService.ToolTip="{x:Bind WidthToolTip, Mode=OneWay}" />
+                                <TextBlock Grid.Column="5" Text="{x:Bind OverrideMark, Mode=OneWay}" FontSize="12" VerticalAlignment="Center" Foreground="{ThemeResource AccentTextFillColorPrimaryBrush}" ToolTipService.ToolTip="ニコカラメーカー用の手動指定（表示時刻・フォント）あり" />
+                                <!-- この行に当たるフォント設定（書き出しと同じ決め方。途中で切り替わる行は最初と最後を → でつなぐ）と、下の段にこの行のページのレイアウト。
+                                     中の大きさを変えたら MainWindow.Layout.cs の FontCellWidth も合わせる -->
+                                <StackPanel Grid.Column="6" VerticalAlignment="Center" Spacing="1">
                                     <Grid ColumnSpacing="4" Background="Transparent" Visibility="{x:Bind AppliedFont.IsVisible, Mode=OneWay}" ToolTipService.ToolTip="{x:Bind AppliedFont.ToolTip, Mode=OneWay}">
                                         <Grid.ColumnDefinitions>
                                             <ColumnDefinition Width="Auto" />
@@ -445,7 +466,7 @@
                                                Visibility="{x:Bind HasLayoutText, Mode=OneWay}" ToolTipService.ToolTip="{x:Bind LayoutToolTip, Mode=OneWay}" />
                                 </StackPanel>
                                 <!-- 歌詞: 字幕の見た目（フォント設定の書体・配色・ルビ・アイコン）で描く。文字をクリック・ドラッグで選べる。空行・タグだけの行と、表示を切ったときは文字のまま -->
-                                <Grid Grid.Column="9">
+                                <Grid Grid.Column="7">
                                     <TextBlock Text="{x:Bind DisplayText, Mode=OneWay}" TextTrimming="CharacterEllipsis" Visibility="{x:Bind ShowPlainText, Mode=OneWay}" />
                                     <views:LyricLineView Height="44" Line="{x:Bind}" Visibility="{x:Bind ShowStyledText, Mode=OneWay}" CharSelecting="OnLyricCharSelecting" />
                                 </Grid>
