@@ -55,7 +55,7 @@
                 <NumberBox x:Name="LeadBox" Header="ワイプ前（秒）" Minimum="0" Maximum="30" SmallChange="0.1" SpinButtonPlacementMode="Compact" />
                 <NumberBox Grid.Column="1" x:Name="TailBox" Header="ワイプ後（秒）" Minimum="0" Maximum="30" SmallChange="0.1" SpinButtonPlacementMode="Compact" />
                 <NumberBox Grid.Column="2" x:Name="IntervalBox" Header="表示間隔（秒）" Minimum="0" Maximum="30" SmallChange="0.1" SpinButtonPlacementMode="Compact" ToolTipService.ToolTip="ページ区切りと段落区切り（間奏など）を分ける間隔" />
-                <NumberBox Grid.Column="3" x:Name="ProtectBox" Header="最短表示後（秒、0=自動）" Minimum="0" Maximum="30" SmallChange="0.1" SpinButtonPlacementMode="Compact" ToolTipService.ToolTip="次のページと重なるとき、前の行を最終タグの何秒後まで短縮してよいか（0 = ワイプ前後の小さい方の半分）" />
+                <NumberBox Grid.Column="3" x:Name="ProtectBox" Header="最短表示後（秒）" Minimum="0" Maximum="30" SmallChange="0.1" SpinButtonPlacementMode="Compact" ToolTipService.ToolTip="次のページと重なるとき、前の行を最終タグの何秒後まで短縮してよいか（0 = 自動: ワイプ前後の小さい方の半分）" />
                 <!-- 同じ段の行を重ねてよい時間（ニコカラメーカー3 には無い機能。保存先は AppSettings.N3OverlapSeconds） -->
                 <NumberBox Grid.Column="4" x:Name="OverlapBox" Header="重ねてよい（秒）" Minimum="0" Maximum="10" SmallChange="0.1" SpinButtonPlacementMode="Compact"
                            ToolTipService.ToolTip="前後のページの同じ段の行を、何秒まで重ねて表示してよいか（0 = 重ねない。ニコカラメーカー3 と同じ計算）。字幕アクションが「文字単位フェード」のときなど、少しの重なりなら見づらくない場合に使います。次のページと重なるときは、前の行のワイプ後や次の行のワイプ前を削るより先に、この時間まで重ねます（ニコカラメーカー3 には無い機能）" />
