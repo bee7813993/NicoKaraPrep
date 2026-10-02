@@ -119,6 +119,7 @@ public partial class MainViewModel
             line.ShowEndCs = null;
             line.FontSetName = null;
             line.LayoutName = null;
+            line.FontSizeDelta = 0;
             CharFontOperations.Clear(line);
         }
         MarkModified();
@@ -251,8 +252,11 @@ public partial class MainViewModel
         RememberSaveFolder(projectPath);
 
         string warn = result.Warnings.Count > 0 ? $"　⚠ {string.Join(" / ", result.Warnings)}" : "";
+        string sized = result.SizedFontSets is { Count: > 0 } names
+            ? $"。ページの文字の大きさのために作ったフォント設定 {names.Count} 件（{string.Join("・", names.Take(3))}{(names.Count > 3 ? " など" : "")}）"
+            : "";
         StatusText = $"ニコカラメーカー3 プロジェクトを書き出しました: {Path.GetFileName(projectPath)}" +
-                     $"（歌詞 {result.LyricsLineCount} 行・歌詞ファイル {result.LyricsPaths.Count} 件・フォント設定 {result.FontSetCount} 件）{warn}";
+                     $"（歌詞 {result.LyricsLineCount} 行・歌詞ファイル {result.LyricsPaths.Count} 件・フォント設定 {result.FontSetCount} 件{sized}）{warn}";
         return result;
     }
 

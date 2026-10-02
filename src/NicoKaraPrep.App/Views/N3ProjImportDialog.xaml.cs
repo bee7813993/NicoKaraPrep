@@ -131,9 +131,12 @@ public sealed partial class N3ProjImportDialog : ContentDialog
         _preview = preview;
 
         var existing = new HashSet<string>(vm.Settings.N3FontSets.Select(f => f.Name));
+        var projectNames = new HashSet<string>(preview.FontSets.Select(f => f.Name));
         foreach (var f in preview.FontSets.Where(f => f.Name.Length > 0))
         {
             var row = N3ImportFontRow.From(f, existing.Contains(f.Name));
+            // ページの文字の大きさのために書き出しで作ったフォント設定（「（麻衣）+4」など）は、最初は選ばない（書き出すたびに作り直すため）
+            if (N3PageFontSize.IsDerivedName(f.Name, projectNames)) row.IsSelected = false;
             row.PropertyChanged += OnFontRowChanged;
             FontRows.Add(row);
         }

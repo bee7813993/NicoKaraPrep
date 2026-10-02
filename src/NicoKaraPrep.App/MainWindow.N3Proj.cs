@@ -287,7 +287,7 @@ public sealed partial class MainWindow
         TryRun(() =>
         {
             int n = ViewModel.ClearLineOverrides(indexes);
-            ViewModel.StatusText = n > 0 ? $"{n} 行の表示時刻・フォント指定を解除しました" : "手動指定のある行はありません";
+            ViewModel.StatusText = n > 0 ? $"{n} 行の表示時刻・フォント・レイアウト・文字の大きさの指定を解除しました" : "手動指定のある行はありません";
         });
         foreach (var line in ViewModel.Lines) line.RaiseOverrideMark();
         RefreshN3LinePanel();
@@ -317,6 +317,7 @@ public sealed partial class MainWindow
                 LineFontLabel.Text = "フォント";
                 LineLayoutBox.SelectedIndex = -1;
                 LineLayoutBox.PlaceholderText = "（自動）";
+                PageFontSizeBox.Value = 0;
                 UpdateSideTarget();
                 RefreshLineFontPlaceholder();
                 return;
@@ -335,6 +336,7 @@ public sealed partial class MainWindow
             LineFontBox.Text = model.FontSetName ?? "";
             RefreshLineFontForSelection();
             RefreshLineLayoutBox(line);
+            PageFontSizeBox.Value = ViewModel.PageFontSizeDelta(line.Index);
 
             if (plan is null)
             {
@@ -478,6 +480,37 @@ public sealed partial class MainWindow
         // 行リストのレイアウトの表示とプレビューを作り直す（チェックはしないので、上の知らせは消えない）
         TryRun(ViewModel.UpdateLineFonts);
         RefreshLineLayoutBox(line);
+    }
+
+    /// <summary>行設定の文字の大きさの欄（選んだ行のページすべてに、文字の大きさの増減 px を指定する。0 でそのまま）。</summary>
+    private void OnPageFontSizeChanged(NumberBox sender, NumberBoxValueChangedEventArgs args)
+    {
+        if (_n3PanelLoading || ViewModel.SelectedLine is not { } line || line.Model.IsEmpty) return;
+        double value = double.IsNaN(args.NewValue) ? 0 : args.NewValue;
+        int delta = (int)Math.Round(Math.Clamp(value, N3PageFontSize.MinDelta, N3PageFontSize.MaxDelta), MidpointRounding.AwayFromZero);
+        var indexes = SelectedIndexes;
+        if (indexes.Count == 0) indexes = new List<int> { line.Index };
+        int n = 0;
+        TryRun(() => n = ViewModel.SetLinesFontSizeDelta(indexes, delta));
+        if (n > 0)
+        {
+            foreach (var l in ViewModel.Lines) l.RaiseOverrideMark();
+            ViewModel.StatusText = delta == 0
+                ? $"選んだ行のページ（{n} 行）の文字の大きさを元に戻しました"
+                : $"選んだ行のページ（{n} 行）の文字の大きさを {N3PageFontSize.Signed(delta)} px にしました（n3proj の書き出しで、文字の大きさだけを変えたフォント設定を作って当てます）";
+        }
+        // 行リスト・字幕のプレビュー・横幅を作り直す（チェックはしないので、上の知らせは消えない）。欄は整数・範囲内の値に直す
+        TryRun(ViewModel.UpdateLineFonts);
+        bool loading = _n3PanelLoading;
+        _n3PanelLoading = true;
+        try
+        {
+            sender.Value = ViewModel.PageFontSizeDelta(line.Index);
+        }
+        finally
+        {
+            _n3PanelLoading = loading;
+        }
     }
 
     private static string FmtCs(int cs) => TimeTag.Format(cs).Trim('[', ']');

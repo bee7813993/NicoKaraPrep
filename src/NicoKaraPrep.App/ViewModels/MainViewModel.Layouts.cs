@@ -144,4 +144,32 @@ public partial class MainViewModel
         SaveProject();
         return changed.Count;
     }
+
+    /// <summary>
+    /// 選んだ行のページ（ページの行すべて）の文字の大きさの増減 px を指定する（0 でそのまま。<see cref="N3PageFontSize"/>）。
+    /// 変えた行の数を返す（変わらなければ 0）。
+    /// </summary>
+    public int SetLinesFontSizeDelta(IReadOnlyList<int> indexes, int delta)
+    {
+        delta = Math.Clamp(delta, N3PageFontSize.MinDelta, N3PageFontSize.MaxDelta);
+        var show = CreateShowTimeSettings(_activeTab.Name);
+        var pages = Document.GetPages(show.PageMode, show.FixedLineCount);
+        var targets = new SortedSet<int>();
+        foreach (int i in indexes)
+        {
+            if (i < 0 || i >= Document.Lines.Count || Document.Lines[i].IsEmpty) continue;
+            var page = pages.FirstOrDefault(p => p.Contains(i));
+            foreach (int k in page ?? new List<int> { i }) targets.Add(k);
+        }
+        var changed = targets.Where(i => Document.Lines[i].FontSizeDelta != delta).ToList();
+        if (changed.Count == 0) return 0;
+        PushUndo();
+        foreach (int i in changed) Document.Lines[i].FontSizeDelta = delta;
+        MarkModified();
+        SaveProject();
+        return changed.Count;
+    }
+
+    /// <summary>表示中のタブの、行のページの文字の大きさの増減 px（<see cref="UpdateLineFonts"/> で作り直す。0 = そのまま）。</summary>
+    public int PageFontSizeDelta(int index) => _pageFontSizeDeltas.GetValueOrDefault(index);
 }

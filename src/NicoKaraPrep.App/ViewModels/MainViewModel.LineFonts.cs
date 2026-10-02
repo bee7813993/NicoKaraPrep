@@ -43,6 +43,9 @@ public partial class MainViewModel
     /// </summary>
     private Dictionary<int, LineWidthResult> _lineWidths = new();
 
+    /// <summary>表示中のタブの、行のページの文字の大きさの増減 px（0 の行は入れない。<see cref="UpdateLineFonts"/> で作り直す）。</summary>
+    private Dictionary<int, int> _pageFontSizeDeltas = new();
+
     /// <summary>
     /// 書き出しのベースにする n3proj（<see cref="SuggestN3ProjBasePath"/>）の中身。ベースが無い・読めなければ null。
     /// ファイルのパスと更新日時が同じあいだは読み直さない。
@@ -93,6 +96,7 @@ public partial class MainViewModel
         if (active < 0)
         {
             _lineWidths = new();
+            _pageFontSizeDeltas = new();
             return;
         }
 
@@ -140,10 +144,25 @@ public partial class MainViewModel
             fontIds[k] = FontContentId(effective[k]!);
         }
 
-        LineRenderSource Source(LyricsLine line, N3FontResolver.LineFonts fonts, SubtitleSpacing spacing)
+        // ページの文字の大きさの増減（書き出しと同じく、ページの文字のフォント設定を大きさだけを変えたものにする。増減ごとに 1 回だけ作る）
+        var activeShow = CreateShowTimeSettings(tabs[active].Name);
+        var activeDeltas = N3PageFontSize.LineDeltas(tabs[active].Document, activeShow.PageMode, activeShow.FixedLineCount);
+        _pageFontSizeDeltas = activeDeltas;
+        var sized = new Dictionary<(int Font, int Delta), (N3FontSet Font, int Id)>();
+        (N3FontSet Font, int Id) FontOf(int k, int delta)
         {
-            var unitFonts = fonts.Units.Select(u => effective[u]).ToArray();
-            string key = $"{context.Key}|{TextEditModeFormat.WriteLyricLine(line)}|{string.Join(",", fonts.Units.Select(u => fontIds[u]))}";
+            if (delta == 0) return (effective[k]!, fontIds[k]);
+            if (sized.TryGetValue((k, delta), out var made)) return made;
+            var font = N3PageFontSize.Derive(effective[k]!, delta);
+            made = (font, FontContentId(font));
+            sized[(k, delta)] = made;
+            return made;
+        }
+
+        LineRenderSource Source(LyricsLine line, N3FontResolver.LineFonts fonts, SubtitleSpacing spacing, int delta)
+        {
+            var unitFonts = fonts.Units.Select(u => FontOf(u, delta).Font).ToArray();
+            string key = $"{context.Key}|{TextEditModeFormat.WriteLyricLine(line)}|{string.Join(",", fonts.Units.Select(u => FontOf(u, delta).Id))}";
             return new LineRenderSource(line, unitFonts, context, spacing, key);
         }
 
@@ -160,7 +179,7 @@ public partial class MainViewModel
                 line.SetRenderSource(null);
                 continue;
             }
-            line.SetRenderSource(Source(line.Model, fonts, SubtitleSpacing.Default));
+            line.SetRenderSource(Source(line.Model, fonts, SubtitleSpacing.Default, activeDeltas.GetValueOrDefault(i)));
         }
 
         // 字幕のプレビュー（全タブ。書き出しと同じ表示時刻・ページ・レイアウト）と、行リストのレイアウト・横幅の表示
@@ -175,7 +194,9 @@ public partial class MainViewModel
         for (int t = 0; t < tabs.Count; t++)
         {
             var doc = tabs[t].Document;
-            var plans = N3ShowTimePlanner.Plan(doc, CreateShowTimeSettings(tabs[t].Name));
+            var show = CreateShowTimeSettings(tabs[t].Name);
+            var plans = N3ShowTimePlanner.Plan(doc, show);
+            var deltas = t == active ? activeDeltas : N3PageFontSize.LineDeltas(doc, show.PageMode, show.FixedLineCount);
             if (plans.Count == 0 && t != active) continue;
             string? fixedLayout = N3ProjSettings.TabLayouts.GetValueOrDefault(tabs[t].Name) is { Length: > 0 } fl ? fl : null;
             var resolver = new N3ProjWriter.LayoutResolver(infos, fixedLayout, Nkm3Env?.LayoutSelectableBegin, Nkm3Env?.LayoutSelectableEnd, new List<string>(), tabs[t].Name);
@@ -193,17 +214,22 @@ public partial class MainViewModel
                 var line = doc.Lines[index];
                 var page = pages[plan.PageIndex];
                 var layout = layouts[page.Layout];
+                int delta = deltas.GetValueOrDefault(index);
                 if (t == active)
                 {
                     string how = page.Manual ? "このページに手動で指定したレイアウト" : fixedLayout is not null && resolver.FindIndex(fixedLayout) is not null
                         ? "タブに固定したレイアウト（n3proj の書き出しの設定）"
                         : $"ページの行数（{page.Count} 行）から自動で選んだレイアウト";
-                    layoutTexts[index] = ((page.Manual ? "✎" : "") + layout.Name, $"{how}: {layout.Name}");
+                    string size = delta != 0 ? $"（文字 {N3PageFontSize.Signed(delta)}）" : "";
+                    string sizeTip = delta != 0
+                        ? $"\nこのページの文字の大きさ: {N3PageFontSize.Signed(delta)} px（書き出しでは、文字に当たるフォント設定を、文字の大きさだけを変えたもの（名前の後ろに「{N3PageFontSize.Signed(delta)}」を付けたもの）にします）"
+                        : "";
+                    layoutTexts[index] = ((page.Manual ? "✎" : "") + layout.Name + size, $"{how}: {layout.Name}{sizeTip}");
                 }
                 if (line.IsEmpty || line.GetDisplayText().Length == 0 || index >= resolved[t].Count) continue;
                 var fonts = resolved[t][index];
                 if (fonts.Runs.Count == 0) continue;
-                var source = Source(line, fonts, SpacingOf(layout));
+                var source = Source(line, fonts, SpacingOf(layout), delta);
                 // 1 行のページを上の段へ上げる（PageRowMap）のは、レイアウトにその段があるときだけ（1 行のレイアウト「コーラス1行」などでは下の段のまま。
                 // ニコカラメーカー3 の出力で確認）。行が多いページはレイアウトの行数を超えても積み上げる
                 int maxRow = Math.Max(layout.LineCount, page.Count);
@@ -230,7 +256,7 @@ public partial class MainViewModel
                     var layout = line.LayoutName is { Length: > 0 } name && resolver.FindIndex(name) is int li
                         ? layouts[Math.Clamp(li, 0, layouts.Count - 1)]
                         : single;
-                    widths[i] = LineWidthValidator.Evaluate(i, Source(line, fonts, SpacingOf(layout)).GetLayout().Width, screenWidth, layout.HorizontalMarginPx);
+                    widths[i] = LineWidthValidator.Evaluate(i, Source(line, fonts, SpacingOf(layout), activeDeltas.GetValueOrDefault(i)).GetLayout().Width, screenWidth, layout.HorizontalMarginPx);
                 }
             }
         }

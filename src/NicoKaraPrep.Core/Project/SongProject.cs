@@ -23,6 +23,9 @@ public sealed class LineExportSettings
     /// <summary>行のページのレイアウト設定名の手動指定。null は自動。</summary>
     public string? LayoutName { get; set; }
 
+    /// <summary>行のページの文字の大きさの増減 px（0 = そのまま）。</summary>
+    public int FontSizeDelta { get; set; }
+
     /// <summary>文字単位のフォント設定名の手動指定（表示文字の位置の範囲）。無ければ null。</summary>
     public List<CharFontRange>? CharFonts { get; set; }
 
@@ -45,6 +48,7 @@ public sealed class LineExportSettings
                 ShowEndCs = l.ShowEndCs,
                 FontSetName = l.FontSetName,
                 LayoutName = l.LayoutName,
+                FontSizeDelta = l.FontSizeDelta,
                 CharFonts = ranges.Count > 0 ? ranges : null,
                 CharText = ranges.Count > 0 ? l.GetDisplayText() : null,
             });
@@ -64,6 +68,7 @@ public sealed class LineExportSettings
             l.ShowEndCs = s.ShowEndCs;
             l.FontSetName = string.IsNullOrEmpty(s.FontSetName) ? null : s.FontSetName;
             l.LayoutName = string.IsNullOrEmpty(s.LayoutName) ? null : s.LayoutName;
+            l.FontSizeDelta = s.FontSizeDelta;
             if (s.CharFonts is { Count: > 0 } && s.CharText == l.GetDisplayText()) CharFontOperations.ApplyRanges(l, s.CharFonts);
         }
     }

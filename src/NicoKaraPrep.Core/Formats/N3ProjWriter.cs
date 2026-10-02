@@ -90,7 +90,8 @@ public sealed record N3ProjExportResult(
     IReadOnlyList<string> LyricsPaths,
     int LyricsLineCount,
     int FontSetCount,
-    IReadOnlyList<string> Warnings);
+    IReadOnlyList<string> Warnings,
+    IReadOnlyList<string>? SizedFontSets = null);
 
 /// <summary>
 /// ニコカラメーカー3 のプロジェクト（.n3proj）を書き出す。
@@ -143,9 +144,10 @@ public static class N3ProjWriter
             lrcPaths.Add(lrcPath);
         }
 
-        var root = BuildProjectJson(projectPath, sources, options, baseRoot, warnings, out int lineCount, out int fontCount);
+        var sized = new List<string>();
+        var root = BuildProjectJson(projectPath, sources, options, baseRoot, warnings, out int lineCount, out int fontCount, sized);
         SaveZip(projectPath, root);
-        return new N3ProjExportResult(projectPath, lrcPaths, lineCount, fontCount, warnings);
+        return new N3ProjExportResult(projectPath, lrcPaths, lineCount, fontCount, warnings, sized);
     }
 
     /// <summary>n3proj の ZIP を書く（エントリ "0" に BOM 付き UTF-8 の JSON）。</summary>
@@ -185,6 +187,7 @@ public static class N3ProjWriter
     }
 
     /// <summary>プロジェクト全体の JSON を組み立てる（ファイルは書かない）。</summary>
+    /// <param name="sizedFontSets">ページの文字の大きさの増減のために足した（置き直した）フォント設定の名前を入れる（null なら入れない）。</param>
     internal static JsonObject BuildProjectJson(
         string projectPath,
         IReadOnlyList<TabSource> sources,
@@ -192,7 +195,8 @@ public static class N3ProjWriter
         JsonObject? baseRoot,
         List<string> warnings,
         out int lineCount,
-        out int fontCount)
+        out int fontCount,
+        List<string>? sizedFontSets = null)
     {
         string ver = string.IsNullOrWhiteSpace(options.AppVersion) ? DefaultAppVersion : options.AppVersion;
         string projectDir = Path.GetDirectoryName(Path.GetFullPath(projectPath)) ?? "";
@@ -254,16 +258,20 @@ public static class N3ProjWriter
         // 全タブで 1 つを共有する（前のタブの最後のフォントを次のタブへ引き継ぐ。ニコカラメーカー3 の動作は未確認）
         var fontResolver = new N3FontResolver(fontNames.Select(f => f.Name).ToList(), options.DefaultFontSetName, options.ContinueFontAcrossLines);
         var action = ResolveSubtitleAction(baseRoot, options.CharFadeSettings, ver);
+        // ページの文字の大きさの増減: 大きさだけを変えたフォント設定を、使うものだけ後ろへ足す（フォントを決める並びには入れない）
+        var sizeVariants = new FontSizeVariants(fonts, height, ver);
         for (int t = 0; t < sources.Count; t++)
         {
             var src = sources[t];
             var show = CloneShowSettings(options.ShowTime);
             show.TopLong = src.Tab.TopLong ?? options.ShowTime.TopLong;
             var layoutResolver = new LayoutResolver(layoutInfos, src.Tab.LayoutName, options.LayoutSelectableBegin, options.LayoutSelectableEnd, warnings, src.Tab.Name);
-            var lines = BuildLineInfos(src.Tab.Document, show, options.EmojiEntries, fontResolver, layoutResolver, action, ver, out int count);
+            var lines = BuildLineInfos(src.Tab.Document, show, options.EmojiEntries, fontResolver, layoutResolver, action, ver, out int count, sizeVariants);
             lineCount += count;
             infos.Add(BuildLyricsInfo(src, t, projectDir, lines, show, ver));
         }
+        fontCount = fonts.Count;
+        sizedFontSets?.AddRange(sizeVariants.Names);
         for (int t = sources.Count; t < 3; t++)
         {
             infos.Add(EmptyLyricsInfo(t, options.ShowTime, ver));
@@ -338,6 +346,7 @@ public static class N3ProjWriter
     /// 歌詞行（LineInfos）を生成する。空行の直前にページ区切り／段落区切りの合成行を挿入し、
     /// 各歌詞行に文字の時刻・フォント・レイアウト・表示時刻・字幕アクションを付ける。
     /// </summary>
+    /// <param name="sizeVariants">ページの文字の大きさの増減に使う、大きさを変えたフォント設定（null なら増減しない）。</param>
     internal static JsonArray BuildLineInfos(
         LyricsDocument doc,
         N3ShowTimeSettings show,
@@ -346,11 +355,13 @@ public static class N3ProjWriter
         LayoutResolver layouts,
         (string Id, JsonObject Settings) action,
         string ver,
-        out int lyricCount)
+        out int lyricCount,
+        FontSizeVariants? sizeVariants = null)
     {
         var arr = new JsonArray();
         var plans = N3ShowTimePlanner.Plan(doc, show);
         var pages = doc.GetPages(show.PageMode, show.FixedLineCount);
+        var sizeDeltas = sizeVariants is null ? new Dictionary<int, int>() : N3PageFontSize.LineDeltas(doc, show.PageMode, show.FixedLineCount);
         var layoutOfLine = new Dictionary<int, int>();
         foreach (var page in pages)
         {
@@ -407,6 +418,10 @@ public static class N3ProjWriter
 
             var tokens = Tokenize(line, matcher);
             var fontByUnit = fonts.Resolve(line);
+            if (sizeVariants is not null && sizeDeltas.TryGetValue(i, out int delta))
+            {
+                for (int u = 0; u < fontByUnit.Length; u++) fontByUnit[u] = sizeVariants.Get(fontByUnit[u], delta);
+            }
             var chars = BuildCharInfos(tokens, fontByUnit, line.EndTimeCs);
             plans.TryGetValue(i, out var plan);
             arr.Add(LineInfo(
@@ -1247,6 +1262,100 @@ public static class N3ProjWriter
 
     /// <summary>未指定（継承）を表す SizeAndRatio。</summary>
     private static JsonObject BlankSize() => new() { ["Size"] = 0, ["Reference"] = 0, ["Ratio"] = 0 };
+
+    /// <summary>
+    /// ページの文字の大きさの増減のための、文字の大きさだけを変えたフォント設定（<see cref="N3PageFontSize"/>）。
+    /// 書き出すフォント設定（LyricsFonts）の 1 件を複製して文字サイズだけを変え、「（麻衣）+4」のような名前で後ろへ足す。
+    /// 同じ名前が既にあれば（前の書き出しをベースにしたとき）、その位置に作り直して置く。テンプレート連動は外す。
+    /// </summary>
+    internal sealed class FontSizeVariants
+    {
+        private readonly JsonArray _fonts;
+        private readonly int _reference;
+        private readonly string _ver;
+        private readonly Dictionary<(int Index, int Delta), int> _made = new();
+
+        public FontSizeVariants(JsonArray fonts, int reference, string ver)
+        {
+            _fonts = fonts;
+            _reference = reference;
+            _ver = ver;
+        }
+
+        /// <summary>足した（置き直した）フォント設定の名前（作った順）。</summary>
+        public List<string> Names { get; } = new();
+
+        /// <summary>フォント設定 <paramref name="index"/> の文字の大きさを <paramref name="delta"/> px 変えたフォント設定の番号（作っていなければ作る）。</summary>
+        public int Get(int index, int delta)
+        {
+            if (delta == 0 || index < 0 || index >= _fonts.Count || _fonts[index] is not JsonObject source) return index;
+            if (_made.TryGetValue((index, delta), out int made)) return made;
+
+            string name = N3PageFontSize.DerivedName(N3FontJson.Str(source["SettingsName"]) ?? "", delta);
+            var sizes = N3PageFontSize.OffsetFaceSizes(N3FontJson.ParseFontSet(source, _reference), delta);
+            var derived = (JsonObject)source.DeepClone();
+            if (derived["FontInfos"] is JsonArray faces)
+            {
+                for (int i = 0; i < faces.Count && i < sizes.Length; i++)
+                {
+                    if (sizes[i] > 0 && faces[i] is JsonObject face) face["CharSize"] = SizeAndRatio(sizes[i], _reference);
+                }
+            }
+            NewGuids(derived);
+            derived["SettingsName"] = name;
+            derived["Synchronize"] = false;
+            derived["SynchronizedTime"] = NoTime;
+            derived["LastModified"] = DateTime.UtcNow;
+            derived["ModifyAppVer"] = _ver;
+
+            int existing = -1;
+            for (int i = 0; i < _fonts.Count; i++)
+            {
+                if (i != index && _fonts[i] is JsonObject o && N3FontJson.Str(o["SettingsName"]) == name)
+                {
+                    existing = i;
+                    break;
+                }
+            }
+            int result = existing >= 0 ? existing : _fonts.Count;
+            derived["Index"] = result;
+            if (existing >= 0)
+            {
+                _fonts[existing] = derived;
+            }
+            else
+            {
+                _fonts.Add(derived);
+            }
+            _made[(index, delta)] = result;
+            Names.Add(name);
+            return result;
+        }
+
+        /// <summary>複製の中の Guid をすべて新しくする（元のフォント設定と同じ Guid を持たせない）。</summary>
+        private static void NewGuids(JsonNode? node)
+        {
+            switch (node)
+            {
+                case JsonObject o:
+                    foreach (var key in o.Select(p => p.Key).ToList())
+                    {
+                        if (key == "Guid" && o[key] is JsonValue)
+                        {
+                            o[key] = Guid.NewGuid().ToString();
+                        }
+                        else
+                        {
+                            NewGuids(o[key]);
+                        }
+                    }
+                    break;
+                case JsonArray a:
+                    foreach (var item in a) NewGuids(item);
+                    break;
+            }
+        }
+    }
 
     /// <summary>ColorBindModel（DxColor + Web16）。R/G/B は byte/255、A は不透明度 % / 100。</summary>
     internal static JsonObject ColorBind(string web16, string ver, int alphaPercent = 100)

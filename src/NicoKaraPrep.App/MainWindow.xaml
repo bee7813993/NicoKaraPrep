@@ -192,7 +192,7 @@
                     <MenuFlyoutSeparator />
                     <MenuFlyoutItem Text="ニコカラメーカー3 プロジェクト(n3proj)を書き出し..." Click="OnExportN3ProjClick" />
                     <MenuFlyoutItem Text="ニコカラメーカー3 のフォント設定を編集" KeyboardAcceleratorTextOverride="F3" Click="OnFontSettingsViewClick" />
-                    <MenuFlyoutItem Text="選択行の表示時刻・フォント指定を解除" Click="OnClearN3OverridesClick" />
+                    <MenuFlyoutItem Text="選択行の表示時刻・フォント指定を解除" Click="OnClearN3OverridesClick" ToolTipService.ToolTip="選んだ行の、ニコカラメーカー用の手動指定（表示時刻・フォント・レイアウト・文字の大きさ）をまとめて解除します" />
                 </MenuBarItem>
                 <MenuBarItem Title="再生(P)" AccessKey="P">
                     <MenuFlyoutItem Text="メディアを開く..." Click="OnOpenMediaClick" />
@@ -438,7 +438,7 @@
                                     <TextBlock Text="{x:Bind WidthGlyph, Mode=OneWay}" ToolTipService.ToolTip="横幅チェック結果" />
                                 </StackPanel>
                                 <TextBlock Grid.Column="4" Text="{x:Bind WidthText, Mode=OneWay}" FontSize="12" TextWrapping="Wrap" Foreground="{x:Bind WidthBrush, Mode=OneWay}" VerticalAlignment="Center" ToolTipService.ToolTip="{x:Bind WidthToolTip, Mode=OneWay}" />
-                                <TextBlock Grid.Column="5" Text="{x:Bind OverrideMark, Mode=OneWay}" FontSize="12" VerticalAlignment="Center" Foreground="{ThemeResource AccentTextFillColorPrimaryBrush}" ToolTipService.ToolTip="ニコカラメーカー用の手動指定（表示時刻・フォント）あり" />
+                                <TextBlock Grid.Column="5" Text="{x:Bind OverrideMark, Mode=OneWay}" FontSize="12" VerticalAlignment="Center" Foreground="{ThemeResource AccentTextFillColorPrimaryBrush}" ToolTipService.ToolTip="ニコカラメーカー用の手動指定（表示時刻・フォント・レイアウト・文字の大きさ）あり" />
                                 <!-- この行に当たるフォント設定（書き出しと同じ決め方。途中で切り替わる行は最初と最後を → でつなぐ）と、下の段にこの行のページのレイアウト。
                                      中の大きさを変えたら MainWindow.Layout.cs の FontCellWidth も合わせる -->
                                 <StackPanel Grid.Column="6" VerticalAlignment="Center" Spacing="1">
@@ -535,6 +535,12 @@
                         <ComboBox x:Name="LineLayoutBox" Width="140" FontSize="12" PlaceholderText="（自動）"
                                   SelectionChanged="OnLineLayoutChanged"
                                   ToolTipService.ToolTip="この行のページに使うレイアウト設定（「（自動）」でページの行数から選ぶ。同じページの行すべてに効きます）" />
+                        <!-- ページの文字の大きさの増減（ニコカラメーカー3 には無い機能。書き出しで大きさだけを変えたフォント設定を作る） -->
+                        <TextBlock Text="文字の大きさ" FontSize="12" VerticalAlignment="Center" Margin="8,0,0,0"
+                                   ToolTipService.ToolTip="この行のページの文字の大きさを、フォント設定の文字サイズに足す px（マイナスで小さく。0 でそのまま。ページ単位で、同じページの行すべてに効きます）" />
+                        <NumberBox x:Name="PageFontSizeBox" Width="96" FontSize="12" Value="0" Minimum="-100" Maximum="200" SmallChange="1" LargeChange="10"
+                                   SpinButtonPlacementMode="Compact" ValueChanged="OnPageFontSizeChanged"
+                                   ToolTipService.ToolTip="ページの文字の大きさの増減 px（+4 で 4px 大きく）。書き出しでは、文字に当たるフォント設定を、文字の大きさだけを変えたもの（「（麻衣）+4」のように名前の後ろに増減を付けたもの）にして足します。ルビは歌詞と同じ割合で変わり、縁の幅は変わりません" />
                     </StackPanel>
                     <TextBlock Grid.Column="2" x:Name="N3LineInfo" FontSize="12" VerticalAlignment="Center" Foreground="{ThemeResource TextFillColorSecondaryBrush}" TextTrimming="CharacterEllipsis" />
                 </Grid>
