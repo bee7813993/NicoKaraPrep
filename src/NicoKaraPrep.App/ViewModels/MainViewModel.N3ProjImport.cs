@@ -137,10 +137,11 @@ public partial class MainViewModel
     public int CountLineShowTimeImports(N3ProjImportPreview preview, bool withEstimatedTiming)
     {
         StoreActiveTab();
+        var matcher = CreateEmojiMatcher();
         int count = 0;
         foreach (var tab in Tabs)
         {
-            var (source, matched) = N3ProjImport.FindSource(tab.Document, tab.Name, preview.Tabs);
+            var (source, matched) = N3ProjImport.FindSource(tab.Document, tab.Name, preview.Tabs, matcher);
             if (source is null || matched.Count == 0) continue;
             var settings = withEstimatedTiming ? EstimatedShowTimeSettings(preview, source) : CreateShowTimeSettings(tab.Name);
             count += N3ProjImport.ApplyShowTimes(tab.Document.Clone(), matched, settings).Count;
@@ -155,10 +156,11 @@ public partial class MainViewModel
     {
         StoreActiveTab();
         var layouts = EffectiveLayoutsFor(preview.Path);
+        var matcher = CreateEmojiMatcher();
         int count = 0;
         foreach (var tab in Tabs)
         {
-            var (source, _) = N3ProjImport.FindSource(tab.Document, tab.Name, preview.Tabs);
+            var (source, _) = N3ProjImport.FindSource(tab.Document, tab.Name, preview.Tabs, matcher);
             if (source is not null) count += PageLayoutDifferences(tab, source, layouts).Count;
         }
         return count;
@@ -172,7 +174,7 @@ public partial class MainViewModel
     {
         var result = new List<(List<int>, string)>();
         if (layouts.Count == 0) return result;
-        var map = N3ProjImport.MatchLineIndexes(tab.Document, source);
+        var map = N3ProjImport.MatchLineIndexes(tab.Document, source, CreateEmojiMatcher());
         if (map.Count == 0) return result;
         var plans = N3ShowTimePlanner.Plan(tab.Document, CreateShowTimeSettings(tab.Name));
         string? fixedLayout = N3ProjSettings.TabLayouts.GetValueOrDefault(tab.Name) is { Length: > 0 } fl ? fl : null;
@@ -213,11 +215,12 @@ public partial class MainViewModel
     public (int Matched, int Total) CountMatchedLyricLines(N3ProjImportPreview preview)
     {
         StoreActiveTab();
+        var matcher = CreateEmojiMatcher();
         int matched = 0, total = 0;
         foreach (var tab in Tabs)
         {
             total += tab.Document.Lines.Count(l => !l.IsEmpty);
-            matched += N3ProjImport.FindSource(tab.Document, tab.Name, preview.Tabs).Lines.Count;
+            matched += N3ProjImport.FindSource(tab.Document, tab.Name, preview.Tabs, matcher).Lines.Count;
         }
         return (matched, total);
     }
@@ -228,6 +231,8 @@ public partial class MainViewModel
         StoreActiveTab();
         var done = new List<string>();
         bool settingsChanged = false;
+        // 歌詞行の照合では、絵文字・＿の開始タグを除いて比べる（書き出しで絵文字の開始を寄せた行も、絵文字の秒数を変えた行も対応させる）
+        var matcher = CreateEmojiMatcher();
 
         // 1) 表示時刻の設定値（手動指定の取り込みより先に適用し、その設定で差分を取る）
         if (choices.Timing && preview.Timing is { } timing)
@@ -238,7 +243,7 @@ public partial class MainViewModel
             Settings.N3TopLong = preview.MainTopLong;
             foreach (var tab in Tabs)
             {
-                var (source, _) = N3ProjImport.FindSource(tab.Document, tab.Name, preview.Tabs);
+                var (source, _) = N3ProjImport.FindSource(tab.Document, tab.Name, preview.Tabs, matcher);
                 if (source is null) continue;
                 if (source.TopLong == Settings.N3TopLong) N3ProjSettings.TabTopLong.Remove(tab.Name);
                 else N3ProjSettings.TabTopLong[tab.Name] = source.TopLong;
@@ -270,7 +275,7 @@ public partial class MainViewModel
             int lines = 0;
             foreach (var tab in Tabs)
             {
-                var (source, matched) = N3ProjImport.FindSource(tab.Document, tab.Name, preview.Tabs);
+                var (source, matched) = N3ProjImport.FindSource(tab.Document, tab.Name, preview.Tabs, matcher);
                 if (source is null || matched.Count == 0) continue;
                 var settings = CreateShowTimeSettings(tab.Name);
 
@@ -306,7 +311,7 @@ public partial class MainViewModel
             int pages = 0;
             foreach (var tab in Tabs)
             {
-                var (source, _) = N3ProjImport.FindSource(tab.Document, tab.Name, preview.Tabs);
+                var (source, _) = N3ProjImport.FindSource(tab.Document, tab.Name, preview.Tabs, matcher);
                 if (source is null) continue;
                 var diffs = PageLayoutDifferences(tab, source, layouts);
                 if (diffs.Count == 0) continue;

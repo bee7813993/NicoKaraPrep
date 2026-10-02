@@ -233,9 +233,12 @@ public partial class MainViewModel
                 // 1 行のページを上の段へ上げる（PageRowMap）のは、レイアウトにその段があるときだけ（1 行のレイアウト「コーラス1行」などでは下の段のまま。
                 // ニコカラメーカー3 の出力で確認）。行が多いページはレイアウトの行数を超えても積み上げる
                 int maxRow = Math.Max(layout.LineCount, page.Count);
+                // ワイプは書き出しと同じく、表示開始より前になった絵文字の開始を表示開始へ寄せた行で作る
+                // （絵文字の分だけ行の表示を遅らせる規則。規則がオフなら元の行のまま）
+                var wipeLine = show.YieldsEmojiLead ? N3EmojiLead.ClampLine(line, plan.BeginMs, show.LeadMatcher) : line;
                 previewLines.Add(new PreviewLine(
                     source, plan.BeginMs, plan.EndMs, t, plan.PageIndex, Math.Min(plan.Row, maxRow), Math.Min(Math.Max(page.Rows, page.Count), maxRow),
-                    page.Count, layout, N3WipeTimeline.Groups(line)));
+                    page.Count, layout, N3WipeTimeline.Groups(wipeLine)));
                 if (t == active)
                 {
                     widths[index] = LineWidthValidator.Evaluate(index, source.GetLayout().Width, screenWidth, layout.HorizontalMarginPx);

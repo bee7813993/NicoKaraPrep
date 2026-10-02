@@ -59,6 +59,12 @@
                 <CheckBox x:Name="TopLongCheck" Content="上段の行をページの最後まで表示する（上段歌詞を長めに表示）" MinWidth="0" />
                 <Button x:Name="ImportNkm3Button" Content="ニコカラメーカーの設定値を取り込む" FontSize="12" Padding="8,3" Click="OnImportNkm3Click" Visibility="Collapsed" />
             </StackPanel>
+            <!-- 絵文字の分だけ行の表示を遅らせる（ニコカラメーカー3 には無い機能。保存先は AppSettings.N3EmojiLeadYield） -->
+            <CheckBox x:Name="EmojiLeadYieldCheck"
+                      AutomationProperties.Name="前のページの同じ段と重なるときは、絵文字の分だけ行の表示を遅らせる"
+                      ToolTipService.ToolTip="絵文字の表示秒数は、ワイプ前の表示時間まで縮めます。それでも重なるときは、さらに縮めて前の行のワイプ後を残します">
+                <TextBlock TextWrapping="Wrap" Text="前のページの同じ段と重なるときは、絵文字の分だけ行の表示を遅らせる（ニコカラメーカー3 には無い機能）" />
+            </CheckBox>
 
             <TextBlock Text="歌詞設定タブ" Style="{ThemeResource BodyStrongTextBlockStyle}" Margin="0,6,0,0" />
             <Grid ColumnSpacing="6" Padding="4,0">

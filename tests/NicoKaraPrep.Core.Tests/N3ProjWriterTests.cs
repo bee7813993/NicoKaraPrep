@@ -440,6 +440,199 @@ public class N3ProjWriterTests
         }
     }
 
+    // ------------------------------------------------------------ 絵文字の先行を譲る規則
+
+    /// <summary>Circle of Love 冒頭 3 ページ（上段の行頭に (愛)。ページ1→2・2→3 の上段が重なる）。</summary>
+    private static LyricsDocument CircleOfLove() => Doc(
+        "@Emoji=(愛),a.png",
+        "[00:16:21](愛)[00:18:21]曇[00:19:00]り[00:20:58]",
+        "[00:19:86]「[00:20:70]大[00:23:12]",
+        "",
+        "[00:21:18](愛)[00:23:18]鮮[00:24:00]や[00:25:41]",
+        "[00:25:49]O[00:25:95]ur[00:27:80]",
+        "",
+        "[00:26:20](愛)[00:28:20]無[00:29:00]限[00:30:46]",
+        "[00:29:65]「[00:30:60]楽[00:32:94]");
+
+    /// <summary>ワイプ前 1500 / ワイプ後 800 / 表示間隔 300。絵文字（曲の @Emoji ＋ ＿）の先行を譲る規則のオン・オフ。</summary>
+    private static N3ShowTimeSettings YieldShow(LyricsDocument doc, bool on = true) => new()
+    {
+        LeadMs = 1500,
+        TailMs = 800,
+        IntervalMs = 300,
+        EmojiLeadYield = on,
+        LeadMatcher = new EmojiMatcher(doc.EmojiEntries.Select(e => e.ReplaceChar).Append("＿")),
+    };
+
+    private static N3ProjExportOptions ExportOptions(LyricsDocument doc, N3ShowTimeSettings show) => new()
+    {
+        ShowTime = show,
+        EmojiEntries = doc.EmojiEntries,
+        DefaultFont = new N3FontSet { Name = "標準" },
+    };
+
+    private static JsonObject LyricLine(JsonArray lines, int n) =>
+        lines.OfType<JsonObject>().Where(l => l["Kind"]!.GetValue<int>() == 1).ElementAt(n);
+
+    /// <summary>行の文字の開始時刻の最小（-1 を除く）。</summary>
+    private static int FirstCharBegin(JsonObject line) =>
+        line["LyricsCharInfos"]!.AsArray().Select(c => c!["BeginTime"]!.GetValue<int>()).Where(b => b >= 0).Min();
+
+    /// <summary>書き出すたびに変わる Guid と LastModified を除いた JSON。</summary>
+    private static string WithoutIdentity(JsonNode node)
+    {
+        static void Strip(JsonNode? n)
+        {
+            switch (n)
+            {
+                case JsonObject o:
+                    o.Remove("Guid");
+                    o.Remove("LastModified");
+                    foreach (var kv in o) Strip(kv.Value);
+                    break;
+                case JsonArray a:
+                    foreach (var item in a) Strip(item);
+                    break;
+            }
+        }
+        var copy = node.DeepClone();
+        Strip(copy);
+        return copy.ToJsonString();
+    }
+
+    [Fact]
+    public void 絵文字の先行を譲る_遅らせた行の絵文字は表示開始へ寄せ文字の時刻とRawとlrcをそろえる()
+    {
+        string dir = Path.Combine(Path.GetTempPath(), "NicoKaraPrepTests", Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(dir);
+        try
+        {
+            var doc = CircleOfLove();
+            string before = LrcFormat.Write(doc);
+            string path = Path.Combine(dir, "song.n3proj");
+            string lrcPath = Path.Combine(dir, "song.lrc");
+            N3ProjWriter.Write(path, new[] { new N3ProjExportTab { Name = "メイン", Document = doc, LyricsPath = lrcPath } }, ExportOptions(doc, YieldShow(doc)));
+            var lines = N3ProjFormat.ReadJsonObject(path)["SourceLyricsInfos"]![0]!["LineInfos"]!.AsArray();
+
+            // ページ2 の上段: 21680 に出て、絵文字は 21680〜23180（元は 21180〜。前の行と重ならないよう遅らせた分だけ縮める）
+            var page2 = LyricLine(lines, 2);
+            Assert.Equal(21680, page2["ShowBeginTime"]!.GetValue<int>());
+            AssertChar(page2["LyricsCharInfos"]![0], "(愛)", 21680, 23180, kind: 1);
+            AssertChar(page2["LyricsCharInfos"]![1], "鮮", 23180, 24000);
+            Assert.Equal("[00:21:68](愛)[00:23:18]鮮[00:24:00]や[00:25:41]", page2["Raw"]!.GetValue<string>());
+            // ページ3 の上段
+            var page3 = LyricLine(lines, 4);
+            Assert.Equal(26510, page3["ShowBeginTime"]!.GetValue<int>());
+            AssertChar(page3["LyricsCharInfos"]![0], "(愛)", 26510, 28200, kind: 1);
+            Assert.Equal("[00:26:51](愛)[00:28:20]無[00:29:00]限[00:30:46]", page3["Raw"]!.GetValue<string>());
+            // 重ならない行（ページ1 の上段）の絵文字はそのまま。前の行はワイプ後を残す
+            var page1 = LyricLine(lines, 0);
+            Assert.Equal((14710, 21380), (page1["ShowBeginTime"]!.GetValue<int>(), page1["ShowEndTime"]!.GetValue<int>()));
+            AssertChar(page1["LyricsCharInfos"]![0], "(愛)", 16210, 18210, kind: 1);
+            Assert.Equal("[00:16:21](愛)[00:18:21]曇[00:19:00]り[00:20:58]", page1["Raw"]!.GetValue<string>());
+            // どの行も表示開始 ≦ 最初の文字（絵文字）の開始
+            foreach (var line in lines.OfType<JsonObject>().Where(l => l["Kind"]!.GetValue<int>() == 1))
+            {
+                Assert.True(line["ShowBeginTime"]!.GetValue<int>() <= FirstCharBegin(line), line["Raw"]!.GetValue<string>());
+            }
+
+            // 書き出した lrc も同じ寄せ（ニコカラメーカーが lrc を読み直しても文字の時刻が変わらない）
+            var written = LrcFormat.Parse(File.ReadAllText(lrcPath));
+            var raws = lines.OfType<JsonObject>().Where(l => l["Kind"]!.GetValue<int>() == 1).Select(l => l["Raw"]!.GetValue<string>());
+            Assert.Equal(raws, written.Lines.Where(l => !l.IsEmpty).Select(LrcFormat.WriteLyricLine));
+            // ユーザーの歌詞は変えない
+            Assert.Equal(before, LrcFormat.Write(doc));
+        }
+        finally
+        {
+            Directory.Delete(dir, recursive: true);
+        }
+    }
+
+    [Fact]
+    public void 絵文字の先行を譲る_BuildProjectJsonでもタブの上段を長めにと合わせて効く()
+    {
+        var doc = CircleOfLove();
+        var root = N3ProjWriter.BuildProjectJson(@"C:\v\a.n3proj", new[] { Tab("メイン", doc, @"C:\v\a.lrc") }, ExportOptions(doc, YieldShow(doc)), null, new List<string>(), out _, out _);
+        var lines = root["SourceLyricsInfos"]![0]!["LineInfos"]!.AsArray();
+        Assert.Equal(21380, LyricLine(lines, 0)["ShowEndTime"]!.GetValue<int>());
+        Assert.Equal(21680, LyricLine(lines, 2)["ShowBeginTime"]!.GetValue<int>());
+        Assert.Equal("[00:21:68](愛)[00:23:18]鮮[00:24:00]や[00:25:41]", LyricLine(lines, 2)["Raw"]!.GetValue<string>());
+
+        // タブだけ上段を長めに（全体の設定の写しにタブの指定を当てても、規則の設定は残る）
+        var tab = new N3ProjWriter.TabSource(new N3ProjExportTab { Name = "メイン", Document = doc, LyricsPath = @"C:\v\a.lrc", TopLong = true }, @"C:\v\a.lrc", LrcFormat.Write(doc), DateTime.Now);
+        var longRoot = N3ProjWriter.BuildProjectJson(@"C:\v\a.n3proj", new[] { tab }, ExportOptions(doc, YieldShow(doc)), null, new List<string>(), out _, out _);
+        var info = longRoot["SourceLyricsInfos"]![0]!;
+        Assert.Equal("SHINTA.TopLongAdjuster", info["LastSelectedAddOns"]!["ShowTimeAdjusterId"]!.GetValue<string>());
+        var longLines = info["LineInfos"]!.AsArray();
+        Assert.Equal((21680, 26400), (LyricLine(longLines, 2)["ShowBeginTime"]!.GetValue<int>(), LyricLine(longLines, 2)["ShowEndTime"]!.GetValue<int>()));
+        Assert.Equal(26700, LyricLine(longLines, 4)["ShowBeginTime"]!.GetValue<int>());
+        Assert.Equal("[00:26:70](愛)[00:28:20]無[00:29:00]限[00:30:46]", LyricLine(longLines, 4)["Raw"]!.GetValue<string>());
+    }
+
+    [Fact]
+    public void 絵文字の先行を譲る_規則オフなら書き出しは今と同じ()
+    {
+        var doc = CircleOfLove();
+        var tab = Tab("メイン", doc, @"C:\v\a.lrc");
+        JsonObject Build(N3ShowTimeSettings show) =>
+            N3ProjWriter.BuildProjectJson(@"C:\v\a.n3proj", new[] { tab }, ExportOptions(doc, show), null, new List<string>(), out _, out _);
+
+        var plain = Build(new N3ShowTimeSettings { LeadMs = 1500, TailMs = 800, IntervalMs = 300 });
+        var off = Build(YieldShow(doc, on: false));
+        Assert.Equal(WithoutIdentity(plain), WithoutIdentity(off));
+        // 行の値はニコカラメーカー3 の実プロジェクトの値・歌詞のタグのまま
+        var page2 = LyricLine(off["SourceLyricsInfos"]![0]!["LineInfos"]!.AsArray(), 2);
+        Assert.Equal(20780, page2["ShowBeginTime"]!.GetValue<int>());
+        Assert.Equal("[00:21:18](愛)[00:23:18]鮮[00:24:00]や[00:25:41]", page2["Raw"]!.GetValue<string>());
+        // 比べ方が違いを見分けられること（規則オンとは違う）
+        Assert.NotEqual(WithoutIdentity(plain), WithoutIdentity(Build(YieldShow(doc))));
+    }
+
+    [Fact]
+    public void 絵文字の先行を譲る_規則オフならlrcは歌詞そのもの()
+    {
+        string dir = Path.Combine(Path.GetTempPath(), "NicoKaraPrepTests", Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(dir);
+        try
+        {
+            var doc = CircleOfLove();
+            string lrcPath = Path.Combine(dir, "song.lrc");
+            N3ProjWriter.Write(Path.Combine(dir, "song.n3proj"), new[] { new N3ProjExportTab { Name = "メイン", Document = doc, LyricsPath = lrcPath } }, ExportOptions(doc, YieldShow(doc, on: false)));
+            string expected = LrcFormat.Write(doc, new LrcWriteOptions { EmojiEntriesOverride = doc.EmojiEntries, BaseFolder = dir });
+            Assert.Equal(expected, File.ReadAllText(lrcPath));
+        }
+        finally
+        {
+            Directory.Delete(dir, recursive: true);
+        }
+    }
+
+    [Fact]
+    public void 表示時刻の設定の写しはすべての項目を写す()
+    {
+        // 項目を足して CloneShowSettings に足し忘れると、書き出しだけ黙って違う計算になるのを防ぐ
+        var props = typeof(N3ShowTimeSettings).GetProperties().Where(p => p.CanWrite).ToList();
+        var s = new N3ShowTimeSettings();
+        int n = 0;
+        foreach (var p in props)
+        {
+            n++;
+            object value = p.PropertyType == typeof(int) ? 1000 + n
+                : p.PropertyType == typeof(int?) ? 2000 + n
+                : p.PropertyType == typeof(bool) ? !(bool)p.GetValue(s)!
+                : p.PropertyType == typeof(PageSplitMode) ? PageSplitMode.FixedLineCount
+                : p.PropertyType == typeof(EmojiMatcher) ? new EmojiMatcher(new[] { "★" })
+                : throw new InvalidOperationException($"{p.Name}（{p.PropertyType.Name}）に入れる値をテストに足してください");
+            p.SetValue(s, value);
+        }
+        var copy = N3ProjWriter.CloneShowSettings(s);
+        foreach (var p in props)
+        {
+            Assert.True(Equals(p.GetValue(s), p.GetValue(copy)), $"{p.Name} が写されていない");
+        }
+    }
+
     /// <summary>
     /// ニコカラメーカー3 が保存した実プロジェクトと同じ行構造・文字時刻・文字ごとのフォントを生成できることを確認する。
     /// 環境変数 TTT_N3PROJ_SAMPLE に n3proj のパス（歌詞ファイルが同じ場所にあること）を設定して実行する。

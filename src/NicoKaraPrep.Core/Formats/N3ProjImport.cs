@@ -374,24 +374,29 @@ public static class N3ProjImport
     /// 順序を保って対応付ける（最長共通部分列）。歌詞を直した行は対応しない。
     /// 戻り値は ドキュメントの行インデックス → ニコカラメーカーの表示時刻（ms）。
     /// </summary>
-    public static Dictionary<int, (int BeginMs, int EndMs)> MatchLines(LyricsDocument doc, N3ProjSourceTab source) =>
-        MatchLineIndexes(doc, source).ToDictionary(kv => kv.Key, kv => source.ShowTimes[kv.Value]!.Value);
+    /// <param name="matcher">
+    /// 絵文字（＿などのプレースホルダを含む）。指定すると、両方の行の絵文字の単位のタグを除いて比べる
+    /// （書き出しで絵文字の開始を表示開始へ寄せた行や、絵文字の表示秒数を変えた行も対応させるため）。null なら行の lrc テキストそのもので比べる。
+    /// </param>
+    public static Dictionary<int, (int BeginMs, int EndMs)> MatchLines(LyricsDocument doc, N3ProjSourceTab source, EmojiMatcher? matcher = null) =>
+        MatchLineIndexes(doc, source, matcher).ToDictionary(kv => kv.Key, kv => source.ShowTimes[kv.Value]!.Value);
 
     /// <summary>
     /// <see cref="MatchLines"/> と同じ対応付けで、ドキュメントの行インデックス → n3proj の歌詞設定タブの行インデックス（<see cref="N3ProjSourceTab.Document"/> の添字）を返す
     /// （表示時刻が設定された行だけ）。
     /// </summary>
-    public static Dictionary<int, int> MatchLineIndexes(LyricsDocument doc, N3ProjSourceTab source)
+    /// <param name="matcher">絵文字（＿を含む）。指定すると、両方の行の絵文字の単位のタグを除いて比べる（<see cref="MatchLines"/>）。</param>
+    public static Dictionary<int, int> MatchLineIndexes(LyricsDocument doc, N3ProjSourceTab source, EmojiMatcher? matcher = null)
     {
         var docRows = new List<(int Index, string Key)>();
         for (int i = 0; i < doc.Lines.Count; i++)
         {
-            if (!doc.Lines[i].IsEmpty) docRows.Add((i, LrcFormat.WriteLyricLine(doc.Lines[i])));
+            if (!doc.Lines[i].IsEmpty) docRows.Add((i, MatchKey(doc.Lines[i], matcher)));
         }
         var srcRows = new List<(int Index, string Key)>();
         for (int k = 0; k < source.Document.Lines.Count; k++)
         {
-            if (source.ShowTimes[k] is not null) srcRows.Add((k, LrcFormat.WriteLyricLine(source.Document.Lines[k])));
+            if (source.ShowTimes[k] is not null) srcRows.Add((k, MatchKey(source.Document.Lines[k], matcher)));
         }
 
         int n = docRows.Count, m = srcRows.Count;
@@ -429,16 +434,38 @@ public static class N3ProjImport
     }
 
     /// <summary>
+    /// 行の照合のキー: 行の lrc テキスト。matcher があれば、絵文字・＿の出現の単位のタグを除く
+    /// （絵文字の開始タグは、書き出しでの寄せや表示秒数の変更で変わるため）。
+    /// </summary>
+    private static string MatchKey(LyricsLine line, EmojiMatcher? matcher)
+    {
+        if (matcher is null || matcher.IsEmpty) return LrcFormat.WriteLyricLine(line);
+        var emojiUnits = N3EmojiLead.UnitIndexes(line, matcher);
+        if (emojiUnits.Count == 0) return LrcFormat.WriteLyricLine(line);
+
+        var sb = new System.Text.StringBuilder();
+        for (int k = 0; k < line.Chars.Count; k++)
+        {
+            var c = line.Chars[k];
+            if (c.TimeCs is int t && !emojiUnits.Contains(k)) sb.Append(TimeTag.Format(t));
+            if (!c.IsSpacer) sb.Append(c.Text);
+        }
+        if (line.EndTimeCs is int end) sb.Append(TimeTag.Format(end));
+        return sb.ToString();
+    }
+
+    /// <summary>
     /// NicoKaraPrep のタブに対応する n3proj の歌詞設定タブを選ぶ
     /// （同じ名前で 1 行以上対応するもの → 対応する行が最も多いもの）。
     /// </summary>
+    /// <param name="matcher">絵文字（＿を含む）。行の照合で絵文字の単位のタグを除く（<see cref="MatchLines"/>）。</param>
     public static (N3ProjSourceTab? Tab, Dictionary<int, (int BeginMs, int EndMs)> Lines) FindSource(
-        LyricsDocument doc, string tabName, IReadOnlyList<N3ProjSourceTab> sources)
+        LyricsDocument doc, string tabName, IReadOnlyList<N3ProjSourceTab> sources, EmojiMatcher? matcher = null)
     {
         var same = sources.FirstOrDefault(s => s.Name == tabName);
         if (same is not null)
         {
-            var lines = MatchLines(doc, same);
+            var lines = MatchLines(doc, same, matcher);
             if (lines.Count > 0) return (same, lines);
         }
 
@@ -446,7 +473,7 @@ public static class N3ProjImport
         var bestLines = new Dictionary<int, (int, int)>();
         foreach (var s in sources)
         {
-            var lines = MatchLines(doc, s);
+            var lines = MatchLines(doc, s, matcher);
             if (lines.Count > bestLines.Count)
             {
                 best = s;
@@ -459,6 +486,9 @@ public static class N3ProjImport
     /// <summary>
     /// ニコカラメーカーの表示時刻を、NicoKaraPrep の自動計算と異なる行だけ行ごとの手動指定として取り込む。
     /// 手動指定は前後の行の自動計算にも影響するため、変化がなくなるまで繰り返す。
+    /// 絵文字の先行を譲る規則（<see cref="N3ShowTimeSettings.EmojiLeadYield"/>）がオンなら、規則なし（ニコカラメーカー3 と同じ計算）の値と
+    /// 一致する値も自動のままにする（ニコカラメーカー3 が自動設定したプロジェクトを読んでも、詰められた行が手動指定にならないように）。
+    /// 規則オンで書き出した後にニコカラメーカー3 で自動設定をやり直した値（寄せた歌詞を規則なしで計算した値）も自動のままにする。
     /// 戻り値は手動指定を設定（変更）した行の集合。
     /// </summary>
     public static HashSet<int> ApplyShowTimes(
@@ -466,22 +496,36 @@ public static class N3ProjImport
         IReadOnlyDictionary<int, (int BeginMs, int EndMs)> actual,
         N3ShowTimeSettings settings)
     {
+        N3ShowTimeSettings? plain = null; // 規則なしの設定（規則がオンのときだけ）
+        if (settings.YieldsEmojiLead)
+        {
+            plain = N3ProjWriter.CloneShowSettings(settings);
+            plain.EmojiLeadYield = false;
+        }
+
         var touched = new HashSet<int>();
         for (int iteration = 0; iteration < 8; iteration++)
         {
             var plan = N3ShowTimePlanner.Plan(doc, settings);
+            var plainPlan = plain is null ? null : N3ShowTimePlanner.Plan(doc, plain);
+            // 規則オンで書き出したプロジェクトでニコカラメーカー3 が表示時刻の自動設定をやり直した値
+            // （絵文字の開始を寄せた歌詞＝書き出しと同じ写しを、規則なしで計算した値）
+            var clampedPlan = plain is null ? null : N3ShowTimePlanner.Plan(N3EmojiLead.ClampDocument(doc, plan, settings.LeadMatcher), plain);
             bool changed = false;
             foreach (var (i, (begin, end)) in actual)
             {
                 if (i < 0 || i >= doc.Lines.Count || !plan.TryGetValue(i, out var p)) continue;
                 var line = doc.Lines[i];
-                if (Math.Abs(p.BeginMs - begin) > 5)
+                N3LinePlan? q = null, r = null;
+                plainPlan?.TryGetValue(i, out q);
+                clampedPlan?.TryGetValue(i, out r);
+                if (!IsNear(p.BeginMs, begin) && !(q is not null && IsNear(q.BeginMs, begin)) && !(r is not null && IsNear(r.BeginMs, begin)))
                 {
                     line.ShowBeginCs = ToCs(begin);
                     touched.Add(i);
                     changed = true;
                 }
-                if (Math.Abs(p.EndMs - end) > 5)
+                if (!IsNear(p.EndMs, end) && !(q is not null && IsNear(q.EndMs, end)) && !(r is not null && IsNear(r.EndMs, end)))
                 {
                     line.ShowEndCs = ToCs(end);
                     touched.Add(i);
@@ -492,6 +536,9 @@ public static class N3ProjImport
         }
         return touched;
     }
+
+    /// <summary>自動計算の値と実際の値が一致するとみなせるか（5ms 以内）。</summary>
+    private static bool IsNear(int planMs, int actualMs) => Math.Abs(planMs - actualMs) <= 5;
 
     private static int ToCs(int ms) => (int)Math.Round(ms / 10.0, MidpointRounding.AwayFromZero);
 }

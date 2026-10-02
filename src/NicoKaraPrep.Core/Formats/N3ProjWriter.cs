@@ -133,7 +133,10 @@ public static class N3ProjWriter
                 throw new ArgumentException($"タブ「{tab.Name}」の歌詞ファイルのパスが指定されていません");
             }
             string lrcPath = Path.GetFullPath(tab.LyricsPath);
-            string text = LrcFormat.Write(tab.Document, new LrcWriteOptions
+            // lrc は n3proj の行（BuildProjectJson → BuildLineInfos）と同じく、絵文字の開始を表示開始へ寄せた歌詞から書く
+            // （ニコカラメーカーが lrc を読み直しても文字の時刻が変わらないように）
+            var (_, lyrics) = N3EmojiLead.PrepareTab(tab.Document, TabShowSettings(tab, options));
+            string text = LrcFormat.Write(lyrics, new LrcWriteOptions
             {
                 EmojiEntriesOverride = options.EmojiEntries,
                 BaseFolder = Path.GetDirectoryName(lrcPath),
@@ -263,8 +266,7 @@ public static class N3ProjWriter
         for (int t = 0; t < sources.Count; t++)
         {
             var src = sources[t];
-            var show = CloneShowSettings(options.ShowTime);
-            show.TopLong = src.Tab.TopLong ?? options.ShowTime.TopLong;
+            var show = TabShowSettings(src.Tab, options);
             var layoutResolver = new LayoutResolver(layoutInfos, src.Tab.LayoutName, options.LayoutSelectableBegin, options.LayoutSelectableEnd, warnings, src.Tab.Name);
             var lines = BuildLineInfos(src.Tab.Document, show, options.EmojiEntries, fontResolver, layoutResolver, action, ver, out int count, sizeVariants);
             lineCount += count;
@@ -345,10 +347,12 @@ public static class N3ProjWriter
     /// <summary>
     /// 歌詞行（LineInfos）を生成する。空行の直前にページ区切り／段落区切りの合成行を挿入し、
     /// 各歌詞行に文字の時刻・フォント・レイアウト・表示時刻・字幕アクションを付ける。
+    /// 絵文字の先行を譲る規則（<see cref="N3ShowTimeSettings.EmojiLeadYield"/>）がオンなら、文字の時刻・Raw・区切りの種類は
+    /// 絵文字の開始を表示開始へ寄せた歌詞から、表示時刻は元の歌詞で計算した値から作る（<see cref="N3EmojiLead.PrepareTab"/>。lrc の書き出しと同じ）。
     /// </summary>
     /// <param name="sizeVariants">ページの文字の大きさの増減に使う、大きさを変えたフォント設定（null なら増減しない）。</param>
     internal static JsonArray BuildLineInfos(
-        LyricsDocument doc,
+        LyricsDocument source,
         N3ShowTimeSettings show,
         IReadOnlyList<EmojiEntry> emoji,
         N3FontResolver fonts,
@@ -359,7 +363,7 @@ public static class N3ProjWriter
         FontSizeVariants? sizeVariants = null)
     {
         var arr = new JsonArray();
-        var plans = N3ShowTimePlanner.Plan(doc, show);
+        var (plans, doc) = N3EmojiLead.PrepareTab(source, show);
         var pages = doc.GetPages(show.PageMode, show.FixedLineCount);
         var sizeDeltas = sizeVariants is null ? new Dictionary<int, int>() : N3PageFontSize.LineDeltas(doc, show.PageMode, show.FixedLineCount);
         var layoutOfLine = new Dictionary<int, int>();
@@ -586,7 +590,19 @@ public static class N3ProjWriter
         return ("SHINTA.CharFadeInFadeOut", s);
     }
 
-    private static N3ShowTimeSettings CloneShowSettings(N3ShowTimeSettings s) => new()
+    /// <summary>
+    /// タブの表示時刻の設定（全体の設定の写しに、タブの「上段を長めに」を当てたもの）。
+    /// lrc の書き出し（<see cref="Write"/>）と n3proj の行（<see cref="BuildProjectJson"/>）で同じものを使う。
+    /// </summary>
+    private static N3ShowTimeSettings TabShowSettings(N3ProjExportTab tab, N3ProjExportOptions options)
+    {
+        var show = CloneShowSettings(options.ShowTime);
+        show.TopLong = tab.TopLong ?? options.ShowTime.TopLong;
+        return show;
+    }
+
+    /// <summary>表示時刻の設定の写し（項目を足したらここにも足す。足し忘れはテストで分かる）。</summary>
+    internal static N3ShowTimeSettings CloneShowSettings(N3ShowTimeSettings s) => new()
     {
         PageMode = s.PageMode,
         FixedLineCount = s.FixedLineCount,
@@ -597,6 +613,8 @@ public static class N3ProjWriter
         TopLong = s.TopLong,
         AlignFromTop = s.AlignFromTop,
         SingleLinePromoteGapMs = s.SingleLinePromoteGapMs,
+        EmojiLeadYield = s.EmojiLeadYield,
+        LeadMatcher = s.LeadMatcher,
     };
 
     // ------------------------------------------------------------ レイアウト選択（行数）

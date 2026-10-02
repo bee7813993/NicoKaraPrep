@@ -84,6 +84,7 @@ public sealed partial class N3ProjExportDialog : ContentDialog
         IntervalBox.Value = vm.Settings.N3IntervalSeconds;
         ProtectBox.Value = vm.Settings.N3ProtectSeconds;
         TopLongCheck.IsChecked = vm.Settings.N3TopLong;
+        EmojiLeadYieldCheck.IsChecked = vm.Settings.N3EmojiLeadYield;
         if (vm.Nkm3Env is { PreTimeMs: not null })
         {
             ImportNkm3Button.Visibility = Visibility.Visible;
@@ -177,6 +178,7 @@ public sealed partial class N3ProjExportDialog : ContentDialog
         s.N3IntervalSeconds = Value(IntervalBox, s.N3IntervalSeconds);
         s.N3ProtectSeconds = Value(ProtectBox, 0);
         s.N3TopLong = TopLongCheck.IsChecked == true;
+        s.N3EmojiLeadYield = EmojiLeadYieldCheck.IsChecked == true;
         s.Save();
 
         var result = new N3ProjSongSettings

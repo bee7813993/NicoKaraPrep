@@ -38,17 +38,37 @@ public sealed partial class MainWindow
         if (await dialog.ShowAsync() != ContentDialogResult.Primary) return;
         var settings = dialog.Result;
 
+        // 「書き出し...」を押した時点で、行の表示時刻の設定（ワイプ前・絵文字の分だけ遅らせるなど）は保存済み。
+        // 保存先を選ばずにやめても、プレビュー・行設定パネル・チェックは新しい設定で作り直す
         string? suggestedPath = ViewModel.SuggestN3ProjOutputPath();
         string? folder = Path.GetDirectoryName(suggestedPath ?? "") is { Length: > 0 } d ? d : ViewModel.GetDefaultSaveFolder();
         string suggested = Path.GetFileNameWithoutExtension(suggestedPath ?? "lyrics");
         string? path = SaveFileDialog.Show(Hwnd, folder, suggested, N3ProjFileTypes, "n3proj");
-        if (path is null) return;
-
-        TryRun(() => ViewModel.ExportN3Proj(path, settings));
+        if (path is null)
+        {
+            ViewModel.StatusText = "n3proj は書き出しませんでした（行の表示時刻の設定は保存しました）";
+        }
+        else
+        {
+            TryRun(() => ViewModel.ExportN3Proj(path, settings));
+        }
         _n3FontNamesKey = null;
         RefreshN3LinePanel();
-        // 書き出し設定（ベース・既定のフォント設定・合わせるか）で、行に当たるフォント設定が変わることがある（書き出しの知らせは残す）
-        TryRun(ViewModel.UpdateLineFonts);
+        // 表示時刻の設定で字幕のプレビュー・チェックの結果が、書き出し設定（ベース・既定のフォント設定・合わせるか）で行に当たるフォント設定が変わることがある。
+        // チェックはすぐに実行し、書き出しの知らせがチェック結果で消えないよう、つなげて表示する
+        // （フォント設定ビューではチェックしない。戻るときにチェックし直す）
+        if (ViewModel.ViewMode == ViewModels.MainViewMode.FontSettings)
+        {
+            TryRun(ViewModel.UpdateLineFonts);
+        }
+        else
+        {
+            string summary = ViewModel.StatusText;
+            _validateTimer.Stop();
+            TryRun(ViewModel.RunValidation);
+            RefreshInsertGutter();
+            ViewModel.StatusText = $"{summary}　／　{ViewModel.StatusText}";
+        }
         RefreshLineFontPlaceholder();
     }
 
@@ -347,7 +367,8 @@ public sealed partial class MainWindow
                 string row = $"{(ViewModel.Settings.CollisionAlignFromTop ? "上" : "下")}から{plan.Row}行目";
                 string adjusted = plan.Adjusted ? "・前後ページに合わせて調整" : "";
                 string manual = plan.BeginIsManual || plan.EndIsManual ? "（手動指定あり）" : "";
-                SetN3LineInfo($"自動: {FmtCs(plan.BeginMs / 10)} 〜 {FmtCs(plan.EndMs / 10)}　ページ{plan.PageIndex + 1}・{row}{adjusted}{manual}");
+                string yielded = ViewModel.DescribeEmojiLeadYield(plan); // 絵文字の分だけ遅らせた行・絵文字を縮めた行
+                SetN3LineInfo($"自動: {FmtCs(plan.BeginMs / 10)} 〜 {FmtCs(plan.EndMs / 10)}　ページ{plan.PageIndex + 1}・{row}{adjusted}{yielded}{manual}");
             }
         }
         finally

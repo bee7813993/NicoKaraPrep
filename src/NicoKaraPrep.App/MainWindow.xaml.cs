@@ -1814,7 +1814,7 @@ public sealed partial class MainWindow : Window
                 {
                     AddRun("✓", null); // エクスポート済み
                 }
-                // 時間はページ衝突チェック、横幅は横幅チェックの重要度で色分け（通常ビューの列と同じ規則）
+                // 時間はページ衝突・表示時刻のチェック、横幅は横幅チェックの重要度で色分け（通常ビューの列と同じ規則）
                 if (l.TimeText.Length > 0 || l.EndTimeText.Length > 0)
                 {
                     AddRun(l.TimeText, GutterBrushFor(l.StartTimeSeverity));

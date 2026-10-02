@@ -128,6 +128,117 @@ public class N3ProjImportTests : IDisposable
         Assert.True(matched.ContainsKey(8));  // 「さし」
     }
 
+    // ------------------------------------------------------------ 絵文字の先行を譲る規則
+
+    /// <summary>Circle of Love 冒頭 3 ページ（上段の行頭に (愛)。ページ1→2・2→3 の上段が重なる）。</summary>
+    private static LyricsDocument CircleOfLove() => LrcFormat.Parse(string.Join("\r\n",
+        "@Emoji=(愛),a.png",
+        "[00:16:21](愛)[00:18:21]曇[00:19:00]り[00:20:58]",
+        "[00:19:86]「[00:20:70]大[00:23:12]",
+        "",
+        "[00:21:18](愛)[00:23:18]鮮[00:24:00]や[00:25:41]",
+        "[00:25:49]O[00:25:95]ur[00:27:80]",
+        "",
+        "[00:26:20](愛)[00:28:20]無[00:29:00]限[00:30:46]",
+        "[00:29:65]「[00:30:60]楽[00:32:94]",
+        ""));
+
+    /// <summary>ワイプ前 1500 / ワイプ後 800 / 表示間隔 300。絵文字（(愛) ＋ ＿）の先行を譲る規則のオン・オフ。</summary>
+    private static N3ShowTimeSettings YieldShow(bool on) => new()
+    {
+        LeadMs = 1500,
+        TailMs = 800,
+        IntervalMs = 300,
+        EmojiLeadYield = on,
+        LeadMatcher = new EmojiMatcher(new[] { "(愛)", "＿" }),
+    };
+
+    [Fact]
+    public void 絵文字の先行を譲る_規則オンで書き出したものを同じ設定で取り込むと手動指定にならない()
+    {
+        var doc = CircleOfLove();
+        var show = YieldShow(on: true);
+        var preview = N3ProjImport.Analyze(ExportAndEdit(doc, show));
+
+        var (source, matched) = N3ProjImport.FindSource(doc, "メイン", preview.Tabs, show.LeadMatcher);
+        Assert.NotNull(source);
+        Assert.Equal(6, matched.Count); // 絵文字の開始を寄せた行も対応する
+        Assert.Equal((21680, 26210), matched[3]);
+
+        Assert.Empty(N3ProjImport.ApplyShowTimes(doc.Clone(), matched, show));
+    }
+
+    [Fact]
+    public void 絵文字の先行を譲る_規則オンで書き出した後にニコカラメーカー3で自動設定をやり直しても手動指定にならない()
+    {
+        var doc = CircleOfLove();
+        var show = YieldShow(on: true);
+        var preview = N3ProjImport.Analyze(ExportAndEdit(doc, show));
+        var tab = preview.Tabs[0];
+        // ニコカラメーカー3 の自動設定（規則なし）を、書き出した歌詞（絵文字の開始を寄せた Raw）でやり直したことにする
+        var nkm3 = N3ShowTimePlanner.Plan(tab.Document, YieldShow(on: false));
+        for (int k = 0; k < tab.ShowTimes.Count; k++)
+        {
+            if (tab.ShowTimes[k] is not null) tab.ShowTimes[k] = (nkm3[k].BeginMs, nkm3[k].EndMs);
+        }
+        var (_, matched) = N3ProjImport.FindSource(doc, "メイン", preview.Tabs, show.LeadMatcher);
+        Assert.Equal(6, matched.Count);
+        // 規則オンの計算 (21680, 26210) とも、元の歌詞を規則なしで計算した値 (20780, 25800) とも違う
+        Assert.Equal((21055, 25810), matched[3]);
+
+        Assert.Empty(N3ProjImport.ApplyShowTimes(doc.Clone(), matched, show));
+    }
+
+    [Fact]
+    public void 絵文字の先行を譲る_ニコカラメーカー3と同じ計算のプロジェクトを規則オンで取り込んでも手動指定にならない()
+    {
+        var doc = CircleOfLove();
+        int editedEnd = 0;
+        // 規則オフ（ニコカラメーカー3 が自動設定したのと同じ値）で書き出し、最後のページの上段だけ手直しする
+        var preview = N3ProjImport.Analyze(ExportAndEdit(doc, YieldShow(on: false), lines =>
+        {
+            var line = LyricLine(lines, 4);
+            editedEnd = line["ShowEndTime"]!.GetValue<int>() + 1000;
+            line["ShowEndTime"] = editedEnd;
+        }));
+        var show = YieldShow(on: true);
+        var (_, matched) = N3ProjImport.FindSource(doc, "メイン", preview.Tabs, show.LeadMatcher);
+        Assert.Equal(6, matched.Count);
+        // ニコカラメーカー3 が詰めた行は、規則オンの計算とは違う
+        var plans = N3ShowTimePlanner.Plan(doc, show);
+        Assert.Equal((20780, 25800), matched[3]);
+        Assert.NotEqual(matched[3].BeginMs, plans[3].BeginMs);
+
+        // 規則なしの計算と一致する行は自動のまま。手直しした行だけが手動指定になる
+        var target = doc.Clone();
+        var touched = N3ProjImport.ApplyShowTimes(target, matched, show);
+        Assert.Equal(new[] { 6 }, touched.ToArray());
+        Assert.Null(target.Lines[6].ShowBeginCs);
+        Assert.Equal(editedEnd / 10, target.Lines[6].ShowEndCs);
+        Assert.Null(target.Lines[3].ShowBeginCs);
+        Assert.Null(target.Lines[3].ShowEndCs);
+    }
+
+    [Fact]
+    public void 絵文字の先行を譲る_絵文字の開始を寄せた行も照合で対応する()
+    {
+        var doc = CircleOfLove();
+        var show = YieldShow(on: true);
+        var tab = N3ProjImport.Analyze(ExportAndEdit(doc, show)).Tabs[0];
+
+        var map = N3ProjImport.MatchLineIndexes(doc, tab, show.LeadMatcher);
+        Assert.Equal(new[] { 0, 1, 3, 4, 6, 7 }, map.Keys.OrderBy(k => k));
+        // n3proj の行は絵文字の開始を寄せてある
+        Assert.Equal("[00:21:68](愛)[00:23:18]鮮[00:24:00]や[00:25:41]", LrcFormat.WriteLyricLine(tab.Document.Lines[map[3]]));
+        // 絵文字のタグも比べると、寄せた 2 行は対応しない
+        Assert.Equal(new[] { 0, 1, 4, 7 }, N3ProjImport.MatchLineIndexes(doc, tab).Keys.OrderBy(k => k));
+
+        // 絵文字の表示秒数を変えて付け直した歌詞も対応する
+        var retagged = doc.Clone();
+        EmojiTagger.RetagAll(retagged, new EmojiMatcher(new[] { "(愛)" }), new EmojiTagSettings { LeadCs = 150 });
+        Assert.Equal(6, N3ProjImport.MatchLines(retagged, tab, show.LeadMatcher).Count);
+    }
+
     [Fact]
     public void 照合_同じ名前のタブが無ければ一番多く対応するタブを使う()
     {

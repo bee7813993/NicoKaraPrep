@@ -34,6 +34,19 @@ public sealed class N3ShowTimeSettings
     /// <summary>1 行だけのページが上段へ昇格するのに必要な余裕（ms）。</summary>
     public int SingleLinePromoteGapMs { get; set; }
 
+    /// <summary>
+    /// 前のページの同じ段の行と重なるときは、次の行のワイプ前を絵文字・＿の先行タグではなく本当の歌い出しから測り、
+    /// 必要な分だけ次の行の表示を遅らせる（ニコカラメーカー3 には無い NicoKaraPrep の機能。既定はオフ = ニコカラメーカー3 と同じ計算）。
+    /// 遅らせた行の絵文字の開始は、書き出しで表示開始まで寄せる（<see cref="N3EmojiLead"/>）。
+    /// </summary>
+    public bool EmojiLeadYield { get; set; }
+
+    /// <summary><see cref="EmojiLeadYield"/> で先行タグを除く絵文字（＿などのプレースホルダを含む）。null・空なら規則は働かない。</summary>
+    public EmojiMatcher? LeadMatcher { get; set; }
+
+    /// <summary><see cref="EmojiLeadYield"/> の規則が働くか（オンで、対象の絵文字がある）。</summary>
+    public bool YieldsEmojiLead => EmojiLeadYield && LeadMatcher is { IsEmpty: false };
+
     public int EffectiveProtectMs => ProtectMs is int p && p >= 0 ? p : Math.Min(LeadMs, TailMs) / 2;
 
     /// <summary>前後の歌詞ブロックの間隔が段落区切り（間奏など）とみなせるか。</summary>
@@ -50,13 +63,19 @@ public sealed class N3ShowTimeSettings
 /// <param name="PageIndex">ページ番号（0 始まり）。</param>
 /// <param name="Row">画面位置（下から／上から k 行目、1 始まり）。</param>
 /// <param name="Adjusted">前後ページとの衝突回避で自動値から動かされたか。</param>
-public sealed record N3LinePlan(int LineIndex, int BeginMs, int EndMs, bool BeginIsManual, bool EndIsManual, int PageIndex, int Row, bool Adjusted);
+/// <param name="EmojiYieldMs">
+/// 絵文字の先行を譲る規則（<see cref="N3ShowTimeSettings.EmojiLeadYield"/>）で表示開始が遅れた量
+/// （規則なしで計算したときの開始との差。0 = 遅れていない）。
+/// </param>
+public sealed record N3LinePlan(int LineIndex, int BeginMs, int EndMs, bool BeginIsManual, bool EndIsManual, int PageIndex, int Row, bool Adjusted, int EmojiYieldMs = 0);
 
 /// <summary>
 /// ニコカラメーカー3 の「自動で表示開始時刻・表示終了時刻を設定（上段歌詞を短めに／長めに表示）」に
 /// 相当する計算。ページ内の行は同時に表示を開始し（ページ先頭タグ − ワイプ前）、各行は最終タグ＋ワイプ後で消える
 /// （上段を長めに表示する場合はページの最終タグ＋ワイプ後）。隣接ページの同じ画面位置の行とは
 /// <see cref="ResolvePair"/> の規則で間隔を空ける。手動指定の値は動かさない。
+/// <see cref="N3ShowTimeSettings.EmojiLeadYield"/> がオンなら、同じ段の次の行のワイプ前だけを絵文字の先行を除いた歌い出しから測る
+/// （<see cref="ResolvePairYieldingLead"/>。ページの表示開始・段の対応付けはニコカラメーカー3 と同じく絵文字の先行を含めて決める）。
 /// </summary>
 public static class N3ShowTimePlanner
 {
@@ -72,6 +91,7 @@ public static class N3ShowTimePlanner
         var manualEnd = new HashSet<int>();
         var adjusted = new HashSet<int>();
         var pageOf = new Dictionary<int, int>();
+        var emojiYields = new Dictionary<int, int>(); // 絵文字の先行を譲る規則で表示開始が遅れた量
 
         // 1) 希望表示区間
         for (int pi = 0; pi < pages.Count; pi++)
@@ -135,9 +155,19 @@ public static class N3ShowTimePlanner
                 if (!ends.TryGetValue(prev, out int prevEnd) || !begins.TryGetValue(next, out int nextBegin)) continue;
                 if (!lastMs.TryGetValue(prev, out int prevLast) || !firstMs.TryGetValue(next, out int nextFirst)) continue;
 
+                int prevEndShort = shortEnds.GetValueOrDefault(prev, prevEnd);
+                bool prevEndManual = manualEnd.Contains(prev);
+                bool nextBeginManual = manualBegin.Contains(next);
                 var (newEnd, newBegin) = ResolvePair(
-                    prevEnd, shortEnds.GetValueOrDefault(prev, prevEnd), prevLast, manualEnd.Contains(prev),
-                    nextBegin, nextFirst, manualBegin.Contains(next), s);
+                    prevEnd, prevEndShort, prevLast, prevEndManual,
+                    nextBegin, nextFirst, nextBeginManual, s);
+                if (YieldingFirstMs(doc.Lines[next], nextFirst, nextBeginManual, s) is int realFirst)
+                {
+                    // 絵文字の先行を譲る（規則なしの開始との差を、遅れた量として残す）
+                    int plainBegin = newBegin;
+                    (newEnd, newBegin) = ResolvePairYieldingLead(prevEnd, prevEndShort, prevLast, prevEndManual, nextBegin, realFirst, s);
+                    if (newBegin > plainBegin) emojiYields[next] = newBegin - plainBegin;
+                }
                 if (newEnd != prevEnd)
                 {
                     ends[prev] = newEnd;
@@ -152,7 +182,42 @@ public static class N3ShowTimePlanner
         }
 
         // 3) 結果
-        return BuildPlans(begins, ends, manualBegin, manualEnd, adjusted, pageOf, rowMaps);
+        return BuildPlans(begins, ends, manualBegin, manualEnd, adjusted, pageOf, rowMaps, emojiYields);
+    }
+
+    /// <summary>
+    /// 絵文字の先行を譲る規則が次の行に働くか（規則の判定はここだけで行う）。働くなら、次の行のワイプ前を測る本当の歌い出し（ms）を返す。
+    /// 規則がオンで対象の絵文字があり、次の行の表示開始が手動指定でなく、絵文字・＿の先行タグを除いた歌い出しが行内の最小のタグより遅い行だけ。
+    /// </summary>
+    /// <param name="next">次のページの同じ段の行。</param>
+    /// <param name="nextFirst">次の行の行内の最小のタグ（ms。絵文字の先行タグを含む）。</param>
+    private static int? YieldingFirstMs(LyricsLine next, int nextFirst, bool nextBeginManual, N3ShowTimeSettings s)
+    {
+        if (!s.YieldsEmojiLead || nextBeginManual) return null;
+        return N3EmojiLead.RealStartMs(next, s.LeadMatcher) is int real && real > nextFirst ? real : null;
+    }
+
+    /// <summary>
+    /// 絵文字の先行を譲る規則（<see cref="N3ShowTimeSettings.EmojiLeadYield"/>。ニコカラメーカー3 には無い）で、
+    /// 同じ段の前後の行の表示終了・開始を決める。次の行のワイプ前を絵文字・＿の先行タグではなく本当の歌い出しから測り、
+    /// 必要な分だけ次の行を遅らせる（足りなければ <see cref="ResolvePair"/> の手順どおりに詰める）。
+    /// 上段を長めに表示する場合の延長分も、絵文字の先行を譲り切る（表示開始 = 本当の歌い出し − ワイプ前）までは削らない。
+    /// 次の行の表示開始が手動指定の組には使わない（<see cref="YieldingFirstMs"/>）。
+    /// </summary>
+    /// <param name="realFirst">次の行の本当の歌い出し（絵文字・＿の先行タグを除いた行内の最小。<see cref="N3EmojiLead.RealStartMs"/>）。</param>
+    internal static (int PrevEnd, int NextBegin) ResolvePairYieldingLead(
+        int prevEnd, int prevEndShort, int prevLast, bool prevEndManual,
+        int nextBegin, int realFirst,
+        N3ShowTimeSettings s)
+    {
+        int interval = Math.Max(0, s.IntervalMs);
+        int yieldBegin = Math.Max(nextBegin, realFirst - s.LeadMs); // 絵文字の先行を譲り切ったときの表示開始
+        if (s.TopLong && !prevEndManual && prevEnd > prevEndShort)
+        {
+            prevEnd = Math.Max(prevEndShort, Math.Min(prevEnd, yieldBegin - interval));
+            prevEndShort = prevEnd; // 延長分はここで決めた（ResolvePair では削らない）
+        }
+        return ResolvePair(prevEnd, prevEndShort, prevLast, prevEndManual, nextBegin, realFirst, false, s);
     }
 
     /// <summary>
@@ -292,7 +357,8 @@ public static class N3ShowTimePlanner
         HashSet<int> manualEnd,
         HashSet<int> adjusted,
         Dictionary<int, int> pageOf,
-        Dictionary<int, int>[] rowMaps)
+        Dictionary<int, int>[] rowMaps,
+        Dictionary<int, int> emojiYields)
     {
         var rowOf = new Dictionary<int, int>();
         foreach (var map in rowMaps)
@@ -304,7 +370,7 @@ public static class N3ShowTimePlanner
         foreach (var (i, begin) in begins)
         {
             plans[i] = new N3LinePlan(i, begin, ends[i], manualBegin.Contains(i), manualEnd.Contains(i),
-                pageOf.GetValueOrDefault(i), rowOf.GetValueOrDefault(i), adjusted.Contains(i));
+                pageOf.GetValueOrDefault(i), rowOf.GetValueOrDefault(i), adjusted.Contains(i), emojiYields.GetValueOrDefault(i));
         }
         return plans;
     }

@@ -92,6 +92,13 @@ public sealed class AppSettings
     public bool N3TopLong { get; set; }
 
     /// <summary>
+    /// 前のページの同じ段の行と重なるときは、絵文字（＿を含む）の先行の分だけ次の行の表示を遅らせる
+    /// （ニコカラメーカー3 には無い NicoKaraPrep の機能。<see cref="Formats.N3ShowTimeSettings.EmojiLeadYield"/>）。
+    /// 遅らせた行の絵文字の表示秒数は、書き出しで縮める。
+    /// </summary>
+    public bool N3EmojiLeadYield { get; set; } = true;
+
+    /// <summary>
     /// 歌詞ファイルを開いたとき、同じフォルダに n3proj が 1 つだけあれば
     /// 「字幕フォントと画面サイズ」「実際の表示区間」を自動で読み込む。
     /// </summary>
@@ -279,6 +286,7 @@ public sealed class AppSettings
         N3IntervalSeconds = other.N3IntervalSeconds;
         N3ProtectSeconds = other.N3ProtectSeconds;
         N3TopLong = other.N3TopLong;
+        N3EmojiLeadYield = other.N3EmojiLeadYield;
         // N3FontSets（ニコカラメーカー3 のフォント設定）とその階層 N3FontHierarchy・配色パターンはテンプレートとは独立したライブラリなので取り込まない
         // （テンプレートの適用でライブラリが置き換わらないように。古いテンプレートに入っていても無視する）
     }

@@ -1779,21 +1779,19 @@ public partial class MainViewModel : ObservableObject
         var collisionSettings = Settings.ToCollisionSettings(exclude);
         collisionSettings.LineDisplayCs = BuildLineDisplayOverrides(exclude);
         collisionSettings.LineShowBeginCs = BuildManualShowBegins();
-        foreach (var issue in PageRowCollisionValidator.Validate(Document, collisionSettings))
-        {
-            Issues.Add(issue);
+        var collisions = PageRowCollisionValidator.Validate(Document, collisionSettings);
+        foreach (var issue in collisions) AddPairIssue(issue);
 
-            // 対象行の背景と、衝突している時間セルを強調する
-            if (issue.LineIndex >= 0 && issue.LineIndex < Lines.Count)
-            {
-                Lines[issue.LineIndex].SetRowIssue(issue.Severity);
-                Lines[issue.LineIndex].MarkStartTimeIssue(issue.Severity); // 次行の表示開始
-            }
-            if (issue.RelatedLineIndex is int prev && prev >= 0 && prev < Lines.Count)
-            {
-                Lines[prev].SetRowIssue(issue.Severity);
-                Lines[prev].MarkEndTimeIssue(issue.Severity); // 前行の表示終了
-            }
+        // 1') 表示時刻（書き出しと同じ計算で、前の行がワイプの途中で消える組・絵文字を縮めても足りない組）。
+        //     ページ衝突のエラーが出ている組には重ねて出さない
+        var collisionErrors = collisions
+            .Where(i => i.Severity == IssueSeverity.Error && i.RelatedLineIndex is int)
+            .Select(i => (Prev: i.RelatedLineIndex!.Value, Next: i.LineIndex))
+            .ToHashSet();
+        var show = CreateShowTimeSettings(_activeTab.Name);
+        foreach (var issue in N3ShowTimeValidator.Validate(Document, N3ShowTimePlanner.Plan(Document, show), show, collisionErrors))
+        {
+            AddPairIssue(issue);
         }
 
         // 2) 各行に当たるフォント設定・字幕の見た目・プレビュー・横幅（横幅は字幕のプレビューと同じ並べ方で測り、
@@ -1823,6 +1821,25 @@ public partial class MainViewModel : ObservableObject
             : $"チェック結果: エラー {errors} 件 / 警告 {warnings} 件";
         StatusText = _noticeBeforeCheck is { } notice ? $"{notice}　／　{result}" : result;
         _noticeBeforeCheck = null;
+    }
+
+    /// <summary>
+    /// 前後のページの同じ段の行の組のチェック結果（ページ衝突・表示時刻）を一覧に足し、
+    /// 2 行の背景と、問題の時間の欄（次の行は表示開始、前の行は表示終了）を強調する。
+    /// </summary>
+    private void AddPairIssue(ValidationIssue issue)
+    {
+        Issues.Add(issue);
+        if (issue.LineIndex >= 0 && issue.LineIndex < Lines.Count)
+        {
+            Lines[issue.LineIndex].SetRowIssue(issue.Severity);
+            Lines[issue.LineIndex].MarkStartTimeIssue(issue.Severity); // 次行の表示開始
+        }
+        if (issue.RelatedLineIndex is int prev && prev >= 0 && prev < Lines.Count)
+        {
+            Lines[prev].SetRowIssue(issue.Severity);
+            Lines[prev].MarkEndTimeIssue(issue.Severity); // 前行の表示終了
+        }
     }
 
     private void UpdateTitle()

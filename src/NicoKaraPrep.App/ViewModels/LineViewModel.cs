@@ -221,10 +221,10 @@ public partial class LineViewModel : ObservableObject
     private IssueSeverity? _startTimeSeverity;
     private IssueSeverity? _endTimeSeverity;
 
-    /// <summary>ページ衝突チェックの重要度（開始時間側。挿入ビューの行情報欄の色分け用）。</summary>
+    /// <summary>ページ衝突・表示時刻のチェックの重要度（開始時間側。挿入ビューの行情報欄の色分け用）。</summary>
     public IssueSeverity? StartTimeSeverity => _startTimeSeverity;
 
-    /// <summary>ページ衝突チェックの重要度（終了時間側。挿入ビューの行情報欄の色分け用）。</summary>
+    /// <summary>ページ衝突・表示時刻のチェックの重要度（終了時間側。挿入ビューの行情報欄の色分け用）。</summary>
     public IssueSeverity? EndTimeSeverity => _endTimeSeverity;
 
     /// <summary>再生位置がこの行にあるとき true。</summary>
@@ -284,7 +284,7 @@ public partial class LineViewModel : ObservableObject
         }
     }
 
-    /// <summary>開始時間セルを強調（ページ衝突で「次行の表示開始」側）。</summary>
+    /// <summary>開始時間セルを強調（ページ衝突・表示時刻のチェックで「次行の表示開始」側）。</summary>
     public void MarkStartTimeIssue(IssueSeverity severity)
     {
         if (_startTimeSeverity is null || severity > _startTimeSeverity)
@@ -294,7 +294,7 @@ public partial class LineViewModel : ObservableObject
         }
     }
 
-    /// <summary>終了時間セルを強調（ページ衝突で「前行の表示終了」側）。</summary>
+    /// <summary>終了時間セルを強調（ページ衝突・表示時刻のチェックで「前行の表示終了」側）。</summary>
     public void MarkEndTimeIssue(IssueSeverity severity)
     {
         if (_endTimeSeverity is null || severity > _endTimeSeverity)
