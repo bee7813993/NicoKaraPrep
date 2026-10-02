@@ -202,6 +202,7 @@ public partial class MainViewModel : ObservableObject
         StatusText = tab.OwnFile
             ? $"タブ「{tab.Name}」を閉じました（{Path.GetFileName(tab.CopyFilePath)} の歌詞はメインへは戻していません）"
             : $"タブ「{tab.Name}」の行をメインへ時刻順に戻しました";
+        _noticeBeforeCheck = StatusText; // タブを閉じたあとのチェックの結果で消えないように
     }
 
     /// <summary>タブに保存していない変更があるか（表示中のタブは今の状態で見る）。</summary>
@@ -275,6 +276,7 @@ public partial class MainViewModel : ObservableObject
         ActivateTab(main);
         SaveProject();
         StatusText = $"タブ分離を解除し、{lineCount} 行をメインへ時刻順に戻しました";
+        _noticeBeforeCheck = StatusText; // 解除したあとのチェックの結果で消えないように
     }
 
     public void RenameTab(TabState tab, string newName)
