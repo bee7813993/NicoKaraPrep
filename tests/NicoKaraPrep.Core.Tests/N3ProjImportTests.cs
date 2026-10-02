@@ -330,6 +330,18 @@ public class N3ProjImportTests : IDisposable
         Assert.Null(tabs[2].LayoutName); // 行ごとにばらばら
         Assert.Null(tabs[3].LayoutName); // レイアウトの番号が無い
 
+        // 行ごとのレイアウトの名前（ページ区切りの空行は null）
+        Assert.Equal(new string?[] { "コーラス1行", null, "コーラス1行" }, tabs[1].LayoutNames);
+        Assert.Equal(new string?[] { "下寄せ2行", "コーラス1行" }, tabs[2].LayoutNames);
+        Assert.Equal(new string?[] { null }, tabs[3].LayoutNames);
+
+        // 歌詞の行の対応付け（ドキュメントの行 → タブの行）
+        var doc = LrcFormat.Parse(string.Join("\r\n", "[00:05:00]（コーラス）う[00:06:00]", "", "[00:09:00]（コーラス）え[00:10:00]"));
+        var map = N3ProjImport.MatchLineIndexes(doc, tabs[1]);
+        Assert.Equal(0, map[0]);
+        Assert.Equal(2, map[2]);
+        Assert.Equal(new[] { 0, 2 }, map.Keys.OrderBy(k => k));
+
         // コーラスの歌詞ファイルもプロジェクトのフォルダから見つかる
         string chorus = Path.Combine(_dir, "song_パート1.lrc");
         File.WriteAllText(chorus, "[00:05:00]（コーラス）う[00:06:00]");

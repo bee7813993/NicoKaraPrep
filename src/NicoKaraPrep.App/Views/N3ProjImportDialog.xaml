@@ -111,6 +111,15 @@
                 </StackPanel>
             </CheckBox>
 
+            <!-- レイアウト -->
+            <TextBlock Text="レイアウト" Style="{StaticResource SectionTitle}" />
+            <CheckBox x:Name="PageLayoutBox">
+                <StackPanel>
+                    <TextBlock Text="ニコカラメーカーで設定したページのレイアウトを、ページごとの手動指定として取り込む" TextWrapping="Wrap" />
+                    <TextBlock x:Name="PageLayoutDetail" Style="{StaticResource ItemDetail}" />
+                </StackPanel>
+            </CheckBox>
+
             <!-- n3proj 書き出し -->
             <TextBlock Text="n3proj 書き出し" Style="{StaticResource SectionTitle}" />
             <CheckBox x:Name="BaseBox">

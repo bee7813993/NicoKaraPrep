@@ -263,6 +263,23 @@ public class N3ProjWriterTests
     }
 
     [Fact]
+    public void レイアウト_適用対象の範囲の外は選ばない()
+    {
+        // 範囲は「2行」〜「3行」。1 行のページは、範囲の外の「1行」ではなく範囲の中の「2行」（ニコカラメーカー3 の自動設定と同じ）
+        var infos = new List<N3ProjLayoutInfo> { new("2行", 0, 2), new("3行", 1, 3), new("コーラス1行", 2, 1), new("4行", 3, 4) };
+        var resolver = new N3ProjWriter.LayoutResolver(infos, null, "2行", "3行", new List<string>(), "t");
+        Assert.Equal(0, resolver.Resolve(1));
+        Assert.Equal(0, resolver.Resolve(2));
+        Assert.Equal(1, resolver.Resolve(3));
+        Assert.Equal(1, resolver.Resolve(4)); // 範囲の中に無ければ範囲の中で最も行数の多いもの（範囲の外の「4行」は選ばない）
+
+        // 範囲の名前がプロジェクトに無ければ、すべてが対象
+        var all = new N3ProjWriter.LayoutResolver(infos, null, "無い", "無い", new List<string>(), "t");
+        Assert.Equal(2, all.Resolve(1));
+        Assert.Equal(3, all.Resolve(4));
+    }
+
+    [Fact]
     public void レイアウト_固定名の指定()
     {
         var infos = new List<N3ProjLayoutInfo> { new("2行", 0, 2), new("コーラス", 1, 1) };

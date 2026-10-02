@@ -30,6 +30,9 @@ public sealed class N3ProjSourceTab
     /// <summary><see cref="Document"/> の各行の実際の表示時刻（ms）。空行・未設定は null。</summary>
     public List<(int BeginMs, int EndMs)?> ShowTimes { get; } = new();
 
+    /// <summary><see cref="Document"/> の各行にニコカラメーカーが設定したレイアウト設定の名前。空行・不明は null。</summary>
+    public List<string?> LayoutNames { get; } = new();
+
     /// <summary>歌詞行の数。</summary>
     public int LyricLineCount => Document.Lines.Count(l => !l.IsEmpty);
 
@@ -257,6 +260,7 @@ public static class N3ProjImport
                 {
                     tab.Document.Lines.Add(new LyricsLine());
                     tab.ShowTimes.Add(null);
+                    tab.LayoutNames.Add(null);
                 }
                 pendingBreak = false;
 
@@ -265,8 +269,16 @@ public static class N3ProjImport
                 int end = l["ShowEndTime"]?.GetValue<int>() ?? -1;
                 tab.Document.Lines.Add(LrcFormat.ParseLyricLine(raw));
                 tab.ShowTimes.Add(begin >= 0 && end >= begin ? (begin, end) : null);
-                if (l["LayoutIndex"] is JsonValue li && li.TryGetValue(out int layoutIndex)) usedLayouts.Add(layoutIndex);
-                else layoutUnknown = true;
+                if (l["LayoutIndex"] is JsonValue li && li.TryGetValue(out int layoutIndex))
+                {
+                    usedLayouts.Add(layoutIndex);
+                    tab.LayoutNames.Add(layoutIndex >= 0 && layoutIndex < layoutNames.Count && layoutNames[layoutIndex] is { Length: > 0 } layoutName ? layoutName : null);
+                }
+                else
+                {
+                    layoutUnknown = true;
+                    tab.LayoutNames.Add(null);
+                }
             }
 
             if (!layoutUnknown && usedLayouts.Count == 1 && usedLayouts.First() is int only && only >= 0 && only < layoutNames.Count)
@@ -362,7 +374,14 @@ public static class N3ProjImport
     /// 順序を保って対応付ける（最長共通部分列）。歌詞を直した行は対応しない。
     /// 戻り値は ドキュメントの行インデックス → ニコカラメーカーの表示時刻（ms）。
     /// </summary>
-    public static Dictionary<int, (int BeginMs, int EndMs)> MatchLines(LyricsDocument doc, N3ProjSourceTab source)
+    public static Dictionary<int, (int BeginMs, int EndMs)> MatchLines(LyricsDocument doc, N3ProjSourceTab source) =>
+        MatchLineIndexes(doc, source).ToDictionary(kv => kv.Key, kv => source.ShowTimes[kv.Value]!.Value);
+
+    /// <summary>
+    /// <see cref="MatchLines"/> と同じ対応付けで、ドキュメントの行インデックス → n3proj の歌詞設定タブの行インデックス（<see cref="N3ProjSourceTab.Document"/> の添字）を返す
+    /// （表示時刻が設定された行だけ）。
+    /// </summary>
+    public static Dictionary<int, int> MatchLineIndexes(LyricsDocument doc, N3ProjSourceTab source)
     {
         var docRows = new List<(int Index, string Key)>();
         for (int i = 0; i < doc.Lines.Count; i++)
@@ -387,13 +406,13 @@ public static class N3ProjImport
             }
         }
 
-        var result = new Dictionary<int, (int, int)>();
+        var result = new Dictionary<int, int>();
         int a = 0, c = 0;
         while (a < n && c < m)
         {
             if (docRows[a].Key == srcRows[c].Key)
             {
-                result[docRows[a].Index] = source.ShowTimes[srcRows[c].Index]!.Value;
+                result[docRows[a].Index] = srcRows[c].Index;
                 a++;
                 c++;
             }

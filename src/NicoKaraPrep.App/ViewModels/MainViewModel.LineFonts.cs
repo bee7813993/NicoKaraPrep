@@ -201,8 +201,11 @@ public partial class MainViewModel
                 var fonts = resolved[t][index];
                 if (fonts.Runs.Count == 0) continue;
                 var source = Source(line, fonts, SpacingOf(layout));
+                // 1 行のページを上の段へ上げる（PageRowMap）のは、レイアウトにその段があるときだけ（1 行のレイアウト「コーラス1行」などでは下の段のまま。
+                // ニコカラメーカー3 の出力で確認）。行が多いページはレイアウトの行数を超えても積み上げる
+                int maxRow = Math.Max(layout.LineCount, page.Count);
                 previewLines.Add(new PreviewLine(
-                    source, plan.BeginMs, plan.EndMs, t, plan.PageIndex, plan.Row, Math.Max(page.Rows, page.Count),
+                    source, plan.BeginMs, plan.EndMs, t, plan.PageIndex, Math.Min(plan.Row, maxRow), Math.Min(Math.Max(page.Rows, page.Count), maxRow),
                     layout, N3WipeTimeline.Groups(line)));
                 if (t == active)
                 {

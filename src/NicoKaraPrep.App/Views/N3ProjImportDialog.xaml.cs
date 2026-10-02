@@ -221,6 +221,17 @@ public sealed partial class N3ProjImportDialog : ContentDialog
         _lineShowEstimated = matched > 0 && preview.Timing is not null ? vm.CountLineShowTimeImports(preview, withEstimatedTiming: true) : 0;
         LineShowBox.IsEnabled = matched > 0;
 
+        // ---- レイアウト ----
+        int layoutPages = matched > 0 ? vm.CountPageLayoutImports(preview) : 0;
+        PageLayoutDetail.Text = matched == 0
+            ? "開いている歌詞と一致する行がありません"
+            : layoutPages == 0
+                ? "NicoKaraPrep が自動で選ぶレイアウトと違うページはありません（取り込むページはありません）"
+                : $"NicoKaraPrep が自動で選ぶレイアウトと違う {layoutPages} ページを、ページごとの手動指定にします（歌詞が同じ行のページだけ）。" +
+                  "行リストのレイアウトの欄に ✎ が付き、字幕のプレビュー・n3proj 書き出しもそのレイアウトになります" +
+                  "（ニコカラメーカー3 の「適用対象レイアウト」の範囲が、このプロジェクトを作ったときと今とで違うと、自動で選ぶレイアウトが変わります）";
+        PageLayoutBox.IsEnabled = layoutPages > 0;
+
         // ---- 書き出しのベース ----
         string? currentBase = vm.N3ProjSettings.BasePath;
         bool sameBase = currentBase is { Length: > 0 } && string.Equals(Path.GetFullPath(currentBase), Path.GetFullPath(preview.Path), StringComparison.OrdinalIgnoreCase);
@@ -245,6 +256,7 @@ public sealed partial class N3ProjImportDialog : ContentDialog
             BaseBox.IsChecked = currentBase is not { Length: > 0 } || sameBase;
             IconsBox.IsChecked = IconRows.Any(r => r.IsSelected);
             MediaBox.IsChecked = MediaBox.IsEnabled && !sameMedia && (currentMedia is not { Length: > 0 } || !File.Exists(currentMedia));
+            PageLayoutBox.IsChecked = PageLayoutBox.IsEnabled; // 違うページがあれば、ニコカラメーカーと同じレイアウトにする
         }
 
         UpdateLineShowDetail();
@@ -354,6 +366,7 @@ public sealed partial class N3ProjImportDialog : ContentDialog
             LineTimes = LineTimesBox.IsChecked == true && LineTimesBox.IsEnabled,
             Timing = TimingBox.IsChecked == true && TimingBox.IsEnabled,
             LineShowTimes = LineShowBox.IsChecked == true && LineShowBox.IsEnabled,
+            PageLayouts = PageLayoutBox.IsChecked == true && PageLayoutBox.IsEnabled,
             ExportBase = BaseBox.IsChecked == true,
             FontSetNames = FontSetsBox.IsChecked == true
                 ? FontRows.Where(r => r.IsSelected).Select(r => r.Name).ToList()

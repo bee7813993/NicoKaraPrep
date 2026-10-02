@@ -18,6 +18,9 @@ public sealed class N3ProjImportChoices
     /// <summary>ニコカラメーカーで調整された表示時刻を、行ごとの手動指定として取り込む。</summary>
     public bool LineShowTimes { get; set; }
 
+    /// <summary>ニコカラメーカーで設定したページのレイアウトを、自動で選ぶものと違うページだけ、ページの手動指定として取り込む。</summary>
+    public bool PageLayouts { get; set; }
+
     /// <summary>n3proj 書き出しのベースにする。</summary>
     public bool ExportBase { get; set; }
 
@@ -145,6 +148,67 @@ public partial class MainViewModel
         return count;
     }
 
+    /// <summary>
+    /// 「ページのレイアウトを取り込む」を選んだときに手動指定になるページの数（試算。読み込むプロジェクトを書き出しのベースにした場合のレイアウトの並びで比べる）。
+    /// </summary>
+    public int CountPageLayoutImports(N3ProjImportPreview preview)
+    {
+        StoreActiveTab();
+        var layouts = EffectiveLayoutsFor(preview.Path);
+        int count = 0;
+        foreach (var tab in Tabs)
+        {
+            var (source, _) = N3ProjImport.FindSource(tab.Document, tab.Name, preview.Tabs);
+            if (source is not null) count += PageLayoutDifferences(tab, source, layouts).Count;
+        }
+        return count;
+    }
+
+    /// <summary>
+    /// ニコカラメーカーで設定したページのレイアウトが、NicoKaraPrep が自動で選ぶもの（行数に応じたレイアウト・タブに固定したレイアウト）と違うページ
+    /// （ページの行の添字と、ニコカラメーカーのレイアウト名）。手動で指定したページ・歌詞が一致しないページ・ベースに無い名前は含めない。
+    /// </summary>
+    private List<(List<int> Lines, string Layout)> PageLayoutDifferences(TabState tab, N3ProjSourceTab source, List<N3LayoutSettings> layouts)
+    {
+        var result = new List<(List<int>, string)>();
+        if (layouts.Count == 0) return result;
+        var map = N3ProjImport.MatchLineIndexes(tab.Document, source);
+        if (map.Count == 0) return result;
+        var plans = N3ShowTimePlanner.Plan(tab.Document, CreateShowTimeSettings(tab.Name));
+        string? fixedLayout = N3ProjSettings.TabLayouts.GetValueOrDefault(tab.Name) is { Length: > 0 } fl ? fl : null;
+        var resolver = new N3ProjWriter.LayoutResolver(layouts.Select(l => l.Info).ToList(), fixedLayout,
+            Nkm3Env?.LayoutSelectableBegin, Nkm3Env?.LayoutSelectableEnd, new List<string>(), tab.Name);
+        foreach (var page in plans.GroupBy(p => p.Value.PageIndex))
+        {
+            var lines = page.Select(p => p.Key).OrderBy(i => i).ToList();
+            if (lines.Any(i => tab.Document.Lines[i].LayoutName is { Length: > 0 } n && resolver.FindIndex(n) is not null)) continue; // 手動の指定はそのまま
+            string? nkm3 = lines
+                .Select(i => map.TryGetValue(i, out int s) && s < source.LayoutNames.Count ? source.LayoutNames[s] : null)
+                .FirstOrDefault(n => n is not null);
+            if (nkm3 is null || resolver.FindIndex(nkm3) is null) continue;
+            string auto = layouts[Math.Clamp(resolver.Resolve(lines.Count), 0, layouts.Count - 1)].Name;
+            if (auto != nkm3) result.Add((lines, nkm3));
+        }
+        return result;
+    }
+
+    /// <summary>n3proj を書き出しのベースにした場合のレイアウト設定の並び（読めなければ今の並び）。</summary>
+    private List<N3LayoutSettings> EffectiveLayoutsFor(string projectPath)
+    {
+        try
+        {
+            var root = N3ProjFormat.ReadJsonObject(projectPath);
+            var (_, height) = N3LayoutReader.ScreenSize(root);
+            var baseLayouts = N3LayoutReader.Read(root, height);
+            if (baseLayouts.Count == 0) baseLayouts = N3LayoutReader.Defaults(height);
+            return N3LayoutLibrary.Effective(baseLayouts, Settings.N3Layouts, N3ProjSettings.MergeLayouts);
+        }
+        catch (Exception)
+        {
+            return GetEffectiveLayouts();
+        }
+    }
+
     /// <summary>歌詞行が n3proj の歌詞行に対応する数（全タブの合計）と歌詞行の総数。</summary>
     public (int Matched, int Total) CountMatchedLyricLines(N3ProjImportPreview preview)
     {
@@ -232,6 +296,35 @@ public partial class MainViewModel
         {
             N3ProjSettings.BasePath = preview.Path;
             done.Add("書き出しのベース");
+        }
+
+        // 5') ページのレイアウト（ニコカラメーカーで設定したもの）→ 自動で選ぶものと違うページだけ、ページの手動指定に
+        //     （ベースを変えたあとのレイアウトの並びで比べる。ニコカラメーカーの「適用対象レイアウト」の範囲は曲ごとに違うことがあるため）
+        if (choices.PageLayouts)
+        {
+            var layouts = GetEffectiveLayouts();
+            int pages = 0;
+            foreach (var tab in Tabs)
+            {
+                var (source, _) = N3ProjImport.FindSource(tab.Document, tab.Name, preview.Tabs);
+                if (source is null) continue;
+                var diffs = PageLayoutDifferences(tab, source, layouts);
+                if (diffs.Count == 0) continue;
+                tab.UndoStack.Add(tab.Document.Clone());
+                tab.RedoStack.Clear();
+                foreach (var (lines, name) in diffs)
+                {
+                    foreach (int i in lines) tab.Document.Lines[i].LayoutName = name;
+                }
+                tab.IsModified = true;
+                pages += diffs.Count;
+            }
+            if (pages > 0)
+            {
+                IsModified = _activeTab.IsModified;
+                UpdateTitle();
+            }
+            done.Add($"ページのレイアウト {pages} ページ");
         }
 
         // 6) アイコン（@Emoji）

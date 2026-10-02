@@ -624,6 +624,11 @@ public static class N3ProjWriter
         /// <summary>名前のレイアウト設定の番号（無ければ null）。</summary>
         public int? FindIndex(string name) => _layouts.FirstOrDefault(l => l.Name == name)?.Index;
 
+        /// <summary>
+        /// ページの行数に応じたレイアウトの番号。ニコカラメーカー3 の「行数に応じてレイアウトを設定」と同じく、適用対象の範囲（環境設定）の中から、
+        /// ページの行数と同じ行数のものを選ぶ。範囲の中に無ければ、範囲の中で行数が多いもののうち最も少ないもの、それも無ければ範囲の中で最も行数の多いもの
+        /// （範囲の外のレイアウトは選ばない。範囲の外の 1 行のレイアウトがあっても、1 行のページは範囲の中の 2 行のレイアウトになる）。
+        /// </summary>
         public int Resolve(int lineCount)
         {
             if (_fixed is int f) return f;
@@ -631,11 +636,10 @@ public static class N3ProjWriter
             if (_cache.TryGetValue(lineCount, out int cached)) return cached;
 
             var inRange = _layouts.Where(l => l.Index >= _rangeBegin && l.Index <= _rangeEnd).ToList();
-            var pick = inRange.FirstOrDefault(l => l.LineCount == lineCount)
-                ?? _layouts.FirstOrDefault(l => l.LineCount == lineCount)
-                ?? inRange.Where(l => l.LineCount > lineCount).OrderBy(l => l.LineCount).FirstOrDefault()
-                ?? _layouts.Where(l => l.LineCount > lineCount).OrderBy(l => l.LineCount).FirstOrDefault()
-                ?? _layouts.OrderByDescending(l => l.LineCount).First();
+            var candidates = inRange.Count > 0 ? inRange : _layouts;
+            var pick = candidates.FirstOrDefault(l => l.LineCount == lineCount)
+                ?? candidates.Where(l => l.LineCount > lineCount).OrderBy(l => l.LineCount).FirstOrDefault()
+                ?? candidates.OrderByDescending(l => l.LineCount).First();
             _cache[lineCount] = pick.Index;
             return pick.Index;
         }
