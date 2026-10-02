@@ -313,7 +313,7 @@ public sealed partial class MainWindow
                 ShowBeginBox.PlaceholderText = "--:--:--";
                 ShowEndBox.PlaceholderText = "--:--:--";
                 LineFontBox.Text = "";
-                N3LineInfo.Text = "";
+                SetN3LineInfo("");
                 LineFontLabel.Text = "フォント";
                 LineLayoutBox.SelectedIndex = -1;
                 LineLayoutBox.PlaceholderText = "（自動）";
@@ -338,20 +338,27 @@ public sealed partial class MainWindow
 
             if (plan is null)
             {
-                N3LineInfo.Text = "タイムタグが無いため表示時刻を計算できません";
+                SetN3LineInfo("タイムタグが無いため表示時刻を計算できません");
             }
             else
             {
                 string row = $"{(ViewModel.Settings.CollisionAlignFromTop ? "上" : "下")}から{plan.Row}行目";
                 string adjusted = plan.Adjusted ? "・前後ページに合わせて調整" : "";
                 string manual = plan.BeginIsManual || plan.EndIsManual ? "（手動指定あり）" : "";
-                N3LineInfo.Text = $"自動: {FmtCs(plan.BeginMs / 10)} 〜 {FmtCs(plan.EndMs / 10)}　ページ{plan.PageIndex + 1}・{row}{adjusted}{manual}";
+                SetN3LineInfo($"自動: {FmtCs(plan.BeginMs / 10)} 〜 {FmtCs(plan.EndMs / 10)}　ページ{plan.PageIndex + 1}・{row}{adjusted}{manual}");
             }
         }
         finally
         {
             _n3PanelLoading = false;
         }
+    }
+
+    /// <summary>行設定の右の説明（自動の表示時刻など）。欄が狭いと … で切れるので、全文をツールチップにも出す。</summary>
+    private void SetN3LineInfo(string text)
+    {
+        N3LineInfo.Text = text;
+        ToolTipService.SetToolTip(N3LineInfo, text.Length > 0 ? text : null);
     }
 
     /// <summary>

@@ -122,7 +122,10 @@ public sealed class AppSettings
     /// <summary>Z / X（および Ctrl+←/→）でシークする秒数。</summary>
     public double SeekSeconds { get; set; } = 3.0;
 
-    /// <summary>メディアプレイヤーの表示高さ px（ドラッグハンドルで変更）。</summary>
+    /// <summary>
+    /// メディアプレイヤーの表示高さ px（ドラッグハンドルで変更）。ウィンドウが低くて行リストが見えなくなるときは、
+    /// 表示ではこれより縮める（この値は変えない）。
+    /// </summary>
     public double PlayerHeightPx { get; set; } = 260;
 
     /// <summary>
@@ -139,6 +142,24 @@ public sealed class AppSettings
 
     /// <summary>フォント設定ビューの左の一覧の幅 px（一覧と編集欄のあいだのつまみで変更）。</summary>
     public double FontListWidthPx { get; set; } = 300;
+
+    /// <summary>
+    /// 行リスト・絵文字挿入ビューの右のパネル（フォント・レイアウト、絵文字のパレット）の幅 px（左との境のつまみで変更）。
+    /// ウィンドウが狭くて左が狭くなりすぎるときは、表示ではこれより狭める（この値は変えない）。
+    /// </summary>
+    public double SidePanelWidthPx { get; set; } = 300;
+
+    /// <summary>行リスト・絵文字挿入ビューの右のパネルを出すか（表示メニューで切り替え）。</summary>
+    public bool SidePanelVisible { get; set; } = true;
+
+    /// <summary>
+    /// メディア再生を右の列（右のパネルの上）に置くか（表示メニューで切り替え）。置くと行リストが縦いっぱいになるので、
+    /// FHD のような低い画面で行を多く見られる。プレイヤーの高さは列の幅から決める。
+    /// </summary>
+    public bool PlayerOnRight { get; set; }
+
+    /// <summary>メディア再生を右の列に置くときの、右の列の幅 px（<see cref="SidePanelWidthPx"/> とは別に覚える）。</summary>
+    public double SidePlayerWidthPx { get; set; } = 560;
 
     /// <summary>前回ファイルを保存（エクスポート）したフォルダ。</summary>
     public string LastSaveFolder { get; set; } = "";

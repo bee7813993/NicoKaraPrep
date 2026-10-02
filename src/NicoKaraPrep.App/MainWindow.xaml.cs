@@ -35,8 +35,8 @@ public sealed partial class MainWindow : Window
             }
         };
 
-        PlayerHost.Height = Math.Clamp(ViewModel.Settings.PlayerHeightPx, 120, 1200);
         StyledLyricsMenuItem.IsChecked = ViewModel.Settings.LineListStyledLyrics;
+        InitializeAdaptiveLayout();
         InitializePlayerBar();
         InitializeLineSide();
 
@@ -1278,19 +1278,7 @@ public sealed partial class MainWindow : Window
 
     private void OnPlayPauseClick(object sender, RoutedEventArgs e) => TogglePlayPause();
 
-    // ------------------------------------------------ プレイヤーの高さ変更
-
-    private void OnPlayerResizeDelta(object sender, ManipulationDeltaRoutedEventArgs e)
-    {
-        double current = double.IsNaN(PlayerHost.Height) ? PlayerHost.ActualHeight : PlayerHost.Height;
-        PlayerHost.Height = Math.Clamp(current + e.Delta.Translation.Y, 120, 1200);
-    }
-
-    private void OnPlayerResizeCompleted(object sender, ManipulationCompletedRoutedEventArgs e)
-    {
-        ViewModel.Settings.PlayerHeightPx = PlayerHost.Height;
-        ViewModel.Settings.Save();
-    }
+    // プレイヤーの高さ変更（つまみ）は MainWindow.Layout.cs
 
     private void SeekBy(double seconds)
     {

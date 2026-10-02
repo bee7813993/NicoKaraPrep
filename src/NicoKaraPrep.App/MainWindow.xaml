@@ -4,12 +4,13 @@
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
     xmlns:vm="using:NicoKaraPrep.App.ViewModels"
     xmlns:views="using:NicoKaraPrep.App.Views"
+    xmlns:fs="using:NicoKaraPrep.App.Views.FontSettings"
     xmlns:core="using:NicoKaraPrep.Core.Model"
     xmlns:val="using:NicoKaraPrep.Core.Validation">
 
-    <Grid KeyDown="OnRootKeyDown">
+    <!-- 画面の大きさに合わせた並べ方（プレイヤーの高さ・右のパネルの幅・行リストの列・行設定の段）は MainWindow.Layout.cs -->
+    <Grid x:Name="RootGrid" KeyDown="OnRootKeyDown">
         <Grid.RowDefinitions>
-            <RowDefinition Height="Auto" />
             <RowDefinition Height="Auto" />
             <RowDefinition Height="*" />
             <RowDefinition Height="Auto" />
@@ -146,6 +147,16 @@
                         x:Name="StyledLyricsMenuItem"
                         Text="行リストの歌詞を字幕の見た目で表示"
                         Click="OnStyledLyricsMenuClick" />
+                    <MenuFlyoutSeparator />
+                    <!-- 画面の並べ方（低い画面では、メディア再生を右に置くと行リストを縦に広く使える） -->
+                    <ToggleMenuFlyoutItem
+                        x:Name="PlayerOnRightMenuItem"
+                        Text="メディア再生を右の列に置く（行リストを縦に広く）"
+                        Click="OnPlayerOnRightMenuClick" />
+                    <ToggleMenuFlyoutItem
+                        x:Name="SidePanelMenuItem"
+                        Text="右のパネル（フォント・レイアウト／絵文字のパレット）を表示"
+                        Click="OnSidePanelMenuClick" />
                 </MenuBarItem>
                 <MenuBarItem Title="エクスポート(X)" AccessKey="X">
                     <MenuFlyoutItem Text="選択行を新しいタブへ分離" Click="OnSplitToTabClick">
@@ -218,82 +229,98 @@
             </SelectorBar>
         </Grid>
 
-        <!-- メディア再生パネル -->
-        <Expander
-            Grid.Row="1"
-            x:Name="MediaPanel"
-            Header="メディア再生（動画・音声ファイルをここにドロップで読み込み）"
-            HorizontalAlignment="Stretch"
-            HorizontalContentAlignment="Stretch"
-            AllowDrop="True"
-            DragOver="OnMediaDragOver"
-            Drop="OnMediaDrop">
-            <Grid>
-                <Grid.RowDefinitions>
-                    <RowDefinition Height="Auto" />
-                    <RowDefinition Height="Auto" />
-                    <RowDefinition Height="Auto" />
-                </Grid.RowDefinitions>
-                <!-- 動画と字幕のプレビュー（再生の操作は下の行に出して、字幕に重ならないようにする） -->
-                <Grid x:Name="PlayerHost" Height="260" Background="Black">
-                    <MediaPlayerElement x:Name="Player" AreTransportControlsEnabled="False" />
-                    <views:SubtitlePreviewView x:Name="SubtitlePreview" />
-                </Grid>
-                <!-- 再生の操作: 再生・一時停止と位置（左）、音量と字幕プレビューの切り替え（右） -->
-                <Grid Grid.Row="1" x:Name="PlayerBar" Padding="0,6,0,0" ColumnSpacing="10">
-                    <Grid.ColumnDefinitions>
-                        <ColumnDefinition Width="Auto" />
-                        <ColumnDefinition Width="Auto" />
-                        <ColumnDefinition Width="*" />
-                        <ColumnDefinition Width="Auto" />
-                        <ColumnDefinition Width="Auto" />
-                        <ColumnDefinition Width="Auto" />
-                    </Grid.ColumnDefinitions>
-                    <Button x:Name="PlayPauseButton" Padding="12,5" Click="OnPlayPauseClick" ToolTipService.ToolTip="再生 / 一時停止（Ctrl+Space）">
-                        <FontIcon x:Name="PlayPauseIcon" Glyph="&#xE768;" FontSize="14" />
-                    </Button>
-                    <TextBlock Grid.Column="1" x:Name="PlayerTimeText" Text="0:00.00" FontFamily="Consolas" FontSize="12" VerticalAlignment="Center"
-                               ToolTipService.ToolTip="再生位置" />
-                    <Slider Grid.Column="2" x:Name="PlayerSeekSlider" Minimum="0" Maximum="1" StepFrequency="0.01" IsThumbToolTipEnabled="False"
-                            VerticalAlignment="Center" ValueChanged="OnPlayerSeekChanged" ToolTipService.ToolTip="ドラッグで再生位置を移動" />
-                    <TextBlock Grid.Column="3" x:Name="PlayerDurationText" Text="0:00" FontFamily="Consolas" FontSize="12" VerticalAlignment="Center"
-                               Foreground="{ThemeResource TextFillColorSecondaryBrush}" ToolTipService.ToolTip="長さ" />
-                    <StackPanel Grid.Column="4" Orientation="Horizontal" Spacing="4" VerticalAlignment="Center" ToolTipService.ToolTip="音量">
-                        <FontIcon Glyph="&#xE767;" FontSize="14" VerticalAlignment="Center" />
-                        <Slider x:Name="PlayerVolumeSlider" Width="96" Minimum="0" Maximum="100" Value="100" VerticalAlignment="Center" ValueChanged="OnPlayerVolumeChanged" />
-                    </StackPanel>
-                    <ToggleButton Grid.Column="5" x:Name="SubtitlePreviewToggle" Content="字幕プレビュー" Padding="10,5" Click="OnSubtitlePreviewToggleClick"
-                                  ToolTipService.ToolTip="動画の上に、ニコカラメーカー3 での字幕の見え方（近似。フェードなどの字幕アクションは無し）を重ねます" />
-                </Grid>
-                <!-- 高さ変更ハンドル -->
-                <Border
-                    Grid.Row="2"
-                    Height="10"
-                    Background="Transparent"
-                    ManipulationMode="TranslateY"
-                    ManipulationDelta="OnPlayerResizeDelta"
-                    ManipulationCompleted="OnPlayerResizeCompleted"
-                    ToolTipService.ToolTip="ドラッグでプレイヤーの高さを変更">
-                    <Rectangle
-                        Width="48"
-                        Height="4"
-                        RadiusX="2"
-                        RadiusY="2"
-                        HorizontalAlignment="Center"
-                        VerticalAlignment="Center"
-                        Fill="{ThemeResource ControlStrongFillColorDefaultBrush}" />
-                </Border>
-            </Grid>
-        </Expander>
-
-        <!-- メイン -->
-        <Grid Grid.Row="2" x:Name="MainArea">
+        <!-- メイン（上: メディア再生 / 下: 左に行リストか絵文字挿入ビュー・つまみ・右のパネル） -->
+        <Grid Grid.Row="1" x:Name="MainArea">
             <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="*" />
-                <ColumnDefinition Width="300" />
+                <ColumnDefinition Width="Auto" />
+                <ColumnDefinition x:Name="SideColumn" Width="300" />
             </Grid.ColumnDefinitions>
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="*" />
+            </Grid.RowDefinitions>
 
-            <Grid Grid.Column="0" x:Name="NormalView">
+            <!-- メディア再生パネル（見出しと中の余白は既定より薄くして、低い画面でも行リストの高さを残す）。
+                 ふつうは上の段の横いっぱい。「メディア再生を右に置く」では右の列の上（MainWindow.Layout.cs の ApplyPlayerPlacement） -->
+            <Expander
+                Grid.Row="0"
+                Grid.ColumnSpan="3"
+                x:Name="MediaPanel"
+                Header="メディア再生（動画・音声ファイルをここにドロップで読み込み）"
+                MinHeight="32"
+                Padding="8,4"
+                HorizontalAlignment="Stretch"
+                HorizontalContentAlignment="Stretch"
+                AllowDrop="True"
+                DragOver="OnMediaDragOver"
+                Drop="OnMediaDrop">
+                <Grid>
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
+                    </Grid.RowDefinitions>
+                    <!-- 動画と字幕のプレビュー（再生の操作は下の行に出して、字幕に重ならないようにする） -->
+                    <Grid x:Name="PlayerHost" Height="260" Background="Black">
+                        <MediaPlayerElement x:Name="Player" AreTransportControlsEnabled="False" />
+                        <views:SubtitlePreviewView x:Name="SubtitlePreview" />
+                    </Grid>
+                    <!-- 再生の操作: 再生・一時停止と位置（左）、音量と字幕プレビューの切り替え（右）。
+                         右の列に置くときは、位置のスライダーを 1 段目の横いっぱいに、ほかを 2 段目にする -->
+                    <Grid Grid.Row="1" x:Name="PlayerBar" Padding="0,6,0,0" ColumnSpacing="10">
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="Auto" />
+                        </Grid.RowDefinitions>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto" />
+                            <ColumnDefinition Width="Auto" />
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="Auto" />
+                            <ColumnDefinition Width="Auto" />
+                            <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
+                        <Button x:Name="PlayPauseButton" Padding="12,5" Click="OnPlayPauseClick" ToolTipService.ToolTip="再生 / 一時停止（Ctrl+Space）">
+                            <FontIcon x:Name="PlayPauseIcon" Glyph="&#xE768;" FontSize="14" />
+                        </Button>
+                        <TextBlock Grid.Column="1" x:Name="PlayerTimeText" Text="0:00.00" FontFamily="Consolas" FontSize="12" VerticalAlignment="Center"
+                                   ToolTipService.ToolTip="再生位置" />
+                        <Slider Grid.Column="2" x:Name="PlayerSeekSlider" Minimum="0" Maximum="1" StepFrequency="0.01" IsThumbToolTipEnabled="False"
+                                VerticalAlignment="Center" ValueChanged="OnPlayerSeekChanged" ToolTipService.ToolTip="ドラッグで再生位置を移動" />
+                        <TextBlock Grid.Column="3" x:Name="PlayerDurationText" Text="0:00" FontFamily="Consolas" FontSize="12" VerticalAlignment="Center"
+                                   Foreground="{ThemeResource TextFillColorSecondaryBrush}" ToolTipService.ToolTip="長さ" />
+                        <StackPanel Grid.Column="4" Orientation="Horizontal" Spacing="4" VerticalAlignment="Center" ToolTipService.ToolTip="音量">
+                            <FontIcon Glyph="&#xE767;" FontSize="14" VerticalAlignment="Center" />
+                            <Slider x:Name="PlayerVolumeSlider" Width="96" Minimum="0" Maximum="100" Value="100" VerticalAlignment="Center" ValueChanged="OnPlayerVolumeChanged" />
+                        </StackPanel>
+                        <ToggleButton Grid.Column="5" x:Name="SubtitlePreviewToggle" Content="字幕プレビュー" Padding="10,5" Click="OnSubtitlePreviewToggleClick"
+                                      ToolTipService.ToolTip="動画の上に、ニコカラメーカー3 での字幕の見え方（近似。フェードなどの字幕アクションは無し）を重ねます" />
+                    </Grid>
+                    <!-- 高さ変更ハンドル（右に置くときは隠す。高さは幅から決める） -->
+                    <Border
+                        Grid.Row="2"
+                        x:Name="PlayerResizeHandle"
+                        Height="10"
+                        Background="Transparent"
+                        ManipulationMode="TranslateY"
+                        ManipulationDelta="OnPlayerResizeDelta"
+                        ManipulationCompleted="OnPlayerResizeCompleted"
+                        ToolTipService.ToolTip="ドラッグでプレイヤーの高さを変更">
+                        <Rectangle
+                            Width="48"
+                            Height="4"
+                            RadiusX="2"
+                            RadiusY="2"
+                            HorizontalAlignment="Center"
+                            VerticalAlignment="Center"
+                            Fill="{ThemeResource ControlStrongFillColorDefaultBrush}" />
+                    </Border>
+                </Grid>
+            </Expander>
+
+            <!-- 行リストのビュー（ドキュメントタブ・行リスト・行エディタ・行設定・行プレビュー） -->
+            <Grid Grid.Row="1" Grid.Column="0" x:Name="NormalView">
                 <Grid.RowDefinitions>
                     <RowDefinition Height="Auto" />
                     <RowDefinition Height="*" />
@@ -367,31 +394,33 @@
                     </ListView.ContextFlyout>
                     <ListView.ItemTemplate>
                         <DataTemplate x:DataType="vm:LineViewModel">
+                            <!-- 行リストが狭いときは、時間と横幅を 2 段にし、フォントの欄を狭めて歌詞の欄を広く取る（列の幅は vm:LineListLayout） -->
                             <Grid Opacity="{x:Bind Opacity, Mode=OneWay}" ColumnSpacing="8" Background="{x:Bind RowBrush, Mode=OneWay}">
                                 <Grid.ColumnDefinitions>
                                     <ColumnDefinition Width="28" />
                                     <ColumnDefinition Width="22" />
                                     <ColumnDefinition Width="36" />
-                                    <ColumnDefinition Width="76" />
-                                    <ColumnDefinition Width="76" />
+                                    <ColumnDefinition Width="{x:Bind vm:LineListLayout.Current.TimeColumnWidth, Mode=OneWay}" />
                                     <ColumnDefinition Width="22" />
                                     <ColumnDefinition Width="22" />
-                                    <ColumnDefinition Width="92" />
+                                    <ColumnDefinition Width="{x:Bind vm:LineListLayout.Current.WidthColumnWidth, Mode=OneWay}" />
                                     <ColumnDefinition Width="18" />
-                                    <ColumnDefinition Width="220" />
+                                    <ColumnDefinition Width="{x:Bind vm:LineListLayout.Current.FontColumnWidth, Mode=OneWay}" />
                                     <ColumnDefinition Width="*" />
                                 </Grid.ColumnDefinitions>
                                 <CheckBox Grid.Column="0" MinWidth="0" Padding="0" IsChecked="{x:Bind IsSelected, Mode=OneWay}" Click="OnRowCheckClick" Tag="{x:Bind}" ToolTipService.ToolTip="選択（複数選択してエクスポートなどに使用）" />
                                 <TextBlock Grid.Column="1" Text="{x:Bind ExportedMark, Mode=OneWay}" Foreground="{ThemeResource AccentTextFillColorPrimaryBrush}" ToolTipService.ToolTip="エクスポート済み" />
                                 <TextBlock Grid.Column="2" Text="{x:Bind IndexText, Mode=OneWay}" Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
-                                <TextBlock Grid.Column="3" Text="{x:Bind TimeText, Mode=OneWay}" FontFamily="Consolas" Foreground="{x:Bind StartTimeBrush, Mode=OneWay}" ToolTipService.ToolTip="開始時間（ページ衝突時は色付き）" />
-                                <TextBlock Grid.Column="4" Text="{x:Bind EndTimeText, Mode=OneWay}" FontFamily="Consolas" Foreground="{x:Bind EndTimeBrush, Mode=OneWay}" ToolTipService.ToolTip="終了時間（ページ衝突時は色付き）" />
-                                <TextBlock Grid.Column="5" Text="{x:Bind OverlapGlyph, Mode=OneWay}" ToolTipService.ToolTip="同時歌唱などのタイムタグ重なりあり（正常）" />
-                                <TextBlock Grid.Column="6" Text="{x:Bind WidthGlyph, Mode=OneWay}" ToolTipService.ToolTip="横幅チェック結果" />
-                                <TextBlock Grid.Column="7" Text="{x:Bind WidthText, Mode=OneWay}" FontSize="12" Foreground="{x:Bind WidthBrush, Mode=OneWay}" VerticalAlignment="Center" ToolTipService.ToolTip="{x:Bind WidthToolTip, Mode=OneWay}" />
-                                <TextBlock Grid.Column="8" Text="{x:Bind OverrideMark, Mode=OneWay}" FontSize="12" VerticalAlignment="Center" Foreground="{ThemeResource AccentTextFillColorPrimaryBrush}" ToolTipService.ToolTip="ニコカラメーカー用の手動指定（表示時刻・フォント）あり" />
+                                <StackPanel Grid.Column="3" Orientation="{x:Bind vm:LineListLayout.Current.TimeOrientation, Mode=OneWay}" Spacing="{x:Bind vm:LineListLayout.Current.TimeSpacing, Mode=OneWay}">
+                                    <TextBlock Width="76" Text="{x:Bind TimeText, Mode=OneWay}" FontFamily="Consolas" Foreground="{x:Bind StartTimeBrush, Mode=OneWay}" ToolTipService.ToolTip="開始時間（ページ衝突時は色付き）" />
+                                    <TextBlock Width="76" Text="{x:Bind EndTimeText, Mode=OneWay}" FontFamily="Consolas" Foreground="{x:Bind EndTimeBrush, Mode=OneWay}" ToolTipService.ToolTip="終了時間（ページ衝突時は色付き）" />
+                                </StackPanel>
+                                <TextBlock Grid.Column="4" Text="{x:Bind OverlapGlyph, Mode=OneWay}" ToolTipService.ToolTip="同時歌唱などのタイムタグ重なりあり（正常）" />
+                                <TextBlock Grid.Column="5" Text="{x:Bind WidthGlyph, Mode=OneWay}" ToolTipService.ToolTip="横幅チェック結果" />
+                                <TextBlock Grid.Column="6" Text="{x:Bind WidthText, Mode=OneWay}" FontSize="12" TextWrapping="Wrap" Foreground="{x:Bind WidthBrush, Mode=OneWay}" VerticalAlignment="Center" ToolTipService.ToolTip="{x:Bind WidthToolTip, Mode=OneWay}" />
+                                <TextBlock Grid.Column="7" Text="{x:Bind OverrideMark, Mode=OneWay}" FontSize="12" VerticalAlignment="Center" Foreground="{ThemeResource AccentTextFillColorPrimaryBrush}" ToolTipService.ToolTip="ニコカラメーカー用の手動指定（表示時刻・フォント）あり" />
                                 <!-- この行に当たるフォント設定（書き出しと同じ決め方。途中で切り替わる行は最初と最後を → でつなぐ）と、下の段にこの行のページのレイアウト -->
-                                <StackPanel Grid.Column="9" VerticalAlignment="Center" Spacing="1">
+                                <StackPanel Grid.Column="8" VerticalAlignment="Center" Spacing="1">
                                     <Grid ColumnSpacing="4" Background="Transparent" Visibility="{x:Bind AppliedFont.IsVisible, Mode=OneWay}" ToolTipService.ToolTip="{x:Bind AppliedFont.ToolTip, Mode=OneWay}">
                                         <Grid.ColumnDefinitions>
                                             <ColumnDefinition Width="Auto" />
@@ -416,7 +445,7 @@
                                                Visibility="{x:Bind HasLayoutText, Mode=OneWay}" ToolTipService.ToolTip="{x:Bind LayoutToolTip, Mode=OneWay}" />
                                 </StackPanel>
                                 <!-- 歌詞: 字幕の見た目（フォント設定の書体・配色・ルビ・アイコン）で描く。文字をクリック・ドラッグで選べる。空行・タグだけの行と、表示を切ったときは文字のまま -->
-                                <Grid Grid.Column="10">
+                                <Grid Grid.Column="9">
                                     <TextBlock Text="{x:Bind DisplayText, Mode=OneWay}" TextTrimming="CharacterEllipsis" Visibility="{x:Bind ShowPlainText, Mode=OneWay}" />
                                     <views:LyricLineView Height="44" Line="{x:Bind}" Visibility="{x:Bind ShowStyledText, Mode=OneWay}" CharSelecting="OnLyricCharSelecting" />
                                 </Grid>
@@ -426,7 +455,7 @@
                 </ListView>
 
                 <!-- 行エディタ -->
-                <Grid Grid.Row="2" Padding="8" ColumnSpacing="8" BorderThickness="0,1,0,0" BorderBrush="{ThemeResource DividerStrokeColorDefaultBrush}">
+                <Grid Grid.Row="2" Padding="8,4" ColumnSpacing="8" BorderThickness="0,1,0,0" BorderBrush="{ThemeResource DividerStrokeColorDefaultBrush}">
                     <Grid.ColumnDefinitions>
                         <ColumnDefinition Width="*" />
                         <ColumnDefinition Width="Auto" />
@@ -442,50 +471,51 @@
                     <Button Grid.Column="1" Content="適用" Click="OnApplyLineClick" VerticalAlignment="Stretch" />
                 </Grid>
 
-                <!-- ニコカラメーカー用の行設定（表示開始・終了の手動指定、フォント設定名。n3proj 書き出しに反映） -->
+                <!-- ニコカラメーカー用の行設定（表示開始・終了の手動指定、フォント設定名、レイアウト。n3proj 書き出しに反映）。
+                     1 行に収まらないときは、フォント・レイアウトを 2 段目に回す（MainWindow.Layout.cs の FitN3LinePanel） -->
                 <Grid
                     Grid.Row="3"
                     x:Name="N3LinePanel"
                     Padding="8,4"
-                    ColumnSpacing="6"
+                    ColumnSpacing="14"
+                    RowSpacing="4"
                     BorderThickness="0,1,0,0"
                     BorderBrush="{ThemeResource DividerStrokeColorDefaultBrush}">
                     <Grid.ColumnDefinitions>
                         <ColumnDefinition Width="Auto" />
                         <ColumnDefinition Width="Auto" />
-                        <ColumnDefinition Width="104" />
-                        <ColumnDefinition Width="Auto" />
-                        <ColumnDefinition Width="104" />
-                        <ColumnDefinition Width="Auto" />
-                        <ColumnDefinition Width="Auto" />
-                        <ColumnDefinition Width="160" />
-                        <ColumnDefinition Width="Auto" />
-                        <ColumnDefinition Width="Auto" />
-                        <ColumnDefinition Width="140" />
                         <ColumnDefinition Width="*" />
                     </Grid.ColumnDefinitions>
-                    <TextBlock Text="ニコカラメーカー用:" FontSize="12" VerticalAlignment="Center" Foreground="{ThemeResource TextFillColorSecondaryBrush}"
-                               ToolTipService.ToolTip="n3proj 書き出し時にこの行へ適用される表示開始・終了時刻とフォント設定。空欄は自動計算（薄字が自動値）。手動の表示時刻はページ衝突チェックにも反映されます" />
-                    <TextBlock Grid.Column="1" Text="表示開始" FontSize="12" VerticalAlignment="Center" />
-                    <TextBox Grid.Column="2" x:Name="ShowBeginBox" FontFamily="Consolas" FontSize="12" PlaceholderText="--:--:--"
-                             LostFocus="OnShowTimeBoxLostFocus" KeyDown="OnShowTimeBoxKeyDown" ToolTipService.ToolTip="mm:ss:cc 形式。空欄で自動計算" />
-                    <TextBlock Grid.Column="3" Text="表示終了" FontSize="12" VerticalAlignment="Center" />
-                    <TextBox Grid.Column="4" x:Name="ShowEndBox" FontFamily="Consolas" FontSize="12" PlaceholderText="--:--:--"
-                             LostFocus="OnShowTimeBoxLostFocus" KeyDown="OnShowTimeBoxKeyDown" ToolTipService.ToolTip="mm:ss:cc 形式。空欄で自動計算" />
-                    <Button Grid.Column="5" Content="自動に戻す" FontSize="12" Padding="8,3" Click="OnResetShowTimeClick" />
-                    <TextBlock Grid.Column="6" x:Name="LineFontLabel" Text="フォント" FontSize="12" VerticalAlignment="Center" Margin="8,0,0,0"
-                               ToolTipService.ToolTip="行リストの歌詞の文字をクリック・ドラッグで選ぶと、選んだ文字だけに指定します（選んでいなければ行全体）" />
-                    <ComboBox Grid.Column="7" x:Name="LineFontBox" IsEditable="True" FontSize="12" HorizontalAlignment="Stretch" PlaceholderText="（自動）"
-                              SelectionChanged="OnLineFontChanged" TextSubmitted="OnLineFontSubmitted" PreviewKeyDown="OnLineFontPreviewKeyDown"
-                              ToolTipService.ToolTip="この行に適用するニコカラメーカーのフォント設定名（空欄はパート記号で自動判定。空にして Enter で自動に戻す）" />
-                    <Button Grid.Column="8" x:Name="EditLineFontButton" Content="編集..." FontSize="12" Padding="8,3" Click="OnEditLineFontClick"
-                            ToolTipService.ToolTip="フォント設定ビュー（F3）を開いて、このフォント設定を編集します" />
-                    <TextBlock Grid.Column="9" Text="レイアウト" FontSize="12" VerticalAlignment="Center" Margin="8,0,0,0"
-                               ToolTipService.ToolTip="この行のページに使うニコカラメーカーのレイアウト設定（ページ単位。自動はページの行数から選びます）" />
-                    <ComboBox Grid.Column="10" x:Name="LineLayoutBox" FontSize="12" HorizontalAlignment="Stretch" PlaceholderText="（自動）"
-                              SelectionChanged="OnLineLayoutChanged"
-                              ToolTipService.ToolTip="この行のページに使うレイアウト設定（「（自動）」でページの行数から選ぶ。同じページの行すべてに効きます）" />
-                    <TextBlock Grid.Column="11" x:Name="N3LineInfo" FontSize="12" VerticalAlignment="Center" Foreground="{ThemeResource TextFillColorSecondaryBrush}" TextTrimming="CharacterEllipsis" />
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
+                    </Grid.RowDefinitions>
+                    <StackPanel x:Name="N3TimeGroup" Orientation="Horizontal" Spacing="6">
+                        <TextBlock Text="ニコカラメーカー用:" FontSize="12" VerticalAlignment="Center" Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                                   ToolTipService.ToolTip="n3proj 書き出し時にこの行へ適用される表示開始・終了時刻とフォント設定。空欄は自動計算（薄字が自動値）。手動の表示時刻はページ衝突チェックにも反映されます" />
+                        <TextBlock Text="表示開始" FontSize="12" VerticalAlignment="Center" />
+                        <TextBox x:Name="ShowBeginBox" Width="104" FontFamily="Consolas" FontSize="12" PlaceholderText="--:--:--"
+                                 LostFocus="OnShowTimeBoxLostFocus" KeyDown="OnShowTimeBoxKeyDown" ToolTipService.ToolTip="mm:ss:cc 形式。空欄で自動計算" />
+                        <TextBlock Text="表示終了" FontSize="12" VerticalAlignment="Center" />
+                        <TextBox x:Name="ShowEndBox" Width="104" FontFamily="Consolas" FontSize="12" PlaceholderText="--:--:--"
+                                 LostFocus="OnShowTimeBoxLostFocus" KeyDown="OnShowTimeBoxKeyDown" ToolTipService.ToolTip="mm:ss:cc 形式。空欄で自動計算" />
+                        <Button Content="自動に戻す" FontSize="12" Padding="8,3" Click="OnResetShowTimeClick" />
+                    </StackPanel>
+                    <StackPanel x:Name="N3FontGroup" Grid.Column="1" Orientation="Horizontal" Spacing="6">
+                        <TextBlock x:Name="LineFontLabel" Text="フォント" FontSize="12" VerticalAlignment="Center"
+                                   ToolTipService.ToolTip="行リストの歌詞の文字をクリック・ドラッグで選ぶと、選んだ文字だけに指定します（選んでいなければ行全体）" />
+                        <ComboBox x:Name="LineFontBox" Width="160" IsEditable="True" FontSize="12" PlaceholderText="（自動）"
+                                  SelectionChanged="OnLineFontChanged" TextSubmitted="OnLineFontSubmitted" PreviewKeyDown="OnLineFontPreviewKeyDown"
+                                  ToolTipService.ToolTip="この行に適用するニコカラメーカーのフォント設定名（空欄はパート記号で自動判定。空にして Enter で自動に戻す）" />
+                        <Button x:Name="EditLineFontButton" Content="編集..." FontSize="12" Padding="8,3" Click="OnEditLineFontClick"
+                                ToolTipService.ToolTip="フォント設定ビュー（F3）を開いて、このフォント設定を編集します" />
+                        <TextBlock Text="レイアウト" FontSize="12" VerticalAlignment="Center" Margin="8,0,0,0"
+                                   ToolTipService.ToolTip="この行のページに使うニコカラメーカーのレイアウト設定（ページ単位。自動はページの行数から選びます）" />
+                        <ComboBox x:Name="LineLayoutBox" Width="140" FontSize="12" PlaceholderText="（自動）"
+                                  SelectionChanged="OnLineLayoutChanged"
+                                  ToolTipService.ToolTip="この行のページに使うレイアウト設定（「（自動）」でページの行数から選ぶ。同じページの行すべてに効きます）" />
+                    </StackPanel>
+                    <TextBlock Grid.Column="2" x:Name="N3LineInfo" FontSize="12" VerticalAlignment="Center" Foreground="{ThemeResource TextFillColorSecondaryBrush}" TextTrimming="CharacterEllipsis" />
                 </Grid>
 
                 <!-- 行プレビュー（ルビ・絵文字画像） -->
@@ -502,7 +532,7 @@
             </Grid>
 
             <!-- 絵文字挿入ビュー（F2、歌詞全体表示・キーボード専用） -->
-            <Grid Grid.Column="0" x:Name="InsertView" Visibility="Collapsed" Padding="8" RowSpacing="6">
+            <Grid Grid.Row="1" Grid.Column="0" x:Name="InsertView" Visibility="Collapsed" Padding="8" RowSpacing="6">
                 <Grid.RowDefinitions>
                     <RowDefinition Height="Auto" />
                     <RowDefinition Height="Auto" />
@@ -588,23 +618,42 @@
                     Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
             </Grid>
 
+            <!-- 左と右のパネルの境（境の線。左右にドラッグ・← → キーで右のパネルの幅を変える。ダブルクリックで元の幅） -->
+            <fs:ColumnResizeGrip
+                x:Name="SideResizeGrip"
+                Grid.Row="1"
+                Grid.Column="1"
+                Width="9"
+                AutomationProperties.Name="右のパネルの幅"
+                ToolTipService.ToolTip="ドラッグで右のパネルの幅を変えます（選んで ← → キーでも変えられます。ダブルクリックで元の幅に戻します）">
+                <Grid Background="Transparent">
+                    <Rectangle Width="1" HorizontalAlignment="Center" Fill="{ThemeResource DividerStrokeColorDefaultBrush}" />
+                    <Rectangle
+                        Width="4"
+                        Height="48"
+                        RadiusX="2"
+                        RadiusY="2"
+                        HorizontalAlignment="Center"
+                        VerticalAlignment="Center"
+                        Fill="{ThemeResource ControlStrongFillColorDefaultBrush}" />
+                </Grid>
+            </fs:ColumnResizeGrip>
+
             <!-- 右パネル（行リストのとき）: フォント一覧（押すと選んだ文字・行に指定）とレイアウト設定 -->
             <Border
-                Grid.Column="1"
+                Grid.Row="1"
+                Grid.Column="2"
                 x:Name="LineSideHost"
-                BorderThickness="1,0,0,0"
-                BorderBrush="{ThemeResource DividerStrokeColorDefaultBrush}"
                 Padding="8">
                 <views:LineSidePanel x:Name="LineSide" />
             </Border>
 
             <!-- 右パネル（絵文字挿入ビューのとき）: @Emoji パレット -->
             <Grid
-                Grid.Column="1"
+                Grid.Row="1"
+                Grid.Column="2"
                 x:Name="EmojiSidePanel"
                 Visibility="Collapsed"
-                BorderThickness="1,0,0,0"
-                BorderBrush="{ThemeResource DividerStrokeColorDefaultBrush}"
                 Padding="8"
                 RowSpacing="8">
                 <Grid.RowDefinitions>
@@ -713,9 +762,11 @@
 
         <!-- 検証パネル -->
         <Expander
-            Grid.Row="3"
+            Grid.Row="2"
             x:Name="IssuePanel"
             Header="チェック結果"
+            MinHeight="32"
+            Padding="8,4"
             HorizontalAlignment="Stretch"
             HorizontalContentAlignment="Stretch"
             ExpandDirection="Up">
@@ -741,17 +792,17 @@
             </ListView>
         </Expander>
 
-        <!-- フォント設定ビュー（F3。メディア再生・メイン・チェック結果の領域に重ねる）。
+        <!-- フォント設定ビュー（F3。メイン（メディア再生を含む）・チェック結果の領域に重ねる）。
              中身の FontSettingsView は初めて開くときにコードで作る（MainWindow.Views.cs の EnsureFontView。
              ウィンドウの XAML では x:Load="False" の要素を FindName で作れず、x:Bind の x:Load はビルドできないため） -->
         <Border
             x:Name="FontViewHost"
             Grid.Row="1"
-            Grid.RowSpan="3"
+            Grid.RowSpan="2"
             Visibility="Collapsed" />
 
         <!-- ステータスバー（右端は今のビュー） -->
-        <Border Grid.Row="4" Padding="8,4" BorderThickness="0,1,0,0" BorderBrush="{ThemeResource DividerStrokeColorDefaultBrush}">
+        <Border Grid.Row="3" Padding="8,4" BorderThickness="0,1,0,0" BorderBrush="{ThemeResource DividerStrokeColorDefaultBrush}">
             <StackPanel>
                 <!-- 設定ファイルを読み込めなかったときの警告。ほかの表示で上書きされないよう、起動中ずっと出しておく -->
                 <InfoBar x:Name="SettingsLoadFailedBar" Severity="Warning" IsClosable="False" Visibility="Collapsed" Margin="0,0,0,4" />

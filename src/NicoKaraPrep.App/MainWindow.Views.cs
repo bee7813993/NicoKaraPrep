@@ -246,9 +246,10 @@ public sealed partial class MainWindow
         {
             NormalView.Visibility = mode == MainViewMode.Lines ? Visibility.Visible : Visibility.Collapsed;
             InsertView.Visibility = mode == MainViewMode.EmojiInsert ? Visibility.Visible : Visibility.Collapsed;
-            // 右パネル: 行リストではフォント一覧・レイアウト設定、絵文字挿入ビューでは絵文字のパレット
-            LineSideHost.Visibility = mode == MainViewMode.Lines ? Visibility.Visible : Visibility.Collapsed;
-            EmojiSidePanel.Visibility = mode == MainViewMode.EmojiInsert ? Visibility.Visible : Visibility.Collapsed;
+            // 右パネル: 行リストではフォント一覧・レイアウト設定、絵文字挿入ビューでは絵文字のパレット（表示メニューで隠せる）
+            ApplySidePanelVisibility(mode);
+            // 行リストと絵文字挿入ビューでは、メディア再生と分け合う欄の下の欄が違うので、高さを合わせ直す
+            FitPlayerHeightAfterLayout();
         }
     }
 
