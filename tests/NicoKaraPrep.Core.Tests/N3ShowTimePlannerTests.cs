@@ -180,9 +180,9 @@ public class N3ShowTimePlannerTests
     }
 
     [Fact]
-    public void 絵文字の先行を譲る_遅らせても足りなければ前の行のワイプ後を保護時間まで残してワイプ途中で消さない()
+    public void 絵文字の先行を譲る_遅らせても足りなければ絵文字はワイプ前の表示時間を残し前の行のワイプ後を削る()
     {
-        // 2 行ページ 2 枚。上段の次の行の絵文字（22000）が、前の行のワイプ終了（22500）より前に始まる
+        // 2 行ページ 2 枚。上段の次の行の絵文字（22000〜24000 の 2 秒）が、前の行のワイプ終了（22500）より前に始まる
         var doc = Lyrics(
             "@Emoji=（花帆）,a.png",
             "[00:20:00]あ[00:22:50]",
@@ -194,10 +194,13 @@ public class N3ShowTimePlannerTests
         Assert.Equal(22000, now[0].EndMs); // 今は前の行がワイプの途中で消える
         Assert.Equal(22000, now[3].BeginMs);
 
-        var plans = N3ShowTimePlanner.Plan(doc, Yield("（花帆）"));
-        Assert.Equal(22900, plans[0].EndMs); // ワイプ後は保護時間 400
-        Assert.Equal(22975, plans[3].BeginMs); // 本当の歌い出し 24000 の 1025 前（ワイプ前より短い）
-        Assert.Equal(975, plans[3].EmojiYieldMs);
+        var (plans, clamped) = N3EmojiLead.PrepareTab(doc, Yield("（花帆）"));
+        // 絵文字はワイプ前の表示時間 1.5 秒を残す（本当の歌い出し 24000 の 1500 前に出る）。
+        // 前の行はワイプ後を 0 まで削り、ワイプ終了ちょうどで消える（途中では消えない）
+        Assert.Equal(22500, plans[0].EndMs);
+        Assert.Equal(22500, plans[3].BeginMs);
+        Assert.Equal(500, plans[3].EmojiYieldMs);
+        Assert.Equal("[00:22:50]（花帆）[00:24:00]う[00:26:00]", LrcFormat.WriteLyricLine(clamped.Lines[3]));
         // 下段は絵文字に関係しない
         Assert.Equal((26400, 26475), (plans[1].EndMs, plans[4].BeginMs));
     }
@@ -235,8 +238,10 @@ public class N3ShowTimePlannerTests
             "[00:11:50]（花帆）[00:13:50][00:11:50]（さやか）[00:13:50]う[00:15:00]",
             "[00:16:00]え[00:18:00]");
         var plans = N3ShowTimePlanner.Plan(doc, Yield("（花帆）", "（さやか）"));
-        Assert.Equal(12400, plans[0].EndMs);
-        Assert.Equal(12475, plans[3].BeginMs);
+        // 本当の歌い出しはスペーサーの 13500。2 秒の絵文字はどちらもワイプ前の表示時間 1.5 秒を残し（13500 − 1500）、
+        // 前の行はワイプ終了（12000）ちょうどで消える
+        Assert.Equal(12000, plans[0].EndMs);
+        Assert.Equal(12000, plans[3].BeginMs);
     }
 
     [Fact]
@@ -289,7 +294,7 @@ public class N3ShowTimePlannerTests
             "[00:22:00]＿[00:24:00]う[00:26:00]",
             "[00:27:00]え[00:29:00]");
         var s = Yield("（花帆）", "＿");
-        Assert.Equal(22975, N3ShowTimePlanner.Plan(placeholder, s)[3].BeginMs);
+        Assert.Equal(22500, N3ShowTimePlanner.Plan(placeholder, s)[3].BeginMs);
 
         // G キーの先行タグ（スペーサーに載る。早く出したい行なので譲らない）
         var gKey = Lyrics(
@@ -368,5 +373,250 @@ public class N3ShowTimePlannerTests
         Assert.Equal(22500, plans[0].EndMs);
         Assert.Equal((22500, 26800), (plans[3].BeginMs, plans[3].EndMs));
         Assert.Equal("[00:22:50]（花[00:22:50]帆）[00:24:00]う[00:26:00]", LrcFormat.WriteLyricLine(clamped.Lines[3]));
+    }
+
+    // ------------------------------------------------------------ 絵文字の表示秒数の下限（ワイプ前の表示時間と元の表示秒数の短い方）
+
+    /// <summary>
+    /// 次の行のワイプ前の下限（nextMinPreMs）を足す前の ResolvePair の写し（HEAD 24750a7。ニコカラメーカー3 と同じ計算）。
+    /// 下限 0 なら今までと 1ms も違わないことの確かめに使う。
+    /// </summary>
+    private static (int PrevEnd, int NextBegin) HeadResolvePair(
+        int prevEnd, int prevEndShort, int prevLast, bool prevEndManual,
+        int nextBegin, int nextFirst, bool nextBeginManual,
+        N3ShowTimeSettings s)
+    {
+        int interval = Math.Max(0, s.IntervalMs);
+        int minGap = interval / 4;
+        int protect = s.EffectiveProtectMs;
+        int lead = s.LeadMs;
+
+        if (prevEnd + interval <= nextBegin) return (prevEnd, nextBegin);
+        if (prevEndManual && nextBeginManual) return (prevEnd, nextBegin);
+
+        if (!prevEndManual && prevEnd > prevEndShort)
+        {
+            prevEnd = Math.Max(prevEndShort, Math.Min(prevEnd, nextBegin - interval));
+            if (prevEnd + interval <= nextBegin) return (prevEnd, nextBegin);
+        }
+
+        if (nextBeginManual)
+        {
+            int pe = prevEnd;
+            if (pe + minGap > nextBegin) pe = Math.Max(nextBegin - minGap, prevLast + protect);
+            if (pe > nextBegin) pe = Math.Max(nextBegin, prevLast);
+            return (Math.Min(pe, prevEnd), nextBegin);
+        }
+
+        if (prevEndManual)
+        {
+            int nb = prevEnd + interval;
+            if (nb > nextFirst - lead) nb = Math.Max(nextFirst - lead, prevEnd + minGap);
+            if (nb > nextFirst - protect) nb = Math.Max(nextFirst - protect, prevEnd);
+            return (prevEnd, Math.Max(nb, nextBegin));
+        }
+
+        int desired = prevEnd + interval;
+        if (desired <= nextFirst - lead) return (prevEnd, desired);
+
+        int begin = nextFirst - lead;
+        if (prevEnd + minGap <= begin) return (prevEnd, Math.Max(begin, nextBegin));
+
+        int end = begin - minGap;
+        if (end >= prevLast + protect) return (Math.Min(end, prevEnd), Math.Max(begin, nextBegin));
+
+        end = prevLast + protect;
+        begin = end + minGap;
+        if (nextFirst - begin >= protect) return (Math.Min(end, prevEnd), Math.Max(begin, nextBegin));
+
+        int window = nextFirst - prevLast;
+        if (window >= 2 * protect)
+        {
+            return (Math.Min(prevLast + protect, prevEnd), Math.Max(nextFirst - protect, nextBegin));
+        }
+        if (window >= protect)
+        {
+            int meet = nextFirst - protect;
+            return (Math.Min(meet, prevEnd), Math.Max(meet, nextBegin));
+        }
+        if (window >= 0)
+        {
+            return (Math.Min(prevLast, prevEnd), Math.Max(prevLast, nextBegin));
+        }
+        return (Math.Min(nextFirst, prevEnd), Math.Max(nextFirst, nextBegin));
+    }
+
+    [Theory]
+    // 間隔が十分 / 両方が手動 / 上段を長めにの延長分を削るだけで足りる
+    [InlineData(10000, 10000, 9200, false, 10300, 11800, false, 10000, 10300)]
+    [InlineData(20000, 20000, 19000, true, 19000, 20500, true, 20000, 19000)]
+    [InlineData(22000, 18720, 17720, false, 19180, 20980, false, 18880, 19180)]
+    // 次の行の開始が手動 / 前の行の終了が手動（2 つ目のしきい値まで進む）
+    [InlineData(21380, 21380, 20580, false, 19680, 21180, true, 20580, 19680)]
+    [InlineData(21380, 21380, 20580, true, 19680, 21180, false, 21380, 21380)]
+    [InlineData(23000, 23000, 22500, true, 20500, 24000, false, 23000, 23075)]
+    // (0) (1) (2) (3) (3') (4) (5) (6)
+    [InlineData(47840, 47840, 47040, false, 42920, 51170, false, 47840, 48140)]
+    [InlineData(33740, 33740, 32940, false, 29560, 35370, false, 33740, 33870)]
+    [InlineData(23920, 23920, 23120, false, 19680, 25490, false, 23915, 23990)]
+    [InlineData(28600, 28600, 27800, false, 24700, 29650, false, 28200, 28275)]
+    [InlineData(20800, 20800, 20000, false, 19000, 20850, false, 20400, 20450)]
+    [InlineData(21380, 21380, 20580, false, 19680, 21180, false, 20780, 20780)]
+    [InlineData(10800, 10800, 10000, false, 8700, 10200, false, 10000, 10000)]
+    [InlineData(10800, 10800, 10000, false, 8300, 9800, false, 9800, 9800)]
+    public void 下限0なら今と同じ_手順ごと(int prevEnd, int prevEndShort, int prevLast, bool prevEndManual, int nextBegin, int nextFirst, bool nextBeginManual, int expectedEnd, int expectedBegin)
+    {
+        var head = HeadResolvePair(prevEnd, prevEndShort, prevLast, prevEndManual, nextBegin, nextFirst, nextBeginManual, Current);
+        Assert.Equal((expectedEnd, expectedBegin), head);
+        Assert.Equal(head, N3ShowTimePlanner.ResolvePair(prevEnd, prevEndShort, prevLast, prevEndManual, nextBegin, nextFirst, nextBeginManual, Current));
+        Assert.Equal(head, N3ShowTimePlanner.ResolvePair(prevEnd, prevEndShort, prevLast, prevEndManual, nextBegin, nextFirst, nextBeginManual, Current, 0));
+        Assert.Equal(head, N3ShowTimePlanner.ResolvePair(prevEnd, prevEndShort, prevLast, prevEndManual, nextBegin, nextFirst, nextBeginManual, Current, -100));
+        Assert.Equal(head, N3ShowTimePlanner.ResolvePairForAnalysis(prevEnd, prevEndShort, prevLast, prevEndManual, nextBegin, nextFirst, nextBeginManual, Current));
+    }
+
+    [Fact]
+    public void 下限0なら今と同じ_いろいろな入力と設定()
+    {
+        var settings = new[]
+        {
+            Current,
+            new N3ShowTimeSettings { LeadMs = 1800, TailMs = 1000, IntervalMs = 300, ProtectMs = 600 },
+            new N3ShowTimeSettings { LeadMs = 1000, TailMs = 500, IntervalMs = 0 },
+            new N3ShowTimeSettings { LeadMs = 0, TailMs = 0, IntervalMs = 250, ProtectMs = 0 },
+        };
+        var rng = new Random(20261002);
+        for (int n = 0; n < 20000; n++)
+        {
+            var s = settings[n % settings.Length];
+            int prevLast = rng.Next(0, 60000);
+            int prevEndShort = prevLast + rng.Next(-500, 1500);
+            int prevEnd = prevEndShort + (rng.Next(3) == 0 ? rng.Next(0, 3000) : 0);
+            int nextFirst = prevLast + rng.Next(-3000, 4000);
+            int nextBegin = nextFirst - s.LeadMs - rng.Next(0, 3000);
+            bool prevEndManual = rng.Next(4) == 0, nextBeginManual = rng.Next(4) == 0;
+            var head = HeadResolvePair(prevEnd, prevEndShort, prevLast, prevEndManual, nextBegin, nextFirst, nextBeginManual, s);
+            Assert.Equal(head, N3ShowTimePlanner.ResolvePair(prevEnd, prevEndShort, prevLast, prevEndManual, nextBegin, nextFirst, nextBeginManual, s));
+            Assert.Equal(head, N3ShowTimePlanner.ResolvePair(prevEnd, prevEndShort, prevLast, prevEndManual, nextBegin, nextFirst, nextBeginManual, s, 0));
+        }
+    }
+
+    [Theory]
+    // (3) 次の行のワイプ前を下限 1000 まで（1025 残る）。前の行のワイプ後は保護時間 400
+    [InlineData(22300, 21500, 23000, 1000, 21900, 21975)]
+    // (3') 表示間隔を 0 まで（50 残る）。ワイプ後は保護時間 400、ワイプ前は下限 1000
+    [InlineData(22350, 21550, 23000, 1000, 21950, 22000)]
+    // (4) 前の行のワイプ後を 0 まで（200・0 残る）。ワイプ前は下限（1000・1500）
+    [InlineData(22600, 21800, 23000, 1000, 22000, 22000)]
+    [InlineData(23300, 22500, 24000, 1500, 22500, 22500)]
+    // (5) 下限 300 が保護時間 400 より短い: 前の行のワイプ終了で切り替える（ワイプ前 350）
+    [InlineData(23450, 22650, 23000, 300, 22650, 22650)]
+    // (6) 下限を残すと前の行のワイプ終了に間に合わない: 歌い出しの下限の分だけ前で切り替える（前の行はワイプの途中で消える）
+    [InlineData(23550, 22750, 23000, 300, 22700, 22700)]
+    [InlineData(23800, 23000, 24000, 1500, 22500, 22500)]
+    [InlineData(24800, 24000, 23000, 1000, 22000, 22000)]
+    public void 下限つき_次の行のワイプ前は下限を残し足りない分は前の行を削る(int prevEnd, int prevLast, int nextFirst, int minPre, int expectedEnd, int expectedBegin)
+    {
+        var (end, begin) = N3ShowTimePlanner.ResolvePair(prevEnd, prevEnd, prevLast, false, 20000, nextFirst, false, Current, minPre);
+        Assert.Equal((expectedEnd, expectedBegin), (end, begin));
+        Assert.True(nextFirst - begin >= minPre, "次の行のワイプ前が下限を割った");
+        // 下限が無いとき（同じ歌い出し）より次の行を遅らせることはない
+        Assert.True(begin <= N3ShowTimePlanner.ResolvePair(prevEnd, prevEnd, prevLast, false, 20000, nextFirst, false, Current).NextBegin);
+    }
+
+    [Fact]
+    public void 下限つき_前の行の終了が手動なら手動の終了を守る()
+    {
+        // 前の行の終了（手動 23000）より前には出せない: 下限 1500（22500 まで）を割って 23000 に出る（下限 0 なら表示間隔 1/4 を残して 23075）
+        Assert.Equal((23000, 23000), N3ShowTimePlanner.ResolvePair(23000, 23000, 22500, true, 20500, 24000, false, Current, 1500));
+        Assert.Equal((23000, 23075), N3ShowTimePlanner.ResolvePair(23000, 23000, 22500, true, 20500, 24000, false, Current));
+        // 手動の終了の後でも下限を残せるなら、今と同じ（ワイプ前 1700）
+        Assert.Equal((22000, 22300), N3ShowTimePlanner.ResolvePair(22000, 22000, 21500, true, 20500, 24000, false, Current, 1500));
+        // 次の行の開始が手動なら下限は使わない（前の行の終了だけで調整する）
+        Assert.Equal((20580, 19680), N3ShowTimePlanner.ResolvePair(21380, 21380, 20580, false, 19680, 21180, true, Current, 1000));
+    }
+
+    /// <summary>
+    /// 例 3 の形（2 行ページ 2 枚）で、前のページの上段のワイプ終了と、次のページの上段の行頭の絵文字（22000 から）の基準時刻 T を差し替えた歌詞。
+    /// </summary>
+    private static LyricsDocument FloorExample(int prevLastCs, int tCs) => Lyrics(
+        "@Emoji=（花帆）,a.png",
+        $"[00:20:00]あ{Tag(prevLastCs)}",
+        "[00:21:00]い[00:26:00]",
+        "",
+        $"[00:22:00]（花帆）{Tag(tCs)}う[00:30:00]",
+        "[00:31:00]え[00:33:00]");
+
+    private static string Tag(int cs) => $"[{cs / 6000:00}:{cs / 100 % 60:00}:{cs % 100:00}]";
+
+    /// <summary>寄せた後の歌詞の、上段の行頭の絵文字の開始（ms）。</summary>
+    private static int EmojiStartMs(LyricsDocument clamped) =>
+        N3EmojiLead.FindLeads(clamped.Lines[3], new EmojiMatcher(new[] { "（花帆）" })).Single().Ecs * 10;
+
+    [Theory]
+    // (0) 前の行の終了＋表示間隔まで遅らせるだけで足りる（絵文字 1.9 秒）
+    [InlineData(2100, 21800, 22100)]
+    // (2) 前の行のワイプ後を保護時間まで
+    [InlineData(2190, 22425, 22500)]
+    // (3') 表示間隔を 0 まで（下限がワイプ前の表示時間と同じなので、(3) は (2) と同じ条件になり通らない）
+    [InlineData(2205, 22450, 22500)]
+    // (4) 前の行のワイプ後を 0 まで
+    [InlineData(2230, 22500, 22500)]
+    [InlineData(2250, 22500, 22500)]
+    // (6) 前の行はワイプの途中で消える（絵文字は 1.5 秒のまま）
+    [InlineData(2300, 22500, 22500)]
+    public void 下限つき_2秒の絵文字は手順を進めても1点5秒を残す(int prevLastCs, int expectedPrevEnd, int expectedBegin)
+    {
+        var (plans, clamped) = N3EmojiLead.PrepareTab(FloorExample(prevLastCs, 2400), Yield("（花帆）"));
+        Assert.Equal((expectedPrevEnd, expectedBegin), (plans[0].EndMs, plans[3].BeginMs));
+        Assert.True(24000 - EmojiStartMs(clamped) >= 1500);
+    }
+
+    [Theory]
+    // (2) (3) (4) (6)。表示開始は絵文字の開始（22000）より後にならない
+    [InlineData(2100, 21425, 21500)]
+    [InlineData(2150, 21900, 21975)]
+    [InlineData(2180, 22000, 22000)]
+    [InlineData(2250, 22000, 22000)]
+    public void 下限つき_表示秒数1秒の絵文字は縮めない(int prevLastCs, int expectedPrevEnd, int expectedBegin)
+    {
+        var doc = FloorExample(prevLastCs, 2300);
+        var (plans, clamped) = N3EmojiLead.PrepareTab(doc, Yield("（花帆）"));
+        Assert.Equal((expectedPrevEnd, expectedBegin), (plans[0].EndMs, plans[3].BeginMs));
+        Assert.Equal(LrcFormat.WriteLyricLine(doc.Lines[3]), LrcFormat.WriteLyricLine(clamped.Lines[3]));
+    }
+
+    [Theory]
+    [InlineData(2230)] // 0.3 秒（下限が保護時間より短い。(5) まで進む）
+    [InlineData(2300)] // 1 秒
+    [InlineData(2400)] // 2 秒
+    [InlineData(2500)] // 3 秒
+    public void 下限つき_絵文字は下限を割らず前の行は今より削らない(int tCs)
+    {
+        const int e = 22000;
+        int t = tCs * 10;
+        int floor = Math.Min(1500, t - e);
+        for (int prevLastCs = 2010; prevLastCs <= 2550; prevLastCs += 5)
+        {
+            var doc = FloorExample(prevLastCs, tCs);
+            var (plans, clamped) = N3EmojiLead.PrepareTab(doc, Yield("（花帆）"));
+            var now = N3ShowTimePlanner.Plan(doc, Current);
+            string at = $"前の行のワイプ終了 {prevLastCs * 10}・基準時刻 {t}";
+            Assert.True(t - EmojiStartMs(clamped) >= floor, $"{at}: 絵文字 {t - EmojiStartMs(clamped)}ms が下限 {floor}ms を割った");
+            Assert.True(plans[3].BeginMs <= Math.Max(t - 1500, e), $"{at}: 下限を割らない最も遅い開始より後");
+            Assert.True(plans[3].BeginMs <= t, $"{at}: 本当の歌い出しより後");
+            Assert.True(plans[0].EndMs >= now[0].EndMs, $"{at}: 前の行が今（規則オフ）より削られた");
+        }
+    }
+
+    [Fact]
+    public void 下限つき_前の行の表示終了が手動なら手動の終了が勝ち絵文字は下限を割る()
+    {
+        var doc = FloorExample(2250, 2400);
+        doc.Lines[0].ShowEndCs = 2300; // 前の行の表示終了を 23000 に手動指定（自動ならワイプ終了の 22500 で消える）
+        var (plans, clamped) = N3EmojiLead.PrepareTab(doc, Yield("（花帆）"));
+        Assert.Equal(23000, plans[0].EndMs);
+        Assert.True(plans[0].EndIsManual);
+        Assert.Equal(23000, plans[3].BeginMs);
+        Assert.Equal("[00:23:00]（花帆）[00:24:00]う[00:30:00]", LrcFormat.WriteLyricLine(clamped.Lines[3])); // 絵文字は 1.0 秒（下限 1.5 秒より短い）
     }
 }

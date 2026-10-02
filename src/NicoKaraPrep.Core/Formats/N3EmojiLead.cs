@@ -17,6 +17,8 @@ public readonly record struct LeadOccurrence(int UnitIndex, int Ecs, int? Tcs);
 /// 絵文字の先行を譲る規則（<see cref="N3ShowTimeSettings.EmojiLeadYield"/>。ニコカラメーカー3 には無い NicoKaraPrep の機能）の、
 /// 歌詞の側の計算。
 /// 前のページの同じ段と重なって表示が遅れた行は、絵文字の開始タグを表示開始まで寄せる（絵文字の表示秒数を縮める）。
+/// 縮めるのはワイプ前の表示時間（表示秒数がそれより短い絵文字はその秒数）まで（<see cref="LatestBeginMs"/>。
+/// 表示開始をそれより遅らせないのは <see cref="N3ShowTimePlanner"/> の側。表示時刻の手動指定のときだけ下限を割りうる）。
 /// 寄せるのは書き出し用の写し（lrc・Raw・文字の時刻）と字幕のプレビューだけで、ユーザーの歌詞のタグは変えない。
 /// 寄せる出現は「開始タグ E が表示開始（10ms 単位に切り上げ）より前、かつ基準時刻 T より前」のものだけで、
 /// 新しい開始は min(T, 表示開始) にする（同時歌唱で E が T より後の出現や、T の無い出現は変えない）。
@@ -98,9 +100,30 @@ public static class N3EmojiLead
 
     /// <summary>
     /// 寄せられる先行タグか（判定はここだけで行う）: T があって E が T より前のとき。
-    /// E が T より前でない出現（同時歌唱など）や、T の無い出現は寄せない。<see cref="RealStartMs"/> が除くタグもこれにそろえる。
+    /// E が T より前でない出現（同時歌唱など）や、T の無い出現は寄せない。<see cref="RealStartMs"/> が除くタグと
+    /// <see cref="LatestBeginMs"/> が下限を守る出現もこれにそろえる。
     /// </summary>
     internal static bool CanClamp(LeadOccurrence lead) => lead.Tcs is int t && lead.Ecs < t;
+
+    /// <summary>
+    /// どの絵文字・＿も表示秒数の下限を割らない、最も遅い表示開始（ms）。寄せられる先行タグ（<see cref="CanClamp"/>）が無ければ null。
+    /// 下限は出現ごとに、ワイプ前の表示時間と元の表示秒数（T − E）の短い方（F = min(ワイプ前, T − E)。表示秒数 1 秒の絵文字は縮めない）。
+    /// 表示開始が T − F = max(T − ワイプ前, E) 以下なら、寄せても F を割らない（ワイプ前の表示時間が 10ms 単位なら、
+    /// T − F も 10ms 単位なので、表示開始を 10ms 単位に切り上げて寄せても割らない）。
+    /// </summary>
+    /// <param name="leadMs">ワイプ前の表示時間（ms）。</param>
+    public static int? LatestBeginMs(LyricsLine line, EmojiMatcher? matcher, int leadMs)
+    {
+        if (matcher is null || matcher.IsEmpty) return null;
+        int? latest = null;
+        foreach (var lead in FindLeads(line, matcher))
+        {
+            if (!CanClamp(lead)) continue;
+            int begin = Math.Max(lead.Tcs!.Value * 10 - leadMs, lead.Ecs * 10);
+            latest = latest is int l ? Math.Min(l, begin) : begin;
+        }
+        return latest;
+    }
 
     /// <summary>
     /// 表示開始（ms）より前の絵文字の開始タグを表示開始へ寄せた行の写しを返す（寄せる所が無ければ元の行そのもの）。元の行は変えない。

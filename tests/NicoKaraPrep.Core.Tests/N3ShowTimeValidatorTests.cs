@@ -4,7 +4,7 @@ using NicoKaraPrep.Core.Validation;
 
 namespace NicoKaraPrep.Core.Tests;
 
-/// <summary>表示時刻のチェック（書き出しと同じ表示時刻の計算で、前の行がワイプの途中で消える組・絵文字を縮めても足りない組）。</summary>
+/// <summary>表示時刻のチェック（書き出しと同じ表示時刻の計算で、前の行がワイプの途中で消える組・手動指定で絵文字が下限より短くなる行）。</summary>
 public class N3ShowTimeValidatorTests
 {
     private static LyricsDocument Lyrics(params string[] lines) => LrcFormat.Parse(string.Join("\r\n", lines) + "\r\n");
@@ -26,7 +26,7 @@ public class N3ShowTimeValidatorTests
         "[00:27:00]え[00:29:00]");
 
     [Fact]
-    public void 前の行がワイプの途中で消えるとエラー_規則で解消できれば絵文字を縮めた警告だけ()
+    public void 前の行がワイプの途中で消えるとエラー_規則で解消できれば出さない()
     {
         var doc = Example3();
 
@@ -38,18 +38,44 @@ public class N3ShowTimeValidatorTests
         Assert.Equal((3, 0), (error.LineIndex, error.RelatedLineIndex));
         Assert.Equal("4行目（ページ1→2・下から2行目）: 前の行（1行目）がワイプの途中（残り 0.5 秒）で消えます", error.Message);
 
-        // 規則オン: 前の行はワイプ後を残す（22900）。絵文字は 1.02 秒（ワイプ前 1.5 秒より短い）に縮むので警告
-        var on = Validate(doc, Settings(true, "（花帆）"));
-        var warning = Assert.Single(on);
-        Assert.Equal(IssueSeverity.Warning, warning.Severity);
-        Assert.Equal((3, 0), (warning.LineIndex, warning.RelatedLineIndex));
-        Assert.Equal("4行目（ページ1→2・下から2行目）: 絵文字を 2.0→1.02 秒に縮めても前の行（1行目）と重なります", warning.Message);
+        // 規則オン: 絵文字はワイプ前の表示時間 1.5 秒を残し、前の行はワイプ終了ちょうど（22500）で消える。どちらも問題ないので出さない
+        var s = Settings(true, "（花帆）");
+        var plans = N3ShowTimePlanner.Plan(doc, s);
+        Assert.Equal((22500, 22500), (plans[0].EndMs, plans[3].BeginMs));
+        Assert.Equal((2.0, 1.5), Assert.Single(N3EmojiLead.Describe(doc.Lines[3], plans[3].BeginMs, s.LeadMatcher)));
+        Assert.Empty(N3ShowTimeValidator.Validate(doc, plans, s));
     }
 
     [Fact]
-    public void 絵文字を縮めても前の行がワイプの途中で消えるならエラーに縮めた秒数を添える()
+    public void 絵文字を下限まで縮めても前の行がワイプの途中で消えるならエラーに縮めた秒数を添える()
     {
-        // 次の行の歌い出し（23000）自体が前の行のワイプ終了（24000）より前
+        // 次の行の 2 秒の絵文字を 1.5 秒に縮めても、前の行のワイプ終了（23000）に間に合わない
+        var doc = Lyrics(
+            "@Emoji=（花帆）,a.png",
+            "[00:20:00]あ[00:23:00]",
+            "[00:21:00]い[00:26:00]",
+            "",
+            "[00:22:00]（花帆）[00:24:00]う[00:26:00]",
+            "[00:27:00]え[00:29:00]");
+
+        var off = Assert.Single(Validate(doc, Settings(false, "（花帆）")));
+        Assert.Equal("4行目（ページ1→2・下から2行目）: 前の行（1行目）がワイプの途中（残り 1.0 秒）で消えます", off.Message);
+
+        var on = Assert.Single(Validate(doc, Settings(true, "（花帆）")));
+        Assert.Equal(IssueSeverity.Error, on.Severity);
+        Assert.Equal((3, 0), (on.LineIndex, on.RelatedLineIndex));
+        Assert.Equal("4行目（ページ1→2・下から2行目）: 絵文字を 2.0→1.5 秒に縮めても、前の行（1行目）がワイプの途中（残り 0.5 秒）で消えます", on.Message);
+
+        // 上から対応付ける設定では段の数え方が変わる
+        var top = Settings(false, "（花帆）");
+        top.AlignFromTop = true;
+        Assert.StartsWith("4行目（ページ1→2・上から1行目）: ", Assert.Single(Validate(doc, top)).Message);
+    }
+
+    [Fact]
+    public void 表示秒数1秒の絵文字は縮めないので前の行が消えるエラーは規則オフと同じ()
+    {
+        // 次の行の歌い出し（23000）自体が前の行のワイプ終了（24000）より前。1 秒の絵文字（22000〜23000）は縮めない
         var doc = Lyrics(
             "@Emoji=（花帆）,a.png",
             "[00:20:00]あ[00:24:00]",
@@ -57,18 +83,9 @@ public class N3ShowTimeValidatorTests
             "",
             "[00:22:00]（花帆）[00:23:00]う[00:26:00]",
             "[00:27:00]え[00:29:00]");
-
-        var off = Assert.Single(Validate(doc, Settings(false, "（花帆）")));
-        Assert.Equal("4行目（ページ1→2・下から2行目）: 前の行（1行目）がワイプの途中（残り 2.0 秒）で消えます", off.Message);
-
-        var on = Assert.Single(Validate(doc, Settings(true, "（花帆）")));
-        Assert.Equal(IssueSeverity.Error, on.Severity);
-        Assert.Equal("4行目（ページ1→2・下から2行目）: 絵文字を 1.0→0.0 秒に縮めても、前の行（1行目）がワイプの途中（残り 1.0 秒）で消えます", on.Message);
-
-        // 上から対応付ける設定では段の数え方が変わる
-        var top = Settings(false, "（花帆）");
-        top.AlignFromTop = true;
-        Assert.StartsWith("4行目（ページ1→2・上から1行目）: ", Assert.Single(Validate(doc, top)).Message);
+        const string message = "4行目（ページ1→2・下から2行目）: 前の行（1行目）がワイプの途中（残り 2.0 秒）で消えます";
+        Assert.Equal(message, Assert.Single(Validate(doc, Settings(false, "（花帆）"))).Message);
+        Assert.Equal(message, Assert.Single(Validate(doc, Settings(true, "（花帆）"))).Message);
     }
 
     [Fact]
@@ -103,14 +120,52 @@ public class N3ShowTimeValidatorTests
     }
 
     [Fact]
-    public void 表示開始の手動指定に合わせて縮める絵文字は警告しない()
+    public void 表示開始の手動指定で絵文字が下限より短くなると警告する()
     {
         var doc = Example3();
-        doc.Lines[3].ShowBeginCs = 2300; // 絵文字（22000〜24000）は書き出しで 1.0 秒に縮む
+        doc.Lines[3].ShowBeginCs = 2300; // 絵文字（22000〜24000）は書き出しで 1.0 秒に縮む（下限 1.5 秒より短い）
         var s = Settings(true, "（花帆）");
         var plans = N3ShowTimePlanner.Plan(doc, s);
         Assert.Equal((2.0, 1.0), Assert.Single(N3EmojiLead.Describe(doc.Lines[3], plans[3].BeginMs, s.LeadMatcher)));
-        Assert.Empty(N3ShowTimeValidator.Validate(doc, plans, s));
+        var warning = Assert.Single(N3ShowTimeValidator.Validate(doc, plans, s));
+        Assert.Equal(IssueSeverity.Warning, warning.Severity);
+        Assert.Equal("4行目（ページ1→2・下から2行目）: 表示開始の手動指定のため、絵文字が 2.0→1.0 秒に縮みます", warning.Message);
+        Assert.Equal(3, warning.LineIndex);
+        Assert.Null(warning.RelatedLineIndex); // 前の行は関係しない
+
+        // 下限（1.5 秒）までなら警告しない
+        doc.Lines[3].ShowBeginCs = 2240;
+        Assert.Empty(Validate(doc, s));
+        // 規則オフでは絵文字を寄せないので警告しない
+        doc.Lines[3].ShowBeginCs = 2300;
+        Assert.Empty(Validate(doc, Settings(false, "（花帆）")));
+    }
+
+    [Fact]
+    public void 前の行の表示終了の手動指定で絵文字が下限より短くなると警告する()
+    {
+        var doc = Example3();
+        doc.Lines[0].ShowEndCs = 2300; // 前の行が 23000 まで残るので、次の行は 23000 まで出せない（絵文字は 1.0 秒）
+        var s = Settings(true, "（花帆）");
+        var warning = Assert.Single(Validate(doc, s));
+        Assert.Equal(IssueSeverity.Warning, warning.Severity);
+        Assert.Equal((3, 0), (warning.LineIndex, warning.RelatedLineIndex));
+        Assert.Equal("4行目（ページ1→2・下から2行目）: 前の行（1行目）の表示終了の手動指定のため、絵文字が 2.0→1.0 秒に縮みます", warning.Message);
+    }
+
+    [Fact]
+    public void 前のページに同じ段の行が無い行も表示開始の手動指定で下限より短くなれば警告する()
+    {
+        var doc = Lyrics(
+            "@Emoji=（花帆）,a.png",
+            "[00:10:00]（花帆）[00:12:00]あ[00:13:00]",
+            "[00:12:50]い[00:14:00]");
+        doc.Lines[0].ShowBeginCs = 1150;
+        var warning = Assert.Single(Validate(doc, Settings(true, "（花帆）")));
+        Assert.Equal(IssueSeverity.Warning, warning.Severity);
+        Assert.Equal((0, (int?)null), (warning.LineIndex, warning.RelatedLineIndex));
+        Assert.Equal("1行目（ページ1）: 表示開始の手動指定のため、絵文字が 2.0→0.5 秒に縮みます", warning.Message);
+        Assert.Empty(Validate(doc, Settings(false, "（花帆）")));
     }
 
     [Fact]
@@ -119,5 +174,15 @@ public class N3ShowTimeValidatorTests
         Assert.Equal("", N3ShowTimeValidator.FormatShrinks(Array.Empty<(double, double)>()));
         Assert.Equal("2.0→1.5・1.0→0.0", N3ShowTimeValidator.FormatShrinks(new[] { (2.0, 1.5), (2.0, 1.5), (1.0, 0.0) }));
         Assert.Equal("2.0→1.02", N3ShowTimeValidator.FormatShrinks(new[] { (2.0, 1.02) }));
+    }
+
+    [Fact]
+    public void 下限より短い縮み_ワイプ前の表示時間と元の表示秒数の短い方より短いもの()
+    {
+        var shrinks = new[] { (2.0, 1.5), (2.0, 1.49), (1.0, 1.0), (1.0, 0.99), (3.0, 1.6) };
+        Assert.Equal(new[] { (2.0, 1.49), (1.0, 0.99) }, N3ShowTimeValidator.BelowFloor(shrinks, 1500));
+        // ワイプ前の表示時間が 10ms 単位でないとき、表示開始の 10ms への切り上げの差（9ms 以内）は数えない
+        Assert.Empty(N3ShowTimeValidator.BelowFloor(new[] { (2.0, 1.5) }, 1505));
+        Assert.Single(N3ShowTimeValidator.BelowFloor(new[] { (2.0, 1.49) }, 1505));
     }
 }

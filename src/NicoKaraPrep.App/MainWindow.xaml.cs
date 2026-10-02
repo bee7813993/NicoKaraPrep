@@ -679,6 +679,7 @@ public sealed partial class MainWindow : Window
         if (file is null) return;
         TryRun(() => ViewModel.LoadTemplate(file.Path));
         LoadQuickEmojiSettings();
+        RefreshN3LinePanel(); // 表示時刻の設定・絵文字の指定で、行設定の自動の表示時刻と説明が変わる
         ScheduleValidation();
     }
 
@@ -777,6 +778,7 @@ public sealed partial class MainWindow : Window
         if (!_quickEmojiReady) return;
         ViewModel.Settings.PlaceholderChar = QuickPlaceholderBox.Text.Trim();
         ViewModel.Settings.Save();
+        RefreshN3LinePanel(); // プレースホルダは絵文字の分だけ遅らせる規則の対象でもあり、行設定の自動の表示時刻と説明が変わる
         ScheduleValidation(); // プレースホルダは絵文字扱い（チェック除外）の対象に含まれるため
     }
 
@@ -2076,6 +2078,7 @@ public sealed partial class MainWindow : Window
         {
             ViewModel.RefreshEmojiSlots();
             if (dialog.SongListChanged) ViewModel.MarkModified();
+            RefreshN3LinePanel(); // 絵文字の分だけ遅らせる規則の対象が変わり、行設定の自動の表示時刻と説明が変わる
             ScheduleValidation();
         }
     }

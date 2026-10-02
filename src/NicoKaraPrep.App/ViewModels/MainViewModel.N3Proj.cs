@@ -40,12 +40,20 @@ public partial class MainViewModel
     /// <summary>
     /// 行設定パネルの説明に足す、絵文字の分だけ行の表示を遅らせる規則（書き出し画面の設定）の結果（表示中のタブの行）。
     /// 規則で表示を遅らせた行・絵文字を縮めた行だけ「・絵文字の分だけ遅らせた（絵文字 2.0→1.5 秒）」のような文を返す（それ以外は空）。
+    /// 絵文字はワイプ前の表示時間（表示秒数がそれより短い絵文字はその秒数）までしか縮めず、それでも重なるときは前の行のワイプ後を削る。
+    /// それより短くなるのは表示時刻の手動指定の行だけなので、そのときは理由を書く（チェックでも警告する）。
     /// </summary>
     public string DescribeEmojiLeadYield(N3LinePlan plan)
     {
         var show = CreateShowTimeSettings(_activeTab.Name);
         if (!show.YieldsEmojiLead || plan.LineIndex < 0 || plan.LineIndex >= Document.Lines.Count) return "";
-        string emoji = N3ShowTimeValidator.FormatShrinks(N3EmojiLead.Describe(Document.Lines[plan.LineIndex], plan.BeginMs, show.LeadMatcher));
+        var shrinks = N3EmojiLead.Describe(Document.Lines[plan.LineIndex], plan.BeginMs, show.LeadMatcher);
+        string emoji = N3ShowTimeValidator.FormatShrinks(shrinks);
+        if (N3ShowTimeValidator.BelowFloor(shrinks, show.LeadMs).Count > 0)
+        {
+            // 表示開始が自動なら、前のページの同じ段の行の表示終了の手動指定で遅れた行
+            return $"・{(plan.BeginIsManual ? "表示開始" : "前の行の表示終了")}の手動指定のため絵文字を縮めた（{emoji} 秒）";
+        }
         if (plan.EmojiYieldMs > 0)
         {
             return emoji.Length > 0

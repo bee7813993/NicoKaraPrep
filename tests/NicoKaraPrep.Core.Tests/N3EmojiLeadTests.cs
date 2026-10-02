@@ -59,6 +59,30 @@ public class N3EmojiLeadTests
         Assert.Equal(new[] { new LeadOccurrence(1, 1100, null) }, none);
     }
 
+    // ------------------------------------------------------------ 表示秒数の下限を割らない最も遅い表示開始
+
+    [Fact]
+    public void 下限を割らない最も遅い表示開始_ワイプ前の表示時間と元の表示秒数の短い方を残す()
+    {
+        // 行頭の 2 秒の絵文字: ワイプ前の表示時間 1.5 秒を残す（T − 1500）。寄せるとちょうど 1.5 秒
+        var head = Line("[00:22:00]（花帆）[00:24:00]う[00:26:00]");
+        Assert.Equal(22500, N3EmojiLead.LatestBeginMs(head, Kaho, 1500));
+        Assert.Equal(new[] { (2.0, 1.5) }, N3EmojiLead.Describe(head, 22500, Kaho));
+        Assert.Equal(22500, N3EmojiLead.LatestBeginMs(Line("[00:22:00]＿[00:24:00]う[00:26:00]"), Kaho, 1500));
+        // 表示秒数がワイプ前の表示時間より短い絵文字（1 秒）は縮めない（E）
+        Assert.Equal(23000, N3EmojiLead.LatestBeginMs(Line("[00:23:00]（花帆）[00:24:00]う[00:26:00]"), Kaho, 1500));
+        // 複数あれば厳しい方（連続絵文字の 2 つ: 12000 と 12500）
+        Assert.Equal(12000, N3EmojiLead.LatestBeginMs(Line("[00:11:50]（花帆）[00:13:50][00:12:50]（さやか）[00:13:50]う[00:15:00]"), Kaho, 1500));
+        // 行の途中の絵文字も数える
+        Assert.Equal(13500, N3EmojiLead.LatestBeginMs(Line("[00:10:00]あ[00:13:00]（花帆）[00:15:00]い[00:16:00]"), Kaho, 1500));
+        // 寄せない出現（T の無い出現・同時歌唱で E ≧ T）は数えない。対象が無ければ null
+        Assert.Null(N3EmojiLead.LatestBeginMs(Line("[00:10:00]あ[00:11:00]（花帆）"), Kaho, 1500));
+        Assert.Null(N3EmojiLead.LatestBeginMs(Line("[00:10:00]あ[00:12:00]（花帆）[00:11:00]い[00:13:00]"), Kaho, 1500));
+        Assert.Null(N3EmojiLead.LatestBeginMs(Line("[00:10:00]あ[00:11:00]い[00:12:00]"), Kaho, 1500));
+        Assert.Null(N3EmojiLead.LatestBeginMs(head, null, 1500));
+        Assert.Null(N3EmojiLead.LatestBeginMs(head, new EmojiMatcher(Array.Empty<string>()), 1500));
+    }
+
     // ------------------------------------------------------------ 絵文字の開始の寄せ
 
     [Fact]
@@ -147,13 +171,13 @@ public class N3EmojiLeadTests
         Assert.NotSame(doc, clamped);
         Assert.Equal(before, LrcFormat.Write(doc));
         Assert.Equal("[00:22:00]（花帆）[00:24:00]う[00:26:00]", Text(doc.Lines[3]));
-        Assert.Equal("[00:22:98]（花帆）[00:24:00]う[00:26:00]", Text(clamped.Lines[3]));
+        Assert.Equal("[00:22:50]（花帆）[00:24:00]う[00:26:00]", Text(clamped.Lines[3]));
         Assert.NotSame(doc.Lines[3].Chars[0], clamped.Lines[3].Chars[0]);
         // 寄せる所の無い行は同じ内容。曲の設定（@Emoji）も写る
         Assert.Equal(Text(doc.Lines[0]), Text(clamped.Lines[0]));
         Assert.Equal(doc.EmojiEntries.Select(e => e.ReplaceChar), clamped.EmojiEntries.Select(e => e.ReplaceChar));
-        // 表示時刻は元の歌詞で計算した値
-        Assert.Equal(22975, plans[3].BeginMs);
+        // 表示時刻は元の歌詞で計算した値（絵文字はワイプ前の表示時間 1.5 秒を残す）
+        Assert.Equal(22500, plans[3].BeginMs);
         Assert.Equal(N3ShowTimePlanner.Plan(doc, show)[3], plans[3]);
 
         // 何度呼んでも同じ

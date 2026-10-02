@@ -62,7 +62,7 @@
             <!-- 絵文字の分だけ行の表示を遅らせる（ニコカラメーカー3 には無い機能。保存先は AppSettings.N3EmojiLeadYield） -->
             <CheckBox x:Name="EmojiLeadYieldCheck"
                       AutomationProperties.Name="前のページの同じ段と重なるときは、絵文字の分だけ行の表示を遅らせる"
-                      ToolTipService.ToolTip="絵文字の表示秒数は、ワイプ前の表示時間まで縮めます。それでも重なるときは、さらに縮めて前の行のワイプ後を残します">
+                      ToolTipService.ToolTip="絵文字の表示秒数は、ワイプ前の表示時間まで縮めます（表示秒数がそれより短い絵文字は縮めません）。それでも重なるときは、前の行のワイプ後を削ります">
                 <TextBlock TextWrapping="Wrap" Text="前のページの同じ段と重なるときは、絵文字の分だけ行の表示を遅らせる（ニコカラメーカー3 には無い機能）" />
             </CheckBox>
 
