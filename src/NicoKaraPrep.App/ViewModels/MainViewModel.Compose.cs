@@ -58,7 +58,7 @@ public partial class MainViewModel
         if (created.Count == 0) return;
         string note = $"組み合わせのフォント設定「{string.Join("」「", created)}」を作りました（フォント設定ビュー（F3）で色の分け方を変えられます）";
         StatusText += $"　／　{note}";
-        _noticeBeforeCheck = note;
+        _noticeBeforeCheck = _noticeBeforeCheck is { } before ? $"{before}　／　{note}" : note; // 絵文字の挿入の知らせと並べる
     }
 
     /// <summary>次のチェックの結果の前に出すお知らせ（チェックの結果で上書きされて見えなくならないように）。</summary>

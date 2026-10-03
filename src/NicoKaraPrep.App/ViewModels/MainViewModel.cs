@@ -1181,7 +1181,7 @@ public partial class MainViewModel : ObservableObject
             MarkModified();
         }
 
-        StatusText = InsertedEmojiStatus(emojiChar, line, matcher, closedEnd);
+        SetInsertedEmojiStatus(emojiChar, line, matcher, closedEnd);
         NoteComposedFonts(AutoComposeFontsFor(line)); // 2 種類続けて入れたら、組み合わせのフォント設定を作る
 
         string newRaw = TextEditModeFormat.WriteLyricLine(line);
@@ -1319,20 +1319,26 @@ public partial class MainViewModel : ObservableObject
         if (lineIndex < Lines.Count) Lines[lineIndex].RaiseAllChanged();
         MarkModified();
 
-        StatusText = InsertedEmojiStatus(emojiChar, line, matcher, closedEnd);
+        SetInsertedEmojiStatus(emojiChar, line, matcher, closedEnd);
         NoteComposedFonts(AutoComposeFontsFor(line)); // 2 種類続けて入れたら、組み合わせのフォント設定を作る
 
         // 絵文字の後ろへ（直前の文字の終わりのタグを載せる空白を足したときはその分も進める。スペーサーは表示幅 0）
         return GetInsertViewLineStart(lineIndex) + charOffset + (line.GetDisplayText().Length - before);
     }
 
-    /// <summary>絵文字を挿入したときのステータスバーの知らせ（closedEndCs は直前の文字の終わりのタグとして足した時刻）。</summary>
-    private static string InsertedEmojiStatus(string emojiChar, LyricsLine line, EmojiMatcher matcher, int? closedEndCs)
+    /// <summary>
+    /// 絵文字を挿入したときのステータスバーの知らせ（closedEndCs は直前の文字の終わりのタグとして足した時刻）。
+    /// 時刻を設定できなかった・終わりのタグを足したことは、挿入のあとのチェックの結果で消えないよう、次のチェックの結果の前にも出す。
+    /// </summary>
+    private void SetInsertedEmojiStatus(string emojiChar, LyricsLine line, EmojiMatcher matcher, int? closedEndCs)
     {
-        if (EmojiTagger.HasUntaggableEmoji(line, matcher)) return $"絵文字 {emojiChar} を挿入しました（直後にタイムタグ付きの文字が無いため時刻は未設定です）";
-        return closedEndCs is int cs
-            ? $"絵文字 {emojiChar} を挿入しました（直前の文字の終わりが巻き戻らないよう、終わりのタイムタグ {TimeTag.Format(cs)} を足しました）"
-            : $"絵文字 {emojiChar} を挿入しました";
+        string? detail = EmojiTagger.HasUntaggableEmoji(line, matcher)
+            ? "直後にタイムタグ付きの文字が無いため時刻は未設定です"
+            : closedEndCs is int cs
+                ? $"直前の文字の終わりが巻き戻らないよう、終わりのタイムタグ {TimeTag.Format(cs)} を足しました"
+                : null;
+        StatusText = detail is null ? $"絵文字 {emojiChar} を挿入しました" : $"絵文字 {emojiChar} を挿入しました（{detail}）";
+        _noticeBeforeCheck = detail is null ? null : StatusText;
     }
 
     /// <summary>行内の表示文字オフセット → CharUnit 挿入位置（スペーサーは表示幅 0）。</summary>
