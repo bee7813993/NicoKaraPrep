@@ -9,6 +9,13 @@ namespace NicoKaraPrep.App.Services;
 /// </summary>
 public static class SaveFileDialog
 {
+    private static int s_showing;
+
+    /// <summary>
+    /// 保存ダイアログを出しているあいだか（UI スレッドはダイアログの中で止まっているが、MCP の処理は届くので、書き込みを断るのに使う）。
+    /// </summary>
+    public static bool IsShowing => s_showing > 0;
+
     /// <summary>
     /// 保存ダイアログを表示する。キャンセル時は null。
     /// </summary>
@@ -47,7 +54,16 @@ public static class SaveFileDialog
                 }
             }
 
-            int hr = dialog.Show(hwnd);
+            int hr;
+            s_showing++;
+            try
+            {
+                hr = dialog.Show(hwnd);
+            }
+            finally
+            {
+                s_showing--;
+            }
             if (hr != 0) return null; // キャンセル（ERROR_CANCELLED）
 
             dialog.GetResult(out IShellItem item);

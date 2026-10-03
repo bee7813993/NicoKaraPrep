@@ -183,6 +183,32 @@ public partial class MainViewModel
     }
 
     /// <summary>
+    /// 行の表示開始・終了を片方ずつ指定する（MCP の set_line_show_time）。setBegin / setEnd が false の側は今のまま。
+    /// true の側は、値があれば手で指定した値（手動）にし、null なら値を外して自動に戻す（読み込んだ値・自動調整の値も外す）。
+    /// </summary>
+    public bool SetLineShowTimeSides(int index, bool setBegin, int? beginCs, bool setEnd, int? endCs)
+    {
+        if (index < 0 || index >= Document.Lines.Count) return false;
+        var line = Document.Lines[index];
+        int? b = setBegin ? beginCs : line.ShowBeginCs;
+        var bo = setBegin ? ShowTimeOrigin.Manual : line.ShowBeginOrigin;
+        int? e = setEnd ? endCs : line.ShowEndCs;
+        var eo = setEnd ? ShowTimeOrigin.Manual : line.ShowEndOrigin;
+        if (b == line.ShowBeginCs && e == line.ShowEndCs && (b is null || bo == line.ShowBeginOrigin) && (e is null || eo == line.ShowEndOrigin)) return false;
+        PushUndo();
+        line.ShowBeginCs = b;
+        line.ShowBeginOrigin = bo;
+        line.ShowEndCs = e;
+        line.ShowEndOrigin = eo;
+        MarkModified();
+        SaveProject();
+        return true;
+    }
+
+    /// <summary>今のステータスバーの文を、次のチェックの結果の前にもつなげて出す（チェックの結果で消えないように。MCP の操作の知らせ）。</summary>
+    internal void KeepNoticeBeforeCheck() => _noticeBeforeCheck = StatusText;
+
+    /// <summary>
     /// 表示時刻の自動調整を実行する（右のパネル「表示時刻」。全タブ）。手で指定した表示時刻は残し、ほかの値（読み込んだ値・前回の自動調整の値・未設定）を
     /// 今の設定で計算し直して、自動調整の値として行に持たせる（<see cref="N3ShowTimeAdjuster"/>）。変わったタブは元に戻せる。結果をステータスに出す。
     /// </summary>

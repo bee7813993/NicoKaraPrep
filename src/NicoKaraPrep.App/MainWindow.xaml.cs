@@ -44,6 +44,7 @@ public sealed partial class MainWindow : Window
         RestoreWindowBounds();
         Closed += (_, _) => SaveWindowBounds();
         InitializeViewSwitching();
+        InitializeMcp();
 
         _validateTimer = DispatcherQueue.GetForCurrentThread().CreateTimer();
         _validateTimer.Interval = TimeSpan.FromMilliseconds(400);
@@ -212,8 +213,7 @@ public sealed partial class MainWindow : Window
     {
         try
         {
-            string dir = Path.Combine(
-                Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "NicoKaraPrep");
+            string dir = Core.Project.AppSettings.DataFolder;
             Directory.CreateDirectory(dir);
             File.AppendAllText(Path.Combine(dir, "crash.log"),
                 $"[{DateTime.Now:HH:mm:ss.fff}] {message}\n");
@@ -714,6 +714,7 @@ public sealed partial class MainWindow : Window
         if (result == ContentDialogResult.Primary)
         {
             LoadQuickEmojiSettings();
+            ApplyMcpEnabled();
             TryRun(ViewModel.RunValidation);
             RefreshLineFontPlaceholder();
         }

@@ -16,6 +16,9 @@
     <LangVersion>latest</LangVersion>
     <!-- MVVMTK0045: AOT 用の partial property 推奨警告。本アプリは AOT 非対象のため抑制 -->
     <NoWarn>$(NoWarn);MVVMTK0045</NoWarn>
+    <!-- 起動の入口は Program.cs（MCP の橋渡し・単一インスタンス。XAML が生成する Main は使わない） -->
+    <DefineConstants>$(DefineConstants);DISABLE_XAML_GENERATED_MAIN</DefineConstants>
+    <StartupObject>NicoKaraPrep.App.Program</StartupObject>
     <EnableMsixTooling>true</EnableMsixTooling>
     <WindowsPackageType>None</WindowsPackageType>
     <WindowsAppSDKSelfContained>true</WindowsAppSDKSelfContained>
@@ -27,6 +30,7 @@
     <PackageReference Include="Microsoft.WindowsAppSDK" Version="1.6.250205002" />
     <PackageReference Include="Microsoft.Windows.SDK.BuildTools" Version="10.0.26100.1742" />
     <PackageReference Include="CommunityToolkit.Mvvm" Version="8.4.0" />
+    <PackageReference Include="ModelContextProtocol.Core" Version="2.2.0" />
   </ItemGroup>
 
   <ItemGroup>

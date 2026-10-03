@@ -845,7 +845,7 @@
             Grid.RowSpan="2"
             Visibility="Collapsed" />
 
-        <!-- ステータスバー（右端は今のビュー） -->
+        <!-- ステータスバー（右端は MCP の接続と今のビュー） -->
         <Border Grid.Row="3" Padding="8,4" BorderThickness="0,1,0,0" BorderBrush="{ThemeResource DividerStrokeColorDefaultBrush}">
             <StackPanel>
                 <!-- 設定ファイルを読み込めなかったときの警告。ほかの表示で上書きされないよう、起動中ずっと出しておく -->
@@ -854,11 +854,18 @@
                     <Grid.ColumnDefinitions>
                         <ColumnDefinition Width="*" />
                         <ColumnDefinition Width="Auto" />
+                        <ColumnDefinition Width="Auto" />
                     </Grid.ColumnDefinitions>
                     <TextBlock x:Name="StatusBarText" Text="{x:Bind ViewModel.StatusText, Mode=OneWay}" FontSize="12" />
+                    <!-- MCP（Claude などからの操作）の待ち受け・接続の印（MainWindow.Mcp.cs） -->
+                    <TextBlock
+                        x:Name="McpStatusText"
+                        Grid.Column="1"
+                        FontSize="12"
+                        Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
                     <TextBlock
                         x:Name="ViewModeText"
-                        Grid.Column="1"
+                        Grid.Column="2"
                         Text="{x:Bind ViewModel.ViewModeLabel, Mode=OneWay}"
                         FontSize="12"
                         Foreground="{ThemeResource TextFillColorSecondaryBrush}" />

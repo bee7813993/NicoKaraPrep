@@ -51,10 +51,14 @@ public sealed partial class MainWindow
         LineSide.RefreshShowTimeSummary();
     }
 
-    /// <summary>右のパネル「表示時刻」の「自動調整を実行」: 全タブの表示時刻を決め直し、行リストの印・行設定・プレビュー・チェックを作り直す。</summary>
-    private void RunAutoShowTimes()
+    /// <summary>
+    /// 右のパネル「表示時刻」の「自動調整を実行」: 全タブの表示時刻を決め直し、行リストの印・行設定・プレビュー・チェックを作り直す。
+    /// 結果の行数を返す（実行できなかったときは null。MCP からも呼ぶ）。
+    /// </summary>
+    private Core.Formats.N3ShowTimeAdjustResult? RunAutoShowTimes()
     {
-        TryRun(() => ViewModel.RunAutoShowTimes());
+        Core.Formats.N3ShowTimeAdjustResult? result = null;
+        TryRun(() => result = ViewModel.RunAutoShowTimes());
         foreach (var line in ViewModel.Lines) line.RaiseOverrideMark();
         RefreshN3LinePanel();
         // チェックはすぐに実行し、自動調整の知らせがチェック結果で消えないよう、つなげて表示する
@@ -64,6 +68,7 @@ public sealed partial class MainWindow
         RefreshInsertGutter();
         ViewModel.StatusText = $"{summary}　／　{ViewModel.StatusText}";
         LineSide.RefreshShowTimeSummary();
+        return result;
     }
 
     /// <summary>右のフォント一覧で押した（null は「自動に戻す」）: 選んだ文字（文字を選んでいなければ選んだ行）に指定する。</summary>

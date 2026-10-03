@@ -34,6 +34,7 @@ public sealed partial class SettingsDialog : ContentDialog
         EmojiModeBox.SelectedIndex = settings.EmojiTagPerEmoji ? 0 : 1;
         PlaceholderBox.Text = settings.PlaceholderChar;
         SeekSecondsBox.Value = settings.SeekSeconds;
+        McpBox.IsChecked = settings.McpEnabled;
 
         PrimaryButtonClick += (_, _) => ApplyToSettings();
     }
@@ -56,6 +57,7 @@ public sealed partial class SettingsDialog : ContentDialog
         _settings.EmojiTagPerEmoji = EmojiModeBox.SelectedIndex == 0;
         _settings.PlaceholderChar = PlaceholderBox.Text.Trim();
         _settings.SeekSeconds = ToDouble(SeekSecondsBox.Value, 3.0);
+        _settings.McpEnabled = McpBox.IsChecked == true;
         _settings.Save();
     }
 

@@ -44,6 +44,11 @@
             <TextBlock Text="メディア再生" Style="{ThemeResource SubtitleTextBlockStyle}" Margin="0,8,0,0" />
             <NumberBox x:Name="SeekSecondsBox" Header="Z / X（Ctrl+←/→）でシークする秒数" Minimum="0.5" Maximum="60" SmallChange="0.5" SpinButtonPlacementMode="Inline" />
 
+            <TextBlock Text="MCP（Claude などからの操作）" Style="{ThemeResource SubtitleTextBlockStyle}" Margin="0,8,0,0" />
+            <TextBlock TextWrapping="Wrap" Style="{ThemeResource CaptionTextBlockStyle}" Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                       Text="Claude Code などの MCP クライアントに「NicoKaraPrep.exe --mcp」を登録すると、起動中のこのアプリを操作できます（同じ Windows ユーザーのプログラムだけがつながります。詳しくはマニュアルの MCP の章）。" />
+            <CheckBox x:Name="McpBox" Content="MCP サーバーを有効にする" />
+
         </StackPanel>
     </ScrollViewer>
 </ContentDialog>
