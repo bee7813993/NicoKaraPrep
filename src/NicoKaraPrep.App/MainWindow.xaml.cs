@@ -353,7 +353,7 @@ public sealed partial class MainWindow : Window
         }
     }
 
-    private void OpenRecentFile(string path)
+    private async void OpenRecentFile(string path)
     {
         if (!File.Exists(path))
         {
@@ -361,6 +361,12 @@ public sealed partial class MainWindow : Window
             ViewModel.Settings.Save();
             RefreshRecentFilesMenu();
             ViewModel.StatusText = $"ファイルが見つかりません: {path}";
+            return;
+        }
+        // ニコカラメーカー3 のプロジェクトは、開くときと同じく読み込み確認画面で読み込む
+        if (Path.GetExtension(path).Equals(".n3proj", StringComparison.OrdinalIgnoreCase))
+        {
+            await ImportN3ProjAsync(path);
             return;
         }
         TryRun(() => ViewModel.OpenFile(path));

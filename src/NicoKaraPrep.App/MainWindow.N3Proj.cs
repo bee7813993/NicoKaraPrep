@@ -131,6 +131,13 @@ public sealed partial class MainWindow
 
             var choices = dialog.Result;
             TryRun(() => ViewModel.ApplyN3ProjImport(preview, choices));
+            if (focus == N3ProjImportFocus.Default)
+            {
+                // 最近使用したファイルにも入れる（開いたプロジェクトの歌詞より上に。選ぶとこの読み込みをもう一度行う）
+                ViewModel.Settings.AddRecentFile(path);
+                ViewModel.Settings.Save();
+                RefreshRecentFilesMenu();
+            }
             string summary = lyricsNote is null ? ViewModel.StatusText : $"{lyricsNote}　／　{ViewModel.StatusText}";
             if (choices.Media && ViewModel.MediaPath is string media && File.Exists(media))
             {

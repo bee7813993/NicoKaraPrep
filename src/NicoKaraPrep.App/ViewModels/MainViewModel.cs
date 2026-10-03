@@ -1172,7 +1172,7 @@ public partial class MainViewModel : ObservableObject
         if (SelectedLine is not null) CharFontOperations.CopyCharFonts(Document.Lines[SelectedLine.Index], line);
 
         var matcher = CreateEmojiMatcher(emojiChar);
-        int inserted = EmojiTagger.InsertEmoji(line, charIndex, emojiChar, matcher, EmojiTagSettings);
+        int inserted = EmojiTagger.InsertEmoji(line, charIndex, emojiChar, matcher, EmojiTagSettings, out int? closedEnd);
 
         if (SelectedLine is not null)
         {
@@ -1181,9 +1181,7 @@ public partial class MainViewModel : ObservableObject
             MarkModified();
         }
 
-        StatusText = EmojiTagger.HasUntaggableEmoji(line, matcher)
-            ? $"絵文字 {emojiChar} を挿入しました（直後にタイムタグ付きの文字が無いため時刻は未設定です）"
-            : $"絵文字 {emojiChar} を挿入しました";
+        StatusText = InsertedEmojiStatus(emojiChar, line, matcher, closedEnd);
         NoteComposedFonts(AutoComposeFontsFor(line)); // 2 種類続けて入れたら、組み合わせのフォント設定を作る
 
         string newRaw = TextEditModeFormat.WriteLyricLine(line);
@@ -1315,17 +1313,26 @@ public partial class MainViewModel : ObservableObject
         int unitIndex = DisplayOffsetToUnitIndex(line, charOffset);
 
         var matcher = CreateEmojiMatcher(emojiChar);
-        EmojiTagger.InsertEmoji(line, unitIndex, emojiChar, matcher, EmojiTagSettings);
+        int before = line.GetDisplayText().Length;
+        EmojiTagger.InsertEmoji(line, unitIndex, emojiChar, matcher, EmojiTagSettings, out int? closedEnd);
 
         if (lineIndex < Lines.Count) Lines[lineIndex].RaiseAllChanged();
         MarkModified();
 
-        StatusText = EmojiTagger.HasUntaggableEmoji(line, matcher)
-            ? $"絵文字 {emojiChar} を挿入しました（直後にタイムタグ付きの文字が無いため時刻は未設定です）"
-            : $"絵文字 {emojiChar} を挿入しました";
+        StatusText = InsertedEmojiStatus(emojiChar, line, matcher, closedEnd);
         NoteComposedFonts(AutoComposeFontsFor(line)); // 2 種類続けて入れたら、組み合わせのフォント設定を作る
 
-        return GetInsertViewLineStart(lineIndex) + charOffset + emojiChar.Length;
+        // 絵文字の後ろへ（直前の文字の終わりのタグを載せる空白を足したときはその分も進める。スペーサーは表示幅 0）
+        return GetInsertViewLineStart(lineIndex) + charOffset + (line.GetDisplayText().Length - before);
+    }
+
+    /// <summary>絵文字を挿入したときのステータスバーの知らせ（closedEndCs は直前の文字の終わりのタグとして足した時刻）。</summary>
+    private static string InsertedEmojiStatus(string emojiChar, LyricsLine line, EmojiMatcher matcher, int? closedEndCs)
+    {
+        if (EmojiTagger.HasUntaggableEmoji(line, matcher)) return $"絵文字 {emojiChar} を挿入しました（直後にタイムタグ付きの文字が無いため時刻は未設定です）";
+        return closedEndCs is int cs
+            ? $"絵文字 {emojiChar} を挿入しました（直前の文字の終わりが巻き戻らないよう、終わりのタイムタグ {TimeTag.Format(cs)} を足しました）"
+            : $"絵文字 {emojiChar} を挿入しました";
     }
 
     /// <summary>行内の表示文字オフセット → CharUnit 挿入位置（スペーサーは表示幅 0）。</summary>

@@ -18,14 +18,22 @@ public sealed class EmojiTagSettings
 ///   絵文字の終了時刻 = T、開始時刻 = T − 先行秒数
 ///   連続絵文字（デフォルト）: 各絵文字（出現）ごとに先頭へ T−n を付与し、間に終了時刻 T の 2連タグ（スペーサー）を挟む
 ///   連続絵文字（ブロックモード）: ブロック先頭の絵文字にのみ T−n を付与（終了は直後の実文字のタグ）
+///   挿入した絵文字の直前の文字に終わりのタグが無ければ、T を終わりのタグとして足す（<see cref="CloseBeforeEmoji"/>）
 /// </summary>
 public static class EmojiTagger
 {
     /// <summary>
     /// 行の charIndex 位置（CharUnit 単位）に絵文字（置き換え文字列全体）を挿入し、
-    /// 行全体の絵文字タグを付け直す。挿入された CharUnit 数を返す。
+    /// 行全体の絵文字タグを付け直す。挿入された CharUnit 数（直前の文字の終わりのタグを載せる空白を足したらその分も）を返す。
     /// </summary>
-    public static int InsertEmoji(LyricsLine line, int charIndex, string replaceString, EmojiMatcher matcher, EmojiTagSettings settings)
+    public static int InsertEmoji(LyricsLine line, int charIndex, string replaceString, EmojiMatcher matcher, EmojiTagSettings settings) =>
+        InsertEmoji(line, charIndex, replaceString, matcher, settings, out _);
+
+    /// <summary>
+    /// <see cref="InsertEmoji(LyricsLine, int, string, EmojiMatcher, EmojiTagSettings)"/> と同じ。closedEndCs は、直前の文字の
+    /// 終わりのタグとして足した時刻（足さなければ null）。
+    /// </summary>
+    public static int InsertEmoji(LyricsLine line, int charIndex, string replaceString, EmojiMatcher matcher, EmojiTagSettings settings, out int? closedEndCs)
     {
         charIndex = Math.Clamp(charIndex, 0, line.Chars.Count);
 
@@ -42,7 +50,63 @@ public static class EmojiTagger
         }
 
         RetagLine(line, matcher, settings);
-        return count;
+        return count + CloseBeforeEmoji(line, charIndex, matcher, out closedEndCs);
+    }
+
+    /// <summary>
+    /// 挿入した絵文字（charIndex から）の直前の文字に終わりのタイムタグが無ければ、絵文字の基準時刻 T（次の最初のタイムタグ）を足す。
+    /// 足さないと、絵文字の開始タグ（T − 表示秒数）が直前の文字の終わりになり、時刻が巻き戻る（縮む）。
+    /// 例: <c>[02:22:94]d！[02:23:08] </c> の「d！」の後ろに入れると <c>[02:22:94]d！[02:21:08]（コーラス）[02:23:08] </c> になる。
+    /// 直前が歌う文字なら、T のタグを付けた空白を絵文字の前に入れる（<c>[02:22:94]d！[02:23:08] [02:21:08]（コーラス）[02:23:08] </c>）。
+    /// 直前がタグの無い空白なら、その空白に T を付ける。行頭、直前が絵文字・スペーサー・タグの付いた空白、
+    /// 直前の文字より前にタグが無い（どのタグの区間にも入っていない）、絵文字にタグが付かない・開始が T と同じ（表示秒数 0）ときは足さない。
+    /// 足した CharUnit の数（0 か 1）を返す。
+    /// </summary>
+    private static int CloseBeforeEmoji(LyricsLine line, int charIndex, EmojiMatcher matcher, out int? closedEndCs)
+    {
+        closedEndCs = null;
+        if (charIndex <= 0 || charIndex >= line.Chars.Count) return 0;
+        var occurrences = matcher.FindOccurrences(line.Chars);
+        var emojiUnits = new HashSet<int>();
+        foreach (var occ in occurrences)
+        {
+            for (int i = occ.Start; i < occ.EndExclusive; i++) emojiUnits.Add(i);
+        }
+        var prev = line.Chars[charIndex - 1];
+        if (prev.IsSpacer || emojiUnits.Contains(charIndex - 1)) return 0;
+
+        // 挿入した絵文字の開始タグ（T − 表示秒数）と基準時刻 T（RetagLine と同じ決め方）
+        int k = occurrences.FindIndex(o => o.Start == charIndex);
+        if (k < 0 || line.Chars[charIndex].TimeCs is not int lead) return 0;
+        if (BaseTime(line, occurrences[k].EndExclusive, emojiUnits) is not int baseT || lead >= baseT) return 0;
+
+        bool blank = string.IsNullOrWhiteSpace(prev.Text);
+        if (blank && prev.TimeCs is not null) return 0; // 空白に付いた終わりのタグがある
+        bool timed = false;
+        for (int i = charIndex - 1; i >= 0 && !timed; i--) timed = line.Chars[i].TimeCs is not null;
+        if (!timed) return 0;
+
+        closedEndCs = baseT;
+        if (blank)
+        {
+            prev.TimeCs = baseT;
+            prev.CheckCount = 1;
+            return 0;
+        }
+        line.Chars.Insert(charIndex, new CharUnit { Text = " ", TimeCs = baseT, CheckCount = 1 });
+        return 1;
+    }
+
+    /// <summary>絵文字ブロックの基準時刻 T（blockEnd 以降の、絵文字・スペーサー以外の最初のタグ。無ければ行末のタグ）。</summary>
+    private static int? BaseTime(LyricsLine line, int blockEnd, HashSet<int> emojiUnitIndexes)
+    {
+        for (int i = blockEnd; i < line.Chars.Count; i++)
+        {
+            var c = line.Chars[i];
+            if (c.IsSpacer || emojiUnitIndexes.Contains(i)) continue;
+            if (c.TimeCs is int time) return time;
+        }
+        return line.EndTimeCs;
     }
 
     /// <summary>ドキュメント全体の絵文字タグを現在の実文字の時刻から付け直す。</summary>
@@ -111,19 +175,8 @@ public static class EmojiTagger
         {
             int blockEnd = blocks[b][^1].EndExclusive;
 
-            // 基準時刻 T = ブロックの直後にある実文字（絵文字・スペーサー以外）の最初のタグ
-            int? t = null;
-            for (int i = blockEnd; i < line.Chars.Count; i++)
-            {
-                var c = line.Chars[i];
-                if (c.IsSpacer || emojiUnitIndexes.Contains(i)) continue;
-                if (c.TimeCs is int time)
-                {
-                    t = time;
-                    break;
-                }
-            }
-            blockTimes[b] = t ?? line.EndTimeCs;
+            // 基準時刻 T = ブロックの直後にある実文字（絵文字・スペーサー以外）の最初のタグ（無ければ行末のタグ）
+            blockTimes[b] = BaseTime(line, blockEnd, emojiUnitIndexes);
         }
 
         for (int b = blocks.Count - 1; b >= 0; b--)
