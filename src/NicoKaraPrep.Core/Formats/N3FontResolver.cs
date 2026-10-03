@@ -15,6 +15,7 @@ public sealed class N3FontResolver
     private readonly EmojiMatcher _matcher;
     private readonly int _default;
     private readonly bool _continue;
+    private int _start;
     private int _current;
 
     /// <param name="fontNames">フォント設定名（添字がフォント設定の番号。同じ名前が複数あれば先のものを使う）。</param>
@@ -29,15 +30,35 @@ public sealed class N3FontResolver
         }
         _matcher = new EmojiMatcher(_byName.Keys);
         _default = defaultName is not null && _byName.TryGetValue(defaultName, out int d) ? d : 0;
+        _start = _default;
         _current = _default;
         _continue = continueAcrossLines;
     }
+
+    /// <summary>
+    /// 次の文書（歌詞設定タブ）の最初の行から使うフォント設定にする。ニコカラメーカー3 はタブをまたいでフォントを引き継がない
+    /// （実データ 213 件で確認: 2 つ目以降のタブの先頭は、前のタブの最後のフォントではなく、タブの最初のフォント）。
+    /// </summary>
+    /// <param name="startName">そのタブの最初のフォント設定名（無い名前や null なら既定）。</param>
+    public void StartDocument(string? startName)
+    {
+        _start = startName is not null && _byName.TryGetValue(startName, out int s) ? s : _default;
+        _current = _start;
+    }
+
+    /// <summary>
+    /// タブの最初のフォント設定名を自動で決める。メインのタブは既定。2 つ目以降のタブ（コーラスなど）は、名前に「コーラス」を含む
+    /// 最初のフォント設定（ニコカラメーカー3 で作った実データでは、2 つ目以降のタブは「（コーラス）」「コーラス配色」などで始まっていた）。
+    /// 無ければ既定。
+    /// </summary>
+    public static string? AutoStartName(bool isMain, IEnumerable<string> fontNames, string? defaultName) =>
+        isMain ? defaultName : fontNames.FirstOrDefault(n => n.Contains("コーラス", StringComparison.Ordinal)) ?? defaultName;
 
     /// <summary>行の各 CharUnit に適用するフォント設定の番号（fontNames の添字）。</summary>
     public int[] Resolve(LyricsLine line)
     {
         var result = new int[line.Chars.Count];
-        if (!_continue) _current = _default;
+        if (!_continue) _current = _start;
 
         var changes = new Dictionary<int, int>();
         if (!_matcher.IsEmpty)
@@ -84,17 +105,20 @@ public sealed class N3FontResolver
 
     /// <summary>
     /// 複数の文書（歌詞設定タブ）を順に通したときの、フォント設定名ごとの文字数。
-    /// n3proj の書き出しと同じく、前の文書の最後のフォントを次の文書へ引き継ぐ。
+    /// n3proj の書き出しと同じく、文書ごとにその文書の最初のフォント（<paramref name="startNames"/>。無ければ既定）から決め直す。
     /// </summary>
-    public static Dictionary<string, int> CountUsage(IEnumerable<LyricsDocument> documents, IReadOnlyList<string> fontNames, string? defaultName, bool continueAcrossLines)
+    public static Dictionary<string, int> CountUsage(IEnumerable<LyricsDocument> documents, IReadOnlyList<string> fontNames, string? defaultName, bool continueAcrossLines,
+        IReadOnlyList<string?>? startNames = null)
     {
         var usage = new Dictionary<string, int>(StringComparer.Ordinal);
         foreach (string n in fontNames) usage.TryAdd(n, 0);
         if (fontNames.Count == 0) return usage;
 
         var resolver = new N3FontResolver(fontNames, defaultName, continueAcrossLines);
+        int di = 0;
         foreach (var doc in documents)
         {
+            resolver.StartDocument(StartName(startNames, di++));
             foreach (var line in doc.Lines)
             {
                 if (line.IsEmpty) continue;
@@ -120,14 +144,18 @@ public sealed class N3FontResolver
 
     /// <summary>
     /// 複数の文書（歌詞設定タブ）を順に通したときの、行ごとに適用されるフォント設定（[文書の番号][doc.Lines の添字]）。
-    /// n3proj の書き出しと同じく空行は飛ばし、前の文書の最後のフォントを次の文書へ引き継ぐ。
+    /// n3proj の書き出しと同じく空行は飛ばし、文書ごとにその文書の最初のフォント（<paramref name="startNames"/>。無ければ既定）から決め直す。
     /// </summary>
-    public static List<List<LineFonts>> ResolveLines(IEnumerable<LyricsDocument> documents, IReadOnlyList<string> fontNames, string? defaultName, bool continueAcrossLines)
+    public static List<List<LineFonts>> ResolveLines(IEnumerable<LyricsDocument> documents, IReadOnlyList<string> fontNames, string? defaultName, bool continueAcrossLines,
+        IReadOnlyList<string?>? startNames = null)
     {
         var result = new List<List<LineFonts>>();
         var resolver = fontNames.Count > 0 ? new N3FontResolver(fontNames, defaultName, continueAcrossLines) : null;
+        int di = 0;
         foreach (var doc in documents)
         {
+            resolver?.StartDocument(StartName(startNames, di));
+            di++;
             var lines = new List<LineFonts>(doc.Lines.Count);
             foreach (var line in doc.Lines)
             {
@@ -158,10 +186,11 @@ public sealed class N3FontResolver
 
     /// <summary>
     /// 複数の文書（歌詞設定タブ）を順に通したときに、指定したフォント設定が 1 文字以上に適用される行
-    /// （文書の番号と doc.Lines の添字。文書順・行順）。n3proj の書き出しや複数の文書の <see cref="CountUsage(IEnumerable{LyricsDocument}, IReadOnlyList{string}, string?, bool)"/>
-    /// と同じく、前の文書の最後のフォントを次の文書へ引き継ぐ。
+    /// （文書の番号と doc.Lines の添字。文書順・行順）。n3proj の書き出しや複数の文書の <see cref="CountUsage(IEnumerable{LyricsDocument}, IReadOnlyList{string}, string?, bool, IReadOnlyList{string?}?)"/>
+    /// と同じく、文書ごとにその文書の最初のフォントから決め直す。
     /// </summary>
-    public static IReadOnlyList<(int Document, int Line)> LinesUsing(IEnumerable<LyricsDocument> documents, IReadOnlyList<string> fontNames, string? defaultName, bool continueAcrossLines, string fontName)
+    public static IReadOnlyList<(int Document, int Line)> LinesUsing(IEnumerable<LyricsDocument> documents, IReadOnlyList<string> fontNames, string? defaultName, bool continueAcrossLines, string fontName,
+        IReadOnlyList<string?>? startNames = null)
     {
         var result = new List<(int Document, int Line)>();
         int target = -1;
@@ -179,6 +208,7 @@ public sealed class N3FontResolver
         int di = 0;
         foreach (var doc in documents)
         {
+            resolver.StartDocument(StartName(startNames, di));
             for (int li = 0; li < doc.Lines.Count; li++)
             {
                 var line = doc.Lines[li];
@@ -197,4 +227,7 @@ public sealed class N3FontResolver
         }
         return result;
     }
+
+    private static string? StartName(IReadOnlyList<string?>? startNames, int document) =>
+        startNames is not null && document < startNames.Count ? startNames[document] : null;
 }

@@ -97,6 +97,11 @@ public partial class MainViewModel
             {
                 N3ProjSettings.TabLayouts[name] = layout;
             }
+            // 歌詞の文字がみな同じフォント設定なら、タブの最初のフォントにする（ニコカラメーカー3 はタブをまたいで引き継がない。決めていなければ）
+            if (source.FontSetName is { Length: > 0 } font && !N3ProjSettings.TabFontSetNames.ContainsKey(name))
+            {
+                N3ProjSettings.TabFontSetNames[name] = font;
+            }
             opened.Add(name);
         }
         if (opened.Count > 0) SaveProject();

@@ -286,7 +286,11 @@ public sealed partial class MainWindow
         double current = double.IsNaN(PlayerHost.Height) ? PlayerHost.ActualHeight : PlayerHost.Height;
         double cap = PlayerHeightCap();
         double max = double.IsNaN(cap) ? MaxPlayerHeight : cap;
-        PlayerHost.Height = Math.Clamp(current + e.Delta.Translation.Y, MinPlayerHeight, max);
+        double height = Math.Clamp(current + e.Delta.Translation.Y, MinPlayerHeight, max);
+        // 設定の高さも一緒に変える（行リストの大きさが変わると FitPlayerHeight が設定の高さに合わせ直すので、
+        // 変えないとドラッグした高さがすぐ戻される）。設定の保存は離したとき
+        ViewModel.Settings.PlayerHeightPx = height;
+        PlayerHost.Height = height;
     }
 
     private void OnPlayerResizeCompleted(object sender, ManipulationCompletedRoutedEventArgs e)

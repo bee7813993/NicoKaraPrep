@@ -21,6 +21,15 @@ public sealed class N3ProjExportTab
 
     /// <summary>上段の行を長めに表示するか（null = 全体設定に従う）。</summary>
     public bool? TopLong { get; set; }
+
+    /// <summary>
+    /// このタブの最初の行から使うフォント設定名（パート記号が出るまで。null = 既定のフォント設定）。
+    /// ニコカラメーカー3 はタブをまたいでフォントを引き継がないので、タブごとにここから決め直す。
+    /// </summary>
+    public string? StartFontSetName { get; set; }
+
+    /// <summary>このタブの表示時刻の設定（null = 書き出し全体の設定。タブの絵文字・行の画面上の範囲を当てるとき）。</summary>
+    public N3ShowTimeSettings? ShowTime { get; set; }
 }
 
 /// <summary>n3proj 書き出しのオプション。</summary>
@@ -258,7 +267,7 @@ public static class N3ProjWriter
         // ---- 歌詞設定 ----
         var infos = new JsonArray();
         lineCount = 0;
-        // 全タブで 1 つを共有する（前のタブの最後のフォントを次のタブへ引き継ぐ。ニコカラメーカー3 の動作は未確認）
+        // 全タブで 1 つを使い、タブごとにタブの最初のフォントから決め直す（ニコカラメーカー3 はタブをまたいで引き継がない。実データで確認）
         var fontResolver = new N3FontResolver(fontNames.Select(f => f.Name).ToList(), options.DefaultFontSetName, options.ContinueFontAcrossLines);
         var action = ResolveSubtitleAction(baseRoot, options.CharFadeSettings, ver);
         // ページの文字の大きさの増減: 大きさだけを変えたフォント設定を、使うものだけ後ろへ足す（フォントを決める並びには入れない）
@@ -267,6 +276,7 @@ public static class N3ProjWriter
         {
             var src = sources[t];
             var show = TabShowSettings(src.Tab, options);
+            fontResolver.StartDocument(src.Tab.StartFontSetName);
             var layoutResolver = new LayoutResolver(layoutInfos, src.Tab.LayoutName, options.LayoutSelectableBegin, options.LayoutSelectableEnd, warnings, src.Tab.Name);
             var lines = BuildLineInfos(src.Tab.Document, show, options.EmojiEntries, fontResolver, layoutResolver, action, ver, out int count, sizeVariants);
             lineCount += count;
@@ -591,13 +601,14 @@ public static class N3ProjWriter
     }
 
     /// <summary>
-    /// タブの表示時刻の設定（全体の設定の写しに、タブの「上段を長めに」を当てたもの）。
+    /// タブの表示時刻の設定（タブの設定か全体の設定の写しに、タブの「上段を長めに」を当てたもの）。
     /// lrc の書き出し（<see cref="Write"/>）と n3proj の行（<see cref="BuildProjectJson"/>）で同じものを使う。
     /// </summary>
     private static N3ShowTimeSettings TabShowSettings(N3ProjExportTab tab, N3ProjExportOptions options)
     {
-        var show = CloneShowSettings(options.ShowTime);
-        show.TopLong = tab.TopLong ?? options.ShowTime.TopLong;
+        var source = tab.ShowTime ?? options.ShowTime;
+        var show = CloneShowSettings(source);
+        show.TopLong = tab.TopLong ?? source.TopLong;
         return show;
     }
 
@@ -616,6 +627,7 @@ public static class N3ProjWriter
         SingleLinePromoteGapMs = s.SingleLinePromoteGapMs,
         EmojiLeadYield = s.EmojiLeadYield,
         LeadMatcher = s.LeadMatcher,
+        LineSpans = s.LineSpans,
     };
 
     // ------------------------------------------------------------ レイアウト選択（行数）

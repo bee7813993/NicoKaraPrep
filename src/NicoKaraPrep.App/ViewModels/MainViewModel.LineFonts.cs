@@ -2,6 +2,7 @@
 using Microsoft.UI.Xaml.Media;
 using NicoKaraPrep.App.Services;
 using NicoKaraPrep.App.Services.Subtitles;
+using NicoKaraPrep.App.Views;
 using NicoKaraPrep.Core.Formats;
 using NicoKaraPrep.Core.Model;
 using NicoKaraPrep.Core.Validation;
@@ -25,8 +26,19 @@ public partial class MainViewModel
     /// <summary>フォント設定の中身（JSON）ごとの番号（行の配置の使い回しのキーに使う）。</summary>
     private readonly Dictionary<string, int> _fontContentIds = new(StringComparer.Ordinal);
 
-    /// <summary>字幕の見た目で描く共通の材料（中身が同じあいだは同じものを使う）。</summary>
-    private SubtitleContext? _subtitleContext;
+    /// <summary>字幕の見た目で描く共通の材料（タブの絵文字ごと。中身が同じあいだは同じものを使う）。</summary>
+    private readonly Dictionary<string, SubtitleContext> _subtitleContexts = new(StringComparer.Ordinal);
+
+    /// <summary>
+    /// タブの名前 → 行の画面上の範囲（字幕の画面の px。行の添字 → 枠の上端・下端）。<see cref="UpdateLineFonts"/> で字幕のプレビューと同じ並べ方から作り直す。
+    /// 表示時刻の計算とチェックで、前後のページの同じ段の行でもレイアウトで別の場所に出る組を詰めない・知らせないのに使う
+    /// （<see cref="N3ShowTimeSettings.LineSpans"/>。設定 <see cref="AppSettings.N3LayoutAwareRows"/>）。
+    /// </summary>
+    private readonly Dictionary<string, Dictionary<int, (int Top, int Bottom)>> _lineSpans = new(StringComparer.Ordinal);
+
+    /// <summary>表示中のタブの行の画面上の範囲（設定で切っていれば null）。</summary>
+    private IReadOnlyDictionary<int, (int Top, int Bottom)>? CurrentLineSpans() =>
+        Settings.N3LayoutAwareRows ? _lineSpans.GetValueOrDefault(_activeTab.Name) : null;
 
     /// <summary>字幕のプレビューの材料（チェックのたびに作り直す。プレビューを切っていれば null）。</summary>
     public SubtitlePreviewModel? PreviewModel { get; private set; }
@@ -106,7 +118,8 @@ public partial class MainViewModel
         bool merge = N3ProjSettings.MergeFontSets;
         var names = N3ProjWriter.ExportFontNames(baseSets.Select(f => f.Name), export, merge);
         string? def = N3ProjSettings.DefaultFontSetName is { Length: > 0 } d ? d : null;
-        var resolved = N3FontResolver.ResolveLines(tabs.Select(t => t.Document), names, def, continueAcrossLines: true);
+        // タブごとに、タブの最初のフォントから決め直す（ニコカラメーカー3 はタブをまたいでフォントを引き継がない。書き出しと同じ）
+        var resolved = N3FontResolver.ResolveLines(tabs.Select(t => t.Document), names, def, continueAcrossLines: true, GetTabStartFontNames(tabs, names, def));
         var lines = resolved[active];
 
         // 色見本は、書き出しで合わせるフォント設定（曲専用・アプリ共通）を先に使い、指定の無い箇所はベースのものを使う
@@ -159,11 +172,12 @@ public partial class MainViewModel
             return made;
         }
 
-        LineRenderSource Source(LyricsLine line, N3FontResolver.LineFonts fonts, SubtitleSpacing spacing, int delta)
+        // 行の字幕の見た目の材料（絵文字はその行のタブの @Emoji で。表示中のタブは context）
+        LineRenderSource Source(LyricsLine line, N3FontResolver.LineFonts fonts, SubtitleSpacing spacing, int delta, SubtitleContext ctx)
         {
             var unitFonts = fonts.Units.Select(u => FontOf(u, delta).Font).ToArray();
-            string key = $"{context.Key}|{TextEditModeFormat.WriteLyricLine(line)}|{string.Join(",", fonts.Units.Select(u => FontOf(u, delta).Id))}";
-            return new LineRenderSource(line, unitFonts, context, spacing, key);
+            string key = $"{ctx.Key}|{TextEditModeFormat.WriteLyricLine(line)}|{string.Join(",", fonts.Units.Select(u => FontOf(u, delta).Id))}";
+            return new LineRenderSource(line, unitFonts, ctx, spacing, key);
         }
 
         for (int i = 0; i < Lines.Count; i++)
@@ -179,7 +193,7 @@ public partial class MainViewModel
                 line.SetRenderSource(null);
                 continue;
             }
-            line.SetRenderSource(Source(line.Model, fonts, SubtitleSpacing.Default, activeDeltas.GetValueOrDefault(i)));
+            line.SetRenderSource(Source(line.Model, fonts, SubtitleSpacing.Default, activeDeltas.GetValueOrDefault(i), context));
         }
 
         // 字幕のプレビュー（全タブ。書き出しと同じ表示時刻・ページ・レイアウト）と、行リストのレイアウト・横幅の表示
@@ -191,16 +205,20 @@ public partial class MainViewModel
         var widths = new Dictionary<int, LineWidthResult>();
         static SubtitleSpacing SpacingOf(N3LayoutSettings layout) =>
             new((float)layout.LyricsIntervalPx, (float)layout.RubyIntervalPx, (float)layout.LyricsAndRubyIntervalPx, layout.RubyAlignment, layout.AllowBiting);
+        _lineSpans.Clear();
         for (int t = 0; t < tabs.Count; t++)
         {
             var doc = tabs[t].Document;
-            var show = CreateShowTimeSettings(tabs[t].Name);
-            var plans = N3ShowTimePlanner.Plan(doc, show);
-            var deltas = t == active ? activeDeltas : N3PageFontSize.LineDeltas(doc, show.PageMode, show.FixedLineCount);
-            if (plans.Count == 0 && t != active) continue;
-            string? fixedLayout = N3ProjSettings.TabLayouts.GetValueOrDefault(tabs[t].Name) is { Length: > 0 } fl ? fl : null;
-            var resolver = new N3ProjWriter.LayoutResolver(infos, fixedLayout, Nkm3Env?.LayoutSelectableBegin, Nkm3Env?.LayoutSelectableEnd, new List<string>(), tabs[t].Name);
-            var pages = plans.GroupBy(p => p.Value.PageIndex).ToDictionary(g => g.Key, g =>
+            string tabName = tabs[t].Name;
+            var tabContext = t == active ? context : GetSubtitleContext(doc); // 絵文字はタブの @Emoji で描く
+            // ページ・段は行の画面上の範囲によらないので、範囲を使わない計算で先に決め、ページのレイアウトと行の枠から範囲を出す
+            var structureShow = CreateShowTimeSettings(tabName, withSpans: false);
+            var structure = N3ShowTimePlanner.Plan(doc, structureShow);
+            var deltas = t == active ? activeDeltas : N3PageFontSize.LineDeltas(doc, structureShow.PageMode, structureShow.FixedLineCount);
+            if (structure.Count == 0 && t != active) continue;
+            string? fixedLayout = N3ProjSettings.TabLayouts.GetValueOrDefault(tabName) is { Length: > 0 } fl ? fl : null;
+            var resolver = new N3ProjWriter.LayoutResolver(infos, fixedLayout, Nkm3Env?.LayoutSelectableBegin, Nkm3Env?.LayoutSelectableEnd, new List<string>(), tabName);
+            var pages = structure.GroupBy(p => p.Value.PageIndex).ToDictionary(g => g.Key, g =>
             {
                 // ページの中で最初に手動指定のある行のレイアウト（無い名前なら行数から選ぶ。書き出しと同じ）
                 string? manual = g.OrderBy(p => p.Key)
@@ -209,7 +227,9 @@ public partial class MainViewModel
                 int index = manual is not null ? resolver.FindIndex(manual)!.Value : resolver.Resolve(g.Count());
                 return (Count: g.Count(), Rows: g.Max(p => p.Value.Row), Layout: Math.Clamp(index, 0, layouts.Count - 1), Manual: manual is not null);
             });
-            foreach (var (index, plan) in plans.OrderBy(p => p.Key))
+            var items = new List<(int Index, PreviewLine Line)>();
+            var spans = new Dictionary<int, (int Top, int Bottom)>();
+            foreach (var (index, plan) in structure.OrderBy(p => p.Key))
             {
                 var line = doc.Lines[index];
                 var page = pages[plan.PageIndex];
@@ -229,20 +249,34 @@ public partial class MainViewModel
                 if (line.IsEmpty || line.GetDisplayText().Length == 0 || index >= resolved[t].Count) continue;
                 var fonts = resolved[t][index];
                 if (fonts.Runs.Count == 0) continue;
-                var source = Source(line, fonts, SpacingOf(layout), delta);
+                var source = Source(line, fonts, SpacingOf(layout), delta, tabContext);
                 // 1 行のページを上の段へ上げる（PageRowMap）のは、レイアウトにその段があるときだけ（1 行のレイアウト「コーラス1行」などでは下の段のまま。
                 // ニコカラメーカー3 の出力で確認）。行が多いページはレイアウトの行数を超えても積み上げる
                 int maxRow = Math.Max(layout.LineCount, page.Count);
-                // ワイプは書き出しと同じく、表示開始より前になった絵文字の開始を表示開始へ寄せた行で作る
-                // （絵文字の分だけ行の表示を遅らせる規則。規則がオフなら元の行のまま）
-                var wipeLine = show.YieldsEmojiLead ? N3EmojiLead.ClampLine(line, plan.BeginMs, show.LeadMatcher) : line;
-                previewLines.Add(new PreviewLine(
+                var preview = new PreviewLine(
                     source, plan.BeginMs, plan.EndMs, t, plan.PageIndex, Math.Min(plan.Row, maxRow), Math.Min(Math.Max(page.Rows, page.Count), maxRow),
-                    page.Count, layout, N3WipeTimeline.Groups(wipeLine)));
+                    page.Count, layout, Array.Empty<N3WipeTimeline.Group>());
+                var (top, bottom) = SubtitlePreviewView.VerticalSpan(preview, source.GetLayout(), screenHeight);
+                spans[index] = ((int)Math.Floor(top), (int)Math.Ceiling(bottom));
+                items.Add((index, preview));
                 if (t == active)
                 {
                     widths[index] = LineWidthValidator.Evaluate(index, source.GetLayout().Width, screenWidth, layout.HorizontalMarginPx);
                 }
+            }
+            _lineSpans[tabName] = spans;
+
+            // 表示時刻は、行の画面上の範囲を当てて計算する（レイアウトで別の場所に出る前後のページの行は詰めない。設定で切れる）
+            var show = CreateShowTimeSettings(tabName);
+            var plans = show.LineSpans is null ? structure : N3ShowTimePlanner.Plan(doc, show);
+            foreach (var (index, preview) in items)
+            {
+                if (!plans.TryGetValue(index, out var plan)) continue;
+                var line = doc.Lines[index];
+                // ワイプは書き出しと同じく、表示開始より前になった絵文字の開始を表示開始へ寄せた行で作る
+                // （絵文字の分だけ行の表示を遅らせる規則。規則がオフなら元の行のまま）
+                var wipeLine = show.YieldsEmojiLead ? N3EmojiLead.ClampLine(line, plan.BeginMs, show.LeadMatcher) : line;
+                previewLines.Add(preview with { BeginMs = plan.BeginMs, EndMs = plan.EndMs, Wipe = N3WipeTimeline.Groups(wipeLine) });
             }
 
             if (t == active)
@@ -259,7 +293,7 @@ public partial class MainViewModel
                     var layout = line.LayoutName is { Length: > 0 } name && resolver.FindIndex(name) is int li
                         ? layouts[Math.Clamp(li, 0, layouts.Count - 1)]
                         : single;
-                    widths[i] = LineWidthValidator.Evaluate(i, Source(line, fonts, SpacingOf(layout), activeDeltas.GetValueOrDefault(i)).GetLayout().Width, screenWidth, layout.HorizontalMarginPx);
+                    widths[i] = LineWidthValidator.Evaluate(i, Source(line, fonts, SpacingOf(layout), activeDeltas.GetValueOrDefault(i), context).GetLayout().Width, screenWidth, layout.HorizontalMarginPx);
                 }
             }
         }
@@ -333,9 +367,12 @@ public partial class MainViewModel
     }
 
     /// <summary>字幕の見た目で描く共通の材料（絵文字の一覧・画像のフォルダ・既定のフォント設定）。中身が同じなら前と同じものを返す。</summary>
-    public SubtitleContext GetSubtitleContext()
+    public SubtitleContext GetSubtitleContext() => GetSubtitleContext(Document);
+
+    /// <summary>その文書（タブ）の字幕の見た目で描く材料（タブの @Emoji とアプリ共通の絵文字。中身が同じあいだは同じものを使う）。</summary>
+    public SubtitleContext GetSubtitleContext(LyricsDocument doc)
     {
-        var emoji = GetEffectiveEmojiList();
+        var emoji = GetEffectiveEmojiList(doc);
         string? folder = (Tabs.FirstOrDefault(t => t.IsMain)?.FilePath ?? CurrentFilePath) is string path ? Path.GetDirectoryName(path) : null;
         var defaultFont = new N3FontSet
         {
@@ -345,14 +382,16 @@ public partial class MainViewModel
             SizePx = Settings.FontSizePx,
             EdgePx = Settings.EdgeSizePx,
         };
-        var matcher = CreateEmojiMatcher();
+        var matcher = CreateEmojiMatcherFor(doc);
         string key = string.Join("\n", emoji.Select(e => e.ToTagValue()))
             + "|" + string.Join(",", matcher.Strings)
             + "|" + folder
             + "|" + JsonSerializer.Serialize(defaultFont.Detail);
-        if (_subtitleContext is { } current && current.Key == key) return current;
-        _subtitleContext = new SubtitleContext(emoji, matcher, folder, defaultFont, key);
-        return _subtitleContext;
+        if (_subtitleContexts.TryGetValue(key, out var current)) return current;
+        if (_subtitleContexts.Count >= 16) _subtitleContexts.Clear();
+        var made = new SubtitleContext(emoji, matcher, folder, defaultFont, key);
+        _subtitleContexts[key] = made;
+        return made;
     }
 
     /// <summary>フォント設定の中身ごとの番号（同じ中身なら同じ番号）。</summary>

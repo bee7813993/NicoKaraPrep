@@ -21,6 +21,9 @@ public sealed class N3ProjSourceTab
     /// <summary>このタブの歌詞行がみな同じレイアウト設定を使っていれば、その名前（ばらばら・不明なら null）。</summary>
     public string? LayoutName { get; set; }
 
+    /// <summary>このタブの歌詞の文字（絵文字・ルビを除く）がみな同じフォント設定なら、その名前（ばらばら・不明なら null）。</summary>
+    public string? FontSetName { get; set; }
+
     /// <summary>
     /// 歌詞行（Raw）とページ区切り（空行）から組み立てたドキュメント。
     /// ページ区切り・段落区切りの合成行を空行として扱うので、固定行数の行分けでもページ構成が一致する。
@@ -230,6 +233,7 @@ public static class N3ProjImport
         var result = new List<N3ProjSourceTab>();
         if (root["SourceLyricsInfos"] is not JsonArray infos) return result;
         var layoutNames = (root["LyricsLayouts"] as JsonArray)?.Select(l => l?["SettingsName"]?.GetValue<string>()).ToList() ?? new List<string?>();
+        var fontNames = (root["LyricsFonts"] as JsonArray)?.Select(f => f?["SettingsName"]?.GetValue<string>()).ToList() ?? new List<string?>();
 
         foreach (var node in infos)
         {
@@ -245,6 +249,7 @@ public static class N3ProjImport
             bool pendingBreak = false;
             var usedLayouts = new HashSet<int>();
             bool layoutUnknown = false;
+            var usedFonts = new HashSet<int>();
             foreach (var ln in lines)
             {
                 if (ln is not JsonObject l) continue;
@@ -263,6 +268,19 @@ public static class N3ProjImport
                     tab.LayoutNames.Add(null);
                 }
                 pendingBreak = false;
+
+                if (l["LyricsCharInfos"] is JsonArray chars)
+                {
+                    foreach (var c in chars)
+                    {
+                        // 文字（Kind 0）だけ。絵文字（Kind 1）・ルビは見ない
+                        if (c is JsonObject co && (co["Kind"]?.GetValue<int>() ?? 0) == 0 && co["IsRuby"]?.GetValue<bool>() != true
+                            && co["FontIndex"] is JsonValue fv && fv.TryGetValue(out int fontIndex))
+                        {
+                            usedFonts.Add(fontIndex);
+                        }
+                    }
+                }
 
                 string raw = l["Raw"]?.GetValue<string>() ?? "";
                 int begin = l["ShowBeginTime"]?.GetValue<int>() ?? -1;
@@ -284,6 +302,10 @@ public static class N3ProjImport
             if (!layoutUnknown && usedLayouts.Count == 1 && usedLayouts.First() is int only && only >= 0 && only < layoutNames.Count)
             {
                 tab.LayoutName = layoutNames[only] is { Length: > 0 } name ? name : null;
+            }
+            if (usedFonts.Count == 1 && usedFonts.First() is int font && font >= 0 && font < fontNames.Count)
+            {
+                tab.FontSetName = fontNames[font] is { Length: > 0 } fontName ? fontName : null;
             }
             if (tab.LyricLineCount > 0) result.Add(tab);
         }

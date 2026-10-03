@@ -19,7 +19,12 @@ public partial class MainViewModel
     /// 「上段の表示（短め／長め）」の個別指定（n3proj 書き出し設定）を反映する。
     /// 絵文字の分だけ行の表示を遅らせる規則（ニコカラメーカー3 には無い）の対象は、実効の @Emoji とプレースホルダ（＿）。
     /// </summary>
-    public N3ShowTimeSettings CreateShowTimeSettings(string? tabName = null) => new()
+    /// <param name="tabName">タブの名前（そのタブの上段の表示・絵文字・行の画面上の範囲を使う。null = 表示中のタブの絵文字だけ）。</param>
+    /// <param name="withSpans">
+    /// 行の画面上の範囲（<see cref="N3ShowTimeSettings.LineSpans"/>。字幕のプレビューを作ったときのもの）を当てるか。
+    /// 範囲を作るとき（ページ・段だけを決める計算）は false。
+    /// </param>
+    public N3ShowTimeSettings CreateShowTimeSettings(string? tabName = null, bool withSpans = true) => new()
     {
         PageMode = Settings.PageMode,
         FixedLineCount = Settings.FixedLineCount,
@@ -31,8 +36,32 @@ public partial class MainViewModel
         TopLong = tabName is not null && N3ProjSettings.TabTopLong.TryGetValue(tabName, out bool topLong) ? topLong : Settings.N3TopLong,
         AlignFromTop = Settings.CollisionAlignFromTop,
         EmojiLeadYield = Settings.N3EmojiLeadYield,
-        LeadMatcher = CreateEmojiMatcher(),
+        LeadMatcher = CreateEmojiMatcherFor(DocumentOfTab(tabName)),
+        LineSpans = withSpans && tabName is not null && Settings.N3LayoutAwareRows ? _lineSpans.GetValueOrDefault(tabName) : null,
     };
+
+    /// <summary>名前のタブの歌詞（表示中のタブ・名前が無いときは表示中の歌詞）。</summary>
+    private LyricsDocument DocumentOfTab(string? tabName) =>
+        tabName is null || tabName == _activeTab.Name ? Document : Tabs.FirstOrDefault(t => t.Name == tabName)?.Document ?? Document;
+
+    /// <summary>
+    /// タブごとの最初のフォント設定名（書き出しと同じ決め方。曲の設定 <see cref="N3ProjSongSettings.TabFontSetNames"/> に
+    /// 指定が無ければ自動: メインのタブは既定のフォント設定、2 つ目以降は名前に「コーラス」を含むもの。<see cref="N3FontResolver.AutoStartName"/>）。
+    /// </summary>
+    public List<string?> GetTabStartFontNames(IReadOnlyList<TabState> tabs, IReadOnlyList<string> names, string? defaultName, N3ProjSongSettings? settings = null)
+    {
+        var tabFonts = (settings ?? N3ProjSettings).TabFontSetNames;
+        return tabs.Select(t => tabFonts.GetValueOrDefault(t.Name) is { Length: > 0 } n && names.Contains(n)
+            ? n
+            : N3FontResolver.AutoStartName(t.IsMain, names, defaultName)).ToList();
+    }
+
+    /// <summary>タブごとの最初のフォント設定名（今の書き出し設定のフォント設定の並びで）。</summary>
+    public List<string?> GetTabStartFontNames(IReadOnlyList<TabState> tabs)
+    {
+        var (names, def) = GetExportFontNames();
+        return GetTabStartFontNames(tabs, names, def);
+    }
 
     /// <summary>表示中のドキュメントの行ごとの表示時刻（自動計算＋手動指定。ms）。</summary>
     public Dictionary<int, N3LinePlan> PlanShowTimes() =>
@@ -345,9 +374,31 @@ public partial class MainViewModel
             if (t.CopyFilePath is string cp) openFiles.Add(Path.GetFullPath(cp));
         }
 
-        var tabs = new List<N3ProjExportTab>();
-        foreach (var tab in GetN3ProjExportTabs())
+        // 行の画面上の範囲（レイアウトで別の場所に出る行を詰めない）とタブの最初のフォントは、書き出す設定（ベース・タブのレイアウトなど）で決める。
+        // 書き出せなかったときは元の設定に戻す
+        var previousSettings = N3ProjSettings;
+        N3ProjSettings = settings;
+        try
         {
+            return WriteN3Proj(projectPath, settings, dir, baseName, openFiles);
+        }
+        catch
+        {
+            N3ProjSettings = previousSettings;
+            UpdateLineFonts();
+            throw;
+        }
+    }
+
+    private N3ProjExportResult WriteN3Proj(string projectPath, N3ProjSongSettings settings, string dir, string baseName, HashSet<string> openFiles)
+    {
+        UpdateLineFonts(); // 行の画面上の範囲を、書き出す設定と今の歌詞で作り直す
+        var exportTabs = GetN3ProjExportTabs();
+        var startFonts = GetTabStartFontNames(exportTabs);
+        var tabs = new List<N3ProjExportTab>();
+        for (int k = 0; k < exportTabs.Count; k++)
+        {
+            var tab = exportTabs[k];
             string lrcName = tab.IsMain ? baseName + ".lrc" : $"{baseName}_{SafeFileName(tab.Name)}.lrc";
             string lrcPath = Path.Combine(dir, lrcName);
             if (openFiles.Contains(lrcPath))
@@ -361,6 +412,8 @@ public partial class MainViewModel
                 LyricsPath = lrcPath,
                 LayoutName = settings.TabLayouts.GetValueOrDefault(tab.Name) is { Length: > 0 } layout ? layout : null,
                 TopLong = settings.TabTopLong.TryGetValue(tab.Name, out bool topLong) ? topLong : null,
+                StartFontSetName = startFonts[k],
+                ShowTime = CreateShowTimeSettings(tab.Name), // タブの絵文字・行の画面上の範囲
             });
         }
         if (tabs.Count == 0) throw new InvalidOperationException("書き出す歌詞がありません");

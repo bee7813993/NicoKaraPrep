@@ -1135,6 +1135,14 @@ public partial class MainViewModel : ObservableObject
     /// 実効絵文字リスト（＋追加の文字列）から出現マッチャーを作る。
     /// プレースホルダ文字（＿）も絵文字と同じタグ付け・除外の対象に含める。
     /// </summary>
+    /// <summary>その文書（タブ）の @Emoji とアプリ共通の絵文字・プレースホルダ（＿）の matcher（表示時刻の計算をタブごとにするとき）。</summary>
+    public EmojiMatcher CreateEmojiMatcherFor(LyricsDocument doc)
+    {
+        var strings = GetEffectiveEmojiList(doc).Select(e => e.ReplaceChar);
+        if (!string.IsNullOrEmpty(Settings.PlaceholderChar)) strings = strings.Append(Settings.PlaceholderChar);
+        return new EmojiMatcher(strings);
+    }
+
     public EmojiMatcher CreateEmojiMatcher(string? extra = null)
     {
         var strings = GetEffectiveEmojiList().Select(e => e.ReplaceChar);
@@ -1753,11 +1761,14 @@ public partial class MainViewModel : ObservableObject
     // ------------------------------------------------------------ 検証
 
     /// <summary>グローバル＋曲ごと上書きをマージした実効 @Emoji リスト。</summary>
-    public List<EmojiEntry> GetEffectiveEmojiList()
+    public List<EmojiEntry> GetEffectiveEmojiList() => GetEffectiveEmojiList(Document);
+
+    /// <summary>その文書（タブ）の @Emoji と、アプリ共通の絵文字（同じ置き換え文字列は文書のものを使う）。</summary>
+    public List<EmojiEntry> GetEffectiveEmojiList(LyricsDocument doc)
     {
         var result = new List<EmojiEntry>();
-        var songChars = new HashSet<string>(Document.EmojiEntries.Select(e => e.ReplaceChar));
-        result.AddRange(Document.EmojiEntries);
+        var songChars = new HashSet<string>(doc.EmojiEntries.Select(e => e.ReplaceChar));
+        result.AddRange(doc.EmojiEntries);
         result.AddRange(Settings.GlobalEmojiList.Where(e => !songChars.Contains(e.ReplaceChar)));
         return result;
     }
@@ -1776,11 +1787,16 @@ public partial class MainViewModel : ObservableObject
         Issues.Clear();
         foreach (var line in Lines) line.ResetIssueMarks();
 
+        // 0) 各行に当たるフォント設定・字幕の見た目・プレビュー・横幅と、行の画面上の範囲（1)・1') はこの範囲を使い、
+        //    レイアウトで別の場所に出る前後のページの行を組にしない）
+        UpdateLineFonts();
+
         // 1) ページ間行衝突（最重要）
         // n3proj 由来の実表示区間があれば推定値の代わりに使う
         var collisionSettings = Settings.ToCollisionSettings(exclude);
         collisionSettings.LineDisplayCs = BuildLineDisplayOverrides(exclude);
         collisionSettings.LineShowBeginCs = BuildManualShowBegins();
+        collisionSettings.LineSpans = CurrentLineSpans();
         var collisions = PageRowCollisionValidator.Validate(Document, collisionSettings);
         foreach (var issue in collisions) AddPairIssue(issue);
 
@@ -1796,9 +1812,7 @@ public partial class MainViewModel : ObservableObject
             AddPairIssue(issue);
         }
 
-        // 2) 各行に当たるフォント設定・字幕の見た目・プレビュー・横幅（横幅は字幕のプレビューと同じ並べ方で測り、
-        //    ページのレイアウト設定の左右余白で判定する）
-        UpdateLineFonts();
+        // 2) 横幅（0) で、字幕のプレビューと同じ並べ方で測り、ページのレイアウト設定の左右余白で判定したもの）
         var widthResults = _lineWidths.Values.OrderBy(r => r.LineIndex).ToList();
         foreach (var issue in LineWidthValidator.ToIssues(widthResults))
         {

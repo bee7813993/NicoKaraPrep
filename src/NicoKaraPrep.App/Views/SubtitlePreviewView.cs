@@ -118,7 +118,7 @@ public sealed class SubtitlePreviewView : Grid
                 if (layout.Tokens.Count == 0) continue;
                 float alpha = CrossFadeAlpha(line, visible, t);
                 if (alpha <= 0f) continue;
-                var (x, baseline) = Position(line, layout, W, H);
+                var (x, baseline) = Position(line, layout, W, H, model.Pages.GetValueOrDefault((line.Tab, line.Page)));
                 var transform = Matrix3x2.CreateTranslation(x, baseline) * Matrix3x2.CreateScale(scale) * Matrix3x2.CreateTranslation(ox, oy);
                 if (alpha >= 1f)
                 {
@@ -167,10 +167,26 @@ public sealed class SubtitlePreviewView : Grid
 
     /// <summary>
     /// 行の左端の x と本文のベースラインの y（字幕の画面の px）。左右は行ごとの左右レイアウトの位置に置き、
-    /// スマート水平配置は、画面の中央に届かない短い行にだけ当てる（ニコカラメーカー3 のヘルプ:「歌詞 1 行の文字が短くて寄せすぎるとバランスが悪い場合に、
-    /// 自動的に中央寄りに配置する」。中心位置揃えは左寄せの行が中央で終わり右寄せの行が中央から始まる、左右余白揃えは中央に寄せる。近似）。
+    /// スマート水平配置は、ページの行を組にして寄せる（<see cref="SmartX"/>。<paramref name="page"/> はそのページの行）。
     /// </summary>
-    internal static (float X, float Baseline) Position(PreviewLine line, SubtitleLineLayout layout, float W, float H)
+    internal static (float X, float Baseline) Position(PreviewLine line, SubtitleLineLayout layout, float W, float H, IReadOnlyList<PreviewLine>? page = null)
+    {
+        float baseline = Baseline(line, layout, H);
+        return (SmartX(line, layout, W, page), baseline);
+    }
+
+    /// <summary>
+    /// 行の枠の上端・下端（字幕の画面の px）。前後のページの同じ段の行が画面の同じ場所に出るか
+    /// （表示時刻の計算・チェック。レイアウトで位置が違う行は組にしない）を決めるのに使う。
+    /// </summary>
+    internal static (float Top, float Bottom) VerticalSpan(PreviewLine line, SubtitleLineLayout layout, float H)
+    {
+        float baseline = Baseline(line, layout, H);
+        return (baseline + layout.BoxTop, baseline + layout.BoxBottom);
+    }
+
+    /// <summary>本文のベースラインの y（字幕の画面の px）。</summary>
+    private static float Baseline(PreviewLine line, SubtitleLineLayout layout, float H)
     {
         var L = line.Layout;
         // 上下は、文字の枠に縁の幅の半分ずつを足した枠で並べる（ニコカラメーカー3 の出力画像の実測: 行の間隔 = 枠の高さ + 行間、
@@ -203,30 +219,53 @@ public sealed class SubtitlePreviewView : Grid
                 break;
             }
         }
+        return baseline;
+    }
 
-        // 左右は行の送りの範囲（文字の左右のすき間を含む）で余白にそろえる（ニコカラメーカー3 の出力画像の実測）
+    /// <summary>
+    /// 行の左端の x（字幕の画面の px）。左右は行の送りの範囲（文字の左右のすき間を含む）で余白にそろえる（ニコカラメーカー3 の出力画像の実測）。
+    /// スマート水平配置は、ページに左寄せの行と右寄せの行の両方がある（左右に分かれる）ときだけ短い行を中央へ寄せる
+    /// （ニコカラメーカー3 の出力画像の実測。Dou-Da？ DOING！・ジェットスターター、左右余白 50 と 100 で確認。全部の段が左寄せのページは寄せない）:
+    /// 左右余白揃えは、左寄せの行の左の余白と右寄せの行の右の余白を同じ幅にして、2 つの行が中央で本文の文字 1 つ分重なるところまで寄せる
+    /// （余白 = max(左右余白, (画面の幅 + 文字の大きさ − 左寄せの行の幅 − 右寄せの行の幅) / 2)。長い行があれば左右余白のまま）。
+    /// 中心位置揃えは、左寄せの短い行が中央より文字の半分右で終わり、右寄せの短い行が中央より文字の半分左から始まる（ヘルプの説明から。実測は無い）。
+    /// 1 行だけのページは、左右余白揃えなら中央に置く（Darling Wanted の最後のページ・アイドゥーミー！・Dou-Da？ DOING！の 1 行のページで確認）。
+    /// </summary>
+    private static float SmartX(PreviewLine line, SubtitleLineLayout layout, float W, IReadOnlyList<PreviewLine>? page)
+    {
+        var L = line.Layout;
         float w = layout.Width;
         float hm = (float)L.HorizontalMarginPx;
-        int align = L.AlignmentForRow(line.Row, rows);
+        int align = L.AlignmentForRow(line.Row, Math.Max(line.RowsInPage, line.Row));
         float x = align switch
         {
             0 => hm,
             2 => W - hm - w,
             _ => (W - w) / 2,
         };
-        // 短い行: 左寄せで右端が画面の中央に届かない・右寄せで左端が中央より右
-        bool shortLine = (align == 0 && hm + w < W / 2) || (align == 2 && W - hm - w > W / 2);
-        if (shortLine && L.SmartHorizon == 1)
+        if (align == 1 || L.SmartHorizon is not (1 or 2)) return x;
+        if (line.LinesInPage == 1) return L.SmartHorizon == 2 ? (W - w) / 2 : x;
+        if (page is null) return x;
+
+        // ページの左寄せの行・右寄せの行のうち、いちばん長い行（幅と本文の文字の大きさ）
+        (float Width, float Size)? left = null, right = null;
+        foreach (var p in page)
         {
-            x = align == 0 ? W / 2 - w : W / 2; // 中心位置揃え: 中央で終わる（左寄せ）・中央から始まる（右寄せ）
+            var pl = p.Source.GetLayout();
+            if (pl.Tokens.Count == 0) continue;
+            int a = p.Layout.AlignmentForRow(p.Row, Math.Max(p.RowsInPage, p.Row));
+            if (a == 0 && (left is null || pl.Width > left.Value.Width)) left = (pl.Width, pl.MainSize);
+            if (a == 2 && (right is null || pl.Width > right.Value.Width)) right = (pl.Width, pl.MainSize);
         }
-        else if (L.SmartHorizon == 2 && (shortLine || (line.LinesInPage == 1 && align != 1)))
+        if (left is not { } l || right is not { } r) return x; // 左右に分かれていなければ寄せない
+        float overlap = (l.Size + r.Size) / 2;
+        if (L.SmartHorizon == 2)
         {
-            // 左右余白揃え: 左右の余白を等しく（中央に寄せる）。1 行だけのページは、長い行でも中央に置く
-            // （ニコカラメーカー3 の出力で確認: Darling Wanted の最後のページ・アイドゥーミー！の 1 行のページ）
-            x = (W - w) / 2;
+            float m = Math.Max(hm, (W + overlap - l.Width - r.Width) / 2);
+            return align == 0 ? m : W - m - w;
         }
-        return (x, baseline);
+        float half = overlap / 2;
+        return align == 0 ? Math.Max(hm, W / 2 + half - w) : Math.Min(W - hm - w, W / 2 - half);
     }
 
     /// <summary>時刻 <paramref name="cs"/>（10ms 単位）にワイプ済みの横の範囲（行の座標）。</summary>

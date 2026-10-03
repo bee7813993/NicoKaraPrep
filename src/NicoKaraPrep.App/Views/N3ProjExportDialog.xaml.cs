@@ -30,6 +30,15 @@ public partial class N3TabRow : ObservableObject
     /// <summary>0 = 全体設定に従う / 1 = 上段を短めに / 2 = 上段を長めに。</summary>
     [ObservableProperty]
     private int topLongIndex;
+
+    /// <summary>最初のフォントの選択肢（先頭は自動。自動で決まる名前を添える）。</summary>
+    public ObservableCollection<string> FontChoices { get; set; } = new();
+
+    /// <summary>自動の項目の表示（「（自動: （コーラス））」など）。</summary>
+    public string AutoFont { get; set; } = "（自動）";
+
+    [ObservableProperty]
+    private string fontChoice = "";
 }
 
 public sealed partial class N3ProjExportDialog : ContentDialog
@@ -49,9 +58,18 @@ public sealed partial class N3ProjExportDialog : ContentDialog
         _vm = vm;
         var current = vm.N3ProjSettings;
 
-        foreach (var tab in vm.GetN3ProjExportTabs())
+        // タブの最初のフォント: 選べるのは書き出しのフォント設定の名前。自動の項目には、指定が無いときに決まる名前を添える
+        var (fontNames, defaultFont) = vm.GetExportFontNames();
+        var names = fontNames.Where(n => n.Length > 0).Distinct().ToList();
+        var exportTabs = vm.GetN3ProjExportTabs();
+        var autoStarts = vm.GetTabStartFontNames(exportTabs, fontNames, defaultFont, new N3ProjSongSettings());
+        int k = 0;
+        foreach (var tab in exportTabs)
         {
             int count = tab.Document.Lines.Count(l => !l.IsEmpty);
+            string autoFont = $"（自動: {autoStarts[k++] ?? defaultFont ?? fontNames.FirstOrDefault() ?? "先頭のフォント設定"}）";
+            var fontChoices = new ObservableCollection<string> { autoFont };
+            foreach (string n in names) fontChoices.Add(n);
             Rows.Add(new N3TabRow
             {
                 Name = tab.Name,
@@ -60,6 +78,9 @@ public sealed partial class N3ProjExportDialog : ContentDialog
                 LayoutChoices = _layoutChoices,
                 LayoutChoice = current.TabLayouts.GetValueOrDefault(tab.Name) is { Length: > 0 } l ? l : N3TabRow.AutoLayout,
                 TopLongIndex = current.TabTopLong.TryGetValue(tab.Name, out bool tl) ? (tl ? 2 : 1) : 0,
+                FontChoices = fontChoices,
+                AutoFont = autoFont,
+                FontChoice = current.TabFontSetNames.GetValueOrDefault(tab.Name) is { Length: > 0 } f && names.Contains(f) ? f : autoFont,
             });
         }
 
@@ -182,6 +203,10 @@ public sealed partial class N3ProjExportDialog : ContentDialog
             if (row.TopLongIndex is 1 or 2)
             {
                 result.TabTopLong[row.Name] = row.TopLongIndex == 2;
+            }
+            if (row.FontChoice is { Length: > 0 } font && font != row.AutoFont)
+            {
+                result.TabFontSetNames[row.Name] = font;
             }
         }
         Result = result;

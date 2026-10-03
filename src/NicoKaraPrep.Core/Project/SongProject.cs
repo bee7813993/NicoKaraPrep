@@ -102,6 +102,12 @@ public sealed class N3ProjSongSettings
     /// <summary>タブ名 → 上段の行を長めに表示するか（ニコカラメーカーの TopLong 相当）。</summary>
     public Dictionary<string, bool> TabTopLong { get; set; } = new();
 
+    /// <summary>
+    /// タブ名 → タブの最初の行から使うフォント設定名（パート記号が出るまで。空・無し = 自動: メインのタブは既定のフォント設定、
+    /// 2 つ目以降のタブは名前に「コーラス」を含むフォント設定）。ニコカラメーカー3 はタブをまたいでフォントを引き継がない。
+    /// </summary>
+    public Dictionary<string, string> TabFontSetNames { get; set; } = new();
+
     /// <summary>行の既定フォント設定名（パート記号が現れるまで適用）。空 = 先頭の設定。</summary>
     public string DefaultFontSetName { get; set; } = "";
 

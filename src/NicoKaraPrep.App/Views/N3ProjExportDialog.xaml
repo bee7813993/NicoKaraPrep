@@ -50,30 +50,36 @@
             <TextBlock Text="歌詞設定タブ" Style="{ThemeResource BodyStrongTextBlockStyle}" Margin="0,6,0,0" />
             <Grid ColumnSpacing="6" Padding="4,0">
                 <Grid.ColumnDefinitions>
-                    <ColumnDefinition Width="160" />
-                    <ColumnDefinition Width="60" />
+                    <ColumnDefinition Width="140" />
+                    <ColumnDefinition Width="56" />
                     <ColumnDefinition Width="*" />
-                    <ColumnDefinition Width="170" />
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="150" />
                 </Grid.ColumnDefinitions>
                 <TextBlock Text="タブ（歌詞ファイル）" FontSize="12" />
                 <TextBlock Grid.Column="1" Text="行数" FontSize="12" />
                 <TextBlock Grid.Column="2" Text="レイアウト" FontSize="12" />
-                <TextBlock Grid.Column="3" Text="表示時刻の調整" FontSize="12" />
+                <TextBlock Grid.Column="3" Text="最初のフォント" FontSize="12"
+                           ToolTipService.ToolTip="タブの最初の行から、パート記号が出るまで使うフォント設定。ニコカラメーカー3 はタブをまたいでフォントを引き継がないので、タブごとに決めます（自動: メインのタブは既定のフォント設定、2 つ目以降は名前に「コーラス」を含むもの）" />
+                <TextBlock Grid.Column="4" Text="表示時刻の調整" FontSize="12" />
             </Grid>
             <ItemsControl x:Name="TabList" ItemsSource="{x:Bind Rows}">
                 <ItemsControl.ItemTemplate>
                     <DataTemplate x:DataType="local:N3TabRow">
                         <Grid ColumnSpacing="6" Padding="4,2">
                             <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="160" />
-                                <ColumnDefinition Width="60" />
+                                <ColumnDefinition Width="140" />
+                                <ColumnDefinition Width="56" />
                                 <ColumnDefinition Width="*" />
-                                <ColumnDefinition Width="170" />
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="150" />
                             </Grid.ColumnDefinitions>
                             <TextBlock Text="{x:Bind Name}" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" ToolTipService.ToolTip="{x:Bind FileName}" />
                             <TextBlock Grid.Column="1" Text="{x:Bind LineCountText}" VerticalAlignment="Center" Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
                             <ComboBox Grid.Column="2" ItemsSource="{x:Bind LayoutChoices}" SelectedItem="{x:Bind LayoutChoice, Mode=TwoWay}" HorizontalAlignment="Stretch" />
-                            <ComboBox Grid.Column="3" SelectedIndex="{x:Bind TopLongIndex, Mode=TwoWay}" HorizontalAlignment="Stretch">
+                            <ComboBox Grid.Column="3" ItemsSource="{x:Bind FontChoices}" SelectedItem="{x:Bind FontChoice, Mode=TwoWay}" HorizontalAlignment="Stretch"
+                                      AutomationProperties.Name="最初のフォント" />
+                            <ComboBox Grid.Column="4" SelectedIndex="{x:Bind TopLongIndex, Mode=TwoWay}" HorizontalAlignment="Stretch">
                                 <ComboBoxItem Content="全体設定に従う" />
                                 <ComboBoxItem Content="上段を短めに" />
                                 <ComboBoxItem Content="上段を長めに" />

@@ -242,6 +242,11 @@
                           ToolTipService.ToolTip="絵文字の表示秒数は、ワイプ前の表示時間まで縮めます（表示秒数がそれより短い絵文字は縮めません）。それでも重なるときは、前の行のワイプ後を削ります。前の行のワイプ終了から歌い出しまでがそれより短いときだけ、前の行をワイプの最後まで見せるため、さらに縮めます">
                     <TextBlock TextWrapping="Wrap" Text="前のページの同じ段と重なるときは、絵文字の分だけ行の表示を遅らせる（ニコカラメーカー3 には無い機能）" />
                 </CheckBox>
+                <CheckBox x:Name="StLayoutAwareCheck" Click="OnShowTimeCheckClick" MinWidth="0"
+                          AutomationProperties.Name="レイアウトで画面の上下の位置が違う行は、前後のページの同じ段でも重ならないものとして扱う"
+                          ToolTipService.ToolTip="字幕のプレビューで上下に重ならない行（上寄せ 5 行のページの次の、下寄せ 2 行のページなど）は、表示時刻を詰めず、チェックのページ衝突・表示時刻でも知らせません。ニコカラメーカー3 は段（下から何行目）だけで組にするので、外すと同じ計算になります">
+                    <TextBlock TextWrapping="Wrap" Text="レイアウトで画面の上下の位置が違う行は、前後のページの同じ段でも重ならないものとして扱う（ニコカラメーカー3 には無い機能）" />
+                </CheckBox>
                 <!-- 値を添えると長くなるので、パネルの幅で折り返す（切れないように） -->
                 <Button x:Name="StImportNkm3Button" FontSize="12" Padding="8,3" HorizontalAlignment="Stretch" HorizontalContentAlignment="Left" Click="OnStImportNkm3Click" Visibility="Collapsed">
                     <TextBlock x:Name="StImportNkm3Text" Text="ニコカラメーカーの設定値を取り込む" TextWrapping="Wrap" />

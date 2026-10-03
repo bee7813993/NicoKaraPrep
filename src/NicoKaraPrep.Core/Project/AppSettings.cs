@@ -106,6 +106,13 @@ public sealed class AppSettings
     public bool N3EmojiLeadYield { get; set; } = true;
 
     /// <summary>
+    /// 前後のページの同じ段の行でも、レイアウトで画面の上下の位置が違えば（字幕のプレビューで重ならなければ）、重なるものとして扱わない
+    /// （表示時刻の計算・ページ衝突と表示時刻のチェック。ニコカラメーカー3 には無い NicoKaraPrep の機能。
+    /// ニコカラメーカー3 は段だけで組にするので、上寄せ 5 行のページの次の下寄せ 2 行のページなども重なるとみなす）。
+    /// </summary>
+    public bool N3LayoutAwareRows { get; set; } = true;
+
+    /// <summary>
     /// 歌詞ファイルを開いたとき、同じフォルダに n3proj が 1 つだけあれば
     /// 「字幕フォントと画面サイズ」「実際の表示区間」を自動で読み込む。
     /// </summary>
@@ -296,6 +303,7 @@ public sealed class AppSettings
         N3TopLong = other.N3TopLong;
         N3OverlapSeconds = other.N3OverlapSeconds;
         N3EmojiLeadYield = other.N3EmojiLeadYield;
+        N3LayoutAwareRows = other.N3LayoutAwareRows;
         // N3FontSets（ニコカラメーカー3 のフォント設定）とその階層 N3FontHierarchy・配色パターンはテンプレートとは独立したライブラリなので取り込まない
         // （テンプレートの適用でライブラリが置き換わらないように。古いテンプレートに入っていても無視する）
     }

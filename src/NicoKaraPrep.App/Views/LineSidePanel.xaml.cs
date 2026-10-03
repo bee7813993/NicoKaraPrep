@@ -448,6 +448,7 @@ public sealed partial class LineSidePanel : UserControl
             StOverlapBox.Value = s.N3OverlapSeconds;
             StTopLongCheck.IsChecked = s.N3TopLong;
             StEmojiYieldCheck.IsChecked = s.N3EmojiLeadYield;
+            StLayoutAwareCheck.IsChecked = s.N3LayoutAwareRows;
             if (_vm.Nkm3Env is { PreTimeMs: not null } env)
             {
                 StImportNkm3Button.Visibility = Visibility.Visible;
@@ -501,6 +502,7 @@ public sealed partial class LineSidePanel : UserControl
         var s = _vm.Settings;
         if (ReferenceEquals(sender, StTopLongCheck)) s.N3TopLong = StTopLongCheck.IsChecked == true;
         else if (ReferenceEquals(sender, StEmojiYieldCheck)) s.N3EmojiLeadYield = StEmojiYieldCheck.IsChecked == true;
+        else if (ReferenceEquals(sender, StLayoutAwareCheck)) s.N3LayoutAwareRows = StLayoutAwareCheck.IsChecked == true;
         s.Save();
         ShowTimeSettingsChanged?.Invoke(this, EventArgs.Empty);
     }
