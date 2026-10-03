@@ -451,7 +451,7 @@ public sealed partial class LineSidePanel : UserControl
             if (_vm.Nkm3Env is { PreTimeMs: not null } env)
             {
                 StImportNkm3Button.Visibility = Visibility.Visible;
-                StImportNkm3Button.Content = $"ニコカラメーカーの設定値を取り込む（{env.PreTimeMs / 1000.0:0.##} / {env.PostTimeMs / 1000.0:0.##} / {env.IntervalMs / 1000.0:0.##} 秒）";
+                StImportNkm3Text.Text = $"ニコカラメーカーの設定値を取り込む（ワイプ前 {env.PreTimeMs / 1000.0:0.##} 秒・ワイプ後 {env.PostTimeMs / 1000.0:0.##} 秒・表示間隔 {env.IntervalMs / 1000.0:0.##} 秒）";
             }
         }
         finally

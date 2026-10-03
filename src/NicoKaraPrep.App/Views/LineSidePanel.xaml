@@ -242,7 +242,10 @@
                           ToolTipService.ToolTip="絵文字の表示秒数は、ワイプ前の表示時間まで縮めます（表示秒数がそれより短い絵文字は縮めません）。それでも重なるときは、前の行のワイプ後を削ります。前の行のワイプ終了から歌い出しまでがそれより短いときだけ、前の行をワイプの最後まで見せるため、さらに縮めます">
                     <TextBlock TextWrapping="Wrap" Text="前のページの同じ段と重なるときは、絵文字の分だけ行の表示を遅らせる（ニコカラメーカー3 には無い機能）" />
                 </CheckBox>
-                <Button x:Name="StImportNkm3Button" Content="ニコカラメーカーの設定値を取り込む" FontSize="12" Padding="8,3" Click="OnStImportNkm3Click" Visibility="Collapsed" />
+                <!-- 値を添えると長くなるので、パネルの幅で折り返す（切れないように） -->
+                <Button x:Name="StImportNkm3Button" FontSize="12" Padding="8,3" HorizontalAlignment="Stretch" HorizontalContentAlignment="Left" Click="OnStImportNkm3Click" Visibility="Collapsed">
+                    <TextBlock x:Name="StImportNkm3Text" Text="ニコカラメーカーの設定値を取り込む" TextWrapping="Wrap" />
+                </Button>
 
                 <Button x:Name="RunAutoShowTimeButton" Content="自動調整を実行" Style="{ThemeResource AccentButtonStyle}" HorizontalAlignment="Stretch" Margin="0,4,0,0"
                         Click="OnRunAutoShowTimeClick" ToolTipService.ToolTip="今のパラメーターで、全タブの行の表示時刻を決め直します（元に戻すで、歌詞設定タブごとに戻せます）" />
