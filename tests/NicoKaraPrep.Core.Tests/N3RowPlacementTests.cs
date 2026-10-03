@@ -17,7 +17,13 @@ public class N3RowPlacementTests
     private static N3ShowTimeSettings Current() => new() { LeadMs = 1500, TailMs = 800, IntervalMs = 300 };
 
     /// <summary>前のページ（0・1 行目）は画面の上の方、次のページ（3・4 行目）は下の方に出る（上下に重ならない）。</summary>
-    private static Dictionary<int, (int Top, int Bottom)> Apart() => new() { [0] = (100, 200), [1] = (250, 350), [3] = (800, 900), [4] = (950, 1050) };
+    private static Dictionary<int, N3LineBounds> Apart() => new()
+    {
+        [0] = Row(100, 200), [1] = Row(250, 350), [3] = Row(800, 900), [4] = Row(950, 1050),
+    };
+
+    /// <summary>画面の横いっぱい（50〜1870）の行の四角。</summary>
+    private static N3LineBounds Row(int top, int bottom) => new(50, top, 1870, bottom);
 
     /// <summary>
     /// 2 行のページ 2 枚。上の段（0 → 3 行目）は、前の行の表示終了（12000+800）が次の行の表示開始（12500−1500）より後、
@@ -31,14 +37,21 @@ public class N3RowPlacementTests
         "[00:13:00]き[00:13:50]");
 
     [Fact]
-    public void 範囲が分からなければ同じ場所_上下に重なれば同じ場所()
+    public void 四角が分からなければ同じ場所_左右にも上下にも重なれば同じ場所()
     {
-        var spans = new Dictionary<int, (int Top, int Bottom)> { [0] = (0, 100), [1] = (100, 200), [2] = (50, 150) };
+        var bounds = new Dictionary<int, N3LineBounds>
+        {
+            [0] = Row(0, 100), [1] = Row(100, 200), [2] = Row(50, 150),
+            [3] = new(50, 0, 700, 100),    // 左寄せの短い行
+            [4] = new(1200, 0, 1870, 100), // 同じ高さの右寄せの短い行（左右に離れている）
+        };
         Assert.True(N3RowPlacement.SamePlace(null, 0, 1));
-        Assert.True(N3RowPlacement.SamePlace(spans, 0, 9));
-        Assert.False(N3RowPlacement.SamePlace(spans, 0, 1)); // 接するだけなら重ならない
-        Assert.True(N3RowPlacement.SamePlace(spans, 0, 2));
-        Assert.True(N3RowPlacement.SamePlace(spans, 2, 1));
+        Assert.True(N3RowPlacement.SamePlace(bounds, 0, 9));
+        Assert.False(N3RowPlacement.SamePlace(bounds, 0, 1)); // 接するだけなら重ならない
+        Assert.True(N3RowPlacement.SamePlace(bounds, 0, 2));
+        Assert.True(N3RowPlacement.SamePlace(bounds, 2, 1));
+        Assert.False(N3RowPlacement.SamePlace(bounds, 3, 4)); // 上下は重なるが左右に離れている（左寄せ 5 行と右寄せ 5 行のページ）
+        Assert.True(N3RowPlacement.SamePlace(bounds, 0, 4));
     }
 
     [Fact]
@@ -49,7 +62,7 @@ public class N3RowPlacementTests
         Assert.True(same[0].Adjusted && same[3].Adjusted);
 
         var apart = Current();
-        apart.LineSpans = Apart();
+        apart.LineBounds = Apart();
         var plans = N3ShowTimePlanner.Plan(doc, apart);
         // ページの歌い出しの 1.5 秒前〜行の歌い終わりの 0.8 秒後のまま
         Assert.Equal((8500, 12800), (plans[0].BeginMs, plans[0].EndMs));
@@ -60,7 +73,7 @@ public class N3RowPlacementTests
 
         // 上の段どうしだけ上下に重なる（同じ場所）なら、その組は今までどおり詰める
         var overlap = Current();
-        overlap.LineSpans = new Dictionary<int, (int, int)> { [0] = (100, 200), [1] = (250, 350), [3] = (150, 250), [4] = (950, 1050) };
+        overlap.LineBounds = new Dictionary<int, N3LineBounds> { [0] = Row(100, 200), [1] = Row(250, 350), [3] = Row(150, 250), [4] = Row(950, 1050) };
         var o = N3ShowTimePlanner.Plan(doc, overlap);
         Assert.Equal((same[0].EndMs, same[3].BeginMs), (o[0].EndMs, o[3].BeginMs));
         Assert.Equal((11800, 11000), (o[1].EndMs, o[4].BeginMs));
@@ -72,7 +85,7 @@ public class N3RowPlacementTests
         var doc = TwoPages();
         var settings = new PageCollisionSettings(); // 表示前 1.5 秒・表示後 0.5 秒: 1250 > 1100 で重なる
         Assert.NotEmpty(PageRowCollisionValidator.Validate(doc, settings));
-        settings.LineSpans = Apart();
+        settings.LineBounds = Apart();
         Assert.Empty(PageRowCollisionValidator.Validate(doc, settings));
     }
 
@@ -91,7 +104,7 @@ public class N3RowPlacementTests
         var issues = N3ShowTimeValidator.Validate(doc, N3ShowTimePlanner.Plan(doc, s), s);
         Assert.Contains(issues, i => i.Severity == IssueSeverity.Error && i.RelatedLineIndex == 0);
 
-        s.LineSpans = Apart();
+        s.LineBounds = Apart();
         var apart = N3ShowTimeValidator.Validate(doc, N3ShowTimePlanner.Plan(doc, s), s);
         Assert.Empty(apart);
     }
@@ -101,7 +114,7 @@ public class N3RowPlacementTests
     {
         var doc = TwoPages();
         var tabShow = Current();
-        tabShow.LineSpans = Apart();
+        tabShow.LineBounds = Apart();
         var options = new N3ProjExportOptions
         {
             ShowTime = Current(), // 全体の設定は段だけで組にする

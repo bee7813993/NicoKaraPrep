@@ -68,7 +68,7 @@ public static class N3ShowTimeValidator
             foreach (var (row, prev) in prevRows.OrderBy(r => r.Key))
             {
                 if (!nextRows.TryGetValue(row, out int next)) continue;
-                if (!N3RowPlacement.SamePlace(settings.LineSpans, prev, next)) continue; // レイアウトで別の場所に出る組（組の無い行と同じに扱う）
+                if (!N3RowPlacement.SamePlace(settings.LineBounds, prev, next)) continue; // レイアウトで別の場所に出る組（組の無い行と同じに扱う）
                 paired.Add(next);
                 if (skipPairs?.Contains((prev, next)) == true)
                 {

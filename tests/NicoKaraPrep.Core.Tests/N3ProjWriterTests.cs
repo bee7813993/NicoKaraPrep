@@ -623,7 +623,7 @@ public class N3ProjWriterTests
                 : p.PropertyType == typeof(bool) ? !(bool)p.GetValue(s)!
                 : p.PropertyType == typeof(PageSplitMode) ? PageSplitMode.FixedLineCount
                 : p.PropertyType == typeof(EmojiMatcher) ? new EmojiMatcher(new[] { "★" })
-                : p.PropertyType == typeof(IReadOnlyDictionary<int, (int Top, int Bottom)>) ? new Dictionary<int, (int Top, int Bottom)> { [n] = (n, n + 1) }
+                : p.PropertyType == typeof(IReadOnlyDictionary<int, N3LineBounds>) ? new Dictionary<int, N3LineBounds> { [n] = new(n, n, n + 1, n + 1) }
                 : throw new InvalidOperationException($"{p.Name}（{p.PropertyType.Name}）に入れる値をテストに足してください");
             p.SetValue(s, value);
         }

@@ -20,11 +20,11 @@ public partial class MainViewModel
     /// 絵文字の分だけ行の表示を遅らせる規則（ニコカラメーカー3 には無い）の対象は、実効の @Emoji とプレースホルダ（＿）。
     /// </summary>
     /// <param name="tabName">タブの名前（そのタブの上段の表示・絵文字・行の画面上の範囲を使う。null = 表示中のタブの絵文字だけ）。</param>
-    /// <param name="withSpans">
-    /// 行の画面上の範囲（<see cref="N3ShowTimeSettings.LineSpans"/>。字幕のプレビューを作ったときのもの）を当てるか。
-    /// 範囲を作るとき（ページ・段だけを決める計算）は false。
+    /// <param name="withBounds">
+    /// 行の画面上の四角（<see cref="N3ShowTimeSettings.LineBounds"/>。字幕のプレビューを作ったときのもの）を当てるか。
+    /// 四角を作るとき（ページ・段だけを決める計算）は false。
     /// </param>
-    public N3ShowTimeSettings CreateShowTimeSettings(string? tabName = null, bool withSpans = true) => new()
+    public N3ShowTimeSettings CreateShowTimeSettings(string? tabName = null, bool withBounds = true) => new()
     {
         PageMode = Settings.PageMode,
         FixedLineCount = Settings.FixedLineCount,
@@ -37,7 +37,7 @@ public partial class MainViewModel
         AlignFromTop = Settings.CollisionAlignFromTop,
         EmojiLeadYield = Settings.N3EmojiLeadYield,
         LeadMatcher = CreateEmojiMatcherFor(DocumentOfTab(tabName)),
-        LineSpans = withSpans && tabName is not null && Settings.N3LayoutAwareRows ? _lineSpans.GetValueOrDefault(tabName) : null,
+        LineBounds = withBounds && tabName is not null && Settings.N3LayoutAwareRows ? _lineBounds.GetValueOrDefault(tabName) : null,
     };
 
     /// <summary>名前のタブの歌詞（表示中のタブ・名前が無いときは表示中の歌詞）。</summary>
@@ -374,7 +374,7 @@ public partial class MainViewModel
             if (t.CopyFilePath is string cp) openFiles.Add(Path.GetFullPath(cp));
         }
 
-        // 行の画面上の範囲（レイアウトで別の場所に出る行を詰めない）とタブの最初のフォントは、書き出す設定（ベース・タブのレイアウトなど）で決める。
+        // 行の画面上の四角（レイアウトで別の場所に出る行を詰めない）とタブの最初のフォントは、書き出す設定（ベース・タブのレイアウトなど）で決める。
         // 書き出せなかったときは元の設定に戻す
         var previousSettings = N3ProjSettings;
         N3ProjSettings = settings;
@@ -392,7 +392,7 @@ public partial class MainViewModel
 
     private N3ProjExportResult WriteN3Proj(string projectPath, N3ProjSongSettings settings, string dir, string baseName, HashSet<string> openFiles)
     {
-        UpdateLineFonts(); // 行の画面上の範囲を、書き出す設定と今の歌詞で作り直す
+        UpdateLineFonts(); // 行の画面上の四角を、書き出す設定と今の歌詞で作り直す
         var exportTabs = GetN3ProjExportTabs();
         var startFonts = GetTabStartFontNames(exportTabs);
         var tabs = new List<N3ProjExportTab>();
@@ -413,7 +413,7 @@ public partial class MainViewModel
                 LayoutName = settings.TabLayouts.GetValueOrDefault(tab.Name) is { Length: > 0 } layout ? layout : null,
                 TopLong = settings.TabTopLong.TryGetValue(tab.Name, out bool topLong) ? topLong : null,
                 StartFontSetName = startFonts[k],
-                ShowTime = CreateShowTimeSettings(tab.Name), // タブの絵文字・行の画面上の範囲
+                ShowTime = CreateShowTimeSettings(tab.Name), // タブの絵文字・行の画面上の四角
             });
         }
         if (tabs.Count == 0) throw new InvalidOperationException("書き出す歌詞がありません");

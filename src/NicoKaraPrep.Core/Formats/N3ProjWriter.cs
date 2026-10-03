@@ -28,7 +28,7 @@ public sealed class N3ProjExportTab
     /// </summary>
     public string? StartFontSetName { get; set; }
 
-    /// <summary>このタブの表示時刻の設定（null = 書き出し全体の設定。タブの絵文字・行の画面上の範囲を当てるとき）。</summary>
+    /// <summary>このタブの表示時刻の設定（null = 書き出し全体の設定。タブの絵文字・行の画面上の四角を当てるとき）。</summary>
     public N3ShowTimeSettings? ShowTime { get; set; }
 }
 
@@ -627,7 +627,7 @@ public static class N3ProjWriter
         SingleLinePromoteGapMs = s.SingleLinePromoteGapMs,
         EmojiLeadYield = s.EmojiLeadYield,
         LeadMatcher = s.LeadMatcher,
-        LineSpans = s.LineSpans,
+        LineBounds = s.LineBounds,
     };
 
     // ------------------------------------------------------------ レイアウト選択（行数）

@@ -60,10 +60,10 @@ public sealed class PageCollisionSettings
     public IReadOnlyDictionary<int, int>? LineShowBeginCs { get; set; }
 
     /// <summary>
-    /// 行の画面上の上下の範囲（字幕の画面の px）。前後のページの同じ段の行でも、範囲が重ならない組は別の場所に出るので知らせない
+    /// 行の画面上の四角（字幕の画面の px）。前後のページの同じ段の行でも、四角が重ならない組は別の場所に出るので知らせない
     /// （レイアウトで位置が違う行。ニコカラメーカー3 には無い NicoKaraPrep の機能。null = 段だけで組にする）。
     /// </summary>
-    public IReadOnlyDictionary<int, (int Top, int Bottom)>? LineSpans { get; set; }
+    public IReadOnlyDictionary<int, N3LineBounds>? LineBounds { get; set; }
 }
 
 /// <summary>
@@ -170,7 +170,7 @@ public static class PageRowCollisionValidator
             {
                 // 同じ画面位置に次ページの行が来る場合だけ比較する
                 if (!rowMaps[p + 1].TryGetValue(pos, out int nextLineIdx)) continue;
-                if (!N3RowPlacement.SamePlace(settings.LineSpans, prevLineIdx, nextLineIdx)) continue; // レイアウトで別の場所に出る組
+                if (!N3RowPlacement.SamePlace(settings.LineBounds, prevLineIdx, nextLineIdx)) continue; // レイアウトで別の場所に出る組
 
                 if (DisplayEnd(prevLineIdx) is not int displayEnd) continue;
                 if (DisplayStart(nextLineIdx) is not int displayStart) continue;

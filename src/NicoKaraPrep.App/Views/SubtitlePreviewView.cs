@@ -112,11 +112,20 @@ public sealed class SubtitlePreviewView : Grid
             {
                 if (t >= line.BeginMs && t < line.EndMs) visible.Add(line);
             }
+            // 行の画面上の四角（重なりの薄め方で、同じ場所に出る前後のページの行を見る）
+            var boxes = new Dictionary<PreviewLine, (float Left, float Top, float Right, float Bottom)>(ReferenceEqualityComparer.Instance);
+            foreach (var line in visible)
+            {
+                boxes[line] = Bounds(line, line.Source.GetLayout(), W, H, model.Pages.GetValueOrDefault((line.Tab, line.Page)));
+            }
+            bool SamePlace(PreviewLine a, PreviewLine b) =>
+                boxes.TryGetValue(a, out var x) && boxes.TryGetValue(b, out var y) &&
+                x.Left < y.Right && y.Left < x.Right && x.Top < y.Bottom && y.Top < x.Bottom;
             foreach (var line in visible)
             {
                 var layout = line.Source.GetLayout();
                 if (layout.Tokens.Count == 0) continue;
-                float alpha = CrossFadeAlpha(line, visible, t);
+                float alpha = CrossFadeAlpha(line, visible, t, SamePlace);
                 if (alpha <= 0f) continue;
                 var (x, baseline) = Position(line, layout, W, H, model.Pages.GetValueOrDefault((line.Tab, line.Page)));
                 var transform = Matrix3x2.CreateTranslation(x, baseline) * Matrix3x2.CreateScale(scale) * Matrix3x2.CreateTranslation(ox, oy);
@@ -138,17 +147,19 @@ public sealed class SubtitlePreviewView : Grid
     }
 
     /// <summary>
-    /// 同じタブの同じ段で、前後のページの行が同時に出ている（表示時刻が重なっている）ときの濃さ（0〜1。重ならなければ 1）。
+    /// 同じタブの同じ場所（<paramref name="samePlace"/>。無ければ同じ段）で、前後のページの行が同時に出ている（表示時刻が重なっている）ときの濃さ（0〜1。重ならなければ 1）。
     /// 重なりのあいだ、前の行は消えるまでにだんだん薄く、次の行は前の行が消えるまでにだんだん濃くする
     /// （同じ段の行を重ねてよい設定や手動指定で重ねたとき、2 行が同じ位置に重なって読めなくならないように。
     /// 　ニコカラメーカー3 の字幕アクション「文字単位フェード」の見え方の近似で、文字ごとのフェードまでは再現しない）。
     /// </summary>
-    internal static float CrossFadeAlpha(PreviewLine line, IReadOnlyList<PreviewLine> visible, double t)
+    /// <param name="samePlace">2 つの行が画面の同じ場所に出るか（行の四角が重なるか。レイアウトで位置が違う行は薄めない）。null なら同じ段か。</param>
+    internal static float CrossFadeAlpha(PreviewLine line, IReadOnlyList<PreviewLine> visible, double t, Func<PreviewLine, PreviewLine, bool>? samePlace = null)
     {
         float alpha = 1f;
         foreach (var other in visible)
         {
-            if (ReferenceEquals(other, line) || other.Tab != line.Tab || other.Row != line.Row || other.Page == line.Page) continue;
+            if (ReferenceEquals(other, line) || other.Tab != line.Tab || other.Page == line.Page) continue;
+            if (samePlace is not null ? !samePlace(line, other) : other.Row != line.Row) continue;
             if (other.Page > line.Page)
             {
                 // この行が前の行: 次の行が出てから、この行が消えるまでに薄くなる
@@ -176,13 +187,15 @@ public sealed class SubtitlePreviewView : Grid
     }
 
     /// <summary>
-    /// 行の枠の上端・下端（字幕の画面の px）。前後のページの同じ段の行が画面の同じ場所に出るか
-    /// （表示時刻の計算・チェック。レイアウトで位置が違う行は組にしない）を決めるのに使う。
+    /// 行の画面上の四角（字幕の画面の px。左右は行の送りの範囲、上下は行の枠）。前後のページの同じ段の行が画面の同じ場所に出るか
+    /// （表示時刻の計算・チェック・重なりの薄め方。レイアウトで位置が違う行は組にしない）を決めるのに使う。
+    /// <paramref name="page"/> はそのページの行（スマート水平配置で左右の位置を決めるため）。
     /// </summary>
-    internal static (float Top, float Bottom) VerticalSpan(PreviewLine line, SubtitleLineLayout layout, float H)
+    internal static (float Left, float Top, float Right, float Bottom) Bounds(PreviewLine line, SubtitleLineLayout layout, float W, float H, IReadOnlyList<PreviewLine>? page)
     {
         float baseline = Baseline(line, layout, H);
-        return (baseline + layout.BoxTop, baseline + layout.BoxBottom);
+        float x = SmartX(line, layout, W, page);
+        return (x, baseline + layout.BoxTop, x + layout.Width, baseline + layout.BoxBottom);
     }
 
     /// <summary>本文のベースラインの y（字幕の画面の px）。</summary>

@@ -39,11 +39,11 @@ public sealed class N3ShowTimeSettings
     public bool AlignFromTop { get; set; }
 
     /// <summary>
-    /// 行の画面上の上下の範囲（字幕の画面の px。行の添字 → 上端・下端）。前後のページの同じ段の行でも、範囲が重ならない組は
+    /// 行の画面上の四角（字幕の画面の px。行の添字 → 四角）。前後のページの同じ段の行でも、四角が重ならない組は
     /// 別の場所に出るものとして詰めない（レイアウトで位置が違う行。ニコカラメーカー3 には無い NicoKaraPrep の機能）。
-    /// null = ニコカラメーカー3 と同じく段だけで組にする。範囲の無い行も段だけで決める（<see cref="N3RowPlacement.SamePlace"/>）。
+    /// null = ニコカラメーカー3 と同じく段だけで組にする。四角の無い行も段だけで決める（<see cref="N3RowPlacement.SamePlace"/>）。
     /// </summary>
-    public IReadOnlyDictionary<int, (int Top, int Bottom)>? LineSpans { get; set; }
+    public IReadOnlyDictionary<int, N3LineBounds>? LineBounds { get; set; }
 
     /// <summary>1 行だけのページが上段へ昇格するのに必要な余裕（ms）。</summary>
     public int SingleLinePromoteGapMs { get; set; }
@@ -170,7 +170,7 @@ public static class N3ShowTimePlanner
             foreach (var (row, prev) in rowMaps[p])
             {
                 if (!rowMaps[p + 1].TryGetValue(row, out int next)) continue;
-                if (!N3RowPlacement.SamePlace(s.LineSpans, prev, next)) continue; // レイアウトで別の場所に出る組は詰めない
+                if (!N3RowPlacement.SamePlace(s.LineBounds, prev, next)) continue; // レイアウトで別の場所に出る組は詰めない
                 if (!ends.TryGetValue(prev, out int prevEnd) || !begins.TryGetValue(next, out int nextBegin)) continue;
                 if (!lastMs.TryGetValue(prev, out int prevLast) || !firstMs.TryGetValue(next, out int nextFirst)) continue;
 

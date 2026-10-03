@@ -1787,7 +1787,7 @@ public partial class MainViewModel : ObservableObject
         Issues.Clear();
         foreach (var line in Lines) line.ResetIssueMarks();
 
-        // 0) 各行に当たるフォント設定・字幕の見た目・プレビュー・横幅と、行の画面上の範囲（1)・1') はこの範囲を使い、
+        // 0) 各行に当たるフォント設定・字幕の見た目・プレビュー・横幅と、行の画面上の四角（1)・1') はこの四角を使い、
         //    レイアウトで別の場所に出る前後のページの行を組にしない）
         UpdateLineFonts();
 
@@ -1796,7 +1796,7 @@ public partial class MainViewModel : ObservableObject
         var collisionSettings = Settings.ToCollisionSettings(exclude);
         collisionSettings.LineDisplayCs = BuildLineDisplayOverrides(exclude);
         collisionSettings.LineShowBeginCs = BuildManualShowBegins();
-        collisionSettings.LineSpans = CurrentLineSpans();
+        collisionSettings.LineBounds = CurrentLineBounds();
         var collisions = PageRowCollisionValidator.Validate(Document, collisionSettings);
         foreach (var issue in collisions) AddPairIssue(issue);
 

@@ -30,15 +30,15 @@ public partial class MainViewModel
     private readonly Dictionary<string, SubtitleContext> _subtitleContexts = new(StringComparer.Ordinal);
 
     /// <summary>
-    /// タブの名前 → 行の画面上の範囲（字幕の画面の px。行の添字 → 枠の上端・下端）。<see cref="UpdateLineFonts"/> で字幕のプレビューと同じ並べ方から作り直す。
+    /// タブの名前 → 行の画面上の四角（字幕の画面の px。行の添字 → 四角）。<see cref="UpdateLineFonts"/> で字幕のプレビューと同じ並べ方から作り直す。
     /// 表示時刻の計算とチェックで、前後のページの同じ段の行でもレイアウトで別の場所に出る組を詰めない・知らせないのに使う
-    /// （<see cref="N3ShowTimeSettings.LineSpans"/>。設定 <see cref="AppSettings.N3LayoutAwareRows"/>）。
+    /// （<see cref="N3ShowTimeSettings.LineBounds"/>。設定 <see cref="AppSettings.N3LayoutAwareRows"/>）。
     /// </summary>
-    private readonly Dictionary<string, Dictionary<int, (int Top, int Bottom)>> _lineSpans = new(StringComparer.Ordinal);
+    private readonly Dictionary<string, Dictionary<int, N3LineBounds>> _lineBounds = new(StringComparer.Ordinal);
 
-    /// <summary>表示中のタブの行の画面上の範囲（設定で切っていれば null）。</summary>
-    private IReadOnlyDictionary<int, (int Top, int Bottom)>? CurrentLineSpans() =>
-        Settings.N3LayoutAwareRows ? _lineSpans.GetValueOrDefault(_activeTab.Name) : null;
+    /// <summary>表示中のタブの行の画面上の四角（設定で切っていれば null）。</summary>
+    private IReadOnlyDictionary<int, N3LineBounds>? CurrentLineBounds() =>
+        Settings.N3LayoutAwareRows ? _lineBounds.GetValueOrDefault(_activeTab.Name) : null;
 
     /// <summary>字幕のプレビューの材料（チェックのたびに作り直す。プレビューを切っていれば null）。</summary>
     public SubtitlePreviewModel? PreviewModel { get; private set; }
@@ -205,14 +205,14 @@ public partial class MainViewModel
         var widths = new Dictionary<int, LineWidthResult>();
         static SubtitleSpacing SpacingOf(N3LayoutSettings layout) =>
             new((float)layout.LyricsIntervalPx, (float)layout.RubyIntervalPx, (float)layout.LyricsAndRubyIntervalPx, layout.RubyAlignment, layout.AllowBiting);
-        _lineSpans.Clear();
+        _lineBounds.Clear();
         for (int t = 0; t < tabs.Count; t++)
         {
             var doc = tabs[t].Document;
             string tabName = tabs[t].Name;
             var tabContext = t == active ? context : GetSubtitleContext(doc); // 絵文字はタブの @Emoji で描く
-            // ページ・段は行の画面上の範囲によらないので、範囲を使わない計算で先に決め、ページのレイアウトと行の枠から範囲を出す
-            var structureShow = CreateShowTimeSettings(tabName, withSpans: false);
+            // ページ・段は行の画面上の四角によらないので、四角を使わない計算で先に決め、ページのレイアウトと行の並べ方から四角を出す
+            var structureShow = CreateShowTimeSettings(tabName, withBounds: false);
             var structure = N3ShowTimePlanner.Plan(doc, structureShow);
             var deltas = t == active ? activeDeltas : N3PageFontSize.LineDeltas(doc, structureShow.PageMode, structureShow.FixedLineCount);
             if (structure.Count == 0 && t != active) continue;
@@ -228,7 +228,6 @@ public partial class MainViewModel
                 return (Count: g.Count(), Rows: g.Max(p => p.Value.Row), Layout: Math.Clamp(index, 0, layouts.Count - 1), Manual: manual is not null);
             });
             var items = new List<(int Index, PreviewLine Line)>();
-            var spans = new Dictionary<int, (int Top, int Bottom)>();
             foreach (var (index, plan) in structure.OrderBy(p => p.Key))
             {
                 var line = doc.Lines[index];
@@ -256,19 +255,25 @@ public partial class MainViewModel
                 var preview = new PreviewLine(
                     source, plan.BeginMs, plan.EndMs, t, plan.PageIndex, Math.Min(plan.Row, maxRow), Math.Min(Math.Max(page.Rows, page.Count), maxRow),
                     page.Count, layout, Array.Empty<N3WipeTimeline.Group>());
-                var (top, bottom) = SubtitlePreviewView.VerticalSpan(preview, source.GetLayout(), screenHeight);
-                spans[index] = ((int)Math.Floor(top), (int)Math.Ceiling(bottom));
                 items.Add((index, preview));
                 if (t == active)
                 {
                     widths[index] = LineWidthValidator.Evaluate(index, source.GetLayout().Width, screenWidth, layout.HorizontalMarginPx);
                 }
             }
-            _lineSpans[tabName] = spans;
+            // 行の画面上の四角（左右はスマート水平配置で、ページの行を見て決める。字幕のプレビューと同じ並べ方）
+            var bounds = new Dictionary<int, N3LineBounds>();
+            var pageLines = items.GroupBy(x => x.Line.Page).ToDictionary(g => g.Key, g => g.Select(x => x.Line).ToList());
+            foreach (var (index, preview) in items)
+            {
+                var (left, top, right, bottom) = SubtitlePreviewView.Bounds(preview, preview.Source.GetLayout(), screenWidth, screenHeight, pageLines[preview.Page]);
+                bounds[index] = new N3LineBounds((int)Math.Floor(left), (int)Math.Floor(top), (int)Math.Ceiling(right), (int)Math.Ceiling(bottom));
+            }
+            _lineBounds[tabName] = bounds;
 
-            // 表示時刻は、行の画面上の範囲を当てて計算する（レイアウトで別の場所に出る前後のページの行は詰めない。設定で切れる）
+            // 表示時刻は、行の画面上の四角を当てて計算する（レイアウトで別の場所に出る前後のページの行は詰めない。設定で切れる）
             var show = CreateShowTimeSettings(tabName);
-            var plans = show.LineSpans is null ? structure : N3ShowTimePlanner.Plan(doc, show);
+            var plans = show.LineBounds is null ? structure : N3ShowTimePlanner.Plan(doc, show);
             foreach (var (index, preview) in items)
             {
                 if (!plans.TryGetValue(index, out var plan)) continue;
