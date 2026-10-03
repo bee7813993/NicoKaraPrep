@@ -39,6 +39,7 @@ public sealed partial class MainWindow : Window
         InitializeAdaptiveLayout();
         InitializePlayerBar();
         InitializeLineSide();
+        InitializeShowTimeEditing();
 
         RestoreWindowBounds();
         Closed += (_, _) => SaveWindowBounds();

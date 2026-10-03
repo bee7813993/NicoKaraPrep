@@ -627,12 +627,57 @@ public sealed partial class MainWindow
     /// <summary>行リストの歌い終わり・表示終了の時刻をダブルクリック: その行の表示終了の欄へカーソルを移す。</summary>
     private void OnLineEndTimeDoubleTapped(object sender, DoubleTappedRoutedEventArgs e) => BeginEditShowTime(sender, begin: false);
 
+    /// <summary>行リストの上でボタン（マウス・指・ペン）が押されているか（<see cref="OnLineListPointerPressed"/>）。</summary>
+    private bool _lineListPointerDown;
+
+    /// <summary>
+    /// ボタンを離したら移る表示時刻の欄（行リストの時刻のダブルクリック）。ダブルクリックは 2 回目のボタンを押したところで届き、
+    /// 離したときに行の項目がフォーカスを取るので、先に欄へ移っても行リストへ戻されてしまう（画面確認で確かめた）。
+    /// </summary>
+    private (ViewModels.LineViewModel Line, bool Begin)? _showTimeEditOnRelease;
+
+    /// <summary>行リストのボタンの押し・離しを見張る（行の項目が処理済みにしたものも受ける。処理は行の項目のあとになる）。</summary>
+    private void InitializeShowTimeEditing()
+    {
+        LineList.AddHandler(UIElement.PointerPressedEvent, new PointerEventHandler(OnLineListPointerPressed), handledEventsToo: true);
+        var released = new PointerEventHandler(OnLineListPointerReleased);
+        LineList.AddHandler(UIElement.PointerReleasedEvent, released, handledEventsToo: true);
+        LineList.AddHandler(UIElement.PointerCaptureLostEvent, released, handledEventsToo: true);
+        LineList.AddHandler(UIElement.PointerCanceledEvent, released, handledEventsToo: true);
+    }
+
+    private void OnLineListPointerPressed(object sender, PointerRoutedEventArgs e)
+    {
+        _lineListPointerDown = true;
+        _showTimeEditOnRelease = null; // 前のダブルクリックで離したのが届かなかったときの残りは捨てる
+    }
+
+    /// <summary>行リストの上でボタンを離した・つかみが外れた: 待っていた表示時刻の欄へ移る。</summary>
+    private void OnLineListPointerReleased(object sender, PointerRoutedEventArgs e)
+    {
+        _lineListPointerDown = false;
+        if (_showTimeEditOnRelease is not { } pending) return;
+        _showTimeEditOnRelease = null;
+        FocusShowTimeBox(pending.Line, pending.Begin);
+    }
+
     private void BeginEditShowTime(object sender, bool begin)
     {
         if ((sender as FrameworkElement)?.DataContext is not ViewModels.LineViewModel line || line.Model.IsEmpty) return;
         if (!ReferenceEquals(ViewModel.SelectedLine, line)) LineList.SelectedItem = line;
-        // 選んだ行の行設定パネルができてから（行の選択の処理と、行のダブルクリックの処理のあとで）カーソルを移す
-        DispatcherQueue.TryEnqueue(() =>
+        if (_lineListPointerDown)
+        {
+            _showTimeEditOnRelease = (line, begin); // ボタンを離してから（行の項目がフォーカスを取ったあとで）移る
+            return;
+        }
+        FocusShowTimeBox(line, begin);
+    }
+
+    /// <summary>行の表示開始・表示終了の欄へカーソルを移す（手で指定していなければ今の表示時刻を入れて選ぶ）。</summary>
+    private void FocusShowTimeBox(ViewModels.LineViewModel line, bool begin)
+    {
+        // 選んだ行の行設定パネルができてから（行の選択の処理・行のダブルクリックの処理・行の項目がフォーカスを取る処理のあとで）移る
+        DispatcherQueue.TryEnqueue(Microsoft.UI.Dispatching.DispatcherQueuePriority.Low, () =>
         {
             if (!ReferenceEquals(ViewModel.SelectedLine, line)) return;
             var box = begin ? ShowBeginBox : ShowEndBox;
