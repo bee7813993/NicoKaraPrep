@@ -362,8 +362,8 @@ public sealed partial class MainWindow
             // 欄の文字は手で指定した値だけ。読み込んだ値・自動調整の値・自動計算は薄字で出す
             ShowBeginBox.Text = model.HasManualShowBegin ? FmtCs(model.ShowBeginCs!.Value) : "";
             ShowEndBox.Text = model.HasManualShowEnd ? FmtCs(model.ShowEndCs!.Value) : "";
-            ShowBeginBox.PlaceholderText = plan is not null ? FmtCs(plan.BeginMs / 10) : "--:--:--";
-            ShowEndBox.PlaceholderText = plan is not null ? FmtCs(plan.EndMs / 10) : "--:--:--";
+            ShowBeginBox.PlaceholderText = plan is not null ? FmtMs(plan.BeginMs) : "--:--:--";
+            ShowEndBox.PlaceholderText = plan is not null ? FmtMs(plan.EndMs) : "--:--:--";
 
             EnsureN3FontNames();
             LineFontBox.Text = model.FontSetName ?? "";
@@ -387,10 +387,10 @@ public sealed partial class MainWindow
                 string adjusted = shown.Adjusted ? "・前後ページに合わせて調整" : "";
                 string yielded = ViewModel.DescribeEmojiLeadYield(shown, plans, byRule: !recomputable || same); // 絵文字の分だけ遅らせた行・絵文字を縮めた行
                 string outdated = recomputable && freshPlan is not null && !same
-                    ? $"・実行し直すと {FmtCs(freshPlan.BeginMs / 10)} 〜 {FmtCs(freshPlan.EndMs / 10)}"
+                    ? $"・実行し直すと {FmtMs(freshPlan.BeginMs)} 〜 {FmtMs(freshPlan.EndMs)}"
                     : "";
                 string label = ViewModels.MainViewModel.ShowTimeOriginLabel(model); // 自動・読み込み・自動調整・手動
-                SetN3LineInfo($"{label}: {FmtCs(plan.BeginMs / 10)} 〜 {FmtCs(plan.EndMs / 10)}　ページ{plan.PageIndex + 1}・{row}{adjusted}{yielded}{outdated}");
+                SetN3LineInfo($"{label}: {FmtMs(plan.BeginMs)} 〜 {FmtMs(plan.EndMs)}　ページ{plan.PageIndex + 1}・{row}{adjusted}{yielded}{outdated}");
             }
         }
         finally
@@ -557,6 +557,9 @@ public sealed partial class MainWindow
     }
 
     private static string FmtCs(int cs) => TimeTag.Format(cs).Trim('[', ']');
+
+    /// <summary>ms の時刻を 10ms 単位で表示する（自動調整で行に持たせる値・チェックの文と同じく四捨五入）。</summary>
+    private static string FmtMs(int ms) => FmtCs(N3ShowTimeAdjuster.ToCs(ms));
 
     /// <summary>フォント設定名の候補（ベース n3proj のフォント設定 ＋ NicoKaraPrep のフォント設定（アプリ共通・この曲専用））を作る。</summary>
     private void EnsureN3FontNames()
