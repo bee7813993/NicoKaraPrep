@@ -92,6 +92,27 @@ public sealed class AppSettings
     public bool N3TopLong { get; set; }
 
     /// <summary>
+    /// 前後のページの同じ段の行を重ねてよい秒数（0 = 重ねない = ニコカラメーカー3 と同じ計算。NicoKaraPrep の機能）。
+    /// 字幕アクションが「文字単位フェード」のときなど、少しの重なりなら見づらくない場合に使う
+    /// （<see cref="Formats.N3ShowTimeSettings.OverlapMs"/>・ページ衝突チェックの <see cref="Validation.PageCollisionSettings.AllowedOverlapCs"/>）。
+    /// </summary>
+    public double N3OverlapSeconds { get; set; }
+
+    /// <summary>
+    /// 前のページの同じ段の行と重なるときは、絵文字（＿を含む）の先行の分だけ次の行の表示を遅らせる
+    /// （ニコカラメーカー3 には無い NicoKaraPrep の機能。<see cref="Formats.N3ShowTimeSettings.EmojiLeadYield"/>）。
+    /// 遅らせた行の絵文字の表示秒数は、書き出しで縮める。
+    /// </summary>
+    public bool N3EmojiLeadYield { get; set; } = true;
+
+    /// <summary>
+    /// 前後のページの同じ段の行でも、レイアウトで画面の位置が違えば（字幕のプレビューで重ならなければ）、重なるものとして扱わない
+    /// （表示時刻の計算・ページ衝突と表示時刻のチェック・字幕のプレビューの重なりの薄め方。ニコカラメーカー3 には無い NicoKaraPrep の機能。
+    /// ニコカラメーカー3 は段だけで組にするので、上寄せ 5 行のページの次の下寄せ 2 行のページ・左寄せ 5 行と右寄せ 5 行のページなども重なるとみなす）。
+    /// </summary>
+    public bool N3LayoutAwareRows { get; set; } = true;
+
+    /// <summary>
     /// 歌詞ファイルを開いたとき、同じフォルダに n3proj が 1 つだけあれば
     /// 「字幕フォントと画面サイズ」「実際の表示区間」を自動で読み込む。
     /// </summary>
@@ -219,6 +240,7 @@ public sealed class AppSettings
         DisplayLeadCs = DisplayLeadCs,
         DisplayTailCs = DisplayTailCs,
         ErrorThresholdCs = CollisionErrorThresholdCs,
+        AllowedOverlapCs = Math.Max(0, (int)Math.Round(N3OverlapSeconds * 100)),
         AlignFromTop = CollisionAlignFromTop,
         ExcludeChar = excludeChar,
     };
@@ -279,6 +301,9 @@ public sealed class AppSettings
         N3IntervalSeconds = other.N3IntervalSeconds;
         N3ProtectSeconds = other.N3ProtectSeconds;
         N3TopLong = other.N3TopLong;
+        N3OverlapSeconds = other.N3OverlapSeconds;
+        N3EmojiLeadYield = other.N3EmojiLeadYield;
+        N3LayoutAwareRows = other.N3LayoutAwareRows;
         // N3FontSets（ニコカラメーカー3 のフォント設定）とその階層 N3FontHierarchy・配色パターンはテンプレートとは独立したライブラリなので取り込まない
         // （テンプレートの適用でライブラリが置き換わらないように。古いテンプレートに入っていても無視する）
     }

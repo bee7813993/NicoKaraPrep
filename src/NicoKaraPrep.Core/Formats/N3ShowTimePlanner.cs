@@ -25,14 +25,43 @@ public sealed class N3ShowTimeSettings
     /// </summary>
     public int? ProtectMs { get; set; }
 
+    /// <summary>
+    /// 前後のページの同じ段の行を重ねてよい時間（ms。0 = 重ねない = ニコカラメーカー3 と同じ計算。NicoKaraPrep の機能）。
+    /// 字幕アクションが「文字単位フェード」のときなど、前の行が消えきる前に次の行が出ても見づらくない場合に使う。
+    /// 詰めるときは、前の行のワイプ後・次の行のワイプ前を削るより先に、この時間まで重ねる（<see cref="N3ShowTimePlanner.ResolvePair"/>）。
+    /// </summary>
+    public int OverlapMs { get; set; }
+
     /// <summary>上段の行をページの最終行が消えるまで表示する（TopLong）。false は各行が自分の最終タグ後に消える（TopShort）。</summary>
     public bool TopLong { get; set; }
 
     /// <summary>ページ間の行対応付けを上からにする（false = 下から。ニコカラメーカーの既定）。</summary>
     public bool AlignFromTop { get; set; }
 
+    /// <summary>
+    /// 行の画面上の四角（字幕の画面の px。行の添字 → 四角）。前後のページの同じ段の行でも、四角が重ならない組は
+    /// 別の場所に出るものとして詰めない（レイアウトで位置が違う行。ニコカラメーカー3 には無い NicoKaraPrep の機能）。
+    /// null = ニコカラメーカー3 と同じく段だけで組にする。四角の無い行も段だけで決める（<see cref="N3RowPlacement.SamePlace"/>）。
+    /// </summary>
+    public IReadOnlyDictionary<int, N3LineBounds>? LineBounds { get; set; }
+
     /// <summary>1 行だけのページが上段へ昇格するのに必要な余裕（ms）。</summary>
     public int SingleLinePromoteGapMs { get; set; }
+
+    /// <summary>
+    /// 前のページの同じ段の行と重なるときは、次の行のワイプ前を絵文字・＿の先行タグではなく本当の歌い出しから測り、
+    /// 必要な分だけ次の行の表示を遅らせる（ニコカラメーカー3 には無い NicoKaraPrep の機能。既定はオフ = ニコカラメーカー3 と同じ計算）。
+    /// 遅らせた行の絵文字の開始は、書き出しで表示開始まで寄せる（<see cref="N3EmojiLead"/>）。
+    /// 絵文字はワイプ前の表示時間（表示秒数がそれより短い絵文字はその秒数）を残し、それでも重なるときは前の行のワイプ後を削る
+    /// （前の行のワイプ終了から歌い出しまでがそれより短い組だけ、前の行をワイプの最後まで見せるため、さらに縮める）。
+    /// </summary>
+    public bool EmojiLeadYield { get; set; }
+
+    /// <summary><see cref="EmojiLeadYield"/> で先行タグを除く絵文字（＿などのプレースホルダを含む）。null・空なら規則は働かない。</summary>
+    public EmojiMatcher? LeadMatcher { get; set; }
+
+    /// <summary><see cref="EmojiLeadYield"/> の規則が働くか（オンで、対象の絵文字がある）。</summary>
+    public bool YieldsEmojiLead => EmojiLeadYield && LeadMatcher is { IsEmpty: false };
 
     public int EffectiveProtectMs => ProtectMs is int p && p >= 0 ? p : Math.Min(LeadMs, TailMs) / 2;
 
@@ -50,13 +79,21 @@ public sealed class N3ShowTimeSettings
 /// <param name="PageIndex">ページ番号（0 始まり）。</param>
 /// <param name="Row">画面位置（下から／上から k 行目、1 始まり）。</param>
 /// <param name="Adjusted">前後ページとの衝突回避で自動値から動かされたか。</param>
-public sealed record N3LinePlan(int LineIndex, int BeginMs, int EndMs, bool BeginIsManual, bool EndIsManual, int PageIndex, int Row, bool Adjusted);
+/// <param name="EmojiYieldMs">
+/// 絵文字の先行を譲る規則（<see cref="N3ShowTimeSettings.EmojiLeadYield"/>）で表示開始が遅れた量
+/// （規則なしで計算したときの開始との差。0 = 遅れていない）。
+/// </param>
+public sealed record N3LinePlan(int LineIndex, int BeginMs, int EndMs, bool BeginIsManual, bool EndIsManual, int PageIndex, int Row, bool Adjusted, int EmojiYieldMs = 0);
 
 /// <summary>
 /// ニコカラメーカー3 の「自動で表示開始時刻・表示終了時刻を設定（上段歌詞を短めに／長めに表示）」に
 /// 相当する計算。ページ内の行は同時に表示を開始し（ページ先頭タグ − ワイプ前）、各行は最終タグ＋ワイプ後で消える
 /// （上段を長めに表示する場合はページの最終タグ＋ワイプ後）。隣接ページの同じ画面位置の行とは
 /// <see cref="ResolvePair"/> の規則で間隔を空ける。手動指定の値は動かさない。
+/// <see cref="N3ShowTimeSettings.EmojiLeadYield"/> がオンなら、同じ段の次の行のワイプ前だけを絵文字の先行を除いた歌い出しから測る
+/// （<see cref="ResolvePairYieldingLead"/>。ページの表示開始・段の対応付けはニコカラメーカー3 と同じく絵文字の先行を含めて決める）。
+/// 詰めるときも絵文字の表示秒数の下限（ワイプ前の表示時間と元の表示秒数の短い方）は残し、足りない分は前の行のワイプ後を削る
+/// （前の行のワイプを最後まで見せることは下限より優先する。前の行のワイプ終了から歌い出しまでが下限より短い組だけ、絵文字を下限より短くする）。
 /// </summary>
 public static class N3ShowTimePlanner
 {
@@ -72,6 +109,7 @@ public static class N3ShowTimePlanner
         var manualEnd = new HashSet<int>();
         var adjusted = new HashSet<int>();
         var pageOf = new Dictionary<int, int>();
+        var emojiYields = new Dictionary<int, int>(); // 絵文字の先行を譲る規則で表示開始が遅れた量
 
         // 1) 希望表示区間
         for (int pi = 0; pi < pages.Count; pi++)
@@ -132,12 +170,24 @@ public static class N3ShowTimePlanner
             foreach (var (row, prev) in rowMaps[p])
             {
                 if (!rowMaps[p + 1].TryGetValue(row, out int next)) continue;
+                if (!N3RowPlacement.SamePlace(s.LineBounds, prev, next)) continue; // レイアウトで別の場所に出る組は詰めない
                 if (!ends.TryGetValue(prev, out int prevEnd) || !begins.TryGetValue(next, out int nextBegin)) continue;
                 if (!lastMs.TryGetValue(prev, out int prevLast) || !firstMs.TryGetValue(next, out int nextFirst)) continue;
 
+                int prevEndShort = shortEnds.GetValueOrDefault(prev, prevEnd);
+                bool prevEndManual = manualEnd.Contains(prev);
+                bool nextBeginManual = manualBegin.Contains(next);
                 var (newEnd, newBegin) = ResolvePair(
-                    prevEnd, shortEnds.GetValueOrDefault(prev, prevEnd), prevLast, manualEnd.Contains(prev),
-                    nextBegin, nextFirst, manualBegin.Contains(next), s);
+                    prevEnd, prevEndShort, prevLast, prevEndManual,
+                    nextBegin, nextFirst, nextBeginManual, s);
+                if (YieldingFirstMs(doc.Lines[next], nextFirst, nextBeginManual, s) is int realFirst)
+                {
+                    // 絵文字の先行を譲る（規則なしの開始との差を、遅れた量として残す）
+                    int plainBegin = newBegin;
+                    int minPre = EmojiMinPreMs(doc.Lines[next], realFirst, s);
+                    (newEnd, newBegin) = ResolvePairYieldingLead(prevEnd, prevEndShort, prevLast, prevEndManual, nextBegin, realFirst, minPre, s);
+                    if (newBegin > plainBegin) emojiYields[next] = newBegin - plainBegin;
+                }
                 if (newEnd != prevEnd)
                 {
                     ends[prev] = newEnd;
@@ -152,7 +202,55 @@ public static class N3ShowTimePlanner
         }
 
         // 3) 結果
-        return BuildPlans(begins, ends, manualBegin, manualEnd, adjusted, pageOf, rowMaps);
+        return BuildPlans(begins, ends, manualBegin, manualEnd, adjusted, pageOf, rowMaps, emojiYields);
+    }
+
+    /// <summary>
+    /// 絵文字の先行を譲る規則が次の行に働くか（規則の判定はここだけで行う）。働くなら、次の行のワイプ前を測る本当の歌い出し（ms）を返す。
+    /// 規則がオンで対象の絵文字があり、次の行の表示開始が手動指定でなく、絵文字・＿の先行タグを除いた歌い出しが行内の最小のタグより遅い行だけ。
+    /// </summary>
+    /// <param name="next">次のページの同じ段の行。</param>
+    /// <param name="nextFirst">次の行の行内の最小のタグ（ms。絵文字の先行タグを含む）。</param>
+    private static int? YieldingFirstMs(LyricsLine next, int nextFirst, bool nextBeginManual, N3ShowTimeSettings s)
+    {
+        if (!s.YieldsEmojiLead || nextBeginManual) return null;
+        return N3EmojiLead.RealStartMs(next, s.LeadMatcher) is int real && real > nextFirst ? real : null;
+    }
+
+    /// <summary>
+    /// 絵文字の先行を譲る組で、次の行のワイプ前（本当の歌い出し − 表示開始）として残す下限（ms。0 〜 ワイプ前の表示時間）。
+    /// どの絵文字・＿も表示秒数の下限（ワイプ前の表示時間と元の表示秒数の短い方）を割らない最も遅い表示開始
+    /// （<see cref="N3EmojiLead.LatestBeginMs"/>）を、本当の歌い出しから測った長さにしたもの。行頭の絵文字なら下限そのもの。
+    /// </summary>
+    private static int EmojiMinPreMs(LyricsLine next, int realFirst, N3ShowTimeSettings s) =>
+        N3EmojiLead.LatestBeginMs(next, s.LeadMatcher, s.LeadMs) is int latest
+            ? Math.Clamp(realFirst - latest, 0, Math.Max(0, s.LeadMs))
+            : 0;
+
+    /// <summary>
+    /// 絵文字の先行を譲る規則（<see cref="N3ShowTimeSettings.EmojiLeadYield"/>。ニコカラメーカー3 には無い）で、
+    /// 同じ段の前後の行の表示終了・開始を決める。次の行のワイプ前を絵文字・＿の先行タグではなく本当の歌い出しから測り、
+    /// 必要な分だけ次の行を遅らせる（足りなければ <see cref="ResolvePair"/> の手順どおりに詰める）。
+    /// 詰めるときも次の行のワイプ前は <paramref name="minPreMs"/> を残す（絵文字の表示秒数の下限を守る。足りない分は前の行のワイプ後を削る。
+    /// 前の行のワイプ終了から歌い出しまでが下限より短い組だけは、前の行をワイプの最後まで見せるため下限を割る）。
+    /// 上段を長めに表示する場合の延長分も、絵文字の先行を譲り切る（表示開始 = 本当の歌い出し − ワイプ前）までは削らない。
+    /// 次の行の表示開始が手動指定の組には使わない（<see cref="YieldingFirstMs"/>）。
+    /// </summary>
+    /// <param name="realFirst">次の行の本当の歌い出し（絵文字・＿の先行タグを除いた行内の最小。<see cref="N3EmojiLead.RealStartMs"/>）。</param>
+    /// <param name="minPreMs">次の行のワイプ前の下限（<see cref="EmojiMinPreMs"/>。<see cref="ResolvePair"/> の nextMinPreMs）。</param>
+    internal static (int PrevEnd, int NextBegin) ResolvePairYieldingLead(
+        int prevEnd, int prevEndShort, int prevLast, bool prevEndManual,
+        int nextBegin, int realFirst, int minPreMs,
+        N3ShowTimeSettings s)
+    {
+        int interval = Math.Max(0, s.IntervalMs);
+        int yieldBegin = Math.Max(nextBegin, realFirst - s.LeadMs); // 絵文字の先行を譲り切ったときの表示開始
+        if (s.TopLong && !prevEndManual && prevEnd > prevEndShort)
+        {
+            prevEnd = Math.Max(prevEndShort, Math.Min(prevEnd, yieldBegin - interval));
+            prevEndShort = prevEnd; // 延長分はここで決めた（ResolvePair では削らない）
+        }
+        return ResolvePair(prevEnd, prevEndShort, prevLast, prevEndManual, nextBegin, realFirst, false, s, minPreMs);
     }
 
     /// <summary>
@@ -167,21 +265,39 @@ public static class N3ShowTimePlanner
     /// （ニコカラメーカー3 のヘルプ「自動で表示開始時刻・表示終了時刻を設定」に記載の順序。
     /// 　表示間隔の 1/4 を手順 3 まで残すのは実プロジェクトの値から確認した挙動）
     /// 手動指定された側は動かさず、もう一方だけで調整する。
+    /// <paramref name="nextMinPreMs"/>（絵文字の先行を譲る規則だけが使う。ニコカラメーカー3 には無い）があれば、次の行のワイプ前を詰める
+    /// 手順 (3)〜(4) でも保護時間とこの下限の長い方を残す（足りない分は前の行のワイプ後を削る）。
+    /// (5)(6) は今までと同じ（前の行のワイプを最後まで見せることを下限より優先する。(5) では次の行のワイプ前を
+    /// 前の行のワイプ終了から歌い出しまでに縮め、(6) では歌い出しで前の行を消す）。
+    /// 前の行の終了が手動指定のときは手動の値を守る（このときも下限を割りうる）。0 なら今までの計算と同じ。
+    /// <see cref="N3ShowTimeSettings.OverlapMs"/>（重ねてよい時間 X。ニコカラメーカー3 には無い）があれば、手順 (1) 以降の
+    /// 「前の行の表示終了と次の行の表示開始の間隔」をすべて X だけ減らす（間隔がマイナス = 同じ段で重なって表示される）。
+    /// (1) で間隔の 1/4 を残す代わりに X − 1/4 まで重ね、前の行のワイプ後・次の行のワイプ前を削るのはそれでも足りないときだけになる。
+    /// (5) では次の行を前の行のワイプ終了の X 前から出し、(6) では前の行を歌い出しの X 後まで残す。
+    /// 重ならずに済む組（(0) まで）と上段を長めにの延長分は今までと同じ（必要のない重なりは作らない）。X = 0 なら今までの計算と同じ。
     /// </summary>
     /// <param name="prevEnd">前の行の表示終了（希望値。上段を長めに表示する場合はページの最後まで延長した値）。</param>
     /// <param name="prevEndShort">前の行の延長しない表示終了（自分の歌唱終了＋ワイプ後）。延長分は表示間隔を保ったまま最初に削る。</param>
     /// <param name="prevLast">前の行の歌唱終了（ワイプ終了）。</param>
     /// <param name="nextBegin">次の行の表示開始（希望値 = ページ先頭 − ワイプ前）。</param>
     /// <param name="nextFirst">次の行の先頭タグ（ワイプ開始。絵文字の先行タグを含む）。</param>
+    /// <param name="nextMinPreMs">
+    /// 次の行のワイプ前（<paramref name="nextFirst"/> − 表示開始）として手順 (3)〜(4) で残す下限（ms。0 = 下限なし = ニコカラメーカー3 と同じ）。
+    /// 絵文字の先行を譲る規則で、絵文字の表示秒数の下限を守るために渡す（<see cref="ResolvePairYieldingLead"/>）。
+    /// </param>
     internal static (int PrevEnd, int NextBegin) ResolvePair(
         int prevEnd, int prevEndShort, int prevLast, bool prevEndManual,
         int nextBegin, int nextFirst, bool nextBeginManual,
-        N3ShowTimeSettings s)
+        N3ShowTimeSettings s, int nextMinPreMs = 0)
     {
         int interval = Math.Max(0, s.IntervalMs);
         int minGap = interval / 4;
         int protect = s.EffectiveProtectMs;
         int lead = s.LeadMs;
+        // 次の行のワイプ前を詰める手順 (3)〜(4) で残す時間（保護時間と下限の長い方。下限が無ければ保護時間そのもの）
+        int keepPre = nextMinPreMs > 0 ? Math.Max(protect, nextMinPreMs) : protect;
+        // 同じ段の行を重ねてよい時間（手順 (1) 以降の間隔をこの分だけ減らす。0 = ニコカラメーカー3 と同じ）
+        int overlap = Math.Max(0, s.OverlapMs);
 
         if (prevEnd + interval <= nextBegin) return (prevEnd, nextBegin); // 間隔が十分
         if (prevEndManual && nextBeginManual) return (prevEnd, nextBegin);
@@ -195,19 +311,20 @@ public static class N3ShowTimePlanner
 
         if (nextBeginManual)
         {
-            // 次の行の開始は動かせない: 前の行の終了だけで間隔を空ける（ワイプ後表示は保護時間まで）
+            // 次の行の開始は動かせない: 前の行の終了だけで間隔を空ける（ワイプ後表示は保護時間まで。重ねてよい分は重ねる）
             int pe = prevEnd;
-            if (pe + minGap > nextBegin) pe = Math.Max(nextBegin - minGap, prevLast + protect);
-            if (pe > nextBegin) pe = Math.Max(nextBegin, prevLast);
+            if (pe + minGap - overlap > nextBegin) pe = Math.Max(nextBegin - minGap + overlap, prevLast + protect);
+            if (pe > nextBegin + overlap) pe = Math.Max(nextBegin + overlap, prevLast);
             return (Math.Min(pe, prevEnd), nextBegin);
         }
 
         if (prevEndManual)
         {
-            // 前の行の終了は動かせない: 次の行の開始だけで調整する（ワイプ前表示は保護時間まで）
+            // 前の行の終了は動かせない: 次の行の開始だけで調整する（ワイプ前表示は保護時間（と下限の長い方）まで。
+            // それでも重なるときは前の行の終了まで遅らせる＝手動の終了を守り、下限は割りうる）
             int nb = prevEnd + interval;
-            if (nb > nextFirst - lead) nb = Math.Max(nextFirst - lead, prevEnd + minGap);
-            if (nb > nextFirst - protect) nb = Math.Max(nextFirst - protect, prevEnd);
+            if (nb > nextFirst - lead) nb = Math.Max(nextFirst - lead, prevEnd + minGap - overlap);
+            if (nb > nextFirst - keepPre) nb = Math.Max(nextFirst - keepPre, prevEnd - overlap);
             return (prevEnd, Math.Max(nb, nextBegin));
         }
 
@@ -215,42 +332,46 @@ public static class N3ShowTimePlanner
         int desired = prevEnd + interval;
         if (desired <= nextFirst - lead) return (prevEnd, desired);
 
-        // (1) 表示間隔を詰める（1/4 まで）。次の行はワイプ前表示を確保した位置から
+        // (1) 表示間隔を詰める（1/4 まで。重ねてよいなら、その分まで重ねる）。次の行はワイプ前表示を確保した位置から
         int begin = nextFirst - lead;
-        if (prevEnd + minGap <= begin) return (prevEnd, Math.Max(begin, nextBegin));
+        if (prevEnd + minGap - overlap <= begin) return (prevEnd, Math.Max(begin, nextBegin));
 
         // (2) 前の行のワイプ後表示を保護時間まで縮める
-        int end = begin - minGap;
+        int end = begin - minGap + overlap;
         if (end >= prevLast + protect) return (Math.Min(end, prevEnd), Math.Max(begin, nextBegin));
 
-        // (3) 次の行のワイプ前表示を保護時間まで縮める
+        // (3) 次の行のワイプ前表示を保護時間（と下限の長い方）まで縮める
         end = prevLast + protect;
-        begin = end + minGap;
-        if (nextFirst - begin >= protect) return (Math.Min(end, prevEnd), Math.Max(begin, nextBegin));
+        begin = end + minGap - overlap;
+        if (nextFirst - begin >= keepPre) return (Math.Min(end, prevEnd), Math.Max(begin, nextBegin));
 
         int window = nextFirst - prevLast;
 
-        // (3') 残りの表示間隔を 0 まで詰める（ワイプ前後とも保護時間は残す）
-        if (window >= 2 * protect)
+        // (3') 残りの表示間隔を 0 まで詰める（重ねてよいなら、その分まで重ねる。ワイプ後は保護時間、ワイプ前は保護時間と下限の長い方を残す）
+        if (window + overlap >= protect + keepPre)
         {
-            return (Math.Min(prevLast + protect, prevEnd), Math.Max(nextFirst - protect, nextBegin));
+            return (Math.Min(prevLast + protect, prevEnd), Math.Max(nextFirst - keepPre, nextBegin));
         }
 
-        // (4) 前の行のワイプ後表示を 0 まで（次の行のワイプ前表示は保護時間を残す）
-        if (window >= protect)
+        // (4) 前の行のワイプ後表示を 0 まで（次の行のワイプ前表示は保護時間と下限の長い方を残す。前の行は重ねてよい分だけ残す）
+        if (window + overlap >= keepPre)
         {
-            int meet = nextFirst - protect;
-            return (Math.Min(meet, prevEnd), Math.Max(meet, nextBegin));
+            int meet = nextFirst - keepPre;
+            return (Math.Min(meet + overlap, prevEnd), Math.Max(meet, nextBegin));
         }
 
-        // (5) 次の行のワイプ前表示も 0 まで（前の行のワイプ終了と同時に切り替える）
-        if (window >= 0)
+        // (5) 次の行のワイプ前表示も 0 まで（前の行のワイプ終了と同時に切り替える。
+        //     絵文字の下限があっても、前の行をワイプの最後まで見せることを優先して下限を割る。
+        //     重ねてよいなら、次の行は前の行のワイプ終了のその分前から出す）
+        if (window + overlap >= 0)
         {
-            return (Math.Min(prevLast, prevEnd), Math.Max(prevLast, nextBegin));
+            return (Math.Min(prevLast, prevEnd), Math.Max(prevLast - overlap, nextBegin));
         }
 
-        // (6) 次の行の歌い出しで前の行の表示を終える（前の行はワイプ途中で消える。ニコカラメーカーでも警告になる）
-        return (Math.Min(nextFirst, prevEnd), Math.Max(nextFirst, nextBegin));
+        // (6) 次の行の歌い出しで前の行の表示を終える（前の行はワイプ途中で消える。ニコカラメーカーでも警告になる。
+        //     歌い出しが前の行のワイプ終了より前なので、どう詰めても前の行は途中で消える。絵文字は 0 秒になる。
+        //     重ねてよいなら、前の行は歌い出しのその分後まで残す）
+        return (Math.Min(nextFirst + overlap, prevEnd), Math.Max(nextFirst, nextBegin));
     }
 
     /// <summary>
@@ -292,7 +413,8 @@ public static class N3ShowTimePlanner
         HashSet<int> manualEnd,
         HashSet<int> adjusted,
         Dictionary<int, int> pageOf,
-        Dictionary<int, int>[] rowMaps)
+        Dictionary<int, int>[] rowMaps,
+        Dictionary<int, int> emojiYields)
     {
         var rowOf = new Dictionary<int, int>();
         foreach (var map in rowMaps)
@@ -304,7 +426,7 @@ public static class N3ShowTimePlanner
         foreach (var (i, begin) in begins)
         {
             plans[i] = new N3LinePlan(i, begin, ends[i], manualBegin.Contains(i), manualEnd.Contains(i),
-                pageOf.GetValueOrDefault(i), rowOf.GetValueOrDefault(i), adjusted.Contains(i));
+                pageOf.GetValueOrDefault(i), rowOf.GetValueOrDefault(i), adjusted.Contains(i), emojiYields.GetValueOrDefault(i));
         }
         return plans;
     }

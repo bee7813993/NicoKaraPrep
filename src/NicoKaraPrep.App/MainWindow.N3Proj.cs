@@ -35,20 +35,49 @@ public sealed partial class MainWindow
         }
 
         var dialog = new N3ProjExportDialog(ViewModel) { XamlRoot = Content.XamlRoot };
-        if (await dialog.ShowAsync() != ContentDialogResult.Primary) return;
+        var choice = await dialog.ShowAsync();
+        if (choice == ContentDialogResult.None) return;
         var settings = dialog.Result;
 
-        string? suggestedPath = ViewModel.SuggestN3ProjOutputPath();
-        string? folder = Path.GetDirectoryName(suggestedPath ?? "") is { Length: > 0 } d ? d : ViewModel.GetDefaultSaveFolder();
-        string suggested = Path.GetFileNameWithoutExtension(suggestedPath ?? "lyrics");
-        string? path = SaveFileDialog.Show(Hwnd, folder, suggested, N3ProjFileTypes, "n3proj");
-        if (path is null) return;
-
-        TryRun(() => ViewModel.ExportN3Proj(path, settings));
+        if (choice == ContentDialogResult.Secondary)
+        {
+            // 「適用」: 書き出さずに設定（ベース・タブごとの設定など）だけ保存し、プレビュー・行設定パネル・チェックを作り直す
+            TryRun(() => ViewModel.ApplyN3ProjSongSettings(settings));
+            ViewModel.StatusText = "書き出しの設定を適用しました（n3proj は書き出していません）";
+        }
+        else
+        {
+            // 保存先を選ばずにやめたときは何も保存しない（書き出し画面の設定を残すときは「適用」）
+            string? suggestedPath = ViewModel.SuggestN3ProjOutputPath();
+            string? folder = Path.GetDirectoryName(suggestedPath ?? "") is { Length: > 0 } d ? d : ViewModel.GetDefaultSaveFolder();
+            string suggested = Path.GetFileNameWithoutExtension(suggestedPath ?? "lyrics");
+            string? path = SaveFileDialog.Show(Hwnd, folder, suggested, N3ProjFileTypes, "n3proj");
+            if (path is null)
+            {
+                ViewModel.StatusText = "n3proj は書き出しませんでした";
+            }
+            else
+            {
+                TryRun(() => ViewModel.ExportN3Proj(path, settings));
+            }
+        }
         _n3FontNamesKey = null;
         RefreshN3LinePanel();
-        // 書き出し設定（ベース・既定のフォント設定・合わせるか）で、行に当たるフォント設定が変わることがある（書き出しの知らせは残す）
-        TryRun(ViewModel.UpdateLineFonts);
+        // 表示時刻の設定で字幕のプレビュー・チェックの結果が、書き出し設定（ベース・既定のフォント設定・合わせるか）で行に当たるフォント設定が変わることがある。
+        // チェックはすぐに実行し、書き出しの知らせがチェック結果で消えないよう、つなげて表示する
+        // （フォント設定ビューではチェックしない。戻るときにチェックし直す）
+        if (ViewModel.ViewMode == ViewModels.MainViewMode.FontSettings)
+        {
+            TryRun(ViewModel.UpdateLineFonts);
+        }
+        else
+        {
+            string summary = ViewModel.StatusText;
+            _validateTimer.Stop();
+            TryRun(ViewModel.RunValidation);
+            RefreshInsertGutter();
+            ViewModel.StatusText = $"{summary}　／　{ViewModel.StatusText}";
+        }
         RefreshLineFontPlaceholder();
     }
 
@@ -102,6 +131,13 @@ public sealed partial class MainWindow
 
             var choices = dialog.Result;
             TryRun(() => ViewModel.ApplyN3ProjImport(preview, choices));
+            if (focus == N3ProjImportFocus.Default)
+            {
+                // 最近使用したファイルにも入れる（開いたプロジェクトの歌詞より上に。選ぶとこの読み込みをもう一度行う）
+                ViewModel.Settings.AddRecentFile(path);
+                ViewModel.Settings.Save();
+                RefreshRecentFilesMenu();
+            }
             string summary = lyricsNote is null ? ViewModel.StatusText : $"{lyricsNote}　／　{ViewModel.StatusText}";
             if (choices.Media && ViewModel.MediaPath is string media && File.Exists(media))
             {
@@ -299,6 +335,8 @@ public sealed partial class MainWindow
     /// <summary>選択行のニコカラメーカー用行設定（表示時刻・フォント）をパネルへ表示する。</summary>
     private void RefreshN3LinePanel()
     {
+        _showBeginPrefill = null;
+        _showEndPrefill = null;
         _n3PanelLoading = true;
         try
         {
@@ -326,11 +364,15 @@ public sealed partial class MainWindow
             var model = line.Model;
             var plans = ViewModel.PlanShowTimes();
             plans.TryGetValue(line.Index, out var plan);
+            // いま自動調整を実行したら決まる表示時刻（読み込んだ値・自動調整の値を持つ行の説明に使う）
+            N3LinePlan? freshPlan = null;
+            ViewModel.PlanShowTimesFresh()?.TryGetValue(line.Index, out freshPlan);
 
-            ShowBeginBox.Text = model.ShowBeginCs is int b ? FmtCs(b) : "";
-            ShowEndBox.Text = model.ShowEndCs is int en ? FmtCs(en) : "";
-            ShowBeginBox.PlaceholderText = plan is not null ? FmtCs(plan.BeginMs / 10) : "--:--:--";
-            ShowEndBox.PlaceholderText = plan is not null ? FmtCs(plan.EndMs / 10) : "--:--:--";
+            // 欄の文字は手で指定した値だけ。読み込んだ値・自動調整の値・自動計算は薄字で出す
+            ShowBeginBox.Text = model.HasManualShowBegin ? FmtCs(model.ShowBeginCs!.Value) : "";
+            ShowEndBox.Text = model.HasManualShowEnd ? FmtCs(model.ShowEndCs!.Value) : "";
+            ShowBeginBox.PlaceholderText = plan is not null ? FmtMs(plan.BeginMs) : "--:--:--";
+            ShowEndBox.PlaceholderText = plan is not null ? FmtMs(plan.EndMs) : "--:--:--";
 
             EnsureN3FontNames();
             LineFontBox.Text = model.FontSetName ?? "";
@@ -345,9 +387,19 @@ public sealed partial class MainWindow
             else
             {
                 string row = $"{(ViewModel.Settings.CollisionAlignFromTop ? "上" : "下")}から{plan.Row}行目";
-                string adjusted = plan.Adjusted ? "・前後ページに合わせて調整" : "";
-                string manual = plan.BeginIsManual || plan.EndIsManual ? "（手動指定あり）" : "";
-                SetN3LineInfo($"自動: {FmtCs(plan.BeginMs / 10)} 〜 {FmtCs(plan.EndMs / 10)}　ページ{plan.PageIndex + 1}・{row}{adjusted}{manual}");
+                // 読み込んだ値・自動調整の値を持つ行は、いま自動調整を実行し直しても同じなら、規則の説明を実行したときの計算で書く。
+                // 違うなら「実行し直すと …」を添える
+                bool recomputable = (model.ShowBeginCs is not null && model.ShowBeginOrigin != ShowTimeOrigin.Manual) ||
+                                    (model.ShowEndCs is not null && model.ShowEndOrigin != ShowTimeOrigin.Manual);
+                bool same = freshPlan is not null && Math.Abs(freshPlan.BeginMs - plan.BeginMs) <= 5 && Math.Abs(freshPlan.EndMs - plan.EndMs) <= 5;
+                var shown = recomputable && same ? freshPlan! : plan;
+                string adjusted = shown.Adjusted ? "・前後ページに合わせて調整" : "";
+                string yielded = ViewModel.DescribeEmojiLeadYield(shown, plans, byRule: !recomputable || same); // 絵文字の分だけ遅らせた行・絵文字を縮めた行
+                string outdated = recomputable && freshPlan is not null && !same
+                    ? $"・実行し直すと {FmtMs(freshPlan.BeginMs)} 〜 {FmtMs(freshPlan.EndMs)}"
+                    : "";
+                string label = ViewModels.MainViewModel.ShowTimeOriginLabel(model); // 自動・読み込み・自動調整・手動
+                SetN3LineInfo($"{label}: {FmtMs(plan.BeginMs)} 〜 {FmtMs(plan.EndMs)}　ページ{plan.PageIndex + 1}・{row}{adjusted}{yielded}{outdated}");
             }
         }
         finally
@@ -515,6 +567,9 @@ public sealed partial class MainWindow
 
     private static string FmtCs(int cs) => TimeTag.Format(cs).Trim('[', ']');
 
+    /// <summary>ms の時刻を 10ms 単位で表示する（自動調整で行に持たせる値・チェックの文と同じく四捨五入）。</summary>
+    private static string FmtMs(int ms) => FmtCs(N3ShowTimeAdjuster.ToCs(ms));
+
     /// <summary>フォント設定名の候補（ベース n3proj のフォント設定 ＋ NicoKaraPrep のフォント設定（アプリ共通・この曲専用））を作る。</summary>
     private void EnsureN3FontNames()
     {
@@ -554,34 +609,151 @@ public sealed partial class MainWindow
             ApplyShowTimeBoxes();
             e.Handled = true;
         }
+        else if (e.Key == Windows.System.VirtualKey.Escape)
+        {
+            // 直すのをやめる: 欄を行に持たせた値へ戻して、行リストの選択行へ戻る（↑↓ で行を選び続けられるように）
+            RefreshN3LinePanel();
+            if (!(ViewModel.SelectedLine is { } line && LineList.ContainerFromItem(line) is ListViewItem item && item.Focus(FocusState.Programmatic)))
+            {
+                LineList.Focus(FocusState.Programmatic);
+            }
+            ViewModel.StatusText = "表示時刻は直しませんでした";
+            e.Handled = true;
+        }
     }
 
-    private void OnShowTimeBoxLostFocus(object sender, RoutedEventArgs e) => ApplyShowTimeBoxes();
+    /// <summary>
+    /// 行リストの時刻をダブルクリックしたときに表示開始・終了の欄へ入れた、今の表示時刻（欄の文字）。
+    /// 変えずに確定しても手で指定したことにしない（行設定パネルを作り直すと消す）。
+    /// </summary>
+    private string? _showBeginPrefill, _showEndPrefill;
+
+    /// <summary>行リストの歌い出し・表示開始の時刻をダブルクリック: その行の表示開始の欄へカーソルを移す（行のダブルクリックの再生位置の移動もする）。</summary>
+    private void OnLineStartTimeDoubleTapped(object sender, DoubleTappedRoutedEventArgs e) => BeginEditShowTime(sender, begin: true);
+
+    /// <summary>行リストの歌い終わり・表示終了の時刻をダブルクリック: その行の表示終了の欄へカーソルを移す。</summary>
+    private void OnLineEndTimeDoubleTapped(object sender, DoubleTappedRoutedEventArgs e) => BeginEditShowTime(sender, begin: false);
+
+    /// <summary>行リストの上でボタン（マウス・指・ペン）が押されているか（<see cref="OnLineListPointerPressed"/>）。</summary>
+    private bool _lineListPointerDown;
+
+    /// <summary>
+    /// ボタンを離したら移る表示時刻の欄（行リストの時刻のダブルクリック）。ダブルクリックは 2 回目のボタンを押したところで届き、
+    /// 離したときに行の項目がフォーカスを取るので、先に欄へ移っても行リストへ戻されてしまう（画面確認で確かめた）。
+    /// </summary>
+    private (ViewModels.LineViewModel Line, bool Begin)? _showTimeEditOnRelease;
+
+    /// <summary>行リストのボタンの押し・離しを見張る（行の項目が処理済みにしたものも受ける。処理は行の項目のあとになる）。</summary>
+    private void InitializeShowTimeEditing()
+    {
+        LineList.AddHandler(UIElement.PointerPressedEvent, new PointerEventHandler(OnLineListPointerPressed), handledEventsToo: true);
+        var released = new PointerEventHandler(OnLineListPointerReleased);
+        LineList.AddHandler(UIElement.PointerReleasedEvent, released, handledEventsToo: true);
+        LineList.AddHandler(UIElement.PointerCaptureLostEvent, released, handledEventsToo: true);
+        LineList.AddHandler(UIElement.PointerCanceledEvent, released, handledEventsToo: true);
+    }
+
+    private void OnLineListPointerPressed(object sender, PointerRoutedEventArgs e)
+    {
+        _lineListPointerDown = true;
+        _showTimeEditOnRelease = null; // 前のダブルクリックで離したのが届かなかったときの残りは捨てる
+    }
+
+    /// <summary>行リストの上でボタンを離した・つかみが外れた: 待っていた表示時刻の欄へ移る。</summary>
+    private void OnLineListPointerReleased(object sender, PointerRoutedEventArgs e)
+    {
+        _lineListPointerDown = false;
+        if (_showTimeEditOnRelease is not { } pending) return;
+        _showTimeEditOnRelease = null;
+        FocusShowTimeBox(pending.Line, pending.Begin);
+    }
+
+    private void BeginEditShowTime(object sender, bool begin)
+    {
+        if ((sender as FrameworkElement)?.DataContext is not ViewModels.LineViewModel line || line.Model.IsEmpty) return;
+        if (!ReferenceEquals(ViewModel.SelectedLine, line)) LineList.SelectedItem = line;
+        if (_lineListPointerDown)
+        {
+            _showTimeEditOnRelease = (line, begin); // ボタンを離してから（行の項目がフォーカスを取ったあとで）移る
+            return;
+        }
+        FocusShowTimeBox(line, begin);
+    }
+
+    /// <summary>行の表示開始・表示終了の欄へカーソルを移す（手で指定していなければ今の表示時刻を入れて選ぶ）。</summary>
+    private void FocusShowTimeBox(ViewModels.LineViewModel line, bool begin)
+    {
+        // 選んだ行の行設定パネルができてから（行の選択の処理・行のダブルクリックの処理・行の項目がフォーカスを取る処理のあとで）移る
+        DispatcherQueue.TryEnqueue(Microsoft.UI.Dispatching.DispatcherQueuePriority.Low, () =>
+        {
+            if (!ReferenceEquals(ViewModel.SelectedLine, line)) return;
+            var box = begin ? ShowBeginBox : ShowEndBox;
+            if (box.Text.Trim().Length == 0 && box.PlaceholderText is { Length: > 0 } shown && shown != "--:--:--")
+            {
+                // 手で指定していない行は、今の表示時刻（薄字）を入れて選ぶ（そのまま打ち直せる。変えずに確定しても手動にしない）
+                _n3PanelLoading = true;
+                box.Text = shown;
+                _n3PanelLoading = false;
+                if (begin) _showBeginPrefill = shown;
+                else _showEndPrefill = shown;
+            }
+            box.Focus(FocusState.Programmatic);
+            box.SelectAll();
+            ViewModel.StatusText = $"{line.Index + 1} 行目の表示{(begin ? "開始" : "終了")}を直せます（mm:ss:cc で入れて Enter。Esc でやめる）";
+        });
+    }
+
+    private void OnShowTimeBoxLostFocus(object sender, RoutedEventArgs e)
+    {
+        ApplyShowTimeBoxes();
+        DropShowTimePrefill(sender);
+    }
+
+    /// <summary>
+    /// 行リストの時刻のダブルクリックで欄へ入れた今の表示時刻を、変えずに欄を離れたら外して、欄を空欄（薄字の表示）へ戻す
+    /// （手で指定した値に見えないように）。
+    /// </summary>
+    private void DropShowTimePrefill(object sender)
+    {
+        if (sender is not TextBox box) return;
+        bool isBegin = ReferenceEquals(box, ShowBeginBox);
+        string? prefill = isBegin ? _showBeginPrefill : _showEndPrefill;
+        if (prefill is null) return;
+        if (isBegin) _showBeginPrefill = null;
+        else _showEndPrefill = null;
+        if (box.Text.Trim() != prefill) return;
+        _n3PanelLoading = true;
+        box.Text = "";
+        _n3PanelLoading = false;
+    }
 
     private void ApplyShowTimeBoxes()
     {
         if (_n3PanelLoading || ViewModel.SelectedLine is not { } line || line.Model.IsEmpty) return;
 
-        int? begin = ParseTimeText(ShowBeginBox.Text);
-        int? end = ParseTimeText(ShowEndBox.Text);
-        if (ShowBeginBox.Text.Trim().Length > 0 && begin is null)
+        // 行リストの時刻のダブルクリックで入れた今の表示時刻のままなら、手で指定していない（空欄と同じ）
+        string beginText = ShowBeginBox.Text.Trim() == _showBeginPrefill ? "" : ShowBeginBox.Text;
+        string endText = ShowEndBox.Text.Trim() == _showEndPrefill ? "" : ShowEndBox.Text;
+        int? begin = ParseTimeText(beginText);
+        int? end = ParseTimeText(endText);
+        if (beginText.Trim().Length > 0 && begin is null)
         {
-            ViewModel.StatusText = "表示開始は mm:ss:cc 形式で入力してください（空欄で自動）";
+            ViewModel.StatusText = "表示開始は mm:ss:cc 形式で入力してください（空欄にすると、手で指定した値を外します）";
             return;
         }
-        if (ShowEndBox.Text.Trim().Length > 0 && end is null)
+        if (endText.Trim().Length > 0 && end is null)
         {
-            ViewModel.StatusText = "表示終了は mm:ss:cc 形式で入力してください（空欄で自動）";
+            ViewModel.StatusText = "表示終了は mm:ss:cc 形式で入力してください（空欄にすると、手で指定した値を外します）";
             return;
         }
 
         bool changed = false;
-        TryRun(() => changed = ViewModel.SetLineShowTime(line.Index, begin, end));
+        TryRun(() => changed = ViewModel.SetLineShowTimeFromBoxes(line.Index, begin, end));
         if (!changed) return;
         line.RaiseOverrideMark();
         ViewModel.StatusText = begin is null && end is null
-            ? $"{line.Index + 1} 行目の表示時刻を自動に戻しました"
-            : $"{line.Index + 1} 行目の表示時刻を指定しました（n3proj 書き出しとページ衝突チェックに反映）";
+            ? $"{line.Index + 1} 行目の手で指定した表示時刻を外しました"
+            : $"{line.Index + 1} 行目の表示時刻を手で指定しました（自動調整を実行し直しても変わりません）";
         RefreshN3LinePanel();
         ScheduleValidation();
     }

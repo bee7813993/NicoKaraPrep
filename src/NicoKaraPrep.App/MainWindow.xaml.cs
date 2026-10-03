@@ -39,6 +39,7 @@ public sealed partial class MainWindow : Window
         InitializeAdaptiveLayout();
         InitializePlayerBar();
         InitializeLineSide();
+        InitializeShowTimeEditing();
 
         RestoreWindowBounds();
         Closed += (_, _) => SaveWindowBounds();
@@ -352,7 +353,7 @@ public sealed partial class MainWindow : Window
         }
     }
 
-    private void OpenRecentFile(string path)
+    private async void OpenRecentFile(string path)
     {
         if (!File.Exists(path))
         {
@@ -360,6 +361,12 @@ public sealed partial class MainWindow : Window
             ViewModel.Settings.Save();
             RefreshRecentFilesMenu();
             ViewModel.StatusText = $"ファイルが見つかりません: {path}";
+            return;
+        }
+        // ニコカラメーカー3 のプロジェクトは、開くときと同じく読み込み確認画面で読み込む
+        if (Path.GetExtension(path).Equals(".n3proj", StringComparison.OrdinalIgnoreCase))
+        {
+            await ImportN3ProjAsync(path);
             return;
         }
         TryRun(() => ViewModel.OpenFile(path));
@@ -679,6 +686,7 @@ public sealed partial class MainWindow : Window
         if (file is null) return;
         TryRun(() => ViewModel.LoadTemplate(file.Path));
         LoadQuickEmojiSettings();
+        RefreshN3LinePanel(); // 表示時刻の設定・絵文字の指定で、行設定の自動の表示時刻と説明が変わる
         ScheduleValidation();
     }
 
@@ -777,6 +785,7 @@ public sealed partial class MainWindow : Window
         if (!_quickEmojiReady) return;
         ViewModel.Settings.PlaceholderChar = QuickPlaceholderBox.Text.Trim();
         ViewModel.Settings.Save();
+        RefreshN3LinePanel(); // プレースホルダは絵文字の分だけ遅らせる規則の対象でもあり、行設定の自動の表示時刻と説明が変わる
         ScheduleValidation(); // プレースホルダは絵文字扱い（チェック除外）の対象に含まれるため
     }
 
@@ -1814,7 +1823,7 @@ public sealed partial class MainWindow : Window
                 {
                     AddRun("✓", null); // エクスポート済み
                 }
-                // 時間はページ衝突チェック、横幅は横幅チェックの重要度で色分け（通常ビューの列と同じ規則）
+                // 時間はページ衝突・表示時刻のチェック、横幅は横幅チェックの重要度で色分け（通常ビューの列と同じ規則）
                 if (l.TimeText.Length > 0 || l.EndTimeText.Length > 0)
                 {
                     AddRun(l.TimeText, GutterBrushFor(l.StartTimeSeverity));
@@ -2076,6 +2085,7 @@ public sealed partial class MainWindow : Window
         {
             ViewModel.RefreshEmojiSlots();
             if (dialog.SongListChanged) ViewModel.MarkModified();
+            RefreshN3LinePanel(); // 絵文字の分だけ遅らせる規則の対象が変わり、行設定の自動の表示時刻と説明が変わる
             ScheduleValidation();
         }
     }

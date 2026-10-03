@@ -69,17 +69,22 @@ public sealed partial class FontSettingsViewModel
     /// </summary>
     private (List<LyricsDocument> Docs, List<N3FontSet> Export, List<string> Names, string? Default) UsageContext()
     {
-        var docs = _main.GetAllTabs().Select(t => t.Document).ToList();
+        var tabs = _main.GetAllTabs();
+        var docs = tabs.Select(t => t.Document).ToList();
         var export = _main.ExportFontSets;
         var (names, def) = _main.GetExportFontNames();
+        _startNames = _main.GetTabStartFontNames(tabs, names, def);
         return (docs, export, names, def);
     }
+
+    /// <summary>タブごとの最初のフォント設定名（<see cref="UsageContext"/> で作る。書き出しと同じくタブごとに決め直すため）。</summary>
+    private List<string?>? _startNames;
 
     /// <summary>そのフォント設定名が 1 文字以上に適用される行（文書の番号・行の添字）。</summary>
     private IReadOnlyList<(int Document, int Line)> LinesUsingFont(string name)
     {
         var (docs, _, names, def) = UsageContext();
-        return N3FontResolver.LinesUsing(docs, names, def, continueAcrossLines: true, name);
+        return N3FontResolver.LinesUsing(docs, names, def, continueAcrossLines: true, name, _startNames);
     }
 
     /// <summary>一覧の使用文字数・選択中のフォント設定の使用状況・検証を計算し直す。</summary>
@@ -101,7 +106,7 @@ public sealed partial class FontSettingsViewModel
     /// <summary>一覧の各行の使用文字数と「曲専用で上書き」を計算する。戻り値は名前ごとに書き出しで使われるフォント設定。</summary>
     private Dictionary<string, N3FontSet> UpdateItemUsage(List<LyricsDocument> docs, List<N3FontSet> export, List<string> names, string? def)
     {
-        var usage = N3FontResolver.CountUsage(docs, names, def, continueAcrossLines: true);
+        var usage = N3FontResolver.CountUsage(docs, names, def, continueAcrossLines: true, _startNames);
 
         // 同じ名前が複数あるときは、書き出しで使われる先のものに数える
         var first = new Dictionary<string, N3FontSet>(StringComparer.Ordinal);
@@ -141,7 +146,7 @@ public sealed partial class FontSettingsViewModel
         }
 
         var tabs = _main.GetAllTabs();
-        var lines = N3FontResolver.LinesUsing(docs, names, def, continueAcrossLines: true, item.Font.Name);
+        var lines = N3FontResolver.LinesUsing(docs, names, def, continueAcrossLines: true, item.Font.Name, _startNames);
         UsageSummary = $"使用: {item.Usage} 文字 / {lines.Count} 行";
         foreach (var (d, l) in lines)
         {

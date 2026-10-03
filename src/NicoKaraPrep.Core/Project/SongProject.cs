@@ -11,11 +11,17 @@ public sealed class LineExportSettings
 {
     public int Index { get; set; }
 
-    /// <summary>表示開始時刻の手動指定（10ms 単位）。null は自動。</summary>
+    /// <summary>表示開始時刻（10ms 単位）。null は自動。</summary>
     public int? ShowBeginCs { get; set; }
 
-    /// <summary>表示終了時刻の手動指定（10ms 単位）。null は自動。</summary>
+    /// <summary>表示終了時刻（10ms 単位）。null は自動。</summary>
     public int? ShowEndCs { get; set; }
+
+    /// <summary>表示開始の出どころ（以前の版のファイルには無く、手動指定として読む）。</summary>
+    public ShowTimeOrigin ShowBeginOrigin { get; set; }
+
+    /// <summary>表示終了の出どころ（以前の版のファイルには無く、手動指定として読む）。</summary>
+    public ShowTimeOrigin ShowEndOrigin { get; set; }
 
     /// <summary>フォント設定名の手動指定。null は自動。</summary>
     public string? FontSetName { get; set; }
@@ -46,6 +52,8 @@ public sealed class LineExportSettings
                 Index = i,
                 ShowBeginCs = l.ShowBeginCs,
                 ShowEndCs = l.ShowEndCs,
+                ShowBeginOrigin = l.ShowBeginOrigin,
+                ShowEndOrigin = l.ShowEndOrigin,
                 FontSetName = l.FontSetName,
                 LayoutName = l.LayoutName,
                 FontSizeDelta = l.FontSizeDelta,
@@ -66,6 +74,8 @@ public sealed class LineExportSettings
             var l = doc.Lines[s.Index];
             l.ShowBeginCs = s.ShowBeginCs;
             l.ShowEndCs = s.ShowEndCs;
+            l.ShowBeginOrigin = s.ShowBeginOrigin;
+            l.ShowEndOrigin = s.ShowEndOrigin;
             l.FontSetName = string.IsNullOrEmpty(s.FontSetName) ? null : s.FontSetName;
             l.LayoutName = string.IsNullOrEmpty(s.LayoutName) ? null : s.LayoutName;
             l.FontSizeDelta = s.FontSizeDelta;
@@ -91,6 +101,12 @@ public sealed class N3ProjSongSettings
 
     /// <summary>タブ名 → 上段の行を長めに表示するか（ニコカラメーカーの TopLong 相当）。</summary>
     public Dictionary<string, bool> TabTopLong { get; set; } = new();
+
+    /// <summary>
+    /// タブ名 → タブの最初の行から使うフォント設定名（パート記号が出るまで。空・無し = 自動: メインのタブは既定のフォント設定、
+    /// 2 つ目以降のタブは名前に「コーラス」を含むフォント設定）。ニコカラメーカー3 はタブをまたいでフォントを引き継がない。
+    /// </summary>
+    public Dictionary<string, string> TabFontSetNames { get; set; } = new();
 
     /// <summary>行の既定フォント設定名（パート記号が現れるまで適用）。空 = 先頭の設定。</summary>
     public string DefaultFontSetName { get; set; } = "";

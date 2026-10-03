@@ -15,6 +15,8 @@ public sealed partial class MainWindow
         LineSide.Initialize(ViewModel);
         LineSide.FontPicked += (_, name) => ApplyFontFromPanel(name);
         LineSide.LayoutApplyRequested += (_, name) => ApplyLineLayout(name);
+        LineSide.ShowTimeSettingsChanged += (_, _) => OnShowTimeSettingsChanged();
+        LineSide.AutoShowTimeRequested += (_, _) => RunAutoShowTimes();
         ViewModel.LayoutsChanged += (_, _) => ScheduleLayoutRefresh();
         UpdateSideTarget();
     }
@@ -36,6 +38,32 @@ public sealed partial class MainWindow
         }
         _layoutRefreshTimer.Stop();
         _layoutRefreshTimer.Start();
+    }
+
+    /// <summary>
+    /// 右のパネル「表示時刻」のパラメーターを変えた: 表示時刻を持たない行（未設定）はすぐ新しいパラメーターで計算されるので、
+    /// プレビュー・行設定・チェックを作り直す（行に持たせた値は「自動調整を実行」するまで変わらない）。
+    /// </summary>
+    private void OnShowTimeSettingsChanged()
+    {
+        RefreshN3LinePanel();
+        ScheduleValidation();
+        LineSide.RefreshShowTimeSummary();
+    }
+
+    /// <summary>右のパネル「表示時刻」の「自動調整を実行」: 全タブの表示時刻を決め直し、行リストの印・行設定・プレビュー・チェックを作り直す。</summary>
+    private void RunAutoShowTimes()
+    {
+        TryRun(() => ViewModel.RunAutoShowTimes());
+        foreach (var line in ViewModel.Lines) line.RaiseOverrideMark();
+        RefreshN3LinePanel();
+        // チェックはすぐに実行し、自動調整の知らせがチェック結果で消えないよう、つなげて表示する
+        string summary = ViewModel.StatusText;
+        _validateTimer.Stop();
+        TryRun(ViewModel.RunValidation);
+        RefreshInsertGutter();
+        ViewModel.StatusText = $"{summary}　／　{ViewModel.StatusText}";
+        LineSide.RefreshShowTimeSummary();
     }
 
     /// <summary>右のフォント一覧で押した（null は「自動に戻す」）: 選んだ文字（文字を選んでいなければ選んだ行）に指定する。</summary>

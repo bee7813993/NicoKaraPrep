@@ -60,6 +60,38 @@ public class PageRowCollisionValidatorTests
     }
 
     [Fact]
+    public void 重ねてよい時間までの重なりは知らせず_超えた分で警告とエラーを分ける()
+    {
+        // 下段: 表示終了 11:00 vs 表示開始 10:50 → 重なり 0.5 秒
+        var doc = Doc(
+            "[00:01:00]前の上段[00:02:00]",
+            "[00:05:00]あ[00:10:00]",
+            "",
+            "[00:30:00]次の上段[00:35:00]",
+            "[00:12:50]い[00:20:00]");
+        var settings = new PageCollisionSettings { DisplayLeadCs = 200, DisplayTailCs = 100, ErrorThresholdCs = 100, AllowedOverlapCs = 50 };
+        Assert.Empty(PageRowCollisionValidator.Validate(doc, settings));
+        settings.AllowedOverlapCs = 40;
+        var issue = Assert.Single(PageRowCollisionValidator.Validate(doc, settings));
+        Assert.Equal(IssueSeverity.Warning, issue.Severity);
+        Assert.Contains("（重なり 0.50 秒・重ねてよいのは 0.4 秒まで、", issue.Message);
+
+        // 重なり 1.5 秒（表示終了 11:00・表示開始 9:50）: 閾値 1 秒を超えるのでエラー。0.6 秒まで重ねてよいなら、超えた分 0.9 秒で比べて警告
+        var doc2 = Doc(
+            "[00:01:00]前の上段[00:02:00]",
+            "[00:05:00]あ[00:10:00]",
+            "",
+            "[00:30:00]次の上段[00:35:00]",
+            "[00:11:50]い[00:20:00]");
+        settings.AllowedOverlapCs = 0;
+        Assert.Equal(IssueSeverity.Error, Assert.Single(PageRowCollisionValidator.Validate(doc2, settings)).Severity);
+        settings.AllowedOverlapCs = 40;
+        Assert.Equal(IssueSeverity.Error, Assert.Single(PageRowCollisionValidator.Validate(doc2, settings)).Severity); // 超えた分 1.1 秒
+        settings.AllowedOverlapCs = 60;
+        Assert.Equal(IssueSeverity.Warning, Assert.Single(PageRowCollisionValidator.Validate(doc2, settings)).Severity);
+    }
+
+    [Fact]
     public void 上からの位置合わせ_同じ行番号同士だけ比較()
     {
         // 2行目は「次ページの1行目」の表示開始と重なっていても正常。

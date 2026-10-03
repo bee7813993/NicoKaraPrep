@@ -1,3 +1,4 @@
+using NicoKaraPrep.Core.Formats;
 using NicoKaraPrep.Core.Model;
 
 namespace NicoKaraPrep.Core.Validation;
@@ -27,6 +28,13 @@ public sealed class PageCollisionSettings
     public int ErrorThresholdCs { get; set; } = 100;
 
     /// <summary>
+    /// 同じ段の行を重ねてよい時間（10ms 単位。0 = 重ねない）。この時間までの重なりは知らせない
+    /// （表示時刻の計算で重ねて表示するため。<see cref="Formats.N3ShowTimeSettings.OverlapMs"/>）。
+    /// エラーと警告の分かれ目（<see cref="ErrorThresholdCs"/>）は、この時間を超えた分で比べる。
+    /// </summary>
+    public int AllowedOverlapCs { get; set; }
+
+    /// <summary>
     /// 1 行だけのページが「下から 2 行目」に昇格するために必要な、
     /// 次ページの上段行の表示開始までの余裕（10ms 単位。0 = 重ならなければ昇格）。
     /// </summary>
@@ -50,6 +58,18 @@ public sealed class PageCollisionSettings
     /// n3proj 書き出し用に行へ指定した表示開始時刻。指定がある行は「希望表示開始」の代わりに使う。
     /// </summary>
     public IReadOnlyDictionary<int, int>? LineShowBeginCs { get; set; }
+
+    /// <summary>
+    /// 行の画面上の四角（字幕の画面の px）。前後のページの同じ段の行でも、四角が重ならない組は別の場所に出るので知らせない
+    /// （レイアウトで位置が違う行。ニコカラメーカー3 には無い NicoKaraPrep の機能。null = 段だけで組にする）。
+    /// </summary>
+    public IReadOnlyDictionary<int, N3LineBounds>? LineBounds { get; set; }
+
+    /// <summary>
+    /// 1 行だけのページの行が画面の何段目（下から）に出るか（行の添字 → 段。字幕のプレビューで決めたもの）。
+    /// あればその段で比べ、無ければ <see cref="PageRowMap"/> の昇格の規則で決める。
+    /// </summary>
+    public IReadOnlyDictionary<int, int>? SingleLineRows { get; set; }
 }
 
 /// <summary>
@@ -67,13 +87,15 @@ public static class PageRowMap
     /// <param name="displayEnd">行の表示終了時刻を返す関数（単位は呼び出し側で統一）。</param>
     /// <param name="displayStart">行の表示開始時刻を返す関数。</param>
     /// <param name="singleLinePromoteGap">昇格に必要な余裕（displayEnd/displayStart と同じ単位）。</param>
+    /// <param name="singleLineRows">1 行だけのページの行の段（下から。字幕のプレビューで決めたもの）。あれば昇格の規則より優先する。</param>
     public static Dictionary<int, int> Build(
         IReadOnlyList<List<int>> pages,
         int pageIdx,
         bool alignFromTop,
         Func<int, int?> displayEnd,
         Func<int, int?> displayStart,
-        int singleLinePromoteGap)
+        int singleLinePromoteGap,
+        IReadOnlyDictionary<int, int>? singleLineRows = null)
     {
         var page = pages[pageIdx];
         var map = new Dictionary<int, int>();
@@ -87,6 +109,11 @@ public static class PageRowMap
         if (page.Count == 1)
         {
             int line = page[0];
+            if (singleLineRows?.TryGetValue(line, out int known) == true)
+            {
+                map[Math.Max(1, known)] = line;
+                return map;
+            }
             bool promoted = false;
             if (pageIdx + 1 < pages.Count)
             {
@@ -147,7 +174,7 @@ public static class PageRowCollisionValidator
         var rowMaps = new Dictionary<int, int>[pages.Count];
         for (int i = 0; i < pages.Count; i++)
         {
-            rowMaps[i] = PageRowMap.Build(pages, i, settings.AlignFromTop, DisplayEnd, DisplayStart, settings.SingleLinePromoteGapCs);
+            rowMaps[i] = PageRowMap.Build(pages, i, settings.AlignFromTop, DisplayEnd, DisplayStart, settings.SingleLinePromoteGapCs, settings.SingleLineRows);
         }
 
         for (int p = 0; p + 1 < pages.Count; p++)
@@ -156,21 +183,24 @@ public static class PageRowCollisionValidator
             {
                 // 同じ画面位置に次ページの行が来る場合だけ比較する
                 if (!rowMaps[p + 1].TryGetValue(pos, out int nextLineIdx)) continue;
+                if (!N3RowPlacement.SamePlace(settings.LineBounds, prevLineIdx, nextLineIdx)) continue; // レイアウトで別の場所に出る組
 
                 if (DisplayEnd(prevLineIdx) is not int displayEnd) continue;
                 if (DisplayStart(nextLineIdx) is not int displayStart) continue;
 
                 int overlap = displayEnd - displayStart;
-                if (overlap <= 0) continue;
+                int allowed = Math.Max(0, settings.AllowedOverlapCs);
+                if (overlap <= allowed) continue; // 重ねてよい時間まで（重ねない設定なら、重ならない組）
 
                 string rowLabel = settings.AlignFromTop ? $"上から{pos}行目" : $"下から{pos}行目";
-                var severity = overlap > settings.ErrorThresholdCs ? IssueSeverity.Error : IssueSeverity.Warning;
+                var severity = overlap - allowed > settings.ErrorThresholdCs ? IssueSeverity.Error : IssueSeverity.Warning;
+                string allowedNote = allowed > 0 ? $"・重ねてよいのは {allowed / 100.0:0.0#} 秒まで" : "";
                 issues.Add(new ValidationIssue(
                     severity,
                     "ページ衝突",
                     nextLineIdx,
                     $"ページ{p + 1}→{p + 2} {rowLabel}: 前行の表示終了 {TimeTag.Format(displayEnd)} > " +
-                    $"次行の表示開始 {TimeTag.Format(displayStart)}（重なり {overlap / 100.0:F2} 秒、" +
+                    $"次行の表示開始 {TimeTag.Format(displayStart)}（重なり {overlap / 100.0:F2} 秒{allowedNote}、" +
                     $"{prevLineIdx + 1}行目 と {nextLineIdx + 1}行目）",
                     RelatedLineIndex: prevLineIdx));
             }

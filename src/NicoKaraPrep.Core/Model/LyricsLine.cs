@@ -24,11 +24,26 @@ public sealed class LyricsLine
 
     // ---- ニコカラメーカー3 プロジェクト書き出し用の行設定（歌詞ファイルには保存せず .tttproj に保存） ----
 
-    /// <summary>行の表示開始時刻の手動指定（10ms 単位）。null は自動計算（先頭タグ − 表示前秒数）。</summary>
+    /// <summary>
+    /// 行の表示開始時刻（10ms 単位）。null は自動計算（ページの歌い出し − ワイプ前）。値の出どころは <see cref="ShowBeginOrigin"/>
+    /// （手で指定した値・n3proj から読み込んだ値・自動調整を実行して決めた値）。値を持つ表示時刻は、書き出し・画面の表示でそのまま使う。
+    /// </summary>
     public int? ShowBeginCs { get; set; }
 
-    /// <summary>行の表示終了時刻の手動指定（10ms 単位）。null は自動計算（最終タグ ＋ 表示後秒数）。</summary>
+    /// <summary>行の表示終了時刻（10ms 単位）。null は自動計算（最終タグ ＋ ワイプ後）。値の出どころは <see cref="ShowEndOrigin"/>。</summary>
     public int? ShowEndCs { get; set; }
+
+    /// <summary><see cref="ShowBeginCs"/> の出どころ（値が null のときは意味を持たない）。</summary>
+    public ShowTimeOrigin ShowBeginOrigin { get; set; }
+
+    /// <summary><see cref="ShowEndCs"/> の出どころ（値が null のときは意味を持たない）。</summary>
+    public ShowTimeOrigin ShowEndOrigin { get; set; }
+
+    /// <summary>表示開始を手で指定しているか（自動調整を実行し直しても変えない値）。</summary>
+    public bool HasManualShowBegin => ShowBeginCs is not null && ShowBeginOrigin == ShowTimeOrigin.Manual;
+
+    /// <summary>表示終了を手で指定しているか（自動調整を実行し直しても変えない値）。</summary>
+    public bool HasManualShowEnd => ShowEndCs is not null && ShowEndOrigin == ShowTimeOrigin.Manual;
 
     /// <summary>行に適用するニコカラメーカーのフォント設定名の手動指定。null は自動（パート記号で判定）。</summary>
     public string? FontSetName { get; set; }
@@ -48,8 +63,17 @@ public sealed class LyricsLine
     /// <summary>文字単位のフォント設定名の手動指定（<see cref="CharUnit.FontSetName"/>）を 1 つでも持つか。</summary>
     public bool HasCharFonts => Chars.Any(c => c.FontSetName is not null);
 
-    /// <summary>ニコカラメーカー3 書き出し用の手動設定（表示時刻・行のフォント・文字のフォント）を 1 つでも持つか。</summary>
+    /// <summary>
+    /// ニコカラメーカー3 書き出し用の行設定（表示時刻・行のフォント・文字のフォントなど）を 1 つでも持つか（保存する行・解除できる行）。
+    /// 表示時刻は出どころを問わない（読み込んだ値・自動調整の値も含む）。
+    /// </summary>
     public bool HasN3Overrides => ShowBeginCs is not null || ShowEndCs is not null || FontSetName is not null || LayoutName is not null || FontSizeDelta != 0 || HasCharFonts;
+
+    /// <summary>
+    /// 手で指定したニコカラメーカー3 書き出し用の行設定を 1 つでも持つか（行リストの ✎）。
+    /// 表示時刻は手で指定したものだけを数える（読み込んだ値・自動調整の値は数えない）。
+    /// </summary>
+    public bool HasManualN3Overrides => HasManualShowBegin || HasManualShowEnd || FontSetName is not null || LayoutName is not null || FontSizeDelta != 0 || HasCharFonts;
 
     /// <summary>空行（ページ区切り）かどうか。</summary>
     public bool IsEmpty => Chars.Count == 0 && EndTimeCs is null;
@@ -104,6 +128,8 @@ public sealed class LyricsLine
             SplitOrderKey = SplitOrderKey,
             ShowBeginCs = ShowBeginCs,
             ShowEndCs = ShowEndCs,
+            ShowBeginOrigin = ShowBeginOrigin,
+            ShowEndOrigin = ShowEndOrigin,
             FontSetName = FontSetName,
             LayoutName = LayoutName,
             FontSizeDelta = FontSizeDelta,
