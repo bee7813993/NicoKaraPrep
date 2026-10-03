@@ -429,8 +429,11 @@
                                     <TextBlock Text="{x:Bind IndexText, Mode=OneWay}" HorizontalAlignment="Right" Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
                                 </Grid>
                                 <StackPanel Grid.Column="2" Orientation="{x:Bind vm:LineListLayout.Current.TimeOrientation, Mode=OneWay}" Spacing="{x:Bind vm:LineListLayout.Current.TimeSpacing, Mode=OneWay}">
-                                    <TextBlock Width="64" Text="{x:Bind TimeText, Mode=OneWay}" FontFamily="Consolas" Foreground="{x:Bind StartTimeBrush, Mode=OneWay}" ToolTipService.ToolTip="開始時間（ページ衝突時は色付き）" />
-                                    <TextBlock Width="64" Text="{x:Bind EndTimeText, Mode=OneWay}" FontFamily="Consolas" Foreground="{x:Bind EndTimeBrush, Mode=OneWay}" ToolTipService.ToolTip="終了時間（ページ衝突時は色付き）" />
+                                    <!-- 時刻をダブルクリック: 下の行設定の表示開始・表示終了の欄へカーソルを移す（今の表示時刻を入れて選ぶ） -->
+                                    <TextBlock Width="64" Text="{x:Bind TimeText, Mode=OneWay}" FontFamily="Consolas" Foreground="{x:Bind StartTimeBrush, Mode=OneWay}" DoubleTapped="OnLineStartTimeDoubleTapped"
+                                               ToolTipService.ToolTip="歌い出し（行の最初のタイムタグ）。チェックで表示開始に問題があれば色が付きます。ダブルクリックで、下の行設定の表示開始を直せます" />
+                                    <TextBlock Width="64" Text="{x:Bind EndTimeText, Mode=OneWay}" FontFamily="Consolas" Foreground="{x:Bind EndTimeBrush, Mode=OneWay}" DoubleTapped="OnLineEndTimeDoubleTapped"
+                                               ToolTipService.ToolTip="歌い終わり（行の最後のタイムタグ）。チェックで表示終了に問題があれば色が付きます。ダブルクリックで、下の行設定の表示終了を直せます" />
                                 </StackPanel>
                                 <!-- 印: 上に ♪（タイムタグの重なり）、下に横幅の判定（どちらも出ないことが多いので 1 つの欄にまとめる） -->
                                 <StackPanel Grid.Column="3">

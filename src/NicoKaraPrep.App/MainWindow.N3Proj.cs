@@ -328,6 +328,8 @@ public sealed partial class MainWindow
     /// <summary>選択行のニコカラメーカー用行設定（表示時刻・フォント）をパネルへ表示する。</summary>
     private void RefreshN3LinePanel()
     {
+        _showBeginPrefill = null;
+        _showEndPrefill = null;
         _n3PanelLoading = true;
         try
         {
@@ -600,22 +602,94 @@ public sealed partial class MainWindow
             ApplyShowTimeBoxes();
             e.Handled = true;
         }
+        else if (e.Key == Windows.System.VirtualKey.Escape)
+        {
+            // 直すのをやめる: 欄を行に持たせた値へ戻して、行リストの選択行へ戻る（↑↓ で行を選び続けられるように）
+            RefreshN3LinePanel();
+            if (!(ViewModel.SelectedLine is { } line && LineList.ContainerFromItem(line) is ListViewItem item && item.Focus(FocusState.Programmatic)))
+            {
+                LineList.Focus(FocusState.Programmatic);
+            }
+            ViewModel.StatusText = "表示時刻は直しませんでした";
+            e.Handled = true;
+        }
     }
 
-    private void OnShowTimeBoxLostFocus(object sender, RoutedEventArgs e) => ApplyShowTimeBoxes();
+    /// <summary>
+    /// 行リストの時刻をダブルクリックしたときに表示開始・終了の欄へ入れた、今の表示時刻（欄の文字）。
+    /// 変えずに確定しても手で指定したことにしない（行設定パネルを作り直すと消す）。
+    /// </summary>
+    private string? _showBeginPrefill, _showEndPrefill;
+
+    /// <summary>行リストの歌い出しの時刻をダブルクリック: その行の表示開始の欄へカーソルを移す（行のダブルクリックの再生位置の移動もする）。</summary>
+    private void OnLineStartTimeDoubleTapped(object sender, DoubleTappedRoutedEventArgs e) => BeginEditShowTime(sender, begin: true);
+
+    /// <summary>行リストの歌い終わりの時刻をダブルクリック: その行の表示終了の欄へカーソルを移す。</summary>
+    private void OnLineEndTimeDoubleTapped(object sender, DoubleTappedRoutedEventArgs e) => BeginEditShowTime(sender, begin: false);
+
+    private void BeginEditShowTime(object sender, bool begin)
+    {
+        if ((sender as FrameworkElement)?.DataContext is not ViewModels.LineViewModel line || line.Model.IsEmpty) return;
+        if (!ReferenceEquals(ViewModel.SelectedLine, line)) LineList.SelectedItem = line;
+        // 選んだ行の行設定パネルができてから（行の選択の処理と、行のダブルクリックの処理のあとで）カーソルを移す
+        DispatcherQueue.TryEnqueue(() =>
+        {
+            if (!ReferenceEquals(ViewModel.SelectedLine, line)) return;
+            var box = begin ? ShowBeginBox : ShowEndBox;
+            if (box.Text.Trim().Length == 0 && box.PlaceholderText is { Length: > 0 } shown && shown != "--:--:--")
+            {
+                // 手で指定していない行は、今の表示時刻（薄字）を入れて選ぶ（そのまま打ち直せる。変えずに確定しても手動にしない）
+                _n3PanelLoading = true;
+                box.Text = shown;
+                _n3PanelLoading = false;
+                if (begin) _showBeginPrefill = shown;
+                else _showEndPrefill = shown;
+            }
+            box.Focus(FocusState.Programmatic);
+            box.SelectAll();
+            ViewModel.StatusText = $"{line.Index + 1} 行目の表示{(begin ? "開始" : "終了")}を直せます（mm:ss:cc で入れて Enter。Esc でやめる）";
+        });
+    }
+
+    private void OnShowTimeBoxLostFocus(object sender, RoutedEventArgs e)
+    {
+        ApplyShowTimeBoxes();
+        DropShowTimePrefill(sender);
+    }
+
+    /// <summary>
+    /// 行リストの時刻のダブルクリックで欄へ入れた今の表示時刻を、変えずに欄を離れたら外して、欄を空欄（薄字の表示）へ戻す
+    /// （手で指定した値に見えないように）。
+    /// </summary>
+    private void DropShowTimePrefill(object sender)
+    {
+        if (sender is not TextBox box) return;
+        bool isBegin = ReferenceEquals(box, ShowBeginBox);
+        string? prefill = isBegin ? _showBeginPrefill : _showEndPrefill;
+        if (prefill is null) return;
+        if (isBegin) _showBeginPrefill = null;
+        else _showEndPrefill = null;
+        if (box.Text.Trim() != prefill) return;
+        _n3PanelLoading = true;
+        box.Text = "";
+        _n3PanelLoading = false;
+    }
 
     private void ApplyShowTimeBoxes()
     {
         if (_n3PanelLoading || ViewModel.SelectedLine is not { } line || line.Model.IsEmpty) return;
 
-        int? begin = ParseTimeText(ShowBeginBox.Text);
-        int? end = ParseTimeText(ShowEndBox.Text);
-        if (ShowBeginBox.Text.Trim().Length > 0 && begin is null)
+        // 行リストの時刻のダブルクリックで入れた今の表示時刻のままなら、手で指定していない（空欄と同じ）
+        string beginText = ShowBeginBox.Text.Trim() == _showBeginPrefill ? "" : ShowBeginBox.Text;
+        string endText = ShowEndBox.Text.Trim() == _showEndPrefill ? "" : ShowEndBox.Text;
+        int? begin = ParseTimeText(beginText);
+        int? end = ParseTimeText(endText);
+        if (beginText.Trim().Length > 0 && begin is null)
         {
             ViewModel.StatusText = "表示開始は mm:ss:cc 形式で入力してください（空欄にすると、手で指定した値を外します）";
             return;
         }
-        if (ShowEndBox.Text.Trim().Length > 0 && end is null)
+        if (endText.Trim().Length > 0 && end is null)
         {
             ViewModel.StatusText = "表示終了は mm:ss:cc 形式で入力してください（空欄にすると、手で指定した値を外します）";
             return;
