@@ -612,12 +612,12 @@ public sealed partial class MainWindow
         int? end = ParseTimeText(ShowEndBox.Text);
         if (ShowBeginBox.Text.Trim().Length > 0 && begin is null)
         {
-            ViewModel.StatusText = "表示開始は mm:ss:cc 形式で入力してください（空欄で自動）";
+            ViewModel.StatusText = "表示開始は mm:ss:cc 形式で入力してください（空欄にすると、手で指定した値を外します）";
             return;
         }
         if (ShowEndBox.Text.Trim().Length > 0 && end is null)
         {
-            ViewModel.StatusText = "表示終了は mm:ss:cc 形式で入力してください（空欄で自動）";
+            ViewModel.StatusText = "表示終了は mm:ss:cc 形式で入力してください（空欄にすると、手で指定した値を外します）";
             return;
         }
 
