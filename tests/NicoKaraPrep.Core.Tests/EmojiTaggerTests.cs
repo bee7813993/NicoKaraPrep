@@ -165,17 +165,18 @@ public class EmojiTaggerMultiCharTests
         // （花帆）→「あ」、（さやか）→「い」を基準にする
         var line = LrcFormat.ParseLyricLine("[00:10:00]あ[00:20:00]い[00:30:00]");
         EmojiTagger.InsertEmoji(line, 0, "（花帆）", Matcher, PerEmoji);
-        // 「い」の直前（花帆4ユニット+あ の後）。「あ」に終わりのタグが無いので、元の終わり [00:20:00] を載せた空白を足す
-        // （足さないと「あ」が （さやか） の開始 [00:18:00] で終わってしまう）
+        // 「い」の直前（花帆4ユニット+あ の後）。「あ」に終わりのタグが無いので、元の終わり [00:20:00] を 2連タグで置く
+        // （足さないと「あ」が （さやか） の開始 [00:18:00] で終わってしまう。空白の無い所なので空白は足さない）
         EmojiTagger.InsertEmoji(line, 5, "（さやか）", Matcher, PerEmoji);
 
         Assert.Equal(
-            "[00:08:00]（花帆）[00:10:00]あ[00:20:00] [00:18:00]（さやか）[00:20:00]い[00:30:00]",
+            "[00:08:00]（花帆）[00:10:00]あ[00:20:00][00:18:00]（さやか）[00:20:00]い[00:30:00]",
             LrcFormat.WriteLyricLine(line));
+        Assert.True(line.Chars[5].IsSpacer);
     }
 
     [Fact]
-    public void 直前の文字に終わりのタグが無ければ次の最初のタグを載せた空白を足す()
+    public void 直前の文字に終わりのタグが無く後ろが空白なら次の最初のタグを載せた空白を足す()
     {
         // ユーザーの例: 「d！」と [02:23:08] の空白の間に（コーラス）を入れると、（コーラス）の開始 [02:21:08] が「d！」の終わりになって巻き戻っていた
         var matcher = new EmojiMatcher(["（コーラス）"]);
@@ -189,6 +190,21 @@ public class EmojiTaggerMultiCharTests
             LrcFormat.WriteLyricLine(line));
         Assert.Equal(6 + 1, inserted); // （コーラス） 6 ユニット＋足した空白
         Assert.Equal(14308, closed);
+    }
+
+    [Fact]
+    public void 直前の文字に終わりのタグが無く空白の無い所なら2連タグにする()
+    {
+        var line = LrcFormat.ParseLyricLine("[00:10:00]あい[00:20:00]う[00:30:00]");
+        int inserted = EmojiTagger.InsertEmoji(line, 2, "（花帆）", Matcher, PerEmoji, out int? closed);
+
+        Assert.Equal("[00:10:00]あい[00:20:00][00:18:00]（花帆）[00:20:00]う[00:30:00]", LrcFormat.WriteLyricLine(line));
+        Assert.Equal(4 + 1, inserted); // （花帆） 4 ユニット＋スペーサー
+        Assert.Equal(2000, closed);
+        Assert.Equal("あい（花帆）う", line.GetDisplayText()); // 空白は増えない
+
+        // テキスト編集モード（行エディタ）では連続タグ
+        Assert.Equal("[1|00:10:00]あい[1|00:20:00][1|00:18:00]（花帆）[1|00:20:00]う[00:30:00]", TextEditModeFormat.WriteLyricLine(line));
     }
 
     [Fact]
@@ -229,8 +245,10 @@ public class EmojiTaggerMultiCharTests
         var line = LrcFormat.ParseLyricLine("[00:10:00]歌詞[00:12:00]");
         int inserted = EmojiTagger.InsertEmoji(line, line.Chars.Count, "（花帆）", Matcher, PerEmoji);
 
-        Assert.Equal("[00:10:00]歌詞[00:12:00] [00:10:00]（花帆）[00:12:00]", LrcFormat.WriteLyricLine(line));
+        // 空白の無い所なので 2連タグ（スペーサーに行末のタグ）
+        Assert.Equal("[00:10:00]歌詞[00:12:00][00:10:00]（花帆）[00:12:00]", LrcFormat.WriteLyricLine(line));
         Assert.Equal(5, inserted);
+        Assert.True(line.Chars[2].IsSpacer);
     }
 
     [Fact]

@@ -57,7 +57,9 @@ public static class EmojiTagger
     /// 挿入した絵文字（charIndex から）の直前の文字に終わりのタイムタグが無ければ、絵文字の基準時刻 T（次の最初のタイムタグ）を足す。
     /// 足さないと、絵文字の開始タグ（T − 表示秒数）が直前の文字の終わりになり、時刻が巻き戻る（縮む）。
     /// 例: <c>[02:22:94]d！[02:23:08] </c> の「d！」の後ろに入れると <c>[02:22:94]d！[02:21:08]（コーラス）[02:23:08] </c> になる。
-    /// 直前が歌う文字なら、T のタグを付けた空白を絵文字の前に入れる（<c>[02:22:94]d！[02:23:08] [02:21:08]（コーラス）[02:23:08] </c>）。
+    /// 直前が歌う文字で、絵文字の後ろが空白なら、T のタグを付けた空白を絵文字の前にも入れる
+    /// （<c>[02:22:94]d！[02:23:08] [02:21:08]（コーラス）[02:23:08] </c>）。空白の無い所では空白を足さず、T のタグだけを置く
+    /// （2連タグ: <c>[00:10:00]あ[00:20:00][00:18:00]（さやか）[00:20:00]い</c>）。
     /// 直前がタグの無い空白なら、その空白に T を付ける。行頭、直前が絵文字・スペーサー・タグの付いた空白、
     /// 直前の文字より前にタグが無い（どのタグの区間にも入っていない）、絵文字にタグが付かない・開始が T と同じ（表示秒数 0）ときは足さない。
     /// 足した CharUnit の数（0 か 1）を返す。
@@ -93,7 +95,9 @@ public static class EmojiTagger
             prev.CheckCount = 1;
             return 0;
         }
-        line.Chars.Insert(charIndex, new CharUnit { Text = " ", TimeCs = baseT, CheckCount = 1 });
+        int next = occurrences[k].EndExclusive;
+        bool spaceAfter = next < line.Chars.Count && string.IsNullOrWhiteSpace(line.Chars[next].Text);
+        line.Chars.Insert(charIndex, new CharUnit { Text = spaceAfter ? " " : CharUnit.Spacer, TimeCs = baseT, CheckCount = 1 });
         return 1;
     }
 
