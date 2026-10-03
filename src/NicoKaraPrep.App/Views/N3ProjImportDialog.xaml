@@ -106,7 +106,7 @@
             </CheckBox>
             <CheckBox x:Name="LineShowBox">
                 <StackPanel>
-                    <TextBlock Text="ニコカラメーカーで調整された表示時刻を、行ごとの手動指定として取り込む" TextWrapping="Wrap" />
+                    <TextBlock Text="ニコカラメーカーの表示時刻を、そのまま読み込む（全行）" TextWrapping="Wrap" />
                     <TextBlock x:Name="LineShowDetail" Style="{StaticResource ItemDetail}" />
                 </StackPanel>
             </CheckBox>

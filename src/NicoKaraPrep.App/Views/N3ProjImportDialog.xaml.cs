@@ -115,8 +115,6 @@ public sealed partial class N3ProjImportDialog : ContentDialog
     private readonly MainViewModel _vm;
     private readonly N3ProjImportPreview _preview;
     private readonly int _matchedLines;
-    private readonly int _lineShowCurrent;
-    private readonly int _lineShowEstimated;
 
     public ObservableCollection<N3ImportFontRow> FontRows { get; } = new();
 
@@ -220,9 +218,8 @@ public sealed partial class N3ProjImportDialog : ContentDialog
             TimingBox.IsEnabled = false;
         }
 
-        _lineShowCurrent = matched > 0 ? vm.CountLineShowTimeImports(preview, withEstimatedTiming: false) : 0;
-        _lineShowEstimated = matched > 0 && preview.Timing is not null ? vm.CountLineShowTimeImports(preview, withEstimatedTiming: true) : 0;
         LineShowBox.IsEnabled = matched > 0;
+        LineShowBox.IsChecked = matched > 0; // 読み込んだプロジェクトの表示時刻のまま見る・直す・書き出す（自動調整は右のパネル「表示時刻」で実行する）
 
         // ---- レイアウト ----
         int layoutPages = matched > 0 ? vm.CountPageLayoutImports(preview) : 0;
@@ -270,25 +267,10 @@ public sealed partial class N3ProjImportDialog : ContentDialog
 
     private void UpdateLineShowDetail()
     {
-        bool withTiming = TimingBox.IsChecked == true;
-        int n = withTiming ? _lineShowEstimated : _lineShowCurrent;
-        if (_matchedLines == 0)
-        {
-            LineShowDetail.Text = "開いている歌詞と一致する行がありません";
-            return;
-        }
-        if (n == 0)
-        {
-            LineShowDetail.Text = "NicoKaraPrep の自動計算と違う行はありません（取り込む行はありません）";
-            return;
-        }
-
-        string text = $"NicoKaraPrep の自動計算と違う {n} 行を、行ごとの手動指定にします（歌詞が同じ行だけ。{(withTiming ? "取り込む表示時刻の設定" : "現在の表示時刻の設定")}で比較）。行リストに ✎ が付き、n3proj 書き出しもその時刻になります";
-        if (!withTiming && TimingBox.IsEnabled && _lineShowEstimated < n)
-        {
-            text += $"\n⚠ 表示時刻の設定が違うため多くの行が対象になっています。「表示時刻の設定値を取り込む」も選ぶと、ニコカラメーカーで調整された {_lineShowEstimated} 行だけになります";
-        }
-        LineShowDetail.Text = text;
+        LineShowDetail.Text = _matchedLines == 0
+            ? "開いている歌詞と一致する行がありません"
+            : $"歌詞が同じ {_matchedLines} 行の表示開始・終了を、ニコカラメーカーの値のまま行に持たせます。字幕のプレビュー・チェック・書き出しはその値のままです。" +
+              "自動調整は、行リストの右のパネル「表示時刻」で実行します（手で直した行はそのまま）";
     }
 
     private void UpdateFontSetsState()

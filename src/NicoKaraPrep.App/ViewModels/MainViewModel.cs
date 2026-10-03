@@ -885,6 +885,8 @@ public partial class MainViewModel : ObservableObject
         var previous = Document.Lines[index];
         line.ShowBeginCs = previous.ShowBeginCs;
         line.ShowEndCs = previous.ShowEndCs;
+        line.ShowBeginOrigin = previous.ShowBeginOrigin;
+        line.ShowEndOrigin = previous.ShowEndOrigin;
         line.FontSetName = previous.FontSetName;
         line.LayoutName = previous.LayoutName;
         CharFontOperations.CopyCharFonts(previous, line);
@@ -1133,6 +1135,14 @@ public partial class MainViewModel : ObservableObject
     /// 実効絵文字リスト（＋追加の文字列）から出現マッチャーを作る。
     /// プレースホルダ文字（＿）も絵文字と同じタグ付け・除外の対象に含める。
     /// </summary>
+    /// <summary>その文書（タブ）の @Emoji とアプリ共通の絵文字・プレースホルダ（＿）の matcher（表示時刻の計算をタブごとにするとき）。</summary>
+    public EmojiMatcher CreateEmojiMatcherFor(LyricsDocument doc)
+    {
+        var strings = GetEffectiveEmojiList(doc).Select(e => e.ReplaceChar);
+        if (!string.IsNullOrEmpty(Settings.PlaceholderChar)) strings = strings.Append(Settings.PlaceholderChar);
+        return new EmojiMatcher(strings);
+    }
+
     public EmojiMatcher CreateEmojiMatcher(string? extra = null)
     {
         var strings = GetEffectiveEmojiList().Select(e => e.ReplaceChar);
@@ -1162,7 +1172,7 @@ public partial class MainViewModel : ObservableObject
         if (SelectedLine is not null) CharFontOperations.CopyCharFonts(Document.Lines[SelectedLine.Index], line);
 
         var matcher = CreateEmojiMatcher(emojiChar);
-        int inserted = EmojiTagger.InsertEmoji(line, charIndex, emojiChar, matcher, EmojiTagSettings);
+        int inserted = EmojiTagger.InsertEmoji(line, charIndex, emojiChar, matcher, EmojiTagSettings, out int? closedEnd);
 
         if (SelectedLine is not null)
         {
@@ -1171,9 +1181,7 @@ public partial class MainViewModel : ObservableObject
             MarkModified();
         }
 
-        StatusText = EmojiTagger.HasUntaggableEmoji(line, matcher)
-            ? $"絵文字 {emojiChar} を挿入しました（直後にタイムタグ付きの文字が無いため時刻は未設定です）"
-            : $"絵文字 {emojiChar} を挿入しました";
+        SetInsertedEmojiStatus(emojiChar, line, matcher, closedEnd);
         NoteComposedFonts(AutoComposeFontsFor(line)); // 2 種類続けて入れたら、組み合わせのフォント設定を作る
 
         string newRaw = TextEditModeFormat.WriteLyricLine(line);
@@ -1305,17 +1313,32 @@ public partial class MainViewModel : ObservableObject
         int unitIndex = DisplayOffsetToUnitIndex(line, charOffset);
 
         var matcher = CreateEmojiMatcher(emojiChar);
-        EmojiTagger.InsertEmoji(line, unitIndex, emojiChar, matcher, EmojiTagSettings);
+        int before = line.GetDisplayText().Length;
+        EmojiTagger.InsertEmoji(line, unitIndex, emojiChar, matcher, EmojiTagSettings, out int? closedEnd);
 
         if (lineIndex < Lines.Count) Lines[lineIndex].RaiseAllChanged();
         MarkModified();
 
-        StatusText = EmojiTagger.HasUntaggableEmoji(line, matcher)
-            ? $"絵文字 {emojiChar} を挿入しました（直後にタイムタグ付きの文字が無いため時刻は未設定です）"
-            : $"絵文字 {emojiChar} を挿入しました";
+        SetInsertedEmojiStatus(emojiChar, line, matcher, closedEnd);
         NoteComposedFonts(AutoComposeFontsFor(line)); // 2 種類続けて入れたら、組み合わせのフォント設定を作る
 
-        return GetInsertViewLineStart(lineIndex) + charOffset + emojiChar.Length;
+        // 絵文字の後ろへ（直前の文字の終わりのタグを載せる空白を足したときはその分も進める。スペーサーは表示幅 0）
+        return GetInsertViewLineStart(lineIndex) + charOffset + (line.GetDisplayText().Length - before);
+    }
+
+    /// <summary>
+    /// 絵文字を挿入したときのステータスバーの知らせ（closedEndCs は直前の文字の終わりのタグとして足した時刻）。
+    /// 時刻を設定できなかった・終わりのタグを足したことは、挿入のあとのチェックの結果で消えないよう、次のチェックの結果の前にも出す。
+    /// </summary>
+    private void SetInsertedEmojiStatus(string emojiChar, LyricsLine line, EmojiMatcher matcher, int? closedEndCs)
+    {
+        string? detail = EmojiTagger.HasUntaggableEmoji(line, matcher)
+            ? "直後にタイムタグ付きの文字が無いため時刻は未設定です"
+            : closedEndCs is int cs
+                ? $"直前の文字の終わりが巻き戻らないよう、終わりのタイムタグ {TimeTag.Format(cs)} を足しました"
+                : null;
+        StatusText = detail is null ? $"絵文字 {emojiChar} を挿入しました" : $"絵文字 {emojiChar} を挿入しました（{detail}）";
+        _noticeBeforeCheck = detail is null ? null : StatusText;
     }
 
     /// <summary>行内の表示文字オフセット → CharUnit 挿入位置（スペーサーは表示幅 0）。</summary>
@@ -1623,7 +1646,7 @@ public partial class MainViewModel : ObservableObject
     private List<N3ProjLineTime>? _n3projLineTimes;
 
     /// <summary>
-    /// n3proj の実表示区間と行ごとの手動指定（表示終了）をドキュメントの行に対応付ける。
+    /// n3proj の実表示区間と、行に持たせた表示時刻（表示終了）をドキュメントの行に対応付ける。
     /// 実表示区間は、行の最初の実文字のタグ時刻（絵文字の先行タグ除く）が ±50ms で一致した行だけに適用する。
     /// ニコカラメーカーの時刻はタイムタグと同じ基準の ms（@Offset は適用前）。
     /// </summary>
@@ -1648,7 +1671,7 @@ public partial class MainViewModel : ObservableObject
             }
         }
 
-        // 行への手動指定（表示終了）は実表示区間より優先する
+        // 行に持たせた表示時刻（手で直した値・読み込んだ値・自動調整の値）は実表示区間より優先する
         for (int i = 0; i < Document.Lines.Count; i++)
         {
             var line = Document.Lines[i];
@@ -1751,11 +1774,14 @@ public partial class MainViewModel : ObservableObject
     // ------------------------------------------------------------ 検証
 
     /// <summary>グローバル＋曲ごと上書きをマージした実効 @Emoji リスト。</summary>
-    public List<EmojiEntry> GetEffectiveEmojiList()
+    public List<EmojiEntry> GetEffectiveEmojiList() => GetEffectiveEmojiList(Document);
+
+    /// <summary>その文書（タブ）の @Emoji と、アプリ共通の絵文字（同じ置き換え文字列は文書のものを使う）。</summary>
+    public List<EmojiEntry> GetEffectiveEmojiList(LyricsDocument doc)
     {
         var result = new List<EmojiEntry>();
-        var songChars = new HashSet<string>(Document.EmojiEntries.Select(e => e.ReplaceChar));
-        result.AddRange(Document.EmojiEntries);
+        var songChars = new HashSet<string>(doc.EmojiEntries.Select(e => e.ReplaceChar));
+        result.AddRange(doc.EmojiEntries);
         result.AddRange(Settings.GlobalEmojiList.Where(e => !songChars.Contains(e.ReplaceChar)));
         return result;
     }
@@ -1774,31 +1800,33 @@ public partial class MainViewModel : ObservableObject
         Issues.Clear();
         foreach (var line in Lines) line.ResetIssueMarks();
 
+        // 0) 各行に当たるフォント設定・字幕の見た目・プレビュー・横幅と、行の画面上の四角（1)・1') はこの四角を使い、
+        //    レイアウトで別の場所に出る前後のページの行を組にしない）
+        UpdateLineFonts();
+
         // 1) ページ間行衝突（最重要）
         // n3proj 由来の実表示区間があれば推定値の代わりに使う
         var collisionSettings = Settings.ToCollisionSettings(exclude);
         collisionSettings.LineDisplayCs = BuildLineDisplayOverrides(exclude);
         collisionSettings.LineShowBeginCs = BuildManualShowBegins();
-        foreach (var issue in PageRowCollisionValidator.Validate(Document, collisionSettings))
-        {
-            Issues.Add(issue);
+        collisionSettings.LineBounds = CurrentLineBounds();
+        collisionSettings.SingleLineRows = CurrentSingleLineRows(); // 1 行だけのページの段は字幕のプレビューと同じ
+        var collisions = PageRowCollisionValidator.Validate(Document, collisionSettings);
+        foreach (var issue in collisions) AddPairIssue(issue);
 
-            // 対象行の背景と、衝突している時間セルを強調する
-            if (issue.LineIndex >= 0 && issue.LineIndex < Lines.Count)
-            {
-                Lines[issue.LineIndex].SetRowIssue(issue.Severity);
-                Lines[issue.LineIndex].MarkStartTimeIssue(issue.Severity); // 次行の表示開始
-            }
-            if (issue.RelatedLineIndex is int prev && prev >= 0 && prev < Lines.Count)
-            {
-                Lines[prev].SetRowIssue(issue.Severity);
-                Lines[prev].MarkEndTimeIssue(issue.Severity); // 前行の表示終了
-            }
+        // 1') 表示時刻（書き出しと同じ計算で、前の行がワイプの途中で消える組・絵文字が下限より短くなる行）。
+        //     ページ衝突のエラーが出ている組には重ねて出さない
+        var collisionErrors = collisions
+            .Where(i => i.Severity == IssueSeverity.Error && i.RelatedLineIndex is int)
+            .Select(i => (Prev: i.RelatedLineIndex!.Value, Next: i.LineIndex))
+            .ToHashSet();
+        var show = CreateShowTimeSettings(_activeTab.Name);
+        foreach (var issue in N3ShowTimeValidator.Validate(Document, N3ShowTimePlanner.Plan(Document, show), show, collisionErrors))
+        {
+            AddPairIssue(issue);
         }
 
-        // 2) 各行に当たるフォント設定・字幕の見た目・プレビュー・横幅（横幅は字幕のプレビューと同じ並べ方で測り、
-        //    ページのレイアウト設定の左右余白で判定する）
-        UpdateLineFonts();
+        // 2) 横幅（0) で、字幕のプレビューと同じ並べ方で測り、ページのレイアウト設定の左右余白で判定したもの）
         var widthResults = _lineWidths.Values.OrderBy(r => r.LineIndex).ToList();
         foreach (var issue in LineWidthValidator.ToIssues(widthResults))
         {
@@ -1823,6 +1851,25 @@ public partial class MainViewModel : ObservableObject
             : $"チェック結果: エラー {errors} 件 / 警告 {warnings} 件";
         StatusText = _noticeBeforeCheck is { } notice ? $"{notice}　／　{result}" : result;
         _noticeBeforeCheck = null;
+    }
+
+    /// <summary>
+    /// 前後のページの同じ段の行の組のチェック結果（ページ衝突・表示時刻）を一覧に足し、
+    /// 2 行の背景と、問題の時間の欄（次の行は表示開始、前の行は表示終了）を強調する。
+    /// </summary>
+    private void AddPairIssue(ValidationIssue issue)
+    {
+        Issues.Add(issue);
+        if (issue.LineIndex >= 0 && issue.LineIndex < Lines.Count)
+        {
+            Lines[issue.LineIndex].SetRowIssue(issue.Severity);
+            Lines[issue.LineIndex].MarkStartTimeIssue(issue.Severity); // 次行の表示開始
+        }
+        if (issue.RelatedLineIndex is int prev && prev >= 0 && prev < Lines.Count)
+        {
+            Lines[prev].SetRowIssue(issue.Severity);
+            Lines[prev].MarkEndTimeIssue(issue.Severity); // 前行の表示終了
+        }
     }
 
     private void UpdateTitle()

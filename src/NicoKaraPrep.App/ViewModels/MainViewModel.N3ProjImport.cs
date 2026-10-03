@@ -15,7 +15,7 @@ public sealed class N3ProjImportChoices
     /// <summary>表示時刻の設定値（ワイプ前・ワイプ後・表示間隔・上段の表示）を取り込む。</summary>
     public bool Timing { get; set; }
 
-    /// <summary>ニコカラメーカーで調整された表示時刻を、行ごとの手動指定として取り込む。</summary>
+    /// <summary>ニコカラメーカーの表示時刻を、歌詞が同じ行すべてに、読み込んだ値としてそのまま持たせる（自動調整は右のパネル「表示時刻」で実行する）。</summary>
     public bool LineShowTimes { get; set; }
 
     /// <summary>ニコカラメーカーで設定したページのレイアウトを、自動で選ぶものと違うページだけ、ページの手動指定として取り込む。</summary>
@@ -97,6 +97,11 @@ public partial class MainViewModel
             {
                 N3ProjSettings.TabLayouts[name] = layout;
             }
+            // 歌詞の文字がみな同じフォント設定なら、タブの最初のフォントにする（ニコカラメーカー3 はタブをまたいで引き継がない。決めていなければ）
+            if (source.FontSetName is { Length: > 0 } font && !N3ProjSettings.TabFontSetNames.ContainsKey(name))
+            {
+                N3ProjSettings.TabFontSetNames[name] = font;
+            }
             opened.Add(name);
         }
         if (opened.Count > 0) SaveProject();
@@ -116,38 +121,6 @@ public partial class MainViewModel
         }
     }
 
-    /// <summary>表示時刻の設定値を取り込んだ場合の、タブごとの表示時刻計算の設定。</summary>
-    private N3ShowTimeSettings EstimatedShowTimeSettings(N3ProjImportPreview preview, N3ProjSourceTab? source)
-    {
-        var s = CreateShowTimeSettings();
-        if (preview.Timing is { } t)
-        {
-            s.LeadMs = t.LeadMs;
-            s.TailMs = t.TailMs;
-            s.IntervalMs = t.IntervalMs;
-        }
-        s.TopLong = source?.TopLong ?? preview.MainTopLong;
-        return s;
-    }
-
-    /// <summary>
-    /// 「調整された表示時刻を行ごとの手動指定として取り込む」を選んだときに手動指定になる行数（試算）。
-    /// </summary>
-    /// <param name="withEstimatedTiming">表示時刻の設定値も取り込む場合 true。</param>
-    public int CountLineShowTimeImports(N3ProjImportPreview preview, bool withEstimatedTiming)
-    {
-        StoreActiveTab();
-        int count = 0;
-        foreach (var tab in Tabs)
-        {
-            var (source, matched) = N3ProjImport.FindSource(tab.Document, tab.Name, preview.Tabs);
-            if (source is null || matched.Count == 0) continue;
-            var settings = withEstimatedTiming ? EstimatedShowTimeSettings(preview, source) : CreateShowTimeSettings(tab.Name);
-            count += N3ProjImport.ApplyShowTimes(tab.Document.Clone(), matched, settings).Count;
-        }
-        return count;
-    }
-
     /// <summary>
     /// 「ページのレイアウトを取り込む」を選んだときに手動指定になるページの数（試算。読み込むプロジェクトを書き出しのベースにした場合のレイアウトの並びで比べる）。
     /// </summary>
@@ -155,10 +128,11 @@ public partial class MainViewModel
     {
         StoreActiveTab();
         var layouts = EffectiveLayoutsFor(preview.Path);
+        var matcher = CreateEmojiMatcher();
         int count = 0;
         foreach (var tab in Tabs)
         {
-            var (source, _) = N3ProjImport.FindSource(tab.Document, tab.Name, preview.Tabs);
+            var (source, _) = N3ProjImport.FindSource(tab.Document, tab.Name, preview.Tabs, matcher);
             if (source is not null) count += PageLayoutDifferences(tab, source, layouts).Count;
         }
         return count;
@@ -172,7 +146,7 @@ public partial class MainViewModel
     {
         var result = new List<(List<int>, string)>();
         if (layouts.Count == 0) return result;
-        var map = N3ProjImport.MatchLineIndexes(tab.Document, source);
+        var map = N3ProjImport.MatchLineIndexes(tab.Document, source, CreateEmojiMatcher());
         if (map.Count == 0) return result;
         var plans = N3ShowTimePlanner.Plan(tab.Document, CreateShowTimeSettings(tab.Name));
         string? fixedLayout = N3ProjSettings.TabLayouts.GetValueOrDefault(tab.Name) is { Length: > 0 } fl ? fl : null;
@@ -213,11 +187,12 @@ public partial class MainViewModel
     public (int Matched, int Total) CountMatchedLyricLines(N3ProjImportPreview preview)
     {
         StoreActiveTab();
+        var matcher = CreateEmojiMatcher();
         int matched = 0, total = 0;
         foreach (var tab in Tabs)
         {
             total += tab.Document.Lines.Count(l => !l.IsEmpty);
-            matched += N3ProjImport.FindSource(tab.Document, tab.Name, preview.Tabs).Lines.Count;
+            matched += N3ProjImport.FindSource(tab.Document, tab.Name, preview.Tabs, matcher).Lines.Count;
         }
         return (matched, total);
     }
@@ -228,6 +203,8 @@ public partial class MainViewModel
         StoreActiveTab();
         var done = new List<string>();
         bool settingsChanged = false;
+        // 歌詞行の照合では、絵文字・＿の開始タグを除いて比べる（書き出しで絵文字の開始を寄せた行も、絵文字の秒数を変えた行も対応させる）
+        var matcher = CreateEmojiMatcher();
 
         // 1) 表示時刻の設定値（手動指定の取り込みより先に適用し、その設定で差分を取る）
         if (choices.Timing && preview.Timing is { } timing)
@@ -238,7 +215,7 @@ public partial class MainViewModel
             Settings.N3TopLong = preview.MainTopLong;
             foreach (var tab in Tabs)
             {
-                var (source, _) = N3ProjImport.FindSource(tab.Document, tab.Name, preview.Tabs);
+                var (source, _) = N3ProjImport.FindSource(tab.Document, tab.Name, preview.Tabs, matcher);
                 if (source is null) continue;
                 if (source.TopLong == Settings.N3TopLong) N3ProjSettings.TabTopLong.Remove(tab.Name);
                 else N3ProjSettings.TabTopLong[tab.Name] = source.TopLong;
@@ -264,31 +241,25 @@ public partial class MainViewModel
             done.Add($"実際の表示区間 {preview.Settings.LineTimes.Count} 行分");
         }
 
-        // 4) 調整された表示時刻 → 行ごとの手動指定
+        // 4) 表示時刻 → 歌詞が同じ行すべてに、読み込んだ値としてそのまま持たせる（自動調整は右のパネル「表示時刻」で実行する）
         if (choices.LineShowTimes)
         {
             int lines = 0;
             foreach (var tab in Tabs)
             {
-                var (source, matched) = N3ProjImport.FindSource(tab.Document, tab.Name, preview.Tabs);
+                var (source, matched) = N3ProjImport.FindSource(tab.Document, tab.Name, preview.Tabs, matcher);
                 if (source is null || matched.Count == 0) continue;
-                var settings = CreateShowTimeSettings(tab.Name);
-
-                // 変更がある場合だけ元に戻せるようにしてから適用する
-                var trial = tab.Document.Clone();
-                if (N3ProjImport.ApplyShowTimes(trial, matched, settings).Count == 0) continue;
-                tab.UndoStack.Add(tab.Document.Clone());
+                tab.UndoStack.Add(tab.Document.Clone()); // 元に戻せるように
                 tab.RedoStack.Clear();
-                var touched = N3ProjImport.ApplyShowTimes(tab.Document, matched, settings);
+                lines += N3ProjImport.LoadShowTimes(tab.Document, matched);
                 tab.IsModified = true;
-                lines += touched.Count;
             }
             if (lines > 0)
             {
                 IsModified = _activeTab.IsModified;
                 UpdateTitle();
             }
-            done.Add($"調整された表示時刻 {lines} 行");
+            done.Add($"表示時刻 {lines} 行（そのまま）");
         }
 
         // 5) 書き出しのベース
@@ -306,7 +277,7 @@ public partial class MainViewModel
             int pages = 0;
             foreach (var tab in Tabs)
             {
-                var (source, _) = N3ProjImport.FindSource(tab.Document, tab.Name, preview.Tabs);
+                var (source, _) = N3ProjImport.FindSource(tab.Document, tab.Name, preview.Tabs, matcher);
                 if (source is null) continue;
                 var diffs = PageLayoutDifferences(tab, source, layouts);
                 if (diffs.Count == 0) continue;

@@ -107,14 +107,37 @@ public sealed class SubtitlePreviewView : Grid
         {
             using var clip = ds.CreateLayer(1f, screen);
             double t = _timeMs;
+            var visible = new List<PreviewLine>();
             foreach (var line in model.Lines)
             {
-                if (t < line.BeginMs || t >= line.EndMs) continue;
+                if (t >= line.BeginMs && t < line.EndMs) visible.Add(line);
+            }
+            // 行の画面上の四角（重なりの薄め方で、同じ場所に出る前後のページの行を見る）
+            var boxes = new Dictionary<PreviewLine, (float Left, float Top, float Right, float Bottom)>(ReferenceEqualityComparer.Instance);
+            foreach (var line in visible)
+            {
+                boxes[line] = Bounds(line, line.Source.GetLayout(), W, H, model.Pages.GetValueOrDefault((line.Tab, line.Page)));
+            }
+            bool SamePlace(PreviewLine a, PreviewLine b) =>
+                boxes.TryGetValue(a, out var x) && boxes.TryGetValue(b, out var y) &&
+                x.Left < y.Right && y.Left < x.Right && x.Top < y.Bottom && y.Top < x.Bottom;
+            foreach (var line in visible)
+            {
                 var layout = line.Source.GetLayout();
                 if (layout.Tokens.Count == 0) continue;
-                var (x, baseline) = Position(line, layout, W, H);
+                float alpha = CrossFadeAlpha(line, visible, t, SamePlace);
+                if (alpha <= 0f) continue;
+                var (x, baseline) = Position(line, layout, W, H, model.Pages.GetValueOrDefault((line.Tab, line.Page)));
                 var transform = Matrix3x2.CreateTranslation(x, baseline) * Matrix3x2.CreateScale(scale) * Matrix3x2.CreateTranslation(ox, oy);
-                SubtitleRenderer.Draw(ds, layout, transform, scale, Wiped(line, layout, t / 10));
+                if (alpha >= 1f)
+                {
+                    SubtitleRenderer.Draw(ds, layout, transform, scale, Wiped(line, layout, t / 10));
+                }
+                else
+                {
+                    using var fade = ds.CreateLayer(alpha);
+                    SubtitleRenderer.Draw(ds, layout, transform, scale, Wiped(line, layout, t / 10));
+                }
             }
         }
         catch (Exception ex) when (!sender.Device.IsDeviceLost(ex.HResult))
@@ -124,11 +147,59 @@ public sealed class SubtitlePreviewView : Grid
     }
 
     /// <summary>
-    /// 行の左端の x と本文のベースラインの y（字幕の画面の px）。左右は行ごとの左右レイアウトの位置に置き、
-    /// スマート水平配置は、画面の中央に届かない短い行にだけ当てる（ニコカラメーカー3 のヘルプ:「歌詞 1 行の文字が短くて寄せすぎるとバランスが悪い場合に、
-    /// 自動的に中央寄りに配置する」。中心位置揃えは左寄せの行が中央で終わり右寄せの行が中央から始まる、左右余白揃えは中央に寄せる。近似）。
+    /// 同じタブの同じ場所（<paramref name="samePlace"/>。無ければ同じ段）で、前後のページの行が同時に出ている（表示時刻が重なっている）ときの濃さ（0〜1。重ならなければ 1）。
+    /// 重なりのあいだ、前の行は消えるまでにだんだん薄く、次の行は前の行が消えるまでにだんだん濃くする
+    /// （同じ段の行を重ねてよい設定や手動指定で重ねたとき、2 行が同じ位置に重なって読めなくならないように。
+    /// 　ニコカラメーカー3 の字幕アクション「文字単位フェード」の見え方の近似で、文字ごとのフェードまでは再現しない）。
     /// </summary>
-    internal static (float X, float Baseline) Position(PreviewLine line, SubtitleLineLayout layout, float W, float H)
+    /// <param name="samePlace">2 つの行が画面の同じ場所に出るか（行の四角が重なるか。レイアウトで位置が違う行は薄めない）。null なら同じ段か。</param>
+    internal static float CrossFadeAlpha(PreviewLine line, IReadOnlyList<PreviewLine> visible, double t, Func<PreviewLine, PreviewLine, bool>? samePlace = null)
+    {
+        float alpha = 1f;
+        foreach (var other in visible)
+        {
+            if (ReferenceEquals(other, line) || other.Tab != line.Tab || other.Page == line.Page) continue;
+            if (samePlace is not null ? !samePlace(line, other) : other.Row != line.Row) continue;
+            if (other.Page > line.Page)
+            {
+                // この行が前の行: 次の行が出てから、この行が消えるまでに薄くなる
+                double span = line.EndMs - other.BeginMs;
+                if (span > 0) alpha = Math.Min(alpha, (float)Math.Clamp((line.EndMs - t) / span, 0, 1));
+            }
+            else
+            {
+                // この行が次の行: この行が出てから、前の行が消えるまでに濃くなる
+                double span = other.EndMs - line.BeginMs;
+                if (span > 0) alpha = Math.Min(alpha, (float)Math.Clamp((t - line.BeginMs) / span, 0, 1));
+            }
+        }
+        return alpha;
+    }
+
+    /// <summary>
+    /// 行の左端の x と本文のベースラインの y（字幕の画面の px）。左右は行ごとの左右レイアウトの位置に置き、
+    /// スマート水平配置は、ページの行を組にして寄せる（<see cref="SmartX"/>。<paramref name="page"/> はそのページの行）。
+    /// </summary>
+    internal static (float X, float Baseline) Position(PreviewLine line, SubtitleLineLayout layout, float W, float H, IReadOnlyList<PreviewLine>? page = null)
+    {
+        float baseline = Baseline(line, layout, H);
+        return (SmartX(line, layout, W, page), baseline);
+    }
+
+    /// <summary>
+    /// 行の画面上の四角（字幕の画面の px。左右は行の送りの範囲、上下は行の枠）。前後のページの同じ段の行が画面の同じ場所に出るか
+    /// （表示時刻の計算・チェック・重なりの薄め方。レイアウトで位置が違う行は組にしない）を決めるのに使う。
+    /// <paramref name="page"/> はそのページの行（スマート水平配置で左右の位置を決めるため）。
+    /// </summary>
+    internal static (float Left, float Top, float Right, float Bottom) Bounds(PreviewLine line, SubtitleLineLayout layout, float W, float H, IReadOnlyList<PreviewLine>? page)
+    {
+        float baseline = Baseline(line, layout, H);
+        float x = SmartX(line, layout, W, page);
+        return (x, baseline + layout.BoxTop, x + layout.Width, baseline + layout.BoxBottom);
+    }
+
+    /// <summary>本文のベースラインの y（字幕の画面の px）。</summary>
+    private static float Baseline(PreviewLine line, SubtitleLineLayout layout, float H)
     {
         var L = line.Layout;
         // 上下は、文字の枠に縁の幅の半分ずつを足した枠で並べる（ニコカラメーカー3 の出力画像の実測: 行の間隔 = 枠の高さ + 行間、
@@ -161,30 +232,53 @@ public sealed class SubtitlePreviewView : Grid
                 break;
             }
         }
+        return baseline;
+    }
 
-        // 左右は行の送りの範囲（文字の左右のすき間を含む）で余白にそろえる（ニコカラメーカー3 の出力画像の実測）
+    /// <summary>
+    /// 行の左端の x（字幕の画面の px）。左右は行の送りの範囲（文字の左右のすき間を含む）で余白にそろえる（ニコカラメーカー3 の出力画像の実測）。
+    /// スマート水平配置は、ページに左寄せの行と右寄せの行の両方がある（左右に分かれる）ときだけ短い行を中央へ寄せる
+    /// （ニコカラメーカー3 の出力画像の実測。Dou-Da？ DOING！・ジェットスターター、左右余白 50 と 100 で確認。全部の段が左寄せのページは寄せない）:
+    /// 左右余白揃えは、左寄せの行の左の余白と右寄せの行の右の余白を同じ幅にして、2 つの行が中央で本文の文字 1 つ分重なるところまで寄せる
+    /// （余白 = max(左右余白, (画面の幅 + 文字の大きさ − 左寄せの行の幅 − 右寄せの行の幅) / 2)。長い行があれば左右余白のまま）。
+    /// 中心位置揃えは、左寄せの短い行が中央より文字の半分右で終わり、右寄せの短い行が中央より文字の半分左から始まる（ヘルプの説明から。実測は無い）。
+    /// 1 行だけのページは、左右余白揃えなら中央に置く（Darling Wanted の最後のページ・アイドゥーミー！・Dou-Da？ DOING！の 1 行のページで確認）。
+    /// </summary>
+    private static float SmartX(PreviewLine line, SubtitleLineLayout layout, float W, IReadOnlyList<PreviewLine>? page)
+    {
+        var L = line.Layout;
         float w = layout.Width;
         float hm = (float)L.HorizontalMarginPx;
-        int align = L.AlignmentForRow(line.Row, rows);
+        int align = L.AlignmentForRow(line.Row, Math.Max(line.RowsInPage, line.Row));
         float x = align switch
         {
             0 => hm,
             2 => W - hm - w,
             _ => (W - w) / 2,
         };
-        // 短い行: 左寄せで右端が画面の中央に届かない・右寄せで左端が中央より右
-        bool shortLine = (align == 0 && hm + w < W / 2) || (align == 2 && W - hm - w > W / 2);
-        if (shortLine && L.SmartHorizon == 1)
+        if (align == 1 || L.SmartHorizon is not (1 or 2)) return x;
+        if (line.LinesInPage == 1) return L.SmartHorizon == 2 ? (W - w) / 2 : x;
+        if (page is null) return x;
+
+        // ページの左寄せの行・右寄せの行のうち、いちばん長い行（幅と本文の文字の大きさ）
+        (float Width, float Size)? left = null, right = null;
+        foreach (var p in page)
         {
-            x = align == 0 ? W / 2 - w : W / 2; // 中心位置揃え: 中央で終わる（左寄せ）・中央から始まる（右寄せ）
+            var pl = p.Source.GetLayout();
+            if (pl.Tokens.Count == 0) continue;
+            int a = p.Layout.AlignmentForRow(p.Row, Math.Max(p.RowsInPage, p.Row));
+            if (a == 0 && (left is null || pl.Width > left.Value.Width)) left = (pl.Width, pl.MainSize);
+            if (a == 2 && (right is null || pl.Width > right.Value.Width)) right = (pl.Width, pl.MainSize);
         }
-        else if (L.SmartHorizon == 2 && (shortLine || (line.LinesInPage == 1 && align != 1)))
+        if (left is not { } l || right is not { } r) return x; // 左右に分かれていなければ寄せない
+        float overlap = (l.Size + r.Size) / 2;
+        if (L.SmartHorizon == 2)
         {
-            // 左右余白揃え: 左右の余白を等しく（中央に寄せる）。1 行だけのページは、長い行でも中央に置く
-            // （ニコカラメーカー3 の出力で確認: Darling Wanted の最後のページ・アイドゥーミー！の 1 行のページ）
-            x = (W - w) / 2;
+            float m = Math.Max(hm, (W + overlap - l.Width - r.Width) / 2);
+            return align == 0 ? m : W - m - w;
         }
-        return (x, baseline);
+        float half = overlap / 2;
+        return align == 0 ? Math.Max(hm, W / 2 + half - w) : Math.Min(W - hm - w, W / 2 - half);
     }
 
     /// <summary>時刻 <paramref name="cs"/>（10ms 単位）にワイプ済みの横の範囲（行の座標）。</summary>

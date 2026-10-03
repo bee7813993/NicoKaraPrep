@@ -154,24 +154,32 @@ public class N3FontResolverTests
     }
 
     [Fact]
-    public void 集計_複数の文書では前の文書のフォントを引き継ぐ()
+    public void 集計_複数の文書では文書ごとに最初のフォントから決め直す()
     {
+        // ニコカラメーカー3 はタブをまたいでフォントを引き継がない（2 つ目の文書は既定か、指定した最初のフォントから）
         var main = Doc("[00:01:00]（麻衣）あ[00:02:00]");
         var chorus = Doc("[00:03:00]い[00:04:00]");
         var usage = N3FontResolver.CountUsage(new[] { main, chorus }, Names, null, true);
-        Assert.Equal(0, usage["標準"]);
-        Assert.Equal(6, usage["（麻衣）"]);
+        Assert.Equal(1, usage["標準"]);
+        Assert.Equal(5, usage["（麻衣）"]);
+        var started = N3FontResolver.CountUsage(new[] { main, chorus }, Names, null, true, new string?[] { null, "（のりこ）" });
+        Assert.Equal(0, started["標準"]);
+        Assert.Equal(1, started["（のりこ）"]);
     }
 
     [Fact]
-    public void 集計_複数の文書ではフォントを使う行も前の文書のフォントを引き継いで返す()
+    public void 集計_複数の文書ではフォントを使う行も文書ごとに最初のフォントから決め直して返す()
     {
         var main = Doc("[00:01:00]（麻衣）あ[00:02:00]", "[00:03:00]（のりこ）い[00:04:00]");
         var chorus = Doc("[00:05:00]う[00:06:00]", "", "[00:07:00]（麻衣）え[00:08:00]");
         var docs = new[] { main, chorus };
-        Assert.Equal(new[] { (0, 1), (1, 0) }, N3FontResolver.LinesUsing(docs, Names, null, true, "（のりこ）"));
+        Assert.Equal(new[] { (0, 1) }, N3FontResolver.LinesUsing(docs, Names, null, true, "（のりこ）"));
         Assert.Equal(new[] { (0, 0), (1, 2) }, N3FontResolver.LinesUsing(docs, Names, null, true, "（麻衣）"));
-        Assert.Empty(N3FontResolver.LinesUsing(docs, Names, null, true, "標準"));
+        Assert.Equal(new[] { (1, 0) }, N3FontResolver.LinesUsing(docs, Names, null, true, "標準"));
+        // 2 つ目の文書の最初のフォントを（のりこ）にすると、前の文書の最後と同じになる
+        var started = new string?[] { null, "（のりこ）" };
+        Assert.Equal(new[] { (0, 1), (1, 0) }, N3FontResolver.LinesUsing(docs, Names, null, true, "（のりこ）", started));
+        Assert.Empty(N3FontResolver.LinesUsing(docs, Names, null, true, "標準", started));
         // 文書 1 つだけなら既定のフォントから始める
         Assert.Equal(new[] { 0 }, N3FontResolver.LinesUsing(chorus, Names, null, true, "標準"));
     }
@@ -247,14 +255,16 @@ public class N3FontResolverTests
     }
 
     [Fact]
-    public void 行ごと_スペーサーは数えず前の文書のフォントを引き継ぐ()
+    public void 行ごと_スペーサーは数えず文書ごとに最初のフォントから決め直す()
     {
         // 行頭のスペーサーは前の行のフォントのままだが、文字ではないので並びに入れない
         var main = Doc("[00:01:00]（麻衣）あ[00:02:00]", "[00:02:50][00:03:00]（のりこ）え[00:04:00]");
         var chorus = Doc("[00:05:00]お[00:06:00]");
         var result = N3FontResolver.ResolveLines(new[] { main, chorus }, Names, "（麻衣）", true);
         Assert.Equal(new[] { 2 }, result[0][1].Runs);
-        Assert.Equal(new[] { 2 }, result[1][0].Runs);
+        Assert.Equal(new[] { 1 }, result[1][0].Runs); // 前の文書の（のりこ）ではなく既定の（麻衣）
+        var started = N3FontResolver.ResolveLines(new[] { main, chorus }, Names, "（麻衣）", true, new string?[] { null, "（のりこ）" });
+        Assert.Equal(new[] { 2 }, started[1][0].Runs);
     }
 
     [Fact]
