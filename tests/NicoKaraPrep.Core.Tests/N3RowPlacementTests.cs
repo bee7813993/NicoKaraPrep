@@ -130,6 +130,23 @@ public class N3RowPlacementTests
         Assert.Equal(new[] { (8500, 12800), (8500, 11800), (11000, 14800), (11000, 14300) }, shown);
     }
 
+    [Fact]
+    public void ページ衝突_1行のページはプレビューで決めた段で比べる()
+    {
+        // 1 行のページ 2 枚。前の行の表示終了（12000+500）が次の行の表示開始（12500−1500）より後
+        var doc = Lyrics("[00:10:00]あ[00:12:00]", "", "[00:12:50]い[00:14:00]");
+        var settings = new PageCollisionSettings();
+        // 昇格の規則（次のページまで余裕があれば下から 2 行目・最後のページは 2 行目）だけだと、前の行は 1 行目・次の行は 2 行目で比べない
+        Assert.Empty(PageRowCollisionValidator.Validate(doc, settings));
+        // プレビューで決めた段（前の行は 1 行目・次の行は前の行がまだ出ているので 2 行目）でも、段が違うので比べない
+        settings.SingleLineRows = new Dictionary<int, int> { [0] = 1, [2] = 2 };
+        Assert.Empty(PageRowCollisionValidator.Validate(doc, settings));
+        // プレビューで決めた段がどちらも 1 行目なら、昇格の規則より優先して比べる
+        settings.SingleLineRows = new Dictionary<int, int> { [0] = 1, [2] = 1 };
+        var issue = Assert.Single(PageRowCollisionValidator.Validate(doc, settings));
+        Assert.Contains("下から1行目", issue.Message);
+    }
+
     // ------------------------------------------------------------ タブごとの最初のフォント
 
     [Fact]

@@ -36,6 +36,15 @@ public partial class MainViewModel
     /// </summary>
     private readonly Dictionary<string, Dictionary<int, N3LineBounds>> _lineBounds = new(StringComparer.Ordinal);
 
+    /// <summary>
+    /// タブの名前 → 1 行だけのページの行の段（下から 1 か 2。字幕のプレビューと同じ決め方。<see cref="UpdateLineFonts"/> で作り直す）。
+    /// ページ衝突のチェックで、その行を比べる段に使う。
+    /// </summary>
+    private readonly Dictionary<string, Dictionary<int, int>> _singleLineRows = new(StringComparer.Ordinal);
+
+    /// <summary>表示中のタブの、1 行だけのページの行の段。</summary>
+    private IReadOnlyDictionary<int, int>? CurrentSingleLineRows() => _singleLineRows.GetValueOrDefault(_activeTab.Name);
+
     /// <summary>表示中のタブの行の画面上の四角（設定で切っていれば null）。</summary>
     private IReadOnlyDictionary<int, N3LineBounds>? CurrentLineBounds() =>
         Settings.N3LayoutAwareRows ? _lineBounds.GetValueOrDefault(_activeTab.Name) : null;
@@ -206,6 +215,7 @@ public partial class MainViewModel
         static SubtitleSpacing SpacingOf(N3LayoutSettings layout) =>
             new((float)layout.LyricsIntervalPx, (float)layout.RubyIntervalPx, (float)layout.LyricsAndRubyIntervalPx, layout.RubyAlignment, layout.AllowBiting);
         _lineBounds.Clear();
+        _singleLineRows.Clear();
         for (int t = 0; t < tabs.Count; t++)
         {
             var doc = tabs[t].Document;
@@ -227,6 +237,30 @@ public partial class MainViewModel
                 int index = manual is not null ? resolver.FindIndex(manual)!.Value : resolver.Resolve(g.Count());
                 return (Count: g.Count(), Rows: g.Max(p => p.Value.Row), Layout: Math.Clamp(index, 0, layouts.Count - 1), Manual: manual is not null);
             });
+            // 1 行だけのページの段（ニコカラメーカー3 の出力の実測: 前のページの下の段の行がまだ出ているあいだに出るときだけ、
+            // 2 行分の上の段に上げる。「個別位置」「コーラス1行」のような 1 行のレイアウトでも上げる。次のページまでの余裕では決まらない）
+            var singleRows = new Dictionary<int, int>();
+            int? lowerOfPrev = null; // 前のページの下の段の行
+            int prevPageIndex = int.MinValue;
+            foreach (var g in structure.GroupBy(p => p.Value.PageIndex).OrderBy(g => g.Key))
+            {
+                if (g.Key != prevPageIndex + 1) lowerOfPrev = null;
+                prevPageIndex = g.Key;
+                var entries = g.OrderBy(e => e.Value.Row).ToList();
+                if (entries.Count == 1)
+                {
+                    var (single, singlePlan) = (entries[0].Key, entries[0].Value);
+                    bool up = lowerOfPrev is int lower && singlePlan.BeginMs < structure[lower].EndMs;
+                    singleRows[single] = up ? 2 : 1;
+                    lowerOfPrev = up ? null : single;
+                }
+                else
+                {
+                    lowerOfPrev = entries[0].Key; // 下から 1 行目
+                }
+            }
+            _singleLineRows[tabName] = singleRows;
+
             var items = new List<(int Index, PreviewLine Line)>();
             foreach (var (index, plan) in structure.OrderBy(p => p.Key))
             {
@@ -249,11 +283,14 @@ public partial class MainViewModel
                 var fonts = resolved[t][index];
                 if (fonts.Runs.Count == 0) continue;
                 var source = Source(line, fonts, SpacingOf(layout), delta, tabContext);
-                // 1 行のページを上の段へ上げる（PageRowMap）のは、レイアウトにその段があるときだけ（1 行のレイアウト「コーラス1行」などでは下の段のまま。
-                // ニコカラメーカー3 の出力で確認）。行が多いページはレイアウトの行数を超えても積み上げる
+                // 1 行だけのページは上で決めた段（2 行分の上の段に上げるときは、レイアウトが 1 行でも上げる）。
+                // 行が多いページはレイアウトの行数を超えても積み上げる
                 int maxRow = Math.Max(layout.LineCount, page.Count);
+                bool isSingle = singleRows.TryGetValue(index, out int singleRow);
                 var preview = new PreviewLine(
-                    source, plan.BeginMs, plan.EndMs, t, plan.PageIndex, Math.Min(plan.Row, maxRow), Math.Min(Math.Max(page.Rows, page.Count), maxRow),
+                    source, plan.BeginMs, plan.EndMs, t, plan.PageIndex,
+                    isSingle ? singleRow : Math.Min(plan.Row, maxRow),
+                    isSingle ? singleRow : Math.Min(Math.Max(page.Rows, page.Count), maxRow),
                     page.Count, layout, Array.Empty<N3WipeTimeline.Group>());
                 items.Add((index, preview));
                 if (t == active)
