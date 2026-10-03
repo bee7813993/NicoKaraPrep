@@ -192,7 +192,7 @@
                     <MenuFlyoutSeparator />
                     <MenuFlyoutItem Text="ニコカラメーカー3 プロジェクト(n3proj)を書き出し..." Click="OnExportN3ProjClick" />
                     <MenuFlyoutItem Text="ニコカラメーカー3 のフォント設定を編集" KeyboardAcceleratorTextOverride="F3" Click="OnFontSettingsViewClick" />
-                    <MenuFlyoutItem Text="選択行の表示時刻・フォント指定を解除" Click="OnClearN3OverridesClick" ToolTipService.ToolTip="選んだ行の、ニコカラメーカー用の手動指定（表示時刻・フォント・レイアウト・文字の大きさ）をまとめて解除します" />
+                    <MenuFlyoutItem Text="選択行の表示時刻・フォント指定を解除" Click="OnClearN3OverridesClick" ToolTipService.ToolTip="選んだ行の、ニコカラメーカー用の行設定（表示時刻・フォント・レイアウト・文字の大きさ）をまとめて解除します。表示時刻は、手で直した値も読み込んだ値・自動調整の値も外して、自動の計算に戻します" />
                 </MenuBarItem>
                 <MenuBarItem Title="再生(P)" AccessKey="P">
                     <MenuFlyoutItem Text="メディアを開く..." Click="OnOpenMediaClick" />
@@ -513,13 +513,13 @@
                     </Grid.RowDefinitions>
                     <StackPanel x:Name="N3TimeGroup" Orientation="Horizontal" Spacing="6">
                         <TextBlock Text="ニコカラメーカー用:" FontSize="12" VerticalAlignment="Center" Foreground="{ThemeResource TextFillColorSecondaryBrush}"
-                                   ToolTipService.ToolTip="n3proj 書き出し時にこの行へ適用される表示開始・終了時刻とフォント設定。空欄は自動計算（薄字が自動値）。手動の表示時刻はページ衝突チェックにも反映されます" />
+                                   ToolTipService.ToolTip="n3proj 書き出し時にこの行へ適用される表示開始・終了時刻とフォント設定。表示時刻の欄が空なら薄字の値（読み込んだ値・自動調整の値・自動計算）を使います。表示時刻はページ衝突チェックにも反映されます" />
                         <TextBlock Text="表示開始" FontSize="12" VerticalAlignment="Center" />
                         <TextBox x:Name="ShowBeginBox" Width="104" FontFamily="Consolas" FontSize="12" PlaceholderText="--:--:--"
-                                 LostFocus="OnShowTimeBoxLostFocus" KeyDown="OnShowTimeBoxKeyDown" ToolTipService.ToolTip="mm:ss:cc 形式。空欄で自動計算" />
+                                 LostFocus="OnShowTimeBoxLostFocus" KeyDown="OnShowTimeBoxKeyDown" ToolTipService.ToolTip="mm:ss:cc 形式で手で指定（自動調整を実行し直しても変わりません）。空欄なら薄字の値（読み込んだ値・自動調整の値・自動計算）を使います" />
                         <TextBlock Text="表示終了" FontSize="12" VerticalAlignment="Center" />
                         <TextBox x:Name="ShowEndBox" Width="104" FontFamily="Consolas" FontSize="12" PlaceholderText="--:--:--"
-                                 LostFocus="OnShowTimeBoxLostFocus" KeyDown="OnShowTimeBoxKeyDown" ToolTipService.ToolTip="mm:ss:cc 形式。空欄で自動計算" />
+                                 LostFocus="OnShowTimeBoxLostFocus" KeyDown="OnShowTimeBoxKeyDown" ToolTipService.ToolTip="mm:ss:cc 形式で手で指定（自動調整を実行し直しても変わりません）。空欄なら薄字の値（読み込んだ値・自動調整の値・自動計算）を使います" />
                         <Button Content="自動に戻す" FontSize="12" Padding="8,3" Click="OnResetShowTimeClick" />
                     </StackPanel>
                     <StackPanel x:Name="N3FontGroup" Grid.Column="1" Orientation="Horizontal" Spacing="6">

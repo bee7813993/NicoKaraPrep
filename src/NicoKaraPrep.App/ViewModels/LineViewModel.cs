@@ -123,7 +123,7 @@ public partial class LineViewModel : ObservableObject
     public string ExportedMark => Model.Exported ? "✓" : "";
 
     /// <summary>ニコカラメーカー用の手動指定（表示時刻・フォント設定）がある行の印。</summary>
-    public string OverrideMark => Model.HasN3Overrides ? "✎" : "";
+    public string OverrideMark => Model.HasManualN3Overrides ? "✎" : ""; // 手で指定したものだけ（読み込んだ表示時刻・自動調整の値は付けない）
 
     public void RaiseOverrideMark() => OnPropertyChanged(nameof(OverrideMark));
 
@@ -317,6 +317,8 @@ public partial class LineViewModel : ObservableObject
         newModel.Exported = Model.Exported;
         newModel.ShowBeginCs = Model.ShowBeginCs;
         newModel.ShowEndCs = Model.ShowEndCs;
+        newModel.ShowBeginOrigin = Model.ShowBeginOrigin;
+        newModel.ShowEndOrigin = Model.ShowEndOrigin;
         newModel.FontSetName = Model.FontSetName;
         newModel.LayoutName = Model.LayoutName;
         Model = newModel;

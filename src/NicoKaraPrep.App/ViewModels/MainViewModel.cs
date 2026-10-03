@@ -885,6 +885,8 @@ public partial class MainViewModel : ObservableObject
         var previous = Document.Lines[index];
         line.ShowBeginCs = previous.ShowBeginCs;
         line.ShowEndCs = previous.ShowEndCs;
+        line.ShowBeginOrigin = previous.ShowBeginOrigin;
+        line.ShowEndOrigin = previous.ShowEndOrigin;
         line.FontSetName = previous.FontSetName;
         line.LayoutName = previous.LayoutName;
         CharFontOperations.CopyCharFonts(previous, line);
@@ -1623,7 +1625,7 @@ public partial class MainViewModel : ObservableObject
     private List<N3ProjLineTime>? _n3projLineTimes;
 
     /// <summary>
-    /// n3proj の実表示区間と行ごとの手動指定（表示終了）をドキュメントの行に対応付ける。
+    /// n3proj の実表示区間と、行に持たせた表示時刻（表示終了）をドキュメントの行に対応付ける。
     /// 実表示区間は、行の最初の実文字のタグ時刻（絵文字の先行タグ除く）が ±50ms で一致した行だけに適用する。
     /// ニコカラメーカーの時刻はタイムタグと同じ基準の ms（@Offset は適用前）。
     /// </summary>
@@ -1648,7 +1650,7 @@ public partial class MainViewModel : ObservableObject
             }
         }
 
-        // 行への手動指定（表示終了）は実表示区間より優先する
+        // 行に持たせた表示時刻（手で直した値・読み込んだ値・自動調整の値）は実表示区間より優先する
         for (int i = 0; i < Document.Lines.Count; i++)
         {
             var line = Document.Lines[i];

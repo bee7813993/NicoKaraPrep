@@ -41,21 +41,20 @@ public sealed partial class MainWindow
 
         if (choice == ContentDialogResult.Secondary)
         {
-            // 「適用」: 書き出さずに設定（行の表示時刻・ベース・タブごとの設定など）だけ保存し、プレビュー・行設定パネル・チェックを作り直す
+            // 「適用」: 書き出さずに設定（ベース・タブごとの設定など）だけ保存し、プレビュー・行設定パネル・チェックを作り直す
             TryRun(() => ViewModel.ApplyN3ProjSongSettings(settings));
             ViewModel.StatusText = "書き出しの設定を適用しました（n3proj は書き出していません）";
         }
         else
         {
-            // 「書き出し...」を押した時点で、行の表示時刻の設定（ワイプ前・絵文字の分だけ遅らせるなど）は保存済み。
-            // 保存先を選ばずにやめても、プレビュー・行設定パネル・チェックは新しい設定で作り直す
+            // 保存先を選ばずにやめたときは何も保存しない（書き出し画面の設定を残すときは「適用」）
             string? suggestedPath = ViewModel.SuggestN3ProjOutputPath();
             string? folder = Path.GetDirectoryName(suggestedPath ?? "") is { Length: > 0 } d ? d : ViewModel.GetDefaultSaveFolder();
             string suggested = Path.GetFileNameWithoutExtension(suggestedPath ?? "lyrics");
             string? path = SaveFileDialog.Show(Hwnd, folder, suggested, N3ProjFileTypes, "n3proj");
             if (path is null)
             {
-                ViewModel.StatusText = "n3proj は書き出しませんでした（行の表示時刻の設定は保存しました）";
+                ViewModel.StatusText = "n3proj は書き出しませんでした";
             }
             else
             {
@@ -356,9 +355,13 @@ public sealed partial class MainWindow
             var model = line.Model;
             var plans = ViewModel.PlanShowTimes();
             plans.TryGetValue(line.Index, out var plan);
+            // いま自動調整を実行したら決まる表示時刻（読み込んだ値・自動調整の値を持つ行の説明に使う）
+            N3LinePlan? freshPlan = null;
+            ViewModel.PlanShowTimesFresh()?.TryGetValue(line.Index, out freshPlan);
 
-            ShowBeginBox.Text = model.ShowBeginCs is int b ? FmtCs(b) : "";
-            ShowEndBox.Text = model.ShowEndCs is int en ? FmtCs(en) : "";
+            // 欄の文字は手で指定した値だけ。読み込んだ値・自動調整の値・自動計算は薄字で出す
+            ShowBeginBox.Text = model.HasManualShowBegin ? FmtCs(model.ShowBeginCs!.Value) : "";
+            ShowEndBox.Text = model.HasManualShowEnd ? FmtCs(model.ShowEndCs!.Value) : "";
             ShowBeginBox.PlaceholderText = plan is not null ? FmtCs(plan.BeginMs / 10) : "--:--:--";
             ShowEndBox.PlaceholderText = plan is not null ? FmtCs(plan.EndMs / 10) : "--:--:--";
 
@@ -375,10 +378,19 @@ public sealed partial class MainWindow
             else
             {
                 string row = $"{(ViewModel.Settings.CollisionAlignFromTop ? "上" : "下")}から{plan.Row}行目";
-                string adjusted = plan.Adjusted ? "・前後ページに合わせて調整" : "";
-                string manual = plan.BeginIsManual || plan.EndIsManual ? "（手動指定あり）" : "";
-                string yielded = ViewModel.DescribeEmojiLeadYield(plan, plans); // 絵文字の分だけ遅らせた行・絵文字を縮めた行（下限より短くなった行は理由も）
-                SetN3LineInfo($"自動: {FmtCs(plan.BeginMs / 10)} 〜 {FmtCs(plan.EndMs / 10)}　ページ{plan.PageIndex + 1}・{row}{adjusted}{yielded}{manual}");
+                // 読み込んだ値・自動調整の値を持つ行は、いま自動調整を実行し直しても同じなら、規則の説明を実行したときの計算で書く。
+                // 違うなら「実行し直すと …」を添える
+                bool recomputable = (model.ShowBeginCs is not null && model.ShowBeginOrigin != ShowTimeOrigin.Manual) ||
+                                    (model.ShowEndCs is not null && model.ShowEndOrigin != ShowTimeOrigin.Manual);
+                bool same = freshPlan is not null && Math.Abs(freshPlan.BeginMs - plan.BeginMs) <= 5 && Math.Abs(freshPlan.EndMs - plan.EndMs) <= 5;
+                var shown = recomputable && same ? freshPlan! : plan;
+                string adjusted = shown.Adjusted ? "・前後ページに合わせて調整" : "";
+                string yielded = ViewModel.DescribeEmojiLeadYield(shown, plans, byRule: !recomputable || same); // 絵文字の分だけ遅らせた行・絵文字を縮めた行
+                string outdated = recomputable && freshPlan is not null && !same
+                    ? $"・実行し直すと {FmtCs(freshPlan.BeginMs / 10)} 〜 {FmtCs(freshPlan.EndMs / 10)}"
+                    : "";
+                string label = ViewModels.MainViewModel.ShowTimeOriginLabel(model); // 自動・読み込み・自動調整・手動
+                SetN3LineInfo($"{label}: {FmtCs(plan.BeginMs / 10)} 〜 {FmtCs(plan.EndMs / 10)}　ページ{plan.PageIndex + 1}・{row}{adjusted}{yielded}{outdated}");
             }
         }
         finally
@@ -607,12 +619,12 @@ public sealed partial class MainWindow
         }
 
         bool changed = false;
-        TryRun(() => changed = ViewModel.SetLineShowTime(line.Index, begin, end));
+        TryRun(() => changed = ViewModel.SetLineShowTimeFromBoxes(line.Index, begin, end));
         if (!changed) return;
         line.RaiseOverrideMark();
         ViewModel.StatusText = begin is null && end is null
-            ? $"{line.Index + 1} 行目の表示時刻を自動に戻しました"
-            : $"{line.Index + 1} 行目の表示時刻を指定しました（n3proj 書き出しとページ衝突チェックに反映）";
+            ? $"{line.Index + 1} 行目の手で指定した表示時刻を外しました"
+            : $"{line.Index + 1} 行目の表示時刻を手で指定しました（自動調整を実行し直しても変わりません）";
         RefreshN3LinePanel();
         ScheduleValidation();
     }

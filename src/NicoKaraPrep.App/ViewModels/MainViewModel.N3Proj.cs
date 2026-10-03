@@ -39,16 +39,31 @@ public partial class MainViewModel
         N3ShowTimePlanner.Plan(Document, CreateShowTimeSettings(_activeTab.Name));
 
     /// <summary>
-    /// 行設定パネルの説明に足す、絵文字の分だけ行の表示を遅らせる規則（書き出し画面の設定）の結果（表示中のタブの行）。
+    /// いま自動調整を実行したら決まる表示時刻（表示中のタブ。行には持たせない）。自動調整の値・読み込んだ値を持つ行が無ければ null
+    /// （そのときは <see cref="PlanShowTimes"/> と同じになる）。
+    /// </summary>
+    public Dictionary<int, N3LinePlan>? PlanShowTimesFresh() =>
+        N3ShowTimeAdjuster.HasRecomputable(Document)
+            ? N3ShowTimeAdjuster.PlanFresh(Document, CreateShowTimeSettings(_activeTab.Name))
+            : null;
+
+    /// <summary>
+    /// 行設定パネルの説明に足す、絵文字の分だけ行の表示を遅らせる規則（右のパネル「表示時刻」の設定）の結果（表示中のタブの行）。
     /// 規則で表示を遅らせた行・絵文字を縮めた行だけ「・絵文字の分だけ遅らせた（絵文字 2.0→1.5 秒）」のような文を返す（それ以外は空）。
     /// 絵文字はワイプ前の表示時間（表示秒数がそれより短い絵文字はその秒数）までしか縮めず、それでも重なるときは前の行のワイプ後を削る。
-    /// それより短くなるのは表示時刻の手動指定の行だけなので、そのときは理由を書く（チェックでも警告する）。
+    /// それより短くなる行は理由を書く（手で指定した表示時刻・前の行をワイプの最後まで見せるため など）。
     /// </summary>
-    public string DescribeEmojiLeadYield(N3LinePlan plan, IReadOnlyDictionary<int, N3LinePlan> plans)
+    /// <param name="plan">説明する行の表示時刻。規則が決めた値（自動計算・いま実行し直しても同じ自動調整の値）なら、いま自動調整を実行したときの計算を渡す。</param>
+    /// <param name="byRule">
+    /// <paramref name="plan"/> が規則が決めた値か。false（読み込んだ値・古くなった自動調整の値）で絵文字が下限より短くなる行は、
+    /// 理由を書かずに「表示開始に合わせて縮めた」とする（書き出しで自動で縮める）。
+    /// </param>
+    public string DescribeEmojiLeadYield(N3LinePlan plan, IReadOnlyDictionary<int, N3LinePlan> plans, bool byRule = true)
     {
         var show = CreateShowTimeSettings(_activeTab.Name);
         if (!show.YieldsEmojiLead || plan.LineIndex < 0 || plan.LineIndex >= Document.Lines.Count) return "";
-        var shrinks = N3EmojiLead.Describe(Document.Lines[plan.LineIndex], plan.BeginMs, show.LeadMatcher);
+        var line = Document.Lines[plan.LineIndex];
+        var shrinks = N3EmojiLead.Describe(line, plan.BeginMs, show.LeadMatcher);
         string emoji = N3ShowTimeValidator.FormatShrinks(shrinks);
         if (N3ShowTimeValidator.BelowFloor(shrinks, show.LeadMs).Count > 0)
         {
@@ -57,13 +72,14 @@ public partial class MainViewModel
             var prev = plan.Row > 0
                 ? plans.Values.FirstOrDefault(p => p.PageIndex == plan.PageIndex - 1 && p.Row == plan.Row)
                 : null;
-            string cause = plan.BeginIsManual ? "表示開始の手動指定のため"
-                : prev is { EndIsManual: true } ? "前の行の表示終了の手動指定のため"
-                : prev is not null && prev.LineIndex >= 0 && prev.LineIndex < Document.Lines.Count
-                    && N3ShowTimePlanner.SingEndMs(Document.Lines[prev.LineIndex]) is int prevLast && prev.EndMs < prevLast
+            var prevLine = prev is not null && prev.LineIndex >= 0 && prev.LineIndex < Document.Lines.Count ? Document.Lines[prev.LineIndex] : null;
+            string? cause = line.HasManualShowBegin ? "表示開始の手動指定のため"
+                : prevLine?.HasManualShowEnd == true ? "前の行の表示終了の手動指定のため"
+                : !byRule ? null
+                : prev is not null && prevLine is not null && N3ShowTimePlanner.SingEndMs(prevLine) is int prevLast && prev.EndMs < prevLast
                     ? "前の行と歌が重なるため"
                 : "前の行をワイプの最後まで見せるため";
-            return $"・{cause}絵文字を縮めた（{emoji} 秒）";
+            return cause is null ? $"・表示開始に合わせて絵文字を縮めた（{emoji} 秒）" : $"・{cause}絵文字を縮めた（{emoji} 秒）";
         }
         if (plan.EmojiYieldMs > 0)
         {
@@ -71,23 +87,126 @@ public partial class MainViewModel
                 ? $"・絵文字の分だけ遅らせた（絵文字 {emoji} 秒）"
                 : $"・絵文字の分だけ遅らせた（{plan.EmojiYieldMs / 1000.0:0.0##} 秒。絵文字の秒数はそのまま）";
         }
-        // 表示開始の手動指定などで、表示開始より前になった絵文字だけを縮めた行
+        // 表示開始を行に持たせた行などで、表示開始より前になった絵文字だけを縮めた行
         return emoji.Length > 0 ? $"・表示開始に合わせて絵文字を縮めた（{emoji} 秒）" : "";
     }
 
-    /// <summary>行の表示開始・終了の手動指定を設定する（null = 自動に戻す）。</summary>
+    /// <summary>
+    /// 行の表示時刻の出どころの名前（行設定パネルの説明の頭）。表示開始・終了で違えば「開始は手動・終了は自動調整」のように並べる。
+    /// 値を持たない表示時刻は「自動」（書き出し・画面の表示のたびに計算する）。
+    /// </summary>
+    public static string ShowTimeOriginLabel(LyricsLine line)
+    {
+        static string Name(int? cs, ShowTimeOrigin origin) => cs is null ? "自動" : origin switch
+        {
+            ShowTimeOrigin.Loaded => "読み込み",
+            ShowTimeOrigin.Auto => "自動調整",
+            _ => "手動",
+        };
+        string begin = Name(line.ShowBeginCs, line.ShowBeginOrigin);
+        string end = Name(line.ShowEndCs, line.ShowEndOrigin);
+        return begin == end ? begin : $"開始は{begin}・終了は{end}";
+    }
+
+    /// <summary>行の表示開始・終了を設定する（null = 値を外して自動に戻す）。値は手で指定したもの（手動）にする。</summary>
     public bool SetLineShowTime(int index, int? beginCs, int? endCs)
     {
         if (index < 0 || index >= Document.Lines.Count) return false;
         var line = Document.Lines[index];
-        if (line.ShowBeginCs == beginCs && line.ShowEndCs == endCs) return false;
+        bool beginSame = line.ShowBeginCs == beginCs && (beginCs is null || line.ShowBeginOrigin == ShowTimeOrigin.Manual);
+        bool endSame = line.ShowEndCs == endCs && (endCs is null || line.ShowEndOrigin == ShowTimeOrigin.Manual);
+        if (beginSame && endSame) return false;
         PushUndo();
         line.ShowBeginCs = beginCs;
         line.ShowEndCs = endCs;
+        if (beginCs is not null) line.ShowBeginOrigin = ShowTimeOrigin.Manual;
+        if (endCs is not null) line.ShowEndOrigin = ShowTimeOrigin.Manual;
         MarkModified();
         SaveProject();
         return true;
     }
+
+    /// <summary>
+    /// 行設定パネルの表示開始・終了の欄の確定。値のある欄は手で指定した値（手動）にする。
+    /// 空の欄は、手で指定していた値なら外して自動に戻し、読み込んだ値・自動調整の値（欄の薄字）ならそのまま残す。
+    /// </summary>
+    public bool SetLineShowTimeFromBoxes(int index, int? beginCs, int? endCs)
+    {
+        if (index < 0 || index >= Document.Lines.Count) return false;
+        var line = Document.Lines[index];
+        (int? Cs, ShowTimeOrigin Origin) Next(int? typed, int? cs, ShowTimeOrigin origin) =>
+            typed is int t ? (t, ShowTimeOrigin.Manual)
+            : cs is not null && origin == ShowTimeOrigin.Manual ? (null, origin)
+            : (cs, origin);
+        var (b, bo) = Next(beginCs, line.ShowBeginCs, line.ShowBeginOrigin);
+        var (e, eo) = Next(endCs, line.ShowEndCs, line.ShowEndOrigin);
+        if (b == line.ShowBeginCs && e == line.ShowEndCs && (b is null || bo == line.ShowBeginOrigin) && (e is null || eo == line.ShowEndOrigin)) return false;
+        PushUndo();
+        line.ShowBeginCs = b;
+        line.ShowBeginOrigin = bo;
+        line.ShowEndCs = e;
+        line.ShowEndOrigin = eo;
+        MarkModified();
+        SaveProject();
+        return true;
+    }
+
+    /// <summary>
+    /// 表示時刻の自動調整を実行する（右のパネル「表示時刻」。全タブ）。手で指定した表示時刻は残し、ほかの値（読み込んだ値・前回の自動調整の値・未設定）を
+    /// 今の設定で計算し直して、自動調整の値として行に持たせる（<see cref="N3ShowTimeAdjuster"/>）。変わったタブは元に戻せる。結果をステータスに出す。
+    /// </summary>
+    public N3ShowTimeAdjustResult RunAutoShowTimes()
+    {
+        StoreActiveTab();
+        int auto = 0, manual = 0, untimed = 0, changedTabs = 0;
+        foreach (var tab in Tabs)
+        {
+            var settings = CreateShowTimeSettings(tab.Name);
+            var trial = tab.Document.Clone();
+            var r = N3ShowTimeAdjuster.Run(trial, settings);
+            auto += r.AutoLines;
+            manual += r.ManualLines;
+            untimed += r.UntimedLines;
+            if (SameShowTimes(trial, tab.Document)) continue;
+            tab.UndoStack.Add(tab.Document.Clone());
+            if (tab.UndoStack.Count > MaxUndo) tab.UndoStack.RemoveAt(0);
+            tab.RedoStack.Clear();
+            N3ShowTimeAdjuster.Run(tab.Document, settings);
+            tab.IsModified = true;
+            changedTabs++;
+        }
+        if (changedTabs > 0)
+        {
+            IsModified = _activeTab.IsModified;
+            UpdateTitle();
+            SaveProject();
+        }
+        string kept = manual > 0 ? $"。手で直した {manual} 行はそのまま" : "";
+        string none = untimed > 0 ? $"。タイムタグの無い {untimed} 行は決められません" : "";
+        StatusText = changedTabs > 0
+            ? $"表示時刻を自動調整しました（{auto} 行{kept}{none}）"
+            : $"表示時刻を自動調整しました（変わった行はありません{kept}{none}）";
+        return new N3ShowTimeAdjustResult(auto, manual, untimed);
+    }
+
+    /// <summary>2 つのドキュメントの行の表示時刻（値と出どころ）が同じか。</summary>
+    private static bool SameShowTimes(LyricsDocument a, LyricsDocument b)
+    {
+        if (a.Lines.Count != b.Lines.Count) return false;
+        for (int i = 0; i < a.Lines.Count; i++)
+        {
+            var x = a.Lines[i];
+            var y = b.Lines[i];
+            if (x.ShowBeginCs != y.ShowBeginCs || x.ShowEndCs != y.ShowEndCs) return false;
+            if (x.ShowBeginCs is not null && x.ShowBeginOrigin != y.ShowBeginOrigin) return false;
+            if (x.ShowEndCs is not null && x.ShowEndOrigin != y.ShowEndOrigin) return false;
+        }
+        return true;
+    }
+
+    /// <summary>表示中のタブの、表示時刻の出どころごとの行数と、いま自動調整を実行し直すと変わる行の数（右のパネル「表示時刻」）。</summary>
+    public (N3ShowTimeOriginCounts Counts, int Outdated) ShowTimeSummary() =>
+        (N3ShowTimeAdjuster.Count(Document), N3ShowTimeAdjuster.CountOutdated(Document, CreateShowTimeSettings(_activeTab.Name)));
 
     /// <summary>
     /// 行に適用するフォント設定名の手動指定を設定する（null / 空 = 自動）。ニコカラメーカー3 で行のフォントを選んだときと同じく、
@@ -169,7 +288,7 @@ public partial class MainViewModel
         return targets.Count;
     }
 
-    /// <summary>行ごとの表示開始の手動指定（ページ衝突チェック用）。</summary>
+    /// <summary>行に持たせた表示開始（手で直した値・読み込んだ値・自動調整の値。ページ衝突チェック用）。</summary>
     private Dictionary<int, int>? BuildManualShowBegins()
     {
         var result = new Dictionary<int, int>();

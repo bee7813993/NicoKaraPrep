@@ -79,18 +79,16 @@ public sealed partial class N3ProjExportDialog : ContentDialog
             ? $"背景素材: {m}（メディア再生パネルのファイル）"
             : "背景素材: 未設定（ベースのまま。メディア再生パネルに動画を読み込むと設定されます）";
 
-        LeadBox.Value = vm.Settings.DisplayLeadSeconds;
-        TailBox.Value = vm.Settings.DisplayTailSeconds;
-        IntervalBox.Value = vm.Settings.N3IntervalSeconds;
-        ProtectBox.Value = vm.Settings.N3ProtectSeconds;
-        OverlapBox.Value = vm.Settings.N3OverlapSeconds;
-        TopLongCheck.IsChecked = vm.Settings.N3TopLong;
-        EmojiLeadYieldCheck.IsChecked = vm.Settings.N3EmojiLeadYield;
-        if (vm.Nkm3Env is { PreTimeMs: not null })
-        {
-            ImportNkm3Button.Visibility = Visibility.Visible;
-            ImportNkm3Button.Content = $"ニコカラメーカーの設定値を取り込む（{vm.Nkm3Env.PreTimeMs / 1000.0:0.##} / {vm.Nkm3Env.PostTimeMs / 1000.0:0.##} / {vm.Nkm3Env.IntervalMs / 1000.0:0.##} 秒）";
-        }
+        // 表示時刻のパラメーターと自動調整は、行リストの右のパネル「表示時刻」で行う（ここでは今の値と、行に持たせた表示時刻の数を案内する）
+        var st = vm.Settings;
+        var (counts, _) = vm.ShowTimeSummary();
+        string stored = counts.Manual + counts.Loaded + counts.Auto > 0
+            ? $"表示中のタブでは、手で直した {counts.Manual} 行・読み込んだ {counts.Loaded} 行・自動調整の {counts.Auto} 行は、その表示時刻のまま書き出します。"
+            : "";
+        ShowTimeNote.Text =
+            "行の表示時刻は、行リストの右のパネル「表示時刻」で決めます（自動調整のパラメーターと実行）。" + stored +
+            $"表示時刻を持たない行は、書き出しのときに今のパラメーター（ワイプ前 {st.DisplayLeadSeconds:0.0#} 秒・ワイプ後 {st.DisplayTailSeconds:0.0#} 秒・表示間隔 {st.N3IntervalSeconds:0.0#} 秒・" +
+            $"重ねてよい {st.N3OverlapSeconds:0.0#} 秒・上段を{(st.N3TopLong ? "長め" : "短め")}に・絵文字の分だけ遅らせる {(st.N3EmojiLeadYield ? "オン" : "オフ")}）で計算します。";
 
         SetBasePath(vm.SuggestN3ProjBasePath());
         DefaultFontBox.Text = current.DefaultFontSetName;
@@ -164,26 +162,8 @@ public sealed partial class N3ProjExportDialog : ContentDialog
 
     private void OnClearBaseClick(object sender, RoutedEventArgs e) => SetBasePath(null);
 
-    private void OnImportNkm3Click(object sender, RoutedEventArgs e)
-    {
-        if (_vm.Nkm3Env is not { } env) return;
-        if (env.PreTimeMs is int pre) LeadBox.Value = pre / 1000.0;
-        if (env.PostTimeMs is int post) TailBox.Value = post / 1000.0;
-        if (env.IntervalMs is int interval) IntervalBox.Value = interval / 1000.0;
-    }
-
     private void Apply()
     {
-        var s = _vm.Settings;
-        s.DisplayLeadSeconds = Value(LeadBox, s.DisplayLeadSeconds);
-        s.DisplayTailSeconds = Value(TailBox, s.DisplayTailSeconds);
-        s.N3IntervalSeconds = Value(IntervalBox, s.N3IntervalSeconds);
-        s.N3ProtectSeconds = Value(ProtectBox, 0);
-        s.N3OverlapSeconds = Math.Max(0, Value(OverlapBox, 0));
-        s.N3TopLong = TopLongCheck.IsChecked == true;
-        s.N3EmojiLeadYield = EmojiLeadYieldCheck.IsChecked == true;
-        s.Save();
-
         var result = new N3ProjSongSettings
         {
             BasePath = _basePath,

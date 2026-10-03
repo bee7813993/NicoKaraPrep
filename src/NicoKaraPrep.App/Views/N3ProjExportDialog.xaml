@@ -43,33 +43,9 @@
             <CheckBox x:Name="MergeFontsCheck" Content="NicoKaraPrep のフォント設定をベースへ反映する（同名は上書き、無い名前は追加）" />
             <CheckBox x:Name="MergeLayoutsCheck" Content="NicoKaraPrep で編集したレイアウト設定をベースへ反映する（同名は上書き、無い名前は追加）" />
 
-            <TextBlock Text="行の表示時刻（ニコカラメーカーの「自動で表示開始時刻・表示終了時刻を設定」と同じ意味）" Style="{ThemeResource BodyStrongTextBlockStyle}" Margin="0,6,0,0" />
-            <Grid ColumnSpacing="8">
-                <Grid.ColumnDefinitions>
-                    <ColumnDefinition Width="*" />
-                    <ColumnDefinition Width="*" />
-                    <ColumnDefinition Width="*" />
-                    <ColumnDefinition Width="*" />
-                    <ColumnDefinition Width="*" />
-                </Grid.ColumnDefinitions>
-                <NumberBox x:Name="LeadBox" Header="ワイプ前（秒）" Minimum="0" Maximum="30" SmallChange="0.1" SpinButtonPlacementMode="Compact" />
-                <NumberBox Grid.Column="1" x:Name="TailBox" Header="ワイプ後（秒）" Minimum="0" Maximum="30" SmallChange="0.1" SpinButtonPlacementMode="Compact" />
-                <NumberBox Grid.Column="2" x:Name="IntervalBox" Header="表示間隔（秒）" Minimum="0" Maximum="30" SmallChange="0.1" SpinButtonPlacementMode="Compact" ToolTipService.ToolTip="ページ区切りと段落区切り（間奏など）を分ける間隔" />
-                <NumberBox Grid.Column="3" x:Name="ProtectBox" Header="最短表示後（秒）" Minimum="0" Maximum="30" SmallChange="0.1" SpinButtonPlacementMode="Compact" ToolTipService.ToolTip="次のページと重なるとき、前の行を最終タグの何秒後まで短縮してよいか（0 = 自動: ワイプ前後の小さい方の半分）" />
-                <!-- 同じ段の行を重ねてよい時間（ニコカラメーカー3 には無い機能。保存先は AppSettings.N3OverlapSeconds） -->
-                <NumberBox Grid.Column="4" x:Name="OverlapBox" Header="重ねてよい（秒）" Minimum="0" Maximum="10" SmallChange="0.1" SpinButtonPlacementMode="Compact"
-                           ToolTipService.ToolTip="前後のページの同じ段の行を、何秒まで重ねて表示してよいか（0 = 重ねない。ニコカラメーカー3 と同じ計算）。字幕アクションが「文字単位フェード」のときなど、少しの重なりなら見づらくない場合に使います。次のページと重なるときは、前の行のワイプ後や次の行のワイプ前を削るより先に、この時間まで重ねます（ニコカラメーカー3 には無い機能）" />
-            </Grid>
-            <StackPanel Orientation="Horizontal" Spacing="12">
-                <CheckBox x:Name="TopLongCheck" Content="上段の行をページの最後まで表示する（上段歌詞を長めに表示）" MinWidth="0" />
-                <Button x:Name="ImportNkm3Button" Content="ニコカラメーカーの設定値を取り込む" FontSize="12" Padding="8,3" Click="OnImportNkm3Click" Visibility="Collapsed" />
-            </StackPanel>
-            <!-- 絵文字の分だけ行の表示を遅らせる（ニコカラメーカー3 には無い機能。保存先は AppSettings.N3EmojiLeadYield） -->
-            <CheckBox x:Name="EmojiLeadYieldCheck"
-                      AutomationProperties.Name="前のページの同じ段と重なるときは、絵文字の分だけ行の表示を遅らせる"
-                      ToolTipService.ToolTip="絵文字の表示秒数は、ワイプ前の表示時間まで縮めます（表示秒数がそれより短い絵文字は縮めません）。それでも重なるときは、前の行のワイプ後を削ります。前の行のワイプ終了から歌い出しまでがそれより短いときだけ、前の行をワイプの最後まで見せるため、さらに縮めます">
-                <TextBlock TextWrapping="Wrap" Text="前のページの同じ段と重なるときは、絵文字の分だけ行の表示を遅らせる（ニコカラメーカー3 には無い機能）" />
-            </CheckBox>
+            <TextBlock Text="行の表示時刻" Style="{ThemeResource BodyStrongTextBlockStyle}" Margin="0,6,0,0" />
+            <!-- 表示時刻のパラメーターと自動調整は、行リストの右のパネル「表示時刻」へ移した（ここでは今の値を案内するだけ） -->
+            <TextBlock x:Name="ShowTimeNote" FontSize="12" TextWrapping="Wrap" Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
 
             <TextBlock Text="歌詞設定タブ" Style="{ThemeResource BodyStrongTextBlockStyle}" Margin="0,6,0,0" />
             <Grid ColumnSpacing="6" Padding="4,0">

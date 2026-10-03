@@ -525,12 +525,14 @@ public static class N3ProjImport
                 if (!IsNear(p.BeginMs, begin) && !(q is not null && IsNear(q.BeginMs, begin)) && !(r is not null && IsNear(r.BeginMs, begin)))
                 {
                     line.ShowBeginCs = ToCs(begin);
+                    line.ShowBeginOrigin = ShowTimeOrigin.Manual;
                     touched.Add(i);
                     changed = true;
                 }
                 if (!IsNear(p.EndMs, end) && !(q is not null && IsNear(q.EndMs, end)) && !(r is not null && IsNear(r.EndMs, end)))
                 {
                     line.ShowEndCs = ToCs(end);
+                    line.ShowEndOrigin = ShowTimeOrigin.Manual;
                     touched.Add(i);
                     changed = true;
                 }
@@ -538,6 +540,28 @@ public static class N3ProjImport
             if (!changed) break;
         }
         return touched;
+    }
+
+    /// <summary>
+    /// ニコカラメーカーの表示時刻を、対応するすべての行に、読み込んだ値（<see cref="ShowTimeOrigin.Loaded"/>）としてそのまま持たせる
+    /// （読み込み確認画面の「表示時刻をそのまま読み込む」）。自動計算と同じ値の行も含める。
+    /// 読み込んだ値は、その後の書き出し・画面の表示でそのまま使い、自動調整を実行すると計算し直す（<see cref="N3ShowTimeAdjuster"/>）。
+    /// 戻り値は値を持たせた行の数。
+    /// </summary>
+    public static int LoadShowTimes(LyricsDocument doc, IReadOnlyDictionary<int, (int BeginMs, int EndMs)> actual)
+    {
+        int n = 0;
+        foreach (var (i, (begin, end)) in actual)
+        {
+            if (i < 0 || i >= doc.Lines.Count || doc.Lines[i].IsEmpty) continue;
+            var line = doc.Lines[i];
+            line.ShowBeginCs = ToCs(begin);
+            line.ShowBeginOrigin = ShowTimeOrigin.Loaded;
+            line.ShowEndCs = ToCs(end);
+            line.ShowEndOrigin = ShowTimeOrigin.Loaded;
+            n++;
+        }
+        return n;
     }
 
     /// <summary>自動計算の値と実際の値が一致するとみなせるか（5ms 以内）。</summary>

@@ -143,9 +143,11 @@ public class N3ShowTimeValidatorTests
         // 下限（1.5 秒）までなら警告しない
         doc.Lines[3].ShowBeginCs = 2240;
         Assert.Empty(Validate(doc, s));
-        // 規則オフでは絵文字を寄せないので警告しない
+        // 規則オフでは絵文字を寄せないので、絵文字の下限の警告は出ない。代わりに、絵文字のワイプが始まってから行が出ることを知らせる
+        // （ニコカラメーカー3 でも「表示開始時刻が歌唱開始時刻より遅いです」の警告になる）
         doc.Lines[3].ShowBeginCs = 2300;
-        Assert.Empty(Validate(doc, Settings(false, "（花帆）")));
+        Assert.Equal("4行目（ページ2）: 表示開始 [00:23:00] が歌い出し [00:22:00] より後です（ワイプが始まってから行が出ます）",
+            Assert.Single(Validate(doc, Settings(false, "（花帆）"))).Message);
     }
 
     [Fact]
@@ -172,7 +174,9 @@ public class N3ShowTimeValidatorTests
         Assert.Equal(IssueSeverity.Warning, warning.Severity);
         Assert.Equal((0, (int?)null), (warning.LineIndex, warning.RelatedLineIndex));
         Assert.Equal("1行目（ページ1）: 表示開始の手動指定のため、絵文字が 2.0→0.5 秒に縮みます", warning.Message);
-        Assert.Empty(Validate(doc, Settings(false, "（花帆）")));
+        // 規則オフでは絵文字を寄せないので、絵文字のワイプが始まってから行が出ることを知らせる
+        Assert.Equal("1行目（ページ1）: 表示開始 [00:11:50] が歌い出し [00:10:00] より後です（ワイプが始まってから行が出ます）",
+            Assert.Single(Validate(doc, Settings(false, "（花帆）"))).Message);
     }
 
     [Fact]

@@ -51,6 +51,7 @@ public sealed partial class LineSidePanel : UserControl
         {
             RefreshFonts();
             RefreshLayoutPreview();
+            if (IsShowTimePaneVisible) RefreshShowTimeSummary(); // 歌詞を直した・取り込んだ・自動調整した後の行数
         };
         RefreshFonts(force: true);
         RefreshLayouts();
@@ -62,13 +63,16 @@ public sealed partial class LineSidePanel : UserControl
     private void OnPaneChanged(SelectorBar sender, SelectorBarSelectionChangedEventArgs args)
     {
         bool layout = ReferenceEquals(sender.SelectedItem, LayoutPaneItem);
-        FontPane.Visibility = layout ? Visibility.Collapsed : Visibility.Visible;
+        bool showTime = ReferenceEquals(sender.SelectedItem, ShowTimePaneItem);
+        FontPane.Visibility = layout || showTime ? Visibility.Collapsed : Visibility.Visible;
         LayoutPane.Visibility = layout ? Visibility.Visible : Visibility.Collapsed;
+        ShowTimePane.Visibility = showTime ? Visibility.Visible : Visibility.Collapsed;
         if (layout)
         {
             SelectLayoutOfLine(_line);
             RefreshLayoutPreview();
         }
+        if (showTime) RefreshShowTimePane();
     }
 
     // ------------------------------------------------------------ フォント
@@ -417,4 +421,101 @@ public sealed partial class LineSidePanel : UserControl
         LayoutPreview.Model = new SubtitlePreviewModel(model.ScreenWidth, model.ScreenHeight, lines);
         LayoutPreview.TimeMs = 1;
     }
+
+    // ------------------------------------------------------------ 表示時刻（自動調整のパラメーターと実行）
+
+    /// <summary>表示時刻のパラメーターを変えた（設定は保存済み。メイン画面はプレビュー・行設定・チェックを作り直す）。</summary>
+    public event EventHandler? ShowTimeSettingsChanged;
+
+    /// <summary>「自動調整を実行」を押した。</summary>
+    public event EventHandler? AutoShowTimeRequested;
+
+    /// <summary>表示時刻のタブを出しているか。</summary>
+    public bool IsShowTimePaneVisible => ShowTimePane.Visibility == Visibility.Visible;
+
+    /// <summary>表示時刻のタブの欄を設定の値に合わせ、行数の説明を作り直す。</summary>
+    public void RefreshShowTimePane()
+    {
+        if (_vm is null) return;
+        var s = _vm.Settings;
+        _loading = true;
+        try
+        {
+            StLeadBox.Value = s.DisplayLeadSeconds;
+            StTailBox.Value = s.DisplayTailSeconds;
+            StIntervalBox.Value = s.N3IntervalSeconds;
+            StProtectBox.Value = s.N3ProtectSeconds;
+            StOverlapBox.Value = s.N3OverlapSeconds;
+            StTopLongCheck.IsChecked = s.N3TopLong;
+            StEmojiYieldCheck.IsChecked = s.N3EmojiLeadYield;
+            if (_vm.Nkm3Env is { PreTimeMs: not null } env)
+            {
+                StImportNkm3Button.Visibility = Visibility.Visible;
+                StImportNkm3Button.Content = $"ニコカラメーカーの設定値を取り込む（{env.PreTimeMs / 1000.0:0.##} / {env.PostTimeMs / 1000.0:0.##} / {env.IntervalMs / 1000.0:0.##} 秒）";
+            }
+        }
+        finally
+        {
+            _loading = false;
+        }
+        RefreshShowTimeSummary();
+    }
+
+    /// <summary>表示中のタブの、表示時刻の出どころごとの行数と、実行し直すと変わる行の数を出す。</summary>
+    public void RefreshShowTimeSummary()
+    {
+        if (_vm is null) return;
+        var (c, outdated) = _vm.ShowTimeSummary();
+        var parts = new List<string>();
+        if (c.Manual > 0) parts.Add($"手で直した {c.Manual} 行");
+        if (c.Loaded > 0) parts.Add($"読み込んだ {c.Loaded} 行");
+        if (c.Auto > 0) parts.Add($"自動調整の {c.Auto} 行");
+        if (c.Live > 0) parts.Add($"未設定（自動で計算）{c.Live} 行");
+        string text = parts.Count == 0 ? "表示時刻を決められる行がありません" : "表示中のタブ: " + string.Join("・", parts);
+        if (outdated > 0) text += $"\n今のパラメーターで実行し直すと {outdated} 行が変わります";
+        ShowTimeSummaryText.Text = text;
+    }
+
+    private void OnShowTimeNumberChanged(NumberBox sender, NumberBoxValueChangedEventArgs args)
+    {
+        if (_loading || _vm is null) return;
+        if (double.IsNaN(args.NewValue))
+        {
+            RefreshShowTimePane(); // 空にした欄は元の値に戻す
+            return;
+        }
+        var s = _vm.Settings;
+        double v = Math.Max(0, args.NewValue);
+        if (ReferenceEquals(sender, StLeadBox)) s.DisplayLeadSeconds = v;
+        else if (ReferenceEquals(sender, StTailBox)) s.DisplayTailSeconds = v;
+        else if (ReferenceEquals(sender, StIntervalBox)) s.N3IntervalSeconds = v;
+        else if (ReferenceEquals(sender, StProtectBox)) s.N3ProtectSeconds = v;
+        else if (ReferenceEquals(sender, StOverlapBox)) s.N3OverlapSeconds = v;
+        s.Save();
+        ShowTimeSettingsChanged?.Invoke(this, EventArgs.Empty);
+    }
+
+    private void OnShowTimeCheckClick(object sender, RoutedEventArgs e)
+    {
+        if (_loading || _vm is null) return;
+        var s = _vm.Settings;
+        if (ReferenceEquals(sender, StTopLongCheck)) s.N3TopLong = StTopLongCheck.IsChecked == true;
+        else if (ReferenceEquals(sender, StEmojiYieldCheck)) s.N3EmojiLeadYield = StEmojiYieldCheck.IsChecked == true;
+        s.Save();
+        ShowTimeSettingsChanged?.Invoke(this, EventArgs.Empty);
+    }
+
+    private void OnStImportNkm3Click(object sender, RoutedEventArgs e)
+    {
+        if (_vm?.Nkm3Env is not { } env) return;
+        var s = _vm.Settings;
+        if (env.PreTimeMs is int pre) s.DisplayLeadSeconds = pre / 1000.0;
+        if (env.PostTimeMs is int post) s.DisplayTailSeconds = post / 1000.0;
+        if (env.IntervalMs is int interval) s.N3IntervalSeconds = interval / 1000.0;
+        s.Save();
+        RefreshShowTimePane();
+        ShowTimeSettingsChanged?.Invoke(this, EventArgs.Empty);
+    }
+
+    private void OnRunAutoShowTimeClick(object sender, RoutedEventArgs e) => AutoShowTimeRequested?.Invoke(this, EventArgs.Empty);
 }

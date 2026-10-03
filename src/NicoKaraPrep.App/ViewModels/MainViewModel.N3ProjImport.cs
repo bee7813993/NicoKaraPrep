@@ -15,7 +15,7 @@ public sealed class N3ProjImportChoices
     /// <summary>表示時刻の設定値（ワイプ前・ワイプ後・表示間隔・上段の表示）を取り込む。</summary>
     public bool Timing { get; set; }
 
-    /// <summary>ニコカラメーカーで調整された表示時刻を、行ごとの手動指定として取り込む。</summary>
+    /// <summary>ニコカラメーカーの表示時刻を、歌詞が同じ行すべてに、読み込んだ値としてそのまま持たせる（自動調整は右のパネル「表示時刻」で実行する）。</summary>
     public bool LineShowTimes { get; set; }
 
     /// <summary>ニコカラメーカーで設定したページのレイアウトを、自動で選ぶものと違うページだけ、ページの手動指定として取り込む。</summary>
@@ -114,39 +114,6 @@ public partial class MainViewModel
         {
             return string.Equals(a, b, StringComparison.OrdinalIgnoreCase);
         }
-    }
-
-    /// <summary>表示時刻の設定値を取り込んだ場合の、タブごとの表示時刻計算の設定。</summary>
-    private N3ShowTimeSettings EstimatedShowTimeSettings(N3ProjImportPreview preview, N3ProjSourceTab? source)
-    {
-        var s = CreateShowTimeSettings();
-        if (preview.Timing is { } t)
-        {
-            s.LeadMs = t.LeadMs;
-            s.TailMs = t.TailMs;
-            s.IntervalMs = t.IntervalMs;
-        }
-        s.TopLong = source?.TopLong ?? preview.MainTopLong;
-        return s;
-    }
-
-    /// <summary>
-    /// 「調整された表示時刻を行ごとの手動指定として取り込む」を選んだときに手動指定になる行数（試算）。
-    /// </summary>
-    /// <param name="withEstimatedTiming">表示時刻の設定値も取り込む場合 true。</param>
-    public int CountLineShowTimeImports(N3ProjImportPreview preview, bool withEstimatedTiming)
-    {
-        StoreActiveTab();
-        var matcher = CreateEmojiMatcher();
-        int count = 0;
-        foreach (var tab in Tabs)
-        {
-            var (source, matched) = N3ProjImport.FindSource(tab.Document, tab.Name, preview.Tabs, matcher);
-            if (source is null || matched.Count == 0) continue;
-            var settings = withEstimatedTiming ? EstimatedShowTimeSettings(preview, source) : CreateShowTimeSettings(tab.Name);
-            count += N3ProjImport.ApplyShowTimes(tab.Document.Clone(), matched, settings).Count;
-        }
-        return count;
     }
 
     /// <summary>
@@ -269,7 +236,7 @@ public partial class MainViewModel
             done.Add($"実際の表示区間 {preview.Settings.LineTimes.Count} 行分");
         }
 
-        // 4) 調整された表示時刻 → 行ごとの手動指定
+        // 4) 表示時刻 → 歌詞が同じ行すべてに、読み込んだ値としてそのまま持たせる（自動調整は右のパネル「表示時刻」で実行する）
         if (choices.LineShowTimes)
         {
             int lines = 0;
@@ -277,23 +244,17 @@ public partial class MainViewModel
             {
                 var (source, matched) = N3ProjImport.FindSource(tab.Document, tab.Name, preview.Tabs, matcher);
                 if (source is null || matched.Count == 0) continue;
-                var settings = CreateShowTimeSettings(tab.Name);
-
-                // 変更がある場合だけ元に戻せるようにしてから適用する
-                var trial = tab.Document.Clone();
-                if (N3ProjImport.ApplyShowTimes(trial, matched, settings).Count == 0) continue;
-                tab.UndoStack.Add(tab.Document.Clone());
+                tab.UndoStack.Add(tab.Document.Clone()); // 元に戻せるように
                 tab.RedoStack.Clear();
-                var touched = N3ProjImport.ApplyShowTimes(tab.Document, matched, settings);
+                lines += N3ProjImport.LoadShowTimes(tab.Document, matched);
                 tab.IsModified = true;
-                lines += touched.Count;
             }
             if (lines > 0)
             {
                 IsModified = _activeTab.IsModified;
                 UpdateTitle();
             }
-            done.Add($"調整された表示時刻 {lines} 行");
+            done.Add($"表示時刻 {lines} 行（そのまま）");
         }
 
         // 5) 書き出しのベース
