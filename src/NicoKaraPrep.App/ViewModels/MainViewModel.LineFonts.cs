@@ -118,6 +118,7 @@ public partial class MainViewModel
         {
             _lineWidths = new();
             _pageFontSizeDeltas = new();
+            foreach (var line in Lines) line.SetShowTimes(null, null);
             return;
         }
 
@@ -214,6 +215,7 @@ public partial class MainViewModel
         var widths = new Dictionary<int, LineWidthResult>();
         static SubtitleSpacing SpacingOf(N3LayoutSettings layout) =>
             new((float)layout.LyricsIntervalPx, (float)layout.RubyIntervalPx, (float)layout.LyricsAndRubyIntervalPx, layout.RubyAlignment, layout.AllowBiting);
+        Dictionary<int, N3LinePlan>? activePlans = null; // 表示中のタブの表示時刻（行リストの時刻の下の段に出す）
         _lineBounds.Clear();
         _singleLineRows.Clear();
         for (int t = 0; t < tabs.Count; t++)
@@ -311,6 +313,7 @@ public partial class MainViewModel
             // 表示時刻は、行の画面上の四角を当てて計算する（レイアウトで別の場所に出る前後のページの行は詰めない。設定で切れる）
             var show = CreateShowTimeSettings(tabName);
             var plans = show.LineBounds is null ? structure : N3ShowTimePlanner.Plan(doc, show);
+            if (t == active) activePlans = plans;
             foreach (var (index, preview) in items)
             {
                 if (!plans.TryGetValue(index, out var plan)) continue;
@@ -349,6 +352,9 @@ public partial class MainViewModel
             Lines[i].LayoutText = text;
             Lines[i].LayoutToolTip = tip;
             Lines[i].SetWidthResult(widths.GetValueOrDefault(i));
+            // 表示時刻（行リストの時刻の下の段。行設定の説明・書き出し・字幕のプレビューと同じ計算）
+            var shown = activePlans?.GetValueOrDefault(i);
+            Lines[i].SetShowTimes(shown?.BeginMs, shown?.EndMs);
         }
         LineFontsUpdated?.Invoke(this, EventArgs.Empty);
     }

@@ -45,6 +45,72 @@ public partial class LineViewModel : ObservableObject
         }
     }
 
+    // ------------------------------------------------ 表示時刻（行リストの時刻の下の段）
+
+    private int? _showBeginMs;
+    private int? _showEndMs;
+
+    /// <summary>最後に出した表示時刻と、行に持たせた値・出どころ（変わらなければ表示を作り直さない）。</summary>
+    private (int? Begin, int? End, int? BeginCs, ShowTimeOrigin BeginOrigin, int? EndCs, ShowTimeOrigin EndOrigin)? _shownShowTimes;
+
+    /// <summary>
+    /// 表示時刻（ms。ニコカラメーカーで行を出す・消す時刻。書き出し・字幕のプレビュー・行設定の説明と同じ計算）を入れる。
+    /// <see cref="MainViewModel.UpdateLineFonts"/> が入れる（決まらない行は null）。
+    /// </summary>
+    public void SetShowTimes(int? beginMs, int? endMs)
+    {
+        var now = (beginMs, endMs, Model.ShowBeginCs, Model.ShowBeginOrigin, Model.ShowEndCs, Model.ShowEndOrigin);
+        if (_shownShowTimes is { } shown && shown.Equals(now)) return;
+        _shownShowTimes = now;
+        _showBeginMs = beginMs;
+        _showEndMs = endMs;
+        OnPropertyChanged(nameof(ShowBeginText));
+        OnPropertyChanged(nameof(ShowEndText));
+        RaiseShowTimeLooks();
+    }
+
+    /// <summary>表示開始（行リストの歌い出しの下の段。10ms 単位に四捨五入。行設定の薄字・説明と同じ）。</summary>
+    public string ShowBeginText => _showBeginMs is int ms ? FormatShowTime(ms) : "";
+
+    /// <summary>表示終了（行リストの歌い終わりの下の段）。</summary>
+    public string ShowEndText => _showEndMs is int ms ? FormatShowTime(ms) : "";
+
+    /// <summary>表示開始の文字色（チェックで表示開始の側に問題があればその色、手で指定した値は ✎ と同じ色、ほかは薄く）。</summary>
+    public Microsoft.UI.Xaml.Media.Brush? ShowBeginBrush => ShowTimeBrush(_startTimeSeverity, Model.HasManualShowBegin);
+
+    /// <summary>表示終了の文字色。</summary>
+    public Microsoft.UI.Xaml.Media.Brush? ShowEndBrush => ShowTimeBrush(_endTimeSeverity, Model.HasManualShowEnd);
+
+    /// <summary>表示開始の説明（値の出どころを添える）。表示時刻が決まらない行は null（説明を出さない）。</summary>
+    public string? ShowBeginToolTip => _showBeginMs is int ms
+        ? $"表示開始 {FormatShowTime(ms)}（{MainViewModel.ShowTimeOriginName(Model.ShowBeginCs, Model.ShowBeginOrigin)}）: ニコカラメーカーで行が出る時刻です（書き出し・字幕のプレビューと同じ）。" +
+          "手で指定した値は ✎ と同じ色、チェックで問題があれば警告・エラーの色になります。ダブルクリックで、下の行設定の表示開始を直せます"
+        : null;
+
+    /// <summary>表示終了の説明。</summary>
+    public string? ShowEndToolTip => _showEndMs is int ms
+        ? $"表示終了 {FormatShowTime(ms)}（{MainViewModel.ShowTimeOriginName(Model.ShowEndCs, Model.ShowEndOrigin)}）: ニコカラメーカーで行が消える時刻です（書き出し・字幕のプレビューと同じ）。" +
+          "手で指定した値は ✎ と同じ色、チェックで問題があれば警告・エラーの色になります。ダブルクリックで、下の行設定の表示終了を直せます"
+        : null;
+
+    private static string FormatShowTime(int ms) => TimeTag.Format(N3ShowTimeAdjuster.ToCs(ms)).Trim('[', ']');
+
+    private static Microsoft.UI.Xaml.Media.Brush? ShowTimeBrush(IssueSeverity? severity, bool manual) => severity switch
+    {
+        IssueSeverity.Error => ErrorTimeBrush,
+        IssueSeverity.Warning => WarningTimeBrush,
+        _ => (Microsoft.UI.Xaml.Media.Brush)Microsoft.UI.Xaml.Application.Current.Resources[manual ? "AccentTextFillColorPrimaryBrush" : "TextFillColorSecondaryBrush"],
+    };
+
+    /// <summary>表示時刻の色と説明を出し直す（チェックの結果・手で指定した値が変わったとき）。</summary>
+    private void RaiseShowTimeLooks()
+    {
+        OnPropertyChanged(nameof(ShowBeginBrush));
+        OnPropertyChanged(nameof(ShowEndBrush));
+        OnPropertyChanged(nameof(ShowBeginToolTip));
+        OnPropertyChanged(nameof(ShowEndToolTip));
+    }
+
     // 横幅の判定（横幅の欄のツールチップに画面の横幅・左右余白を出す）
     private LineWidthResult? _widthResult;
 
@@ -125,7 +191,11 @@ public partial class LineViewModel : ObservableObject
     /// <summary>ニコカラメーカー用の手動指定（表示時刻・フォント設定）がある行の印。</summary>
     public string OverrideMark => Model.HasManualN3Overrides ? "✎" : ""; // 手で指定したものだけ（読み込んだ表示時刻・自動調整の値は付けない）
 
-    public void RaiseOverrideMark() => OnPropertyChanged(nameof(OverrideMark));
+    public void RaiseOverrideMark()
+    {
+        OnPropertyChanged(nameof(OverrideMark));
+        RaiseShowTimeLooks(); // 手で指定した表示時刻の色・説明
+    }
 
     public double Opacity => Model.Exported ? 0.45 : 1.0;
 
@@ -291,6 +361,7 @@ public partial class LineViewModel : ObservableObject
         {
             _startTimeSeverity = severity;
             OnPropertyChanged(nameof(StartTimeBrush));
+            OnPropertyChanged(nameof(ShowBeginBrush));
         }
     }
 
@@ -301,6 +372,7 @@ public partial class LineViewModel : ObservableObject
         {
             _endTimeSeverity = severity;
             OnPropertyChanged(nameof(EndTimeBrush));
+            OnPropertyChanged(nameof(ShowEndBrush));
         }
     }
 
@@ -309,6 +381,8 @@ public partial class LineViewModel : ObservableObject
         OnPropertyChanged(nameof(RowBrush));
         OnPropertyChanged(nameof(StartTimeBrush));
         OnPropertyChanged(nameof(EndTimeBrush));
+        OnPropertyChanged(nameof(ShowBeginBrush));
+        OnPropertyChanged(nameof(ShowEndBrush));
     }
 
     /// <summary>モデル差し替え（行エディタからの適用時）。</summary>

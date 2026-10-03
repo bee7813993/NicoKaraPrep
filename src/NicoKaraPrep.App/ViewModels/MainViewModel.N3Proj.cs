@@ -126,16 +126,18 @@ public partial class MainViewModel
     /// </summary>
     public static string ShowTimeOriginLabel(LyricsLine line)
     {
-        static string Name(int? cs, ShowTimeOrigin origin) => cs is null ? "自動" : origin switch
-        {
-            ShowTimeOrigin.Loaded => "読み込み",
-            ShowTimeOrigin.Auto => "自動調整",
-            _ => "手動",
-        };
-        string begin = Name(line.ShowBeginCs, line.ShowBeginOrigin);
-        string end = Name(line.ShowEndCs, line.ShowEndOrigin);
+        string begin = ShowTimeOriginName(line.ShowBeginCs, line.ShowBeginOrigin);
+        string end = ShowTimeOriginName(line.ShowEndCs, line.ShowEndOrigin);
         return begin == end ? begin : $"開始は{begin}・終了は{end}";
     }
+
+    /// <summary>表示開始・終了の片方の値の出どころの名前（値を持たなければ「自動」。行リストの表示時刻の説明にも使う）。</summary>
+    public static string ShowTimeOriginName(int? cs, ShowTimeOrigin origin) => cs is null ? "自動" : origin switch
+    {
+        ShowTimeOrigin.Loaded => "読み込み",
+        ShowTimeOrigin.Auto => "自動調整",
+        _ => "手動",
+    };
 
     /// <summary>行の表示開始・終了を設定する（null = 値を外して自動に戻す）。値は手で指定したもの（手動）にする。</summary>
     public bool SetLineShowTime(int index, int? beginCs, int? endCs)

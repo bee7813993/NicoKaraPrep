@@ -621,10 +621,10 @@ public sealed partial class MainWindow
     /// </summary>
     private string? _showBeginPrefill, _showEndPrefill;
 
-    /// <summary>行リストの歌い出しの時刻をダブルクリック: その行の表示開始の欄へカーソルを移す（行のダブルクリックの再生位置の移動もする）。</summary>
+    /// <summary>行リストの歌い出し・表示開始の時刻をダブルクリック: その行の表示開始の欄へカーソルを移す（行のダブルクリックの再生位置の移動もする）。</summary>
     private void OnLineStartTimeDoubleTapped(object sender, DoubleTappedRoutedEventArgs e) => BeginEditShowTime(sender, begin: true);
 
-    /// <summary>行リストの歌い終わりの時刻をダブルクリック: その行の表示終了の欄へカーソルを移す。</summary>
+    /// <summary>行リストの歌い終わり・表示終了の時刻をダブルクリック: その行の表示終了の欄へカーソルを移す。</summary>
     private void OnLineEndTimeDoubleTapped(object sender, DoubleTappedRoutedEventArgs e) => BeginEditShowTime(sender, begin: false);
 
     private void BeginEditShowTime(object sender, bool begin)
