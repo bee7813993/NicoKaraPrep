@@ -1,0 +1,52 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Package
+  xmlns="http://schemas.microsoft.com/appx/manifest/foundation/windows10"
+  xmlns:uap="http://schemas.microsoft.com/appx/manifest/uap/windows10"
+  xmlns:rescap="http://schemas.microsoft.com/appx/manifest/foundation/windows10/restrictedcapabilities"
+  IgnorableNamespaces="uap rescap">
+
+  <!--
+    Identity / PublisherDisplayName は Partner Center の「Product identity」の値。
+    Version の第 4 セグメントは Store 予約のため 0 固定。
+  -->
+  <Identity
+    Name="YFRTeam.8571E940AEEA"
+    Publisher="CN=7F20441E-C8F2-4A45-B847-6FECA63733DB"
+    Version="0.1.0.0" />
+
+  <!-- DisplayName は Partner Center で予約したアプリ名「にこぷれっぷ」と一致させること -->
+  <Properties>
+    <DisplayName>にこぷれっぷ</DisplayName>
+    <PublisherDisplayName>YFRTeam</PublisherDisplayName>
+    <Logo>Assets\StoreLogo.png</Logo>
+  </Properties>
+
+  <Dependencies>
+    <TargetDeviceFamily Name="Windows.Universal" MinVersion="10.0.17763.0" MaxVersionTested="10.0.19041.0" />
+    <TargetDeviceFamily Name="Windows.Desktop" MinVersion="10.0.17763.0" MaxVersionTested="10.0.19041.0" />
+  </Dependencies>
+
+  <Resources>
+    <Resource Language="ja" />
+  </Resources>
+
+  <Applications>
+    <Application Id="App" Executable="$targetnametoken$.exe" EntryPoint="$targetentrypoint$">
+      <uap:VisualElements
+        DisplayName="にこぷれっぷ"
+        Description="RhythmicaLyrics で作成したタイムタグ付き歌詞を、ニコカラメーカー3 に読み込ませるために加工するツール"
+        BackgroundColor="transparent"
+        Square150x150Logo="Assets\Square150x150Logo.png"
+        Square44x44Logo="Assets\Square44x44Logo.png">
+        <uap:DefaultTile Wide310x150Logo="Assets\Wide310x150Logo.png" />
+        <uap:SplashScreen Image="Assets\SplashScreen.png" />
+      </uap:VisualElements>
+    </Application>
+  </Applications>
+
+  <!-- 通信しないローカルアプリのため internetClient は宣言しない
+       （プライバシーポリシー URL 不要のまま提出できる） -->
+  <Capabilities>
+    <rescap:Capability Name="runFullTrust" />
+  </Capabilities>
+</Package>
