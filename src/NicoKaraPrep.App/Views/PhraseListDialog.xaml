@@ -1,0 +1,44 @@
+﻿<ContentDialog
+    x:Class="NicoKaraPrep.App.Views.PhraseListDialog"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:local="using:NicoKaraPrep.App.Views"
+    Title="定型文の編集"
+    PrimaryButtonText="OK"
+    CloseButtonText="キャンセル"
+    DefaultButton="Primary">
+
+    <!-- 絵文字挿入ビューで入れる決まった文字列（アプリ共通。上から 10 件に N のあとの番号 1–0） -->
+    <StackPanel Width="520" Spacing="8">
+        <TextBlock
+            TextWrapping="Wrap"
+            FontSize="12"
+            Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+            Text="絵文字挿入ビューで、パレットの「定型文」を押すか、N のあとに番号（1–0）を押すと、カーソルの位置に入れます。タイムタグは前後の歌に合わせます（直前の歌の終わりから直後の歌の始まりまで。後ろに歌が無ければ 3 秒）。文字列の中の {秒} は、その秒数になります（例: （間奏 約{秒}秒） → （間奏 約14秒））。" />
+        <ListView
+            x:Name="RowList"
+            MaxHeight="360"
+            SelectionMode="None"
+            ItemsSource="{x:Bind Rows}">
+            <ListView.ItemTemplate>
+                <DataTemplate x:DataType="local:PhraseRow">
+                    <Grid ColumnSpacing="6" Padding="0,2">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="20" />
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
+                        <TextBlock Text="{x:Bind KeyLabel, Mode=OneWay}" FontWeight="Bold" VerticalAlignment="Center" HorizontalAlignment="Center" Foreground="{ThemeResource AccentTextFillColorPrimaryBrush}" />
+                        <TextBox Grid.Column="1" Text="{x:Bind Text, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" PlaceholderText="（後奏）" AutomationProperties.Name="定型文" />
+                        <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="2">
+                            <Button Content="↑" FontSize="11" Padding="6,2" MinWidth="0" Click="OnMoveUpClick" Tag="{x:Bind}" ToolTipService.ToolTip="上へ（番号も入れ替わります）" />
+                            <Button Content="↓" FontSize="11" Padding="6,2" MinWidth="0" Click="OnMoveDownClick" Tag="{x:Bind}" ToolTipService.ToolTip="下へ" />
+                            <Button Content="✕" FontSize="11" Padding="6,2" MinWidth="0" Click="OnDeleteClick" Tag="{x:Bind}" ToolTipService.ToolTip="この定型文を削除" />
+                        </StackPanel>
+                    </Grid>
+                </DataTemplate>
+            </ListView.ItemTemplate>
+        </ListView>
+        <Button x:Name="AddButton" Content="＋ 定型文を追加" Click="OnAddClick" HorizontalAlignment="Left" />
+    </StackPanel>
+</ContentDialog>

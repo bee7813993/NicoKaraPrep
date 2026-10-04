@@ -99,7 +99,7 @@ public sealed partial class FontSettingsViewModel
         FlushPendingSave();
 
         bool undoable = backup.CommonFonts is not null || backup.SongFonts is not null;
-        SetStatus($"{backup.Describe()} を消しました（控え: {Path.GetFileName(path)}。一覧の上の「…」>「消す前の控えから戻す」で戻せます{(undoable ? "。フォント設定は Ctrl+Z でも戻せます" : "")}）");
+        SetStatus($"{backup.Describe()} を消しました（控え: {Path.GetFileName(path)}。一覧の下の「控えから戻す...」で戻せます{(undoable ? "。フォント設定は Ctrl+Z でも戻せます" : "")}）");
         return path;
     }
 

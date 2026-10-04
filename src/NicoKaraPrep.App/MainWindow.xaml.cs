@@ -43,6 +43,7 @@ public sealed partial class MainWindow : Window
         RefreshSaveMenuTexts();
 
         StyledLyricsMenuItem.IsChecked = ViewModel.Settings.LineListStyledLyrics;
+        ViewModel.RefreshInsertPhrases();
         InitializeAdaptiveLayout();
         InitializePlayerBar();
         InitializeLineSide();
@@ -1402,6 +1403,7 @@ public sealed partial class MainWindow : Window
         // カーソルのあった行を行リストの選択に引き継ぐ
         int caretLine = ViewModel.MapInsertViewOffset(InsertEditor.SelectionStart) is var (li, _) ? li : -1;
 
+        _phrasePending = false;
         _insertFollow = false;
         UpdateFollowIndicator();
         if (caretLine >= 0) SelectLineAt(caretLine);
@@ -1429,6 +1431,7 @@ public sealed partial class MainWindow : Window
         }
         UpdateInsertLegend();
         UpdateFollowIndicator();
+        PhraseHeaderText.Text = $"定型文（{InsertViewKeyMap.KeyLabel(_insertKeys[InsertViewAction.PhraseInsert])} のあとに番号）";
     }
 
     /// <summary>現在のキー割り当てから挿入ビューの凡例テキストを組み立てる。</summary>
@@ -1436,7 +1439,7 @@ public sealed partial class MainWindow : Window
     {
         string K(InsertViewAction a) => InsertViewKeyMap.KeyLabel(_insertKeys[a]);
         InsertLegend.Text =
-            $"1–0 / Q–P: 絵文字挿入　{K(InsertViewAction.PlaceholderInsert)}: ＿挿入　{K(InsertViewAction.LeadTagInsert)}: 先行タグ挿入　" +
+            $"1–0 / Q–P: 絵文字挿入　{K(InsertViewAction.PlaceholderInsert)}: ＿挿入　{K(InsertViewAction.PhraseInsert)} → 1–0: 定型文挿入　{K(InsertViewAction.LeadTagInsert)}: 先行タグ挿入　" +
             $"{K(InsertViewAction.SpaceInsert)}: 空白挿入（Shift+{K(InsertViewAction.SpaceInsert)}: 全角）　BS / Del: 絵文字・空白削除　" +
             $"{K(InsertViewAction.PlayPause)}: 再生/一時停止　{K(InsertViewAction.PlayFromCursor)}: カーソル位置から再生　" +
             $"{K(InsertViewAction.Play)}: 再生　{K(InsertViewAction.Pause)}: 一時停止　" +
@@ -1456,6 +1459,9 @@ public sealed partial class MainWindow : Window
                 {
                     InsertEmojiStringInView(ViewModel.Settings.PlaceholderChar);
                 }
+                break;
+            case InsertViewAction.PhraseInsert:
+                BeginPhraseSelect();
                 break;
             case InsertViewAction.LeadTagInsert:
                 TryRun(() =>
@@ -1513,6 +1519,17 @@ public sealed partial class MainWindow : Window
                      & Windows.UI.Core.CoreVirtualKeyStates.Down) != 0;
         bool shift = (Microsoft.UI.Input.InputKeyboardSource.GetKeyStateForCurrentThread(Windows.System.VirtualKey.Shift)
                       & Windows.UI.Core.CoreVirtualKeyStates.Down) != 0;
+
+        // 定型文のキー（N）のあと: 番号（1–0）でその定型文を入れる。ほかのキーはやめる（そのキーの機能は動かさない）
+        if (_phrasePending && e.Key is not (Windows.System.VirtualKey.Shift or Windows.System.VirtualKey.Control or Windows.System.VirtualKey.Menu))
+        {
+            _phrasePending = false;
+            e.Handled = true;
+            int number = SlotFromKey(e.Key);
+            if (number is >= 1 and <= 10 && ViewModel.GetInsertPhrase(number) is string phrase) InsertPhraseInView(phrase);
+            else ViewModel.StatusText = "定型文を入れるのをやめました";
+            return;
+        }
 
         if (ctrl)
         {
@@ -1635,6 +1652,59 @@ public sealed partial class MainWindow : Window
         FollowIndicator.Foreground = _insertFollow
             ? (Microsoft.UI.Xaml.Media.Brush)Microsoft.UI.Xaml.Application.Current.Resources["AccentTextFillColorPrimaryBrush"]
             : (Microsoft.UI.Xaml.Media.Brush)Microsoft.UI.Xaml.Application.Current.Resources["TextFillColorSecondaryBrush"];
+    }
+
+    /// <summary>定型文のキー（N）を押して、番号を待っているか。</summary>
+    private bool _phrasePending;
+
+    /// <summary>定型文のキー: 番号を待つ（ステータスバーに番号と定型文を出す）。</summary>
+    private void BeginPhraseSelect()
+    {
+        var items = ViewModel.InsertPhraseItems.Where(p => p.KeyLabel.Length > 0).ToList();
+        if (items.Count == 0)
+        {
+            ViewModel.StatusText = "定型文がありません（絵文字 > 定型文の編集... か、パレットの「定型文」の 編集... で登録できます）";
+            return;
+        }
+        _phrasePending = true;
+        ViewModel.StatusText = $"定型文: {string.Join("　", items.Select(p => $"{p.KeyLabel} {p.Text}"))}　← 番号を押してください（ほかのキーでやめる）";
+    }
+
+    /// <summary>挿入ビューのカーソル位置に定型文を入れる（前後の歌に合わせたタイムタグ）。</summary>
+    private void InsertPhraseInView(string phrase)
+    {
+        TryRun(() =>
+        {
+            int? caret = ViewModel.InsertPhraseAtViewOffset(InsertEditor.SelectionStart, phrase);
+            if (caret is int c)
+            {
+                RefreshInsertView(c);
+                ScheduleValidation();
+            }
+        });
+    }
+
+    /// <summary>パレットの定型文を押したとき。</summary>
+    private void OnPhraseClick(object sender, ItemClickEventArgs e)
+    {
+        if (e.ClickedItem is not ViewModels.PhraseItem item) return;
+        if (!InsertViewActive)
+        {
+            ViewModel.StatusText = "定型文は絵文字挿入ビュー（F2）で入れられます";
+            return;
+        }
+        _phrasePending = false;
+        InsertPhraseInView(item.Text);
+        InsertEditor.Focus(FocusState.Programmatic);
+    }
+
+    /// <summary>定型文の編集（絵文字 > 定型文の編集...・パレットの 編集...）。</summary>
+    private async void OnPhraseListClick(object sender, RoutedEventArgs e)
+    {
+        var dialog = new PhraseListDialog(ViewModel.Settings) { XamlRoot = Content.XamlRoot };
+        if (await dialog.ShowAsync() != ContentDialogResult.Primary) return;
+        ViewModel.RefreshInsertPhrases();
+        ViewModel.StatusText = $"定型文を保存しました（{ViewModel.InsertPhraseItems.Count} 件）";
     }
 
     private void InsertEmojiStringInView(string emoji)

@@ -732,7 +732,7 @@ public sealed partial class FontSettingsView : UserControl
         if (ViewModel is { } vm && e.ClickedItem is FontListItem item) vm.Select(item.Id);
     }
 
-    /// <summary>「…」>「まとめて消す...」: 消す種類を選んで消す（消す前の内容は控えに保存する）。</summary>
+    /// <summary>一覧の下の「まとめて消す...」: 消す種類を選んで消す（消す前の内容は控えに保存する）。</summary>
     private async void OnClearAllClick(object sender, RoutedEventArgs e)
     {
         if (ViewModel is not { } vm) return;
@@ -749,7 +749,7 @@ public sealed partial class FontSettingsView : UserControl
         }
     }
 
-    /// <summary>「…」>「消す前の控えから戻す...」: 控えを選んで、その内容に戻す。</summary>
+    /// <summary>一覧の下の「控えから戻す...」: 控えを選んで、その内容に戻す。</summary>
     private async void OnRestoreBackupClick(object sender, RoutedEventArgs e)
     {
         if (ViewModel is not { } vm) return;

@@ -73,6 +73,13 @@ public sealed class AppSettings
     public List<EmojiEntry> GlobalEmojiList { get; set; } = new();
 
     /// <summary>
+    /// 定型文（絵文字挿入ビューで前後の歌に合わせて入れる決まった文字列。「（後奏）」など）。
+    /// 文字列の中の「{秒}」は入れるときに前後の歌のあいだの秒数になる（PhraseTagger）。設定に無ければ「（後奏）」1 つ。
+    /// テンプレートには含めない（キー割り当てと同じく、アプリでの入力の道具）。
+    /// </summary>
+    public List<string> InsertPhrases { get; set; } = new() { "（後奏）" };
+
+    /// <summary>
     /// 挿入ビューの機能キー割り当て（機能 ID → キー ID）。
     /// 既定値・正規化はアプリ側（InsertViewKeyMap）が担当する。
     /// </summary>
