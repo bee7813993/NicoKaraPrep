@@ -1721,6 +1721,7 @@ public sealed partial class MainWindow : Window
             TryRun(() => changed = ViewModel.EditLine(li, dialog.RawText, dialog.BeginCs, dialog.EndCs, dialog.ResetToAuto));
             if (!changed) return;
             ViewModel.StatusText = $"{li + 1} 行目を更新しました（Ctrl+Z で元に戻せます）";
+            ViewModel.KeepNoticeBeforeCheck(); // 直したあとのチェックの結果で消えないように
             int start = ViewModel.GetInsertViewLineStart(li);
             int end = start + ViewModel.Document.Lines[li].GetDisplayText().Length;
             RefreshInsertView(index >= 0 ? start : Math.Clamp(caret, start, end));
@@ -1761,6 +1762,7 @@ public sealed partial class MainWindow : Window
         {
             if (!ViewModel.ApplyRawTextToLine(li, InsertLineEditor.Text)) return;
             ViewModel.StatusText = $"行 {li + 1} を更新しました（Ctrl+Z で元に戻せます）";
+            ViewModel.KeepNoticeBeforeCheck(); // 直したあとのチェックの結果で消えないように
             int start = ViewModel.GetInsertViewLineStart(li);
             int end = start + (ViewModel.Document.Lines[li].GetDisplayText().Length);
             RefreshInsertView(Math.Clamp(caret, start, end));
