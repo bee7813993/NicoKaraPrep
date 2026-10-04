@@ -12,8 +12,11 @@ public sealed class PhraseTiming
     /// <summary>ワイプ後（行を歌い終わりの何秒後まで表示するか）。</summary>
     public int TailCs { get; init; } = 50;
 
-    /// <summary>後ろ（前）に歌が無いときの定型文のワイプの長さ（後奏）。</summary>
+    /// <summary>後ろ（前）に歌が無いときの定型文のワイプの長さ（後奏。<see cref="SongEndCs"/> が分からないとき）。</summary>
     public int AloneCs { get; init; } = 300;
+
+    /// <summary>曲の終わり（メディアの長さ）。分かれば、後奏は曲の終わりまで表示する。</summary>
+    public int? SongEndCs { get; init; }
 
     /// <summary>定型文だけの行の前後に空行を置いて、定型文だけのページにするか（空行がページ区切りのとき）。</summary>
     public bool SeparatePages { get; init; } = true;
@@ -27,7 +30,8 @@ public sealed class PhraseTiming
 /// <param name="DisplayOffset">定型文の行の中の、定型文の先頭の表示位置。</param>
 /// <param name="OwnLine">定型文だけの行として入れたか（false は行の途中に入れた）。</param>
 /// <param name="Squeezed">前後の間が短く、表示が前後のページと重ならない位置に入らなかったので、前後の歌に合わせたか。</param>
-public sealed record PhraseInsertResult(string Text, int? StartCs, int? EndCs, int LineIndex, int DisplayOffset, bool OwnLine, bool Squeezed);
+/// <param name="AfterLast">後ろに歌が無い（後奏）か。</param>
+public sealed record PhraseInsertResult(string Text, int? StartCs, int? EndCs, int LineIndex, int DisplayOffset, bool OwnLine, bool Squeezed, bool AfterLast = false);
 
 /// <summary>行の中の定型文 1 つ（CharUnit の範囲と、行の表示文字列の中の位置）。</summary>
 public sealed record PhraseOccurrence(int Start, int EndExclusive, int DisplayStart, string Value);
@@ -41,24 +45,30 @@ public sealed record PhraseOccurrence(int Start, int EndExclusive, int DisplaySt
 ///   （前のページが消える時刻 = 前の行の表示終了の指定、無ければ 歌い終わり ＋ ワイプ後。次のページが出る時刻も同じく 歌い出し − ワイプ前）
 ///   タグ = 画面に出す時間の 始まり ＋ ワイプ前 〜 終わり − ワイプ後（ニコカラメーカー3 がこのタグから同じ時間を表示する）
 ///   例: 歌い終わり 01:12.0・歌い出し 01:26.0・ワイプ前 1.5・ワイプ後 0.5 → 画面 01:14.0〜01:24.0、タグ [01:15.5]（間奏）[01:23.5]
-///   後ろに歌が無い（後奏）ときは開始から <see cref="PhraseTiming.AloneCs"/>、前に歌が無い（前奏）ときは曲の頭（00:00）から表示する。
+///   後ろに歌が無い（後奏）ときは曲の終わり（<see cref="PhraseTiming.SongEndCs"/>。分からなければ開始から <see cref="PhraseTiming.AloneCs"/>）まで、
+///   前に歌が無い（前奏）ときは曲の頭（00:00）から表示する。
 ///   間が短くて入らないときは、前後の歌に合わせる（直前の歌の終わり 〜 直後の歌の始まり）。
 /// 行の途中に入れたときは、前後の歌に合わせる（直前の文字の終わり 〜 直後の文字の始まり）。
 /// 文字列の中の <see cref="SecondsToken"/> は、前後の歌のあいだの秒数（四捨五入）に置き換える（「（間奏 約14秒）」）。
+/// フォント設定を指定したら、定型文だけの行は行に、行の途中は定型文の文字に、そのフォント設定を手動指定する。
 /// </summary>
 public static class PhraseTagger
 {
     /// <summary>秒数に置き換える印。</summary>
     public const string SecondsToken = "{秒}";
 
-    /// <summary><paramref name="lineIndex"/> 行の <paramref name="unitIndex"/>（CharUnit 単位）に定型文を入れ、タイムタグを付ける。</summary>
-    public static PhraseInsertResult Insert(LyricsDocument doc, int lineIndex, int unitIndex, string template, PhraseTiming timing)
+    /// <summary>
+    /// <paramref name="lineIndex"/> 行の <paramref name="unitIndex"/>（CharUnit 単位）に定型文を入れ、タイムタグを付ける。
+    /// <paramref name="fontSetName"/> があれば、そのフォント設定を手動指定する。
+    /// </summary>
+    public static PhraseInsertResult Insert(LyricsDocument doc, int lineIndex, int unitIndex, string template, PhraseTiming timing, string? fontSetName = null)
     {
+        if (string.IsNullOrWhiteSpace(fontSetName)) fontSetName = null;
         var line = doc.Lines[lineIndex];
         int u = Math.Clamp(unitIndex, 0, line.Chars.Count);
         bool textBefore = line.Chars.Take(u).Any(c => !c.IsSpacer);
         bool textAfter = line.Chars.Skip(u).Any(c => !c.IsSpacer);
-        if (textBefore && textAfter) return InsertInline(doc, lineIndex, u, template, timing);
+        if (textBefore && textAfter) return InsertInline(doc, lineIndex, u, template, timing, fontSetName);
 
         // 定型文だけの行（空行ならその行、行頭なら前、行末なら後ろに行を足す）
         int at;
@@ -90,7 +100,9 @@ public static class PhraseTagger
 
         // 画面に出す時間 → タグ
         int? start = prevShown is int a ? a + timing.LeadCs + timing.LeadCs : nextShown is not null ? timing.LeadCs : null;
-        int? end = nextShown is int b ? b - timing.TailCs - timing.TailCs : start is int s0 ? s0 + timing.AloneCs : null;
+        int? end = nextShown is int b ? b - timing.TailCs - timing.TailCs
+            : start is int s0 ? (timing.SongEndCs is int songEnd && songEnd - timing.TailCs > s0 ? songEnd - timing.TailCs : s0 + timing.AloneCs)
+            : null;
         bool squeezed = false;
         if (start is int s1 && end is int e1 && e1 <= s1)
         {
@@ -109,12 +121,16 @@ public static class PhraseTagger
             phraseLine.Chars[0].TimeCs = st;
             phraseLine.Chars[0].CheckCount = 1;
         }
-        if (phraseLine.Chars.Count > 0) phraseLine.EndTimeCs = end;
-        return new PhraseInsertResult(text, start, end, at, 0, OwnLine: true, squeezed);
+        if (phraseLine.Chars.Count > 0)
+        {
+            phraseLine.EndTimeCs = end;
+            phraseLine.FontSetName = fontSetName;
+        }
+        return new PhraseInsertResult(text, start, end, at, 0, OwnLine: true, squeezed, AfterLast: nextStart is null && prevEnd is not null);
     }
 
     /// <summary>行の途中: 直前の文字の終わり 〜 直後の文字の始まり。</summary>
-    private static PhraseInsertResult InsertInline(LyricsDocument doc, int lineIndex, int u, string template, PhraseTiming timing)
+    private static PhraseInsertResult InsertInline(LyricsDocument doc, int lineIndex, int u, string template, PhraseTiming timing, string? fontSetName)
     {
         var line = doc.Lines[lineIndex];
 
@@ -133,6 +149,7 @@ public static class PhraseTagger
         string text = template.Replace(SecondsToken, Seconds(prev, next, start, end));
         var units = Units(text);
         if (units.Count == 0) return new PhraseInsertResult(text, null, null, lineIndex, DisplayOffsetOf(line, u), false, false);
+        foreach (var unit in units) unit.FontSetName = fontSetName;
         if (start is int st)
         {
             units[0].TimeCs = st;

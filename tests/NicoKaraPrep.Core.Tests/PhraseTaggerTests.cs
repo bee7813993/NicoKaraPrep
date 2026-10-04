@@ -1,4 +1,4 @@
-using NicoKaraPrep.Core.Formats;
+﻿using NicoKaraPrep.Core.Formats;
 using NicoKaraPrep.Core.Model;
 
 namespace NicoKaraPrep.Core.Tests;
@@ -42,6 +42,37 @@ public class PhraseTaggerTests
 
         Assert.Equal(new[] { "[00:10:00]歌[00:12:00]", "", "[00:15:50]（後奏）[00:18:50]" }, All(doc));
         Assert.Equal(2, r.LineIndex);
+    }
+
+    [Fact]
+    public void 後奏_曲の終わりが分かれば曲の終わりまで表示()
+    {
+        // ユーザーの例: 最後のタグ 03:33.45・曲の長さ 03:56 → 画面に出るのは 03:35.45〜03:56.00（タグ [03:36:95]〜[03:55:50]）
+        var doc = Doc("[03:30:00]歌[03:33:45]");
+        PhraseTagger.Insert(doc, 0, 1, "（後奏）", new PhraseTiming { LeadCs = 150, TailCs = 50, SongEndCs = 23600 });
+
+        Assert.Equal("[03:36:95]（後奏）[03:55:50]", Line(doc, 2));
+    }
+
+    [Fact]
+    public void フォント設定_定型文だけの行は行に_行の途中は定型文の文字に指定する()
+    {
+        var doc = Doc("[00:10:00]あ[00:12:00]", "", "[00:26:00]い[00:28:00]");
+        var r = PhraseTagger.Insert(doc, 1, 0, "（間奏）", Timing, "情報中");
+        Assert.Equal("情報中", doc.Lines[r.LineIndex].FontSetName);
+        Assert.All(doc.Lines[r.LineIndex].Chars, c => Assert.Null(c.FontSetName));
+        Assert.Null(doc.Lines[0].FontSetName);
+
+        var doc2 = Doc("[00:10:00]あ[00:12:00][00:20:00]い[00:22:00]");
+        PhraseTagger.Insert(doc2, 0, 1, "（間奏）", Timing, "情報中");
+        var line = doc2.Lines[0];
+        Assert.Null(line.FontSetName);
+        Assert.Equal(new[] { null, "情報中", "情報中", "情報中", "情報中", null }, line.Chars.Select(c => c.FontSetName).ToArray());
+
+        // 空なら指定しない
+        var doc3 = Doc("[00:10:00]あ[00:12:00]");
+        var r3 = PhraseTagger.Insert(doc3, 0, 1, "（後奏）", Timing, " ");
+        Assert.Null(doc3.Lines[r3.LineIndex].FontSetName);
     }
 
     [Fact]

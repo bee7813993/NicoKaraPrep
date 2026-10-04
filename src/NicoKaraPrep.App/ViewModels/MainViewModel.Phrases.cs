@@ -39,12 +39,16 @@ public partial class MainViewModel
     public string? GetInsertPhrase(int number) =>
         Settings.InsertPhrases is { } list && number >= 1 && number <= list.Count ? list[number - 1] : null;
 
-    /// <summary>定型文の時刻の決め方（表示時刻のワイプ前・ワイプ後。空行がページ区切りなら定型文だけのページにする）。</summary>
+    /// <summary>開いているメディアの長さ（10ms 単位。開いていなければ null。後奏を曲の終わりまで表示するのに使う）。</summary>
+    public int? MediaDurationCs { get; set; }
+
+    /// <summary>定型文の時刻の決め方（表示時刻のワイプ前・ワイプ後。空行がページ区切りなら定型文だけのページにする。後奏は曲の終わりまで）。</summary>
     private PhraseTiming PhraseTiming => new()
     {
         LeadCs = Settings.DisplayLeadCs,
         TailCs = Settings.DisplayTailCs,
         SeparatePages = Settings.PageMode == PageSplitMode.EmptyLine,
+        SongEndCs = MediaDurationCs,
     };
 
     /// <summary>
@@ -67,7 +71,8 @@ public partial class MainViewModel
 
         PushUndo();
         var timing = PhraseTiming;
-        var r = PhraseTagger.Insert(Document, lineIndex, unitIndex, template, timing);
+        string font = (Settings.InsertPhraseFontSetName ?? "").Trim();
+        var r = PhraseTagger.Insert(Document, lineIndex, unitIndex, template, timing, font);
         RebuildLinesPreservingMarks();
         MarkModified();
 
@@ -78,7 +83,9 @@ public partial class MainViewModel
                 : $"タグ {TimeTag.Format(s)} 〜 {TimeTag.Format(e)}"
             : "前後にタイムタグのある歌が無いため、時刻は付けていません";
         string squeezed = r.Squeezed ? "。前後の間が短いので、前後の歌に合わせました" : "";
-        StatusText = $"定型文「{r.Text}」を{where}入れました（{time}{squeezed}。BS / Del・Ctrl+Z で消せます）";
+        string songEnd = r.AfterLast && MediaDurationCs is null ? "。メディアを開いていないので 3 秒にしました（開いていれば曲の終わりまで）" : "";
+        string fontNote = font.Length > 0 ? $"。フォント設定「{font}」" : "";
+        StatusText = $"定型文「{r.Text}」を{where}入れました（{time}{squeezed}{songEnd}{fontNote}。BS / Del・Ctrl+Z で消せます）";
         _noticeBeforeCheck = StatusText;
         return GetInsertViewLineStart(r.LineIndex) + r.DisplayOffset + r.Text.Length;
 

@@ -202,52 +202,12 @@ public sealed partial class EmojiListDialog : ContentDialog
     {
         if (sender is not FrameworkElement target || target.Tag is not EmojiSlotRow row) return;
         SlotList.SelectedItem = row;
-
-        var search = new TextBox { PlaceholderText = "名前で絞り込み" };
-        var empty = new TextBlock
-        {
-            TextWrapping = TextWrapping.Wrap,
-            FontSize = 12,
-            Foreground = (Microsoft.UI.Xaml.Media.Brush)Application.Current.Resources["TextFillColorSecondaryBrush"],
-        };
-        var source = new Microsoft.UI.Xaml.Data.CollectionViewSource { IsSourceGrouped = true };
-        var list = new ListView
-        {
-            SelectionMode = ListViewSelectionMode.None,
-            IsItemClickEnabled = true,
-            MaxHeight = 420,
-            ItemTemplate = (DataTemplate)RootGrid.Resources["FontNameItemTemplate"],
-        };
-        list.GroupStyle.Add(new GroupStyle { HeaderTemplate = (DataTemplate)RootGrid.Resources["FontNameGroupTemplate"] });
-
-        void Fill()
-        {
-            var groups = _fontGroups?.Invoke(search.Text) ?? new List<FontPickGroup>();
-            source.Source = groups;
-            list.ItemsSource = source.View;
-            bool none = groups.Count == 0;
-            empty.Text = search.Text.Trim().Length > 0
-                ? "当てはまるフォント設定がありません"
-                : "フォント設定がありません（フォント設定ビュー（F3）で作れます）";
-            empty.Visibility = none ? Visibility.Visible : Visibility.Collapsed;
-            list.Visibility = none ? Visibility.Collapsed : Visibility.Visible;
-        }
-        Fill();
-
-        var panel = new StackPanel { Spacing = 8, Width = 280 };
-        panel.Children.Add(search);
-        panel.Children.Add(empty);
-        panel.Children.Add(list);
-        var flyout = new Flyout { Content = panel, Placement = Microsoft.UI.Xaml.Controls.Primitives.FlyoutPlacementMode.BottomEdgeAlignedLeft };
-        search.TextChanged += (_, _) => Fill();
-        list.ItemClick += (_, args) =>
-        {
-            if (args.ClickedItem is not FontPickItem item) return;
-            row.ReplaceChar = item.Name;
-            flyout.Hide();
-        };
-        flyout.Opened += (_, _) => search.Focus(FocusState.Programmatic);
-        flyout.ShowAt(target);
+        FontNameFlyout.Show(
+            target,
+            (DataTemplate)RootGrid.Resources["FontNameItemTemplate"],
+            (DataTemplate)RootGrid.Resources["FontNameGroupTemplate"],
+            _fontGroups,
+            name => row.ReplaceChar = name);
     }
 
     // ------------------------------------------------------------ プレビュー

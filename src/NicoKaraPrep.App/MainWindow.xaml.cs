@@ -44,6 +44,8 @@ public sealed partial class MainWindow : Window
 
         StyledLyricsMenuItem.IsChecked = ViewModel.Settings.LineListStyledLyrics;
         ViewModel.RefreshInsertPhrases();
+        // 絵文字挿入ビューの行のダブルクリックで行の編集（TextBox が単語の選択で処理済みにするので、処理済みのものも受け取る）
+        InsertEditor.AddHandler(UIElement.DoubleTappedEvent, new DoubleTappedEventHandler((_, _) => OpenInsertLineEditDialog(-1)), handledEventsToo: true);
         InitializeAdaptiveLayout();
         InitializePlayerBar();
         InitializeLineSide();
@@ -335,6 +337,7 @@ public sealed partial class MainWindow : Window
         _mediaTimer?.Stop();
         HookFrames(false);
         Player.Source = null;
+        ViewModel.MediaDurationCs = null;
         SubtitlePreview.HasVideo = false;
         PlayerTimeText.Text = "0:00.00";
         PlayerDurationText.Text = "0:00";
@@ -1229,6 +1232,7 @@ public sealed partial class MainWindow : Window
         TryRun(() =>
         {
             SubtitlePreview.HasVideo = false; // 開き終わったら動画の有無で決め直す
+            ViewModel.MediaDurationCs = null; // 開けたら OnMediaOpened で入れる
             Player.Source = Windows.Media.Core.MediaSource.CreateFromUri(new Uri(path));
             ObservePlayer();
             ViewModel.MediaPath = path;
@@ -1672,6 +1676,64 @@ public sealed partial class MainWindow : Window
 
     private void OnInsertLineApplyClick(object sender, RoutedEventArgs e) => ApplyInsertLineEditor();
 
+    private void OnInsertLineEditClick(object sender, RoutedEventArgs e) => OpenInsertLineEditDialog(-1);
+
+    /// <summary>左の行情報のダブルクリック: その行の編集画面。</summary>
+    private void OnGutterRowDoubleTapped(object sender, DoubleTappedRoutedEventArgs e)
+    {
+        if ((sender as FrameworkElement)?.Tag is int index) OpenInsertLineEditDialog(index);
+    }
+
+    private bool _lineEditOpen;
+
+    /// <summary>
+    /// 行の編集画面（歌詞（タイムタグ付き）と表示開始・終了）を開き、適用したらまとめて反映する（1 回の Ctrl+Z で戻る）。
+    /// <paramref name="index"/> が負ならカーソルの行。
+    /// </summary>
+    private async void OpenInsertLineEditDialog(int index)
+    {
+        if (_lineEditOpen || !InsertViewActive) return;
+        int li = index >= 0 ? index : ViewModel.MapInsertViewOffset(InsertEditor.SelectionStart) is var (l, _) ? l : -1;
+        if (li < 0 || li >= ViewModel.Document.Lines.Count) return;
+        _lineEditOpen = true;
+        try
+        {
+            var model = ViewModel.Document.Lines[li];
+            ViewModel.PlanShowTimes().TryGetValue(li, out var plan);
+            string sung = model.IsEmpty
+                ? "空行（ページ区切り）です。表示時刻は直せません"
+                : $"歌い出し {(model.GetFirstTimeCs() is int f ? FmtCs(f) : "なし")}・歌い終わり {(model.GetLastTimeCs() is int t ? FmtCs(t) : "なし")}"
+                  + (model.FontSetName is { Length: > 0 } font ? $"・フォント設定「{font}」" : "");
+            var dialog = new LineEditDialog(
+                li + 1,
+                ViewModel.GetLineRawText(li),
+                model.HasManualShowBegin ? FmtCs(model.ShowBeginCs!.Value) : "",
+                model.HasManualShowEnd ? FmtCs(model.ShowEndCs!.Value) : "",
+                plan is not null ? FmtMs(plan.BeginMs) : "--:--:--",
+                plan is not null ? FmtMs(plan.EndMs) : "--:--:--",
+                sung,
+                !model.IsEmpty)
+            { XamlRoot = Content.XamlRoot };
+            if (await dialog.ShowAsync() != ContentDialogResult.Primary) return;
+
+            int caret = InsertEditor.SelectionStart;
+            bool changed = false;
+            TryRun(() => changed = ViewModel.EditLine(li, dialog.RawText, dialog.BeginCs, dialog.EndCs, dialog.ResetToAuto));
+            if (!changed) return;
+            ViewModel.StatusText = $"{li + 1} 行目を更新しました（Ctrl+Z で元に戻せます）";
+            int start = ViewModel.GetInsertViewLineStart(li);
+            int end = start + ViewModel.Document.Lines[li].GetDisplayText().Length;
+            RefreshInsertView(index >= 0 ? start : Math.Clamp(caret, start, end));
+            ScheduleValidation();
+        }
+        finally
+        {
+            _lineEditOpen = false;
+            InsertEditor.Focus(FocusState.Programmatic);
+            UpdateInsertLineEditor(force: true);
+        }
+    }
+
     private void OnInsertLineEditorPreviewKeyDown(object sender, KeyRoutedEventArgs e)
     {
         switch (e.Key)
@@ -1755,7 +1817,7 @@ public sealed partial class MainWindow : Window
     /// <summary>定型文の編集（絵文字 > 定型文の編集...・パレットの 編集...）。</summary>
     private async void OnPhraseListClick(object sender, RoutedEventArgs e)
     {
-        var dialog = new PhraseListDialog(ViewModel.Settings) { XamlRoot = Content.XamlRoot };
+        var dialog = new PhraseListDialog(ViewModel.Settings, filter => ViewModel.BuildFontPickGroups(filter, allOwnFonts: true, clickHint: "押すと、定型文にこのフォント設定を使います")) { XamlRoot = Content.XamlRoot };
         if (await dialog.ShowAsync() != ContentDialogResult.Primary) return;
         ViewModel.RefreshInsertPhrases();
         ViewModel.StatusText = $"定型文を保存しました（{ViewModel.InsertPhraseItems.Count} 件）";
@@ -2000,6 +2062,7 @@ public sealed partial class MainWindow : Window
             };
             host.Tapped += OnGutterRowTapped;
             host.RightTapped += OnGutterRowRightTapped;
+            host.DoubleTapped += OnGutterRowDoubleTapped;
             children.Add(host);
         }
         // 末尾の余白はエディタ下端（横スクロールバー分）とのずれ吸収用
@@ -2230,7 +2293,7 @@ public sealed partial class MainWindow : Window
 
     private async void OnEmojiListClick(object sender, RoutedEventArgs e)
     {
-        var dialog = new EmojiListDialog(ViewModel.Settings, ViewModel.Document, filter => ViewModel.BuildFontPickGroups(filter, forEmoji: true)) { XamlRoot = Content.XamlRoot };
+        var dialog = new EmojiListDialog(ViewModel.Settings, ViewModel.Document, filter => ViewModel.BuildFontPickGroups(filter, allOwnFonts: true, clickHint: "押すと、この名前を絵文字の「文字」に入れます")) { XamlRoot = Content.XamlRoot };
         var result = await dialog.ShowAsync();
         if (result == ContentDialogResult.Primary)
         {

@@ -86,6 +86,7 @@ public class AppSettingsTests
         string[] defaults = { "（前奏）", "（間奏 約{秒}秒）", "（後奏）" };
         Assert.Equal(defaults, new AppSettings().InsertPhrases);
         Assert.Equal(defaults, AppSettings.DefaultInsertPhrases);
+        Assert.Equal("情報中", new AppSettings().InsertPhraseFontSetName);
 
         // 一覧を変えても既定や別の設定は変わらない
         var a = new AppSettings();

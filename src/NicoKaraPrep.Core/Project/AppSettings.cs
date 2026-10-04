@@ -79,6 +79,11 @@ public sealed class AppSettings
     /// </summary>
     public List<string> InsertPhrases { get; set; } = DefaultInsertPhrases.ToList();
 
+    /// <summary>
+    /// 定型文に使うフォント設定の名前（全部の定型文で同じ。定型文だけの行は行に、行の途中は定型文の文字に手動指定する）。空なら指定しない。
+    /// </summary>
+    public string InsertPhraseFontSetName { get; set; } = "情報中";
+
     /// <summary>既定の定型文（設定に一覧が無いときと、定型文の編集画面の「既定の定型文を足す」）。</summary>
     public static IReadOnlyList<string> DefaultInsertPhrases { get; } = new[] { "（前奏）", "（間奏 約{秒}秒）", "（後奏）" };
 

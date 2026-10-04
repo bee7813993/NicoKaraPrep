@@ -685,7 +685,15 @@
                         AutomationProperties.Name="カーソルの行の編集"
                         ToolTipService.ToolTip="カーソルの行を、タイムタグ付き（テキスト編集モードの書き方）で直せます。Enter か 適用 で反映し（Ctrl+Z で戻せます）、Esc で直す前に戻します"
                         PreviewKeyDown="OnInsertLineEditorPreviewKeyDown" />
-                    <Button Grid.Column="2" Content="適用" VerticalAlignment="Stretch" Click="OnInsertLineApplyClick" AutomationProperties.Name="カーソルの行に適用" />
+                    <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="4">
+                        <Button Content="適用" VerticalAlignment="Stretch" Click="OnInsertLineApplyClick" AutomationProperties.Name="カーソルの行に適用" />
+                        <Button
+                            x:Name="InsertLineEditButton"
+                            Content="行の編集..."
+                            VerticalAlignment="Stretch"
+                            Click="OnInsertLineEditClick"
+                            ToolTipService.ToolTip="カーソルの行の歌詞と表示開始・終了をまとめて直す画面を開きます（行や左の行情報のダブルクリックでも開きます）" />
+                    </StackPanel>
                 </Grid>
                 <TextBlock
                     x:Name="InsertCursorInfo"
