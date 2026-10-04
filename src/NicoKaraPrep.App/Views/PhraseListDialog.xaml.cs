@@ -55,6 +55,26 @@ public sealed partial class PhraseListDialog : ContentDialog
         RowList.ScrollIntoView(row);
     }
 
+    /// <summary>既定の定型文（前奏・間奏・後奏）のうち、まだ無いものを末尾に足す（空の行があればそこへ入れる）。</summary>
+    private void OnAddDefaultsClick(object sender, RoutedEventArgs e)
+    {
+        var have = new HashSet<string>(Rows.Select(r => r.Text.Trim()));
+        PhraseRow? last = null;
+        foreach (string p in AppSettings.DefaultInsertPhrases.Where(p => !have.Contains(p)))
+        {
+            var row = Rows.FirstOrDefault(r => r.Text.Trim().Length == 0);
+            if (row is null)
+            {
+                row = new PhraseRow();
+                Rows.Add(row);
+            }
+            row.Text = p;
+            last = row;
+        }
+        UpdateKeyLabels();
+        if (last is not null) RowList.ScrollIntoView(last);
+    }
+
     private void OnDeleteClick(object sender, RoutedEventArgs e)
     {
         if ((sender as FrameworkElement)?.Tag is not PhraseRow row) return;

@@ -85,6 +85,13 @@ public class AppSettingsTests
     {
         string[] defaults = { "（前奏）", "（間奏）", "（後奏）" };
         Assert.Equal(defaults, new AppSettings().InsertPhrases);
+        Assert.Equal(defaults, AppSettings.DefaultInsertPhrases);
+
+        // 一覧を変えても既定や別の設定は変わらない
+        var a = new AppSettings();
+        a.InsertPhrases.Add("（セリフ）");
+        Assert.Equal(defaults, new AppSettings().InsertPhrases);
+        Assert.Equal(defaults, AppSettings.DefaultInsertPhrases);
         InTempDir(dir =>
         {
             string path = Path.Combine(dir, "settings.json");

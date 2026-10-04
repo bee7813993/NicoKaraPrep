@@ -77,7 +77,10 @@ public sealed class AppSettings
     /// 文字列の中の「{秒}」は入れるときに前後の歌のあいだの秒数になる（PhraseTagger）。設定に無ければ「（前奏）」「（間奏）」「（後奏）」。
     /// テンプレートには含めない（キー割り当てと同じく、アプリでの入力の道具）。
     /// </summary>
-    public List<string> InsertPhrases { get; set; } = new() { "（前奏）", "（間奏）", "（後奏）" };
+    public List<string> InsertPhrases { get; set; } = DefaultInsertPhrases.ToList();
+
+    /// <summary>既定の定型文（設定に一覧が無いときと、定型文の編集画面の「既定の定型文を足す」）。</summary>
+    public static IReadOnlyList<string> DefaultInsertPhrases { get; } = new[] { "（前奏）", "（間奏）", "（後奏）" };
 
     /// <summary>
     /// 挿入ビューの機能キー割り当て（機能 ID → キー ID）。

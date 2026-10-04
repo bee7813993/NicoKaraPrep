@@ -39,6 +39,14 @@
                 </DataTemplate>
             </ListView.ItemTemplate>
         </ListView>
-        <Button x:Name="AddButton" Content="＋ 定型文を追加" Click="OnAddClick" HorizontalAlignment="Left" />
+        <!-- 行を足す操作（どちらも一覧の末尾に足すので、同じ行に並べる） -->
+        <StackPanel Orientation="Horizontal" Spacing="8">
+            <Button x:Name="AddButton" Content="＋ 定型文を追加" Click="OnAddClick" />
+            <Button
+                x:Name="AddDefaultsButton"
+                Content="既定の定型文を足す"
+                Click="OnAddDefaultsClick"
+                ToolTipService.ToolTip="（前奏）（間奏）（後奏）のうち、まだ無いものを末尾に足します（今ある定型文はそのまま）" />
+        </StackPanel>
     </StackPanel>
 </ContentDialog>
