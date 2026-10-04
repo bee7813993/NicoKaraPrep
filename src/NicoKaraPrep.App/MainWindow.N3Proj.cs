@@ -725,7 +725,8 @@ public sealed partial class MainWindow
         _n3PanelLoading = false;
         if (ReferenceEquals(box, ShowBeginBox)) _showBeginPrefill = shown;
         else _showEndPrefill = shown;
-        DispatcherQueue.TryEnqueue(Microsoft.UI.Dispatching.DispatcherQueuePriority.Low, box.SelectAll);
+        // 部品のメソッド（box.SelectAll）をそのまま渡すと、WinRT へ渡すときに InvalidCastException で落ちるのでラムダで包む
+        DispatcherQueue.TryEnqueue(Microsoft.UI.Dispatching.DispatcherQueuePriority.Low, () => box.SelectAll());
     }
 
     private void OnShowTimeBoxLostFocus(object sender, RoutedEventArgs e)
@@ -807,14 +808,20 @@ public sealed partial class MainWindow
     private void OnLineFontChanged(object sender, SelectionChangedEventArgs e)
     {
         if (_n3PanelLoading) return;
-        if (LineFontBox.SelectedItem is string name) ApplyLineFont(name);
+        if (LineFontBox.SelectedItem is string name && !IsPrefilledFont(name)) ApplyLineFont(name);
     }
 
     private void OnLineFontSubmitted(ComboBox sender, ComboBoxTextSubmittedEventArgs args)
     {
-        ApplyLineFont(args.Text);
+        if (!IsPrefilledFont(args.Text)) ApplyLineFont(args.Text);
         args.Handled = true;
     }
+
+    /// <summary>
+    /// 欄に入ったときに入れた、自動で当たっているフォント設定の名前か（編集できる ComboBox は、入れた名前を欄を離れるときなどに
+    /// 自分で確定してしまうので、その名前は手で指定したことにしない。もう自動で当たっている名前なので、指定しなくても同じ）。
+    /// </summary>
+    private bool IsPrefilledFont(string? name) => _lineFontPrefill is string p && (name ?? "").Trim() == p;
 
     private void ApplyLineFont(string? name)
     {
@@ -868,7 +875,13 @@ public sealed partial class MainWindow
     /// </summary>
     private void OnLineFontGotFocus(object sender, RoutedEventArgs e)
     {
-        if (_lineFontPrefill is not null || !string.IsNullOrEmpty(LineFontBox.Text)) return;
+        if (!string.IsNullOrEmpty(LineFontBox.Text))
+        {
+            // 手で指定した名前が入っている（または入れた名前のまま、欄の中で動いただけ）
+            if (!IsPrefilledFont(LineFontBox.Text)) _lineFontPrefill = null;
+            return;
+        }
+        _lineFontPrefill = null;
         if (PlaceholderPrefill.ValueOf(LineFontBox.PlaceholderText) is not string name) return;
         _n3PanelLoading = true;
         try
@@ -880,27 +893,49 @@ public sealed partial class MainWindow
             _n3PanelLoading = false;
         }
         _lineFontPrefill = name;
-        if (e.OriginalSource is TextBox box) DispatcherQueue.TryEnqueue(Microsoft.UI.Dispatching.DispatcherQueuePriority.Low, box.SelectAll);
+        if (e.OriginalSource is TextBox box) DispatcherQueue.TryEnqueue(Microsoft.UI.Dispatching.DispatcherQueuePriority.Low, () => box.SelectAll()); // ラムダで包む（上と同じ）
     }
 
-    /// <summary>フォントの欄を離れる: 入れた名前のままなら空欄（自動）へ戻す。一覧を開いて選ぶとき（欄の中へ移る）はそのまま。</summary>
+    /// <summary>
+    /// フォントの欄を離れる: 入れた名前のままなら空欄（自動）へ戻す。一覧を開いて選ぶとき（欄の中へ移る）はそのまま。
+    /// 編集できる ComboBox は、離れるときに自分で中の文字を確定し直すので、離れ終わってから（優先度を下げて）空にする。
+    /// </summary>
     private void OnLineFontLosingFocus(UIElement sender, LosingFocusEventArgs args)
     {
         if (_lineFontPrefill is not string name) return;
         if (args.NewFocusedElement is DependencyObject next && IsInsideOf(next, LineFontBox)) return;
         if (args.NewFocusedElement is ComboBoxItem) return; // 一覧の項目を選ぼうとしている
-        _lineFontPrefill = null;
-        if (LineFontBox.Text.Trim() != name) return;
-        _n3PanelLoading = true;
-        try
+        // _lineFontPrefill は残す（このあと ComboBox が入れた名前を確定してきても、手で指定したことにしないため。次に欄に入ったときに入れ直す）
+        DispatcherQueue.TryEnqueue(Microsoft.UI.Dispatching.DispatcherQueuePriority.Low, () =>
         {
-            LineFontBox.SelectedIndex = -1;
-            LineFontBox.Text = "";
-        }
-        finally
+            if (LineFontBox.FocusState != FocusState.Unfocused) return;
+            var inner = FindInnerTextBox(LineFontBox);
+            string shown = (inner?.Text ?? LineFontBox.Text ?? "").Trim();
+            if (shown != name && (LineFontBox.Text ?? "").Trim() != name) return;
+            _n3PanelLoading = true;
+            try
+            {
+                LineFontBox.SelectedIndex = -1;
+                LineFontBox.Text = "";
+                if (inner is not null) inner.Text = "";
+            }
+            finally
+            {
+                _n3PanelLoading = false;
+            }
+        });
+    }
+
+    private static TextBox? FindInnerTextBox(DependencyObject root)
+    {
+        int count = Microsoft.UI.Xaml.Media.VisualTreeHelper.GetChildrenCount(root);
+        for (int i = 0; i < count; i++)
         {
-            _n3PanelLoading = false;
+            var child = Microsoft.UI.Xaml.Media.VisualTreeHelper.GetChild(root, i);
+            if (child is TextBox t) return t;
+            if (FindInnerTextBox(child) is { } found) return found;
         }
+        return null;
     }
 
     private static bool IsInsideOf(DependencyObject element, DependencyObject ancestor)
@@ -921,7 +956,6 @@ public sealed partial class MainWindow
         // 欄に入ったときに入れた自動のフォント設定の名前のまま Enter: 手で指定したことにしない
         if (e.Key == Windows.System.VirtualKey.Enter && _lineFontPrefill is string prefill && e.OriginalSource is TextBox current && current.Text.Trim() == prefill)
         {
-            _lineFontPrefill = null;
             _n3PanelLoading = true;
             try
             {

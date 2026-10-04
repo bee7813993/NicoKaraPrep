@@ -89,8 +89,9 @@ public static class PlaceholderPrefill
     }
 
     private static void SelectAllLater(TextBox box) =>
-        // 欄を押して入ったときは、押したあとにカーソルが置かれて選択が外れるので、そのあとで選ぶ
-        box.DispatcherQueue.TryEnqueue(Microsoft.UI.Dispatching.DispatcherQueuePriority.Low, box.SelectAll);
+        // 欄を押して入ったときは、押したあとにカーソルが置かれて選択が外れるので、そのあとで選ぶ。
+        // 部品のメソッド（box.SelectAll）をそのまま渡すと、WinRT へ渡すときに InvalidCastException で落ちるのでラムダで包む
+        box.DispatcherQueue.TryEnqueue(Microsoft.UI.Dispatching.DispatcherQueuePriority.Low, () => box.SelectAll());
 
     private static TextBox? InnerBox(DependencyObject root)
     {
