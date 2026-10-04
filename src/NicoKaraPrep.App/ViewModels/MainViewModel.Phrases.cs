@@ -15,7 +15,7 @@ public sealed record PhraseItem(int Number, string KeyLabel, string Text)
 }
 
 /// <summary>
-/// 定型文（「（前奏）」「（間奏）」「（後奏）」など）の挿入と削除。絵文字挿入ビューのパレットのクリックと、キー（N のあとに番号）で入れ、
+/// 定型文（「（前奏）」「（間奏 約{秒}秒）」「（後奏）」など）の挿入と削除。絵文字挿入ビューのパレットのクリックと、キー（N のあとに番号）で入れ、
 /// BS / Del でまとめて消す。タイムタグは <see cref="PhraseTagger"/>（ワイプ前・ワイプ後は 表示時刻 のパラメーター）。
 /// </summary>
 public partial class MainViewModel

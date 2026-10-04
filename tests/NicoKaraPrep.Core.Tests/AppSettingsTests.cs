@@ -81,9 +81,9 @@ public class AppSettingsTests
     }
 
     [Fact]
-    public void 定型文_既定は前奏間奏後奏_古い設定ファイルでも既定_保存した一覧はそのまま()
+    public void 定型文_既定は前奏_間奏の秒数つき_後奏_古い設定ファイルでも既定_保存した一覧はそのまま()
     {
-        string[] defaults = { "（前奏）", "（間奏）", "（後奏）" };
+        string[] defaults = { "（前奏）", "（間奏 約{秒}秒）", "（後奏）" };
         Assert.Equal(defaults, new AppSettings().InsertPhrases);
         Assert.Equal(defaults, AppSettings.DefaultInsertPhrases);
 
