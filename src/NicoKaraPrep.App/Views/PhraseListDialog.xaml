@@ -9,7 +9,7 @@
     DefaultButton="Primary">
 
     <!-- 絵文字挿入ビューで入れる決まった文字列（アプリ共通。上から 10 件に N のあとの番号 1–0） -->
-    <StackPanel Width="520" Spacing="8">
+    <StackPanel Width="480" Spacing="8">
         <TextBlock
             TextWrapping="Wrap"
             FontSize="12"
