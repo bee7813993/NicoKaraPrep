@@ -40,8 +40,9 @@ internal static class McpInfo
     }
 
     /// <summary>
-    /// この exe の場所ごとの識別子（exe のフルパスから作る）。同じフォルダの exe どうしだけが 1 つのインスタンスにまとまり、
-    /// 同じフォルダの exe の <c>--mcp</c>（橋渡し）だけがその本体につながる（別のフォルダのビルドは別物として動く）。
+    /// このアプリの識別子。ストア版（MSIX）はパッケージのファミリー名（更新して場所が変わっても同じ）、
+    /// それ以外（zip 版・開発中のビルド）は exe のフルパスから作る（同じフォルダの exe どうしだけがまとまり、別のフォルダのビルドは別物として動く）。
+    /// 同じ識別子のものだけが 1 つのインスタンスにまとまり、その <c>--mcp</c>（橋渡し）だけがその本体につながる。
     /// 環境変数 NICOKARAPREP_INSTANCE があればそれを使う（検証用）。
     /// </summary>
     public static string InstanceId => s_instanceId ??= ReadInstanceId();
@@ -52,6 +53,7 @@ internal static class McpInfo
     {
         string? custom = Environment.GetEnvironmentVariable("NICOKARAPREP_INSTANCE");
         if (custom is { Length: > 0 }) return Sanitize(custom);
+        if (PackageFamilyName is string family) return "pkg-" + Sanitize(family);
         string path = Environment.ProcessPath ?? typeof(McpInfo).Assembly.Location;
         try
         {
@@ -82,7 +84,81 @@ internal static class McpInfo
     public static string PipeName => $"NicoKaraPrep.mcp.{InstanceId}";
 
     /// <summary>橋渡しが本体につなげないときの案内。</summary>
-    public static string NotRunningMessage =>
-        "にこぷれっぷ（NicoKaraPrep）が起動していません。本体を起動してから、もう一度お願いします" +
-        $"（この橋渡しは {Path.GetDirectoryName(Environment.ProcessPath)} の NicoKaraPrep.exe につながります）。";
+    public static string NotRunningMessage => IsPackaged
+        ? "にこぷれっぷ（NicoKaraPrep）が起動していません。スタートメニューからにこぷれっぷ（ストア版）を起動してから、もう一度お願いします。"
+        : "にこぷれっぷ（NicoKaraPrep）が起動していません。本体を起動してから、もう一度お願いします" +
+          $"（この橋渡しは {Path.GetDirectoryName(Environment.ProcessPath)} の NicoKaraPrep.exe につながります）。";
+
+    // ------------------------------------------------------------ ストア版（MSIX）
+
+    /// <summary>ストア版（MSIX のパッケージ）として動いているか。</summary>
+    public static bool IsPackaged => PackageFamilyName is not null;
+
+    /// <summary>パッケージのファミリー名（ストア版でなければ null）。</summary>
+    public static string? PackageFamilyName => s_family.Value;
+
+    private static readonly Lazy<string?> s_family = new(ReadPackageFamilyName);
+
+    private static string? ReadPackageFamilyName()
+    {
+        try
+        {
+            uint length = 0;
+            // パッケージが無ければ APPMODEL_ERROR_NO_PACKAGE（15700）、あれば ERROR_INSUFFICIENT_BUFFER（122）で長さが返る
+            if (GetCurrentPackageFamilyName(ref length, null) != ErrorInsufficientBuffer || length == 0) return null;
+            var buffer = new StringBuilder((int)length);
+            return GetCurrentPackageFamilyName(ref length, buffer) == 0 ? buffer.ToString() : null;
+        }
+        catch (Exception)
+        {
+            return null; // 古い Windows など
+        }
+    }
+
+    private const int ErrorInsufficientBuffer = 122;
+
+    [System.Runtime.InteropServices.DllImport("kernel32.dll", CharSet = System.Runtime.InteropServices.CharSet.Unicode)]
+    private static extern int GetCurrentPackageFamilyName(ref uint packageFamilyNameLength, StringBuilder? packageFamilyName);
+
+    // ------------------------------------------------------------ クライアントへの登録のしかた
+
+    /// <summary>ストア版の実行エイリアスの名前（Package.appxmanifest の desktop:ExecutionAlias と同じ）。</summary>
+    public const string AliasName = "nicokaraprep.exe";
+
+    /// <summary>
+    /// MCP クライアントに登録する exe のパス。ストア版は実行エイリアス（%LOCALAPPDATA%\Microsoft\WindowsApps\nicokaraprep.exe。更新しても同じ）、
+    /// それ以外は今動いている exe。
+    /// </summary>
+    public static string RegistrationExePath => IsPackaged
+        ? Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Microsoft", "WindowsApps", AliasName)
+        : Environment.ProcessPath ?? "NicoKaraPrep.exe";
+
+    /// <summary>Claude Code に登録するコマンド（PowerShell・コマンドプロンプトで 1 回だけ実行する）。</summary>
+    public static string ClaudeCodeCommand =>
+        $"claude mcp add --scope user nicokaraprep -- \"{RegistrationExePath}\" --mcp";
+
+    /// <summary>Claude Desktop の構成ファイル（claude_desktop_config.json）の mcpServers に書く内容。</summary>
+    public static string ClaudeDesktopEntry
+    {
+        get
+        {
+            var entry = new System.Text.Json.Nodes.JsonObject
+            {
+                ["nicokaraprep"] = new System.Text.Json.Nodes.JsonObject
+                {
+                    ["command"] = RegistrationExePath,
+                    ["args"] = new System.Text.Json.Nodes.JsonArray("--mcp"),
+                },
+            };
+            string json = entry.ToJsonString(new System.Text.Json.JsonSerializerOptions
+            {
+                WriteIndented = true,
+                Encoder = System.Text.Encodings.Web.JavaScriptEncoder.UnsafeRelaxedJsonEscaping,
+            });
+            // 外側の { } を外して、mcpServers の中に貼る形にする
+            string inner = json.Trim();
+            inner = inner[1..^1].Trim('\r', '\n');
+            return string.Join("\n", inner.Split('\n').Select(l => l.StartsWith("  ", StringComparison.Ordinal) ? l[2..] : l));
+        }
+    }
 }

@@ -2,8 +2,10 @@
 <Package
   xmlns="http://schemas.microsoft.com/appx/manifest/foundation/windows10"
   xmlns:uap="http://schemas.microsoft.com/appx/manifest/uap/windows10"
+  xmlns:uap3="http://schemas.microsoft.com/appx/manifest/uap/windows10/3"
+  xmlns:desktop="http://schemas.microsoft.com/appx/manifest/desktop/windows10"
   xmlns:rescap="http://schemas.microsoft.com/appx/manifest/foundation/windows10/restrictedcapabilities"
-  IgnorableNamespaces="uap rescap">
+  IgnorableNamespaces="uap uap3 desktop rescap">
 
   <!--
     Identity / PublisherDisplayName は Partner Center の「Product identity」の値。
@@ -12,7 +14,7 @@
   <Identity
     Name="YFRTeam.8571E940AEEA"
     Publisher="CN=7F20441E-C8F2-4A45-B847-6FECA63733DB"
-    Version="0.1.0.0" />
+    Version="0.2.0.0" />
 
   <!-- DisplayName は Partner Center で予約したアプリ名「にこぷれっぷ」と一致させること -->
   <Properties>
@@ -41,6 +43,15 @@
         <uap:DefaultTile Wide310x150Logo="Assets\Wide310x150Logo.png" />
         <uap:SplashScreen Image="Assets\SplashScreen.png" />
       </uap:VisualElements>
+      <Extensions>
+        <!-- 実行エイリアス: Claude などの MCP クライアントに、nicokaraprep.exe を MCP の橋渡しとして登録できるようにする
+             （%LOCALAPPDATA%\Microsoft\WindowsApps に置かれ、ストア版を更新しても同じ名前で呼べる。引数は README・マニュアル 18 章） -->
+        <uap3:Extension Category="windows.appExecutionAlias" Executable="NicoKaraPrep.exe" EntryPoint="Windows.FullTrustApplication">
+          <uap3:AppExecutionAlias>
+            <desktop:ExecutionAlias Alias="nicokaraprep.exe" />
+          </uap3:AppExecutionAlias>
+        </uap3:Extension>
+      </Extensions>
     </Application>
   </Applications>
 

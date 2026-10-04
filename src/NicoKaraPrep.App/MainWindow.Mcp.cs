@@ -490,7 +490,13 @@ public sealed partial class MainWindow
         var (fontNames, defaultFont) = ViewModel.GetExportFontNames();
         return new JsonObject
         {
-            ["app"] = new JsonObject { ["name"] = McpInfo.ServerName, ["version"] = McpInfo.Version },
+            ["app"] = new JsonObject
+            {
+                ["name"] = McpInfo.ServerName,
+                ["version"] = McpInfo.Version,
+                ["store"] = McpInfo.IsPackaged,
+                ["registrationExe"] = McpInfo.RegistrationExePath,
+            },
             ["file"] = ViewModel.MainFilePath,
             ["modified"] = ViewModel.HasUnsavedChanges,
             ["view"] = ViewKey(ViewModel.ViewMode),

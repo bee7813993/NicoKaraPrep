@@ -35,6 +35,9 @@ public sealed partial class SettingsDialog : ContentDialog
         PlaceholderBox.Text = settings.PlaceholderChar;
         SeekSecondsBox.Value = settings.SeekSeconds;
         McpBox.IsChecked = settings.McpEnabled;
+        // MCP の登録のしかた（ストア版は実行エイリアス、それ以外は今の exe のパスで作る）
+        McpCommandBox.Text = Services.Mcp.McpInfo.ClaudeCodeCommand;
+        McpDesktopBox.Text = Services.Mcp.McpInfo.ClaudeDesktopEntry;
 
         PrimaryButtonClick += (_, _) => ApplyToSettings();
     }
@@ -59,6 +62,26 @@ public sealed partial class SettingsDialog : ContentDialog
         _settings.SeekSeconds = ToDouble(SeekSecondsBox.Value, 3.0);
         _settings.McpEnabled = McpBox.IsChecked == true;
         _settings.Save();
+    }
+
+    private void OnCopyMcpCommandClick(object sender, Microsoft.UI.Xaml.RoutedEventArgs e) => CopyText(McpCommandBox.Text, McpCommandCopyButton);
+
+    private void OnCopyMcpDesktopClick(object sender, Microsoft.UI.Xaml.RoutedEventArgs e) => CopyText(McpDesktopBox.Text, McpDesktopCopyButton);
+
+    /// <summary>クリップボードへ写し、ボタンの文字で知らせる。</summary>
+    private static void CopyText(string text, Button button)
+    {
+        try
+        {
+            var package = new Windows.ApplicationModel.DataTransfer.DataPackage();
+            package.SetText(text);
+            Windows.ApplicationModel.DataTransfer.Clipboard.SetContent(package);
+            button.Content = "コピーしました";
+        }
+        catch (Exception)
+        {
+            button.Content = "コピーできません";
+        }
     }
 
     private static int ToInt(double v, int fallback) => double.IsNaN(v) ? fallback : (int)Math.Round(v);
