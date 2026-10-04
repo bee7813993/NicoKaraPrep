@@ -81,14 +81,15 @@ public class AppSettingsTests
     }
 
     [Fact]
-    public void 定型文_既定は後奏1つ_古い設定ファイルでも後奏_保存した一覧はそのまま()
+    public void 定型文_既定は前奏間奏後奏_古い設定ファイルでも既定_保存した一覧はそのまま()
     {
-        Assert.Equal(new[] { "（後奏）" }, new AppSettings().InsertPhrases);
+        string[] defaults = { "（前奏）", "（間奏）", "（後奏）" };
+        Assert.Equal(defaults, new AppSettings().InsertPhrases);
         InTempDir(dir =>
         {
             string path = Path.Combine(dir, "settings.json");
             File.WriteAllText(path, "{ \"FixedLineCount\": 3 }");
-            Assert.Equal(new[] { "（後奏）" }, AppSettings.Load(path).InsertPhrases);
+            Assert.Equal(defaults, AppSettings.Load(path).InsertPhrases);
 
             var s = new AppSettings { InsertPhrases = new List<string> { "（間奏 約{秒}秒）" } };
             s.Save(path);

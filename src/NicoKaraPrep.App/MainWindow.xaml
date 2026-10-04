@@ -587,6 +587,7 @@
                     <RowDefinition Height="Auto" />
                     <RowDefinition Height="*" />
                     <RowDefinition Height="Auto" />
+                    <RowDefinition Height="Auto" />
                 </Grid.RowDefinitions>
                 <StackPanel Grid.Row="0" Orientation="Horizontal" Spacing="12">
                     <TextBlock Text="絵文字挿入ビュー" Style="{ThemeResource SubtitleTextBlockStyle}" />
@@ -660,9 +661,35 @@
                         SelectionChanged="OnInsertEditorSelectionChanged"
                         PreviewKeyDown="OnInsertEditorPreviewKeyDown" />
                 </Grid>
+                <!-- カーソルの行の簡易行エディタ（タイムタグ付きのテキスト編集モードの書き方で直して、Enter か 適用 で反映。Esc で戻す） -->
+                <Grid Grid.Row="3" ColumnSpacing="6">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="Auto" />
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+                    <TextBlock
+                        x:Name="InsertLineLabel"
+                        MinWidth="44"
+                        Text="行"
+                        FontSize="12"
+                        VerticalAlignment="Center"
+                        Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+                    <TextBox
+                        x:Name="InsertLineEditor"
+                        Grid.Column="1"
+                        FontFamily="Consolas"
+                        AcceptsReturn="False"
+                        IsSpellCheckEnabled="False"
+                        PlaceholderText="カーソルの行をここで直せます（Enter か 適用 で反映、Esc で戻す）"
+                        AutomationProperties.Name="カーソルの行の編集"
+                        ToolTipService.ToolTip="カーソルの行を、タイムタグ付き（テキスト編集モードの書き方）で直せます。Enter か 適用 で反映し（Ctrl+Z で戻せます）、Esc で直す前に戻します"
+                        PreviewKeyDown="OnInsertLineEditorPreviewKeyDown" />
+                    <Button Grid.Column="2" Content="適用" VerticalAlignment="Stretch" Click="OnInsertLineApplyClick" AutomationProperties.Name="カーソルの行に適用" />
+                </Grid>
                 <TextBlock
                     x:Name="InsertCursorInfo"
-                    Grid.Row="3"
+                    Grid.Row="4"
                     FontSize="12"
                     Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
             </Grid>
@@ -821,7 +848,7 @@
                             FontSize="12"
                             FontWeight="SemiBold"
                             VerticalAlignment="Center"
-                            ToolTipService.ToolTip="「（後奏）」などの決まった文字列を、前後の歌に合わせたタイムタグで入れます（直前の歌の終わりから直後の歌の始まりまで。後ろに歌が無ければ 3 秒）" />
+                            ToolTipService.ToolTip="「（間奏）」などの決まった文字列を入れます。行頭・行末・空行に入れると、定型文だけのページにして（前後に空行を置きます）、前後のページと表示が重ならない時刻にします（前のページが消えてからワイプ前の秒数のあと 〜 次のページが出るワイプ後の秒数前まで画面に出します。後奏は 3 秒）。行の途中なら、直前の文字の終わりから直後の文字の始まりまでです。BS / Del でまとめて消せます" />
                         <Button Grid.Column="1" Content="編集..." FontSize="12" Padding="8,3" Click="OnPhraseListClick" />
                     </Grid>
                     <ListView

@@ -1440,7 +1440,7 @@ public sealed partial class MainWindow : Window
         string K(InsertViewAction a) => InsertViewKeyMap.KeyLabel(_insertKeys[a]);
         InsertLegend.Text =
             $"1–0 / Q–P: 絵文字挿入　{K(InsertViewAction.PlaceholderInsert)}: ＿挿入　{K(InsertViewAction.PhraseInsert)} → 1–0: 定型文挿入　{K(InsertViewAction.LeadTagInsert)}: 先行タグ挿入　" +
-            $"{K(InsertViewAction.SpaceInsert)}: 空白挿入（Shift+{K(InsertViewAction.SpaceInsert)}: 全角）　BS / Del: 絵文字・空白削除　" +
+            $"{K(InsertViewAction.SpaceInsert)}: 空白挿入（Shift+{K(InsertViewAction.SpaceInsert)}: 全角）　BS / Del: 絵文字・定型文・空白削除　" +
             $"{K(InsertViewAction.PlayPause)}: 再生/一時停止　{K(InsertViewAction.PlayFromCursor)}: カーソル位置から再生　" +
             $"{K(InsertViewAction.Play)}: 再生　{K(InsertViewAction.Pause)}: 一時停止　" +
             $"{K(InsertViewAction.SeekBack)} / {K(InsertViewAction.SeekForward)}: 数秒戻る / 進む　{K(InsertViewAction.FollowToggle)}: 再生追従　" +
@@ -1652,6 +1652,60 @@ public sealed partial class MainWindow : Window
         FollowIndicator.Foreground = _insertFollow
             ? (Microsoft.UI.Xaml.Media.Brush)Microsoft.UI.Xaml.Application.Current.Resources["AccentTextFillColorPrimaryBrush"]
             : (Microsoft.UI.Xaml.Media.Brush)Microsoft.UI.Xaml.Application.Current.Resources["TextFillColorSecondaryBrush"];
+    }
+
+    // ------------------------------------------------ 挿入ビューの簡易行エディタ
+
+    /// <summary>簡易行エディタに出している行（無ければ -1）。</summary>
+    private int _insertLineEditIndex = -1;
+
+    /// <summary>簡易行エディタにカーソルの行を出す（force=false なら、簡易行エディタで直している最中は書き換えない）。</summary>
+    private void UpdateInsertLineEditor(bool force)
+    {
+        if (!force && InsertLineEditor.FocusState != FocusState.Unfocused) return;
+        int li = ViewModel.MapInsertViewOffset(InsertEditor.SelectionStart) is var (l, _) ? l : -1;
+        _insertLineEditIndex = li;
+        InsertLineLabel.Text = li >= 0 ? $"行 {li + 1}" : "行";
+        string raw = li >= 0 ? ViewModel.GetLineRawText(li) : "";
+        if (InsertLineEditor.Text != raw) InsertLineEditor.Text = raw;
+    }
+
+    private void OnInsertLineApplyClick(object sender, RoutedEventArgs e) => ApplyInsertLineEditor();
+
+    private void OnInsertLineEditorPreviewKeyDown(object sender, KeyRoutedEventArgs e)
+    {
+        switch (e.Key)
+        {
+            case Windows.System.VirtualKey.Enter:
+                ApplyInsertLineEditor();
+                e.Handled = true;
+                break;
+            case Windows.System.VirtualKey.Escape:
+                // 直す前に戻して、挿入ビューへ（ビューを閉じる Esc にはしない）
+                UpdateInsertLineEditor(force: true);
+                InsertEditor.Focus(FocusState.Programmatic);
+                e.Handled = true;
+                break;
+        }
+    }
+
+    /// <summary>簡易行エディタの内容をその行に反映し、挿入ビューへ戻る（Ctrl+Z で戻せる）。</summary>
+    private void ApplyInsertLineEditor()
+    {
+        int li = _insertLineEditIndex;
+        if (li < 0) return;
+        int caret = InsertEditor.SelectionStart;
+        TryRun(() =>
+        {
+            if (!ViewModel.ApplyRawTextToLine(li, InsertLineEditor.Text)) return;
+            ViewModel.StatusText = $"行 {li + 1} を更新しました（Ctrl+Z で元に戻せます）";
+            int start = ViewModel.GetInsertViewLineStart(li);
+            int end = start + (ViewModel.Document.Lines[li].GetDisplayText().Length);
+            RefreshInsertView(Math.Clamp(caret, start, end));
+            ScheduleValidation();
+        });
+        InsertEditor.Focus(FocusState.Programmatic);
+        UpdateInsertLineEditor(force: true);
     }
 
     /// <summary>定型文のキー（N）を押して、番号を待っているか。</summary>
@@ -2113,6 +2167,7 @@ public sealed partial class MainWindow : Window
     /// <summary>カーソル位置の行番号と直前・直後のタイムタグを下部バーに表示する。</summary>
     private void UpdateInsertCursorInfo()
     {
+        UpdateInsertLineEditor(force: false);
         int offset = InsertEditor.SelectionStart;
         var (prev, next) = ViewModel.GetTagTimesAroundViewOffset(offset);
         static string F(int? cs) => cs is int c ? TimeTag.Format(c).Trim('[', ']') : "なし";

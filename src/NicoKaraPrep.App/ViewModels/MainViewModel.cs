@@ -793,6 +793,26 @@ public partial class MainViewModel : ObservableObject
     // ------------------------------------------------------------ 行編集
 
     /// <summary>行エディタの生テキストを選択行へ反映する。</summary>
+    /// <summary>行の生テキスト（タイムタグ付きのテキスト編集モードの書き方）。</summary>
+    public string GetLineRawText(int index) =>
+        index >= 0 && index < Document.Lines.Count ? TextEditModeFormat.WriteLyricLine(Document.Lines[index]) : "";
+
+    /// <summary>
+    /// 行を生テキストで置き換える（絵文字挿入ビューの簡易行エディタ。行の手動指定・文字ごとのフォントは引き継ぐ）。変えたら true。
+    /// </summary>
+    public bool ApplyRawTextToLine(int index, string rawText)
+    {
+        if (index < 0 || index >= Document.Lines.Count || index >= Lines.Count) return false;
+        if (rawText == GetLineRawText(index)) return false; // 変更なし
+        PushUndo();
+        var newLine = TextEditModeFormat.ParseLyricLine(rawText);
+        CharFontOperations.CopyCharFonts(Document.Lines[index], newLine);
+        Document.Lines[index] = newLine;
+        Lines[index].ReplaceModel(newLine);
+        MarkModified();
+        return true;
+    }
+
     public bool ApplyRawTextToSelectedLine(string rawText)
     {
         if (SelectedLine is null) return false;
@@ -1386,6 +1406,8 @@ public partial class MainViewModel : ObservableObject
     /// </summary>
     public int? DeleteEmojiAtViewOffset(int offset, bool forward)
     {
+        // 定型文（「（間奏）」など）はまとめて消す
+        if (DeletePhraseAtViewOffset(offset, forward) is int afterPhrase) return afterPhrase;
         if (MapInsertViewOffset(offset) is not var (lineIndex, charOffset)) return null;
         var line = Document.Lines[lineIndex];
         var matcher = CreateEmojiMatcher();
