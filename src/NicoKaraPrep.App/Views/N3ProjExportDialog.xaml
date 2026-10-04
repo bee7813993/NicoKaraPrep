@@ -36,7 +36,7 @@
                     <ColumnDefinition Width="*" />
                     <ColumnDefinition Width="*" />
                 </Grid.ColumnDefinitions>
-                <TextBox x:Name="ProjectNameBox" Header="プロジェクト名（ニコカラメーカーの設定名）" />
+                <TextBox x:Name="ProjectNameBox" local:PlaceholderPrefill.IsEnabled="True" Header="プロジェクト名（ニコカラメーカーの設定名）" />
                 <ComboBox Grid.Column="1" x:Name="DefaultFontBox" Header="行の既定フォント設定（パート記号が出るまで）" IsEditable="True" HorizontalAlignment="Stretch" />
             </Grid>
             <TextBlock x:Name="MediaText" FontSize="12" Foreground="{ThemeResource TextFillColorSecondaryBrush}" TextWrapping="Wrap" />

@@ -538,10 +538,10 @@
                                    ToolTipService.ToolTip="n3proj 書き出し時にこの行へ適用される表示開始・終了時刻とフォント設定。表示時刻の欄が空なら薄字の値（読み込んだ値・自動調整の値・自動計算）を使います。表示時刻はページ衝突チェックにも反映されます" />
                         <TextBlock Text="表示開始" FontSize="12" VerticalAlignment="Center" />
                         <TextBox x:Name="ShowBeginBox" Width="104" FontFamily="Consolas" FontSize="12" PlaceholderText="--:--:--"
-                                 LostFocus="OnShowTimeBoxLostFocus" KeyDown="OnShowTimeBoxKeyDown" ToolTipService.ToolTip="mm:ss:cc 形式で手で指定（自動調整を実行し直しても変わりません）。空欄なら薄字の値（読み込んだ値・自動調整の値・自動計算）を使います" />
+                                 GotFocus="OnShowTimeBoxGotFocus" LostFocus="OnShowTimeBoxLostFocus" KeyDown="OnShowTimeBoxKeyDown" ToolTipService.ToolTip="mm:ss:cc 形式で手で指定（自動調整を実行し直しても変わりません）。空欄なら薄字の値（読み込んだ値・自動調整の値・自動計算）を使います" />
                         <TextBlock Text="表示終了" FontSize="12" VerticalAlignment="Center" />
                         <TextBox x:Name="ShowEndBox" Width="104" FontFamily="Consolas" FontSize="12" PlaceholderText="--:--:--"
-                                 LostFocus="OnShowTimeBoxLostFocus" KeyDown="OnShowTimeBoxKeyDown" ToolTipService.ToolTip="mm:ss:cc 形式で手で指定（自動調整を実行し直しても変わりません）。空欄なら薄字の値（読み込んだ値・自動調整の値・自動計算）を使います" />
+                                 GotFocus="OnShowTimeBoxGotFocus" LostFocus="OnShowTimeBoxLostFocus" KeyDown="OnShowTimeBoxKeyDown" ToolTipService.ToolTip="mm:ss:cc 形式で手で指定（自動調整を実行し直しても変わりません）。空欄なら薄字の値（読み込んだ値・自動調整の値・自動計算）を使います" />
                         <Button Content="自動に戻す" FontSize="12" Padding="8,3" Click="OnResetShowTimeClick" />
                     </StackPanel>
                     <StackPanel x:Name="N3FontGroup" Grid.Column="1" Orientation="Horizontal" Spacing="6">
@@ -549,6 +549,7 @@
                                    ToolTipService.ToolTip="行リストの歌詞の文字をクリック・ドラッグで選ぶと、選んだ文字だけに指定します（選んでいなければ行全体）" />
                         <ComboBox x:Name="LineFontBox" Width="160" IsEditable="True" FontSize="12" PlaceholderText="（自動）"
                                   SelectionChanged="OnLineFontChanged" TextSubmitted="OnLineFontSubmitted" PreviewKeyDown="OnLineFontPreviewKeyDown"
+                                  GotFocus="OnLineFontGotFocus" LosingFocus="OnLineFontLosingFocus"
                                   ToolTipService.ToolTip="この行に適用するニコカラメーカーのフォント設定名（空欄はパート記号で自動判定。空にして Enter で自動に戻す）" />
                         <Button x:Name="EditLineFontButton" Content="編集..." FontSize="12" Padding="8,3" Click="OnEditLineFontClick"
                                 ToolTipService.ToolTip="フォント設定ビュー（F3）を開いて、このフォント設定を編集します" />

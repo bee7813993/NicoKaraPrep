@@ -54,7 +54,8 @@ public sealed partial class LineEditDialog : ContentDialog
 
     private void OnPrimaryClick(ContentDialog sender, ContentDialogButtonClickEventArgs args)
     {
-        if (!TryParse(BeginBox.Text, out int? begin) || !TryParse(EndBox.Text, out int? end))
+        // 欄に入ったときに入れた今の表示時刻のままなら空欄（自動のまま）
+        if (!TryParse(PlaceholderPrefill.EffectiveText(BeginBox), out int? begin) || !TryParse(PlaceholderPrefill.EffectiveText(EndBox), out int? end))
         {
             ErrorText.Text = "表示開始・終了は mm:ss:cc 形式で入力してください（空欄なら自動）";
             ErrorText.Visibility = Visibility.Visible;
