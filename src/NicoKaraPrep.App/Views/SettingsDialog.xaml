@@ -55,7 +55,7 @@
                     <ColumnDefinition Width="Auto" />
                 </Grid.ColumnDefinitions>
                 <TextBox x:Name="McpCommandBox" IsReadOnly="True" TextWrapping="Wrap" FontFamily="Consolas" FontSize="12" />
-                <Button x:Name="McpCommandCopyButton" Grid.Column="1" Content="コピー" VerticalAlignment="Top" Click="OnCopyMcpCommandClick" />
+                <Button x:Name="McpCommandCopyButton" Grid.Column="1" Content="コピー" MinWidth="128" VerticalAlignment="Top" Click="OnCopyMcpCommandClick" />
             </Grid>
             <TextBlock TextWrapping="Wrap" Text="Claude Desktop（チャット）の場合: 構成ファイル（claude_desktop_config.json）の mcpServers の中に書く内容" />
             <Grid ColumnSpacing="8">
@@ -64,7 +64,7 @@
                     <ColumnDefinition Width="Auto" />
                 </Grid.ColumnDefinitions>
                 <TextBox x:Name="McpDesktopBox" IsReadOnly="True" TextWrapping="Wrap" AcceptsReturn="True" FontFamily="Consolas" FontSize="12" />
-                <Button x:Name="McpDesktopCopyButton" Grid.Column="1" Content="コピー" VerticalAlignment="Top" Click="OnCopyMcpDesktopClick" />
+                <Button x:Name="McpDesktopCopyButton" Grid.Column="1" Content="コピー" MinWidth="128" VerticalAlignment="Top" Click="OnCopyMcpDesktopClick" />
             </Grid>
             <TextBlock TextWrapping="Wrap" Style="{ThemeResource CaptionTextBlockStyle}" Foreground="{ThemeResource TextFillColorSecondaryBrush}"
                        Text="登録したあとに始めた Claude の会話から使えます。「claude」が見つからないと言われたときは、claude.exe をフルパスで書きます（例: %USERPROFILE%\.local\bin\claude.exe。PowerShell では先頭に &amp; を付けて &amp; &quot;フルパス&quot; mcp add ...）。" />
