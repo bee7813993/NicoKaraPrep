@@ -142,6 +142,7 @@
                 <RowDefinition Height="Auto" />
                 <RowDefinition Height="Auto" />
                 <RowDefinition Height="Auto" />
+                <RowDefinition Height="Auto" />
             </Grid.RowDefinitions>
             <Grid ColumnSpacing="8">
                 <Grid.ColumnDefinitions>
@@ -324,7 +325,22 @@
                     </DropDownButton.Flyout>
                 </DropDownButton>
             </StackPanel>
-            <StackPanel Grid.Row="8" Spacing="2">
+            <!-- 一覧全体の操作（説明の動画を撮るときなどに、まっさらにして、あとで戻す） -->
+            <StackPanel Grid.Row="8" Orientation="Horizontal" Spacing="4">
+                <Button x:Name="ClearAllButton" Padding="8,4" Click="OnClearAllClick" AutomationProperties.Name="まとめて消す..." ToolTipService.ToolTip="アプリ共通・この曲専用のフォント設定などを、種類を選んでまとめて消します（消す前の内容は控えに保存し、右の「控えから戻す...」で戻せます）">
+                    <StackPanel Orientation="Horizontal" Spacing="4">
+                        <FontIcon Glyph="&#xE74D;" FontSize="12" />
+                        <TextBlock Text="まとめて消す..." FontSize="12" />
+                    </StackPanel>
+                </Button>
+                <Button x:Name="RestoreBackupButton" Padding="8,4" Click="OnRestoreBackupClick" AutomationProperties.Name="控えから戻す..." ToolTipService.ToolTip="「まとめて消す」で保存した控えを選んで、消す前の内容に戻します">
+                    <StackPanel Orientation="Horizontal" Spacing="4">
+                        <FontIcon Glyph="&#xE7A7;" FontSize="12" />
+                        <TextBlock Text="控えから戻す..." FontSize="12" />
+                    </StackPanel>
+                </Button>
+            </StackPanel>
+            <StackPanel Grid.Row="9" Spacing="2">
                 <TextBlock x:Name="ListSummaryText" Text="{x:Bind ViewModel.ListSummary, Mode=OneWay}" Style="{StaticResource Note}" />
                 <TextBlock
                     x:Name="SaveNoteText"

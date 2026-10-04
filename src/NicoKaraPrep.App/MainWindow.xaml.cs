@@ -33,9 +33,19 @@ public sealed partial class MainWindow : Window
             {
                 Title = ViewModel.WindowTitle;
             }
+            // 開く・保存・タブの切り替えのあと（タイトルかステータスバーが変わる）に、上書き保存の形式を出し直す。
+            // 操作の途中で読まないよう、操作が終わってから
+            if (e.PropertyName is nameof(MainViewModel.WindowTitle) or nameof(MainViewModel.StatusText))
+            {
+                DispatcherQueue.TryEnqueue(RefreshSaveMenuTexts);
+            }
         };
+        RefreshSaveMenuTexts();
 
         StyledLyricsMenuItem.IsChecked = ViewModel.Settings.LineListStyledLyrics;
+        ViewModel.RefreshInsertPhrases();
+        // 絵文字挿入ビューの行のダブルクリックで行の編集（TextBox が単語の選択で処理済みにするので、処理済みのものも受け取る）
+        InsertEditor.AddHandler(UIElement.DoubleTappedEvent, new DoubleTappedEventHandler((_, _) => OpenInsertLineEditDialog(-1)), handledEventsToo: true);
         InitializeAdaptiveLayout();
         InitializePlayerBar();
         InitializeLineSide();
@@ -327,6 +337,7 @@ public sealed partial class MainWindow : Window
         _mediaTimer?.Stop();
         HookFrames(false);
         Player.Source = null;
+        ViewModel.MediaDurationCs = null;
         SubtitlePreview.HasVideo = false;
         PlayerTimeText.Text = "0:00.00";
         PlayerDurationText.Text = "0:00";
@@ -426,6 +437,22 @@ public sealed partial class MainWindow : Window
         if (path is null) return;
         TryRun(() => ViewModel.SaveFullTo(path));
         RefreshRecentFilesMenu();
+    }
+
+    /// <summary>
+    /// ファイルメニューの上書き保存の項目に、書くファイルの形式（拡張子）を出す。上書き保存はメインの歌詞ファイル、
+    /// 表示中のタブの上書き保存は前に別ファイルへ保存した先。まだ保存先が無ければ形式は出さない（名前を付けて保存の画面になる）。
+    /// </summary>
+    private void RefreshSaveMenuTexts()
+    {
+        string? main = ViewModel.ActiveTabIsMain ? ViewModel.CurrentFilePath : ViewModel.Tabs.FirstOrDefault(t => t.IsMain)?.FilePath;
+        string save = main is null ? "上書き保存（タブ含む全行）" : $"上書き保存（タブ含む全行・{FormatName(main)} 形式）";
+        string? tabPath = ViewModel.GetActiveTabCopyPath();
+        string saveTab = tabPath is null ? "表示中のタブを上書き保存" : $"表示中のタブを上書き保存（{FormatName(tabPath)} 形式）";
+        if (SaveMenuItem.Text != save) SaveMenuItem.Text = save;
+        if (SaveTabMenuItem.Text != saveTab) SaveTabMenuItem.Text = saveTab;
+
+        static string FormatName(string path) => Path.GetExtension(path).TrimStart('.').ToLowerInvariant() is { Length: > 0 } ext ? ext : "lrc";
     }
 
     /// <summary>表示中のタブへファイルを読み込んで差し替える。</summary>
@@ -1205,6 +1232,7 @@ public sealed partial class MainWindow : Window
         TryRun(() =>
         {
             SubtitlePreview.HasVideo = false; // 開き終わったら動画の有無で決め直す
+            ViewModel.MediaDurationCs = null; // 開けたら OnMediaOpened で入れる
             Player.Source = Windows.Media.Core.MediaSource.CreateFromUri(new Uri(path));
             ObservePlayer();
             ViewModel.MediaPath = path;
@@ -1379,6 +1407,7 @@ public sealed partial class MainWindow : Window
         // カーソルのあった行を行リストの選択に引き継ぐ
         int caretLine = ViewModel.MapInsertViewOffset(InsertEditor.SelectionStart) is var (li, _) ? li : -1;
 
+        _phrasePending = false;
         _insertFollow = false;
         UpdateFollowIndicator();
         if (caretLine >= 0) SelectLineAt(caretLine);
@@ -1406,6 +1435,7 @@ public sealed partial class MainWindow : Window
         }
         UpdateInsertLegend();
         UpdateFollowIndicator();
+        PhraseHeaderText.Text = $"定型文（{InsertViewKeyMap.KeyLabel(_insertKeys[InsertViewAction.PhraseInsert])} のあとに番号）";
     }
 
     /// <summary>現在のキー割り当てから挿入ビューの凡例テキストを組み立てる。</summary>
@@ -1413,8 +1443,8 @@ public sealed partial class MainWindow : Window
     {
         string K(InsertViewAction a) => InsertViewKeyMap.KeyLabel(_insertKeys[a]);
         InsertLegend.Text =
-            $"1–0 / Q–P: 絵文字挿入　{K(InsertViewAction.PlaceholderInsert)}: ＿挿入　{K(InsertViewAction.LeadTagInsert)}: 先行タグ挿入　" +
-            $"{K(InsertViewAction.SpaceInsert)}: 空白挿入（Shift+{K(InsertViewAction.SpaceInsert)}: 全角）　BS / Del: 絵文字・空白削除　" +
+            $"1–0 / Q–P: 絵文字挿入　{K(InsertViewAction.PlaceholderInsert)}: ＿挿入　{K(InsertViewAction.PhraseInsert)} → 1–0: 定型文挿入　{K(InsertViewAction.LeadTagInsert)}: 先行タグ挿入　" +
+            $"{K(InsertViewAction.SpaceInsert)}: 空白挿入（Shift+{K(InsertViewAction.SpaceInsert)}: 全角）　BS / Del: 絵文字・定型文・空白削除　" +
             $"{K(InsertViewAction.PlayPause)}: 再生/一時停止　{K(InsertViewAction.PlayFromCursor)}: カーソル位置から再生　" +
             $"{K(InsertViewAction.Play)}: 再生　{K(InsertViewAction.Pause)}: 一時停止　" +
             $"{K(InsertViewAction.SeekBack)} / {K(InsertViewAction.SeekForward)}: 数秒戻る / 進む　{K(InsertViewAction.FollowToggle)}: 再生追従　" +
@@ -1433,6 +1463,9 @@ public sealed partial class MainWindow : Window
                 {
                     InsertEmojiStringInView(ViewModel.Settings.PlaceholderChar);
                 }
+                break;
+            case InsertViewAction.PhraseInsert:
+                BeginPhraseSelect();
                 break;
             case InsertViewAction.LeadTagInsert:
                 TryRun(() =>
@@ -1490,6 +1523,17 @@ public sealed partial class MainWindow : Window
                      & Windows.UI.Core.CoreVirtualKeyStates.Down) != 0;
         bool shift = (Microsoft.UI.Input.InputKeyboardSource.GetKeyStateForCurrentThread(Windows.System.VirtualKey.Shift)
                       & Windows.UI.Core.CoreVirtualKeyStates.Down) != 0;
+
+        // 定型文のキー（N）のあと: 番号（1–0）でその定型文を入れる。ほかのキーはやめる（そのキーの機能は動かさない）
+        if (_phrasePending && e.Key is not (Windows.System.VirtualKey.Shift or Windows.System.VirtualKey.Control or Windows.System.VirtualKey.Menu))
+        {
+            _phrasePending = false;
+            e.Handled = true;
+            int number = SlotFromKey(e.Key);
+            if (number is >= 1 and <= 10 && ViewModel.GetInsertPhrase(number) is string phrase) InsertPhraseInView(phrase);
+            else ViewModel.StatusText = "定型文を入れるのをやめました";
+            return;
+        }
 
         if (ctrl)
         {
@@ -1612,6 +1656,173 @@ public sealed partial class MainWindow : Window
         FollowIndicator.Foreground = _insertFollow
             ? (Microsoft.UI.Xaml.Media.Brush)Microsoft.UI.Xaml.Application.Current.Resources["AccentTextFillColorPrimaryBrush"]
             : (Microsoft.UI.Xaml.Media.Brush)Microsoft.UI.Xaml.Application.Current.Resources["TextFillColorSecondaryBrush"];
+    }
+
+    // ------------------------------------------------ 挿入ビューの簡易行エディタ
+
+    /// <summary>簡易行エディタに出している行（無ければ -1）。</summary>
+    private int _insertLineEditIndex = -1;
+
+    /// <summary>簡易行エディタにカーソルの行を出す（force=false なら、簡易行エディタで直している最中は書き換えない）。</summary>
+    private void UpdateInsertLineEditor(bool force)
+    {
+        if (!force && InsertLineEditor.FocusState != FocusState.Unfocused) return;
+        int li = ViewModel.MapInsertViewOffset(InsertEditor.SelectionStart) is var (l, _) ? l : -1;
+        _insertLineEditIndex = li;
+        InsertLineLabel.Text = li >= 0 ? $"行 {li + 1}" : "行";
+        string raw = li >= 0 ? ViewModel.GetLineRawText(li) : "";
+        if (InsertLineEditor.Text != raw) InsertLineEditor.Text = raw;
+    }
+
+    private void OnInsertLineApplyClick(object sender, RoutedEventArgs e) => ApplyInsertLineEditor();
+
+    private void OnInsertLineEditClick(object sender, RoutedEventArgs e) => OpenInsertLineEditDialog(-1);
+
+    /// <summary>左の行情報のダブルクリック: その行の編集画面。</summary>
+    private void OnGutterRowDoubleTapped(object sender, DoubleTappedRoutedEventArgs e)
+    {
+        if ((sender as FrameworkElement)?.Tag is int index) OpenInsertLineEditDialog(index);
+    }
+
+    private bool _lineEditOpen;
+
+    /// <summary>
+    /// 行の編集画面（歌詞（タイムタグ付き）と表示開始・終了）を開き、適用したらまとめて反映する（1 回の Ctrl+Z で戻る）。
+    /// <paramref name="index"/> が負ならカーソルの行。
+    /// </summary>
+    private async void OpenInsertLineEditDialog(int index)
+    {
+        if (_lineEditOpen || !InsertViewActive) return;
+        int li = index >= 0 ? index : ViewModel.MapInsertViewOffset(InsertEditor.SelectionStart) is var (l, _) ? l : -1;
+        if (li < 0 || li >= ViewModel.Document.Lines.Count) return;
+        _lineEditOpen = true;
+        try
+        {
+            var model = ViewModel.Document.Lines[li];
+            ViewModel.PlanShowTimes().TryGetValue(li, out var plan);
+            string sung = model.IsEmpty
+                ? "空行（ページ区切り）です。表示時刻は直せません"
+                : $"歌い出し {(model.GetFirstTimeCs() is int f ? FmtCs(f) : "なし")}・歌い終わり {(model.GetLastTimeCs() is int t ? FmtCs(t) : "なし")}"
+                  + (model.FontSetName is { Length: > 0 } font ? $"・フォント設定「{font}」" : "");
+            var dialog = new LineEditDialog(
+                li + 1,
+                ViewModel.GetLineRawText(li),
+                model.HasManualShowBegin ? FmtCs(model.ShowBeginCs!.Value) : "",
+                model.HasManualShowEnd ? FmtCs(model.ShowEndCs!.Value) : "",
+                plan is not null ? FmtMs(plan.BeginMs) : "--:--:--",
+                plan is not null ? FmtMs(plan.EndMs) : "--:--:--",
+                sung,
+                !model.IsEmpty)
+            { XamlRoot = Content.XamlRoot };
+            if (await dialog.ShowAsync() != ContentDialogResult.Primary) return;
+
+            int caret = InsertEditor.SelectionStart;
+            bool changed = false;
+            TryRun(() => changed = ViewModel.EditLine(li, dialog.RawText, dialog.BeginCs, dialog.EndCs, dialog.ResetToAuto));
+            if (!changed) return;
+            ViewModel.StatusText = $"{li + 1} 行目を更新しました（Ctrl+Z で元に戻せます）";
+            ViewModel.KeepNoticeBeforeCheck(); // 直したあとのチェックの結果で消えないように
+            int start = ViewModel.GetInsertViewLineStart(li);
+            int end = start + ViewModel.Document.Lines[li].GetDisplayText().Length;
+            RefreshInsertView(index >= 0 ? start : Math.Clamp(caret, start, end));
+            ScheduleValidation();
+        }
+        finally
+        {
+            _lineEditOpen = false;
+            InsertEditor.Focus(FocusState.Programmatic);
+            UpdateInsertLineEditor(force: true);
+        }
+    }
+
+    private void OnInsertLineEditorPreviewKeyDown(object sender, KeyRoutedEventArgs e)
+    {
+        switch (e.Key)
+        {
+            case Windows.System.VirtualKey.Enter:
+                ApplyInsertLineEditor();
+                e.Handled = true;
+                break;
+            case Windows.System.VirtualKey.Escape:
+                // 直す前に戻して、挿入ビューへ（ビューを閉じる Esc にはしない）
+                UpdateInsertLineEditor(force: true);
+                InsertEditor.Focus(FocusState.Programmatic);
+                e.Handled = true;
+                break;
+        }
+    }
+
+    /// <summary>簡易行エディタの内容をその行に反映し、挿入ビューへ戻る（Ctrl+Z で戻せる）。</summary>
+    private void ApplyInsertLineEditor()
+    {
+        int li = _insertLineEditIndex;
+        if (li < 0) return;
+        int caret = InsertEditor.SelectionStart;
+        TryRun(() =>
+        {
+            if (!ViewModel.ApplyRawTextToLine(li, InsertLineEditor.Text)) return;
+            ViewModel.StatusText = $"行 {li + 1} を更新しました（Ctrl+Z で元に戻せます）";
+            ViewModel.KeepNoticeBeforeCheck(); // 直したあとのチェックの結果で消えないように
+            int start = ViewModel.GetInsertViewLineStart(li);
+            int end = start + (ViewModel.Document.Lines[li].GetDisplayText().Length);
+            RefreshInsertView(Math.Clamp(caret, start, end));
+            ScheduleValidation();
+        });
+        InsertEditor.Focus(FocusState.Programmatic);
+        UpdateInsertLineEditor(force: true);
+    }
+
+    /// <summary>定型文のキー（N）を押して、番号を待っているか。</summary>
+    private bool _phrasePending;
+
+    /// <summary>定型文のキー: 番号を待つ（ステータスバーに番号と定型文を出す）。</summary>
+    private void BeginPhraseSelect()
+    {
+        var items = ViewModel.InsertPhraseItems.Where(p => p.KeyLabel.Length > 0).ToList();
+        if (items.Count == 0)
+        {
+            ViewModel.StatusText = "定型文がありません（絵文字 > 定型文の編集... か、パレットの「定型文」の 編集... で登録できます）";
+            return;
+        }
+        _phrasePending = true;
+        ViewModel.StatusText = $"定型文: {string.Join("　", items.Select(p => $"{p.KeyLabel} {p.Text}"))}　← 番号を押してください（ほかのキーでやめる）";
+    }
+
+    /// <summary>挿入ビューのカーソル位置に定型文を入れる（前後の歌に合わせたタイムタグ）。</summary>
+    private void InsertPhraseInView(string phrase)
+    {
+        TryRun(() =>
+        {
+            int? caret = ViewModel.InsertPhraseAtViewOffset(InsertEditor.SelectionStart, phrase);
+            if (caret is int c)
+            {
+                RefreshInsertView(c);
+                ScheduleValidation();
+            }
+        });
+    }
+
+    /// <summary>パレットの定型文を押したとき。</summary>
+    private void OnPhraseClick(object sender, ItemClickEventArgs e)
+    {
+        if (e.ClickedItem is not ViewModels.PhraseItem item) return;
+        if (!InsertViewActive)
+        {
+            ViewModel.StatusText = "定型文は絵文字挿入ビュー（F2）で入れられます";
+            return;
+        }
+        _phrasePending = false;
+        InsertPhraseInView(item.Text);
+        InsertEditor.Focus(FocusState.Programmatic);
+    }
+
+    /// <summary>定型文の編集（絵文字 > 定型文の編集...・パレットの 編集...）。</summary>
+    private async void OnPhraseListClick(object sender, RoutedEventArgs e)
+    {
+        var dialog = new PhraseListDialog(ViewModel.Settings, filter => ViewModel.BuildFontPickGroups(filter, allOwnFonts: true, clickHint: "押すと、定型文にこのフォント設定を使います")) { XamlRoot = Content.XamlRoot };
+        if (await dialog.ShowAsync() != ContentDialogResult.Primary) return;
+        ViewModel.RefreshInsertPhrases();
+        ViewModel.StatusText = $"定型文を保存しました（{ViewModel.InsertPhraseItems.Count} 件）";
     }
 
     private void InsertEmojiStringInView(string emoji)
@@ -1853,6 +2064,7 @@ public sealed partial class MainWindow : Window
             };
             host.Tapped += OnGutterRowTapped;
             host.RightTapped += OnGutterRowRightTapped;
+            host.DoubleTapped += OnGutterRowDoubleTapped;
             children.Add(host);
         }
         // 末尾の余白はエディタ下端（横スクロールバー分）とのずれ吸収用
@@ -1959,7 +2171,7 @@ public sealed partial class MainWindow : Window
 
         menu.Items.Add(new MenuFlyoutSeparator());
 
-        var export = new MenuFlyoutItem { Text = "選択行をエクスポート..." };
+        var export = new MenuFlyoutItem { Text = "選択行をファイルへエクスポート（lrc / rlf / txt 形式）..." };
         export.Click += OnExportFileClick;
         menu.Items.Add(export);
 
@@ -2020,6 +2232,7 @@ public sealed partial class MainWindow : Window
     /// <summary>カーソル位置の行番号と直前・直後のタイムタグを下部バーに表示する。</summary>
     private void UpdateInsertCursorInfo()
     {
+        UpdateInsertLineEditor(force: false);
         int offset = InsertEditor.SelectionStart;
         var (prev, next) = ViewModel.GetTagTimesAroundViewOffset(offset);
         static string F(int? cs) => cs is int c ? TimeTag.Format(c).Trim('[', ']') : "なし";
@@ -2082,7 +2295,7 @@ public sealed partial class MainWindow : Window
 
     private async void OnEmojiListClick(object sender, RoutedEventArgs e)
     {
-        var dialog = new EmojiListDialog(ViewModel.Settings, ViewModel.Document) { XamlRoot = Content.XamlRoot };
+        var dialog = new EmojiListDialog(ViewModel.Settings, ViewModel.Document, filter => ViewModel.BuildFontPickGroups(filter, allOwnFonts: true, clickHint: "押すと、この名前を絵文字の「文字」に入れます")) { XamlRoot = Content.XamlRoot };
         var result = await dialog.ShowAsync();
         if (result == ContentDialogResult.Primary)
         {

@@ -1,0 +1,30 @@
+﻿<ContentDialog
+    x:Class="NicoKaraPrep.App.Views.FontSettings.FontClearDialog"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    Title="フォント設定をまとめて消す"
+    PrimaryButtonText="消す"
+    CloseButtonText="キャンセル"
+    DefaultButton="Close"
+    IsPrimaryButtonEnabled="False">
+
+    <!-- 消す種類を選ぶ（説明の動画を撮るときなどに、まっさらにする）。消す前の内容は控えに保存する -->
+    <StackPanel Width="480" Spacing="10">
+        <TextBlock
+            TextWrapping="Wrap"
+            FontSize="12"
+            Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+            Text="消す種類を選んでください。消す前の内容は控えに保存するので、あとで一覧の下の「控えから戻す...」で戻せます（フォント設定とフォルダ分けは Ctrl+Z でも戻せます）。" />
+        <StackPanel Spacing="2">
+            <CheckBox x:Name="CommonBox" Checked="OnChoiceChanged" Unchecked="OnChoiceChanged" />
+            <CheckBox x:Name="SongBox" Checked="OnChoiceChanged" Unchecked="OnChoiceChanged" />
+            <CheckBox x:Name="PatternsBox" Checked="OnChoiceChanged" Unchecked="OnChoiceChanged" />
+            <CheckBox x:Name="RecentBox" Checked="OnChoiceChanged" Unchecked="OnChoiceChanged" />
+        </StackPanel>
+        <TextBlock
+            TextWrapping="Wrap"
+            FontSize="12"
+            Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+            Text="行に指定したフォント設定の名前・絵文字のリスト・ページのレイアウトは消しません（行の指定は、行リストで行を選んで エクスポート > 選択行の表示時刻・フォント指定を解除 で外せます）。" />
+    </StackPanel>
+</ContentDialog>

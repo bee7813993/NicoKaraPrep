@@ -81,6 +81,34 @@ public class AppSettingsTests
     }
 
     [Fact]
+    public void 定型文_既定は前奏_間奏の秒数つき_後奏_古い設定ファイルでも既定_保存した一覧はそのまま()
+    {
+        string[] defaults = { "（前奏）", "（間奏 約{秒}秒）", "（後奏）" };
+        Assert.Equal(defaults, new AppSettings().InsertPhrases);
+        Assert.Equal(defaults, AppSettings.DefaultInsertPhrases);
+        Assert.Equal("情報中", new AppSettings().InsertPhraseFontSetName);
+
+        // 一覧を変えても既定や別の設定は変わらない
+        var a = new AppSettings();
+        a.InsertPhrases.Add("（セリフ）");
+        Assert.Equal(defaults, new AppSettings().InsertPhrases);
+        Assert.Equal(defaults, AppSettings.DefaultInsertPhrases);
+        InTempDir(dir =>
+        {
+            string path = Path.Combine(dir, "settings.json");
+            File.WriteAllText(path, "{ \"FixedLineCount\": 3 }");
+            Assert.Equal(defaults, AppSettings.Load(path).InsertPhrases);
+
+            var s = new AppSettings { InsertPhrases = new List<string> { "（間奏 約{秒}秒）" } };
+            s.Save(path);
+            Assert.Equal(new[] { "（間奏 約{秒}秒）" }, AppSettings.Load(path).InsertPhrases);
+
+            new AppSettings { InsertPhrases = new List<string>() }.Save(path);
+            Assert.Empty(AppSettings.Load(path).InsertPhrases);
+        });
+    }
+
+    [Fact]
     public void 読み込み_正常な設定ファイルは今までどおり読み書きできる()
     {
         InTempDir(dir =>

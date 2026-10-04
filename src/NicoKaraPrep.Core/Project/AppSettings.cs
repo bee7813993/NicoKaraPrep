@@ -73,6 +73,21 @@ public sealed class AppSettings
     public List<EmojiEntry> GlobalEmojiList { get; set; } = new();
 
     /// <summary>
+    /// 定型文（絵文字挿入ビューで前後の歌に合わせて入れる決まった文字列。「（後奏）」など）。
+    /// 文字列の中の「{秒}」は入れるときに前後の歌のあいだの秒数になる（PhraseTagger）。設定に無ければ「（前奏）」「（間奏 約{秒}秒）」「（後奏）」。
+    /// テンプレートには含めない（キー割り当てと同じく、アプリでの入力の道具）。
+    /// </summary>
+    public List<string> InsertPhrases { get; set; } = DefaultInsertPhrases.ToList();
+
+    /// <summary>
+    /// 定型文に使うフォント設定の名前（全部の定型文で同じ。定型文だけの行は行に、行の途中は定型文の文字に手動指定する）。空なら指定しない。
+    /// </summary>
+    public string InsertPhraseFontSetName { get; set; } = "情報中";
+
+    /// <summary>既定の定型文（設定に一覧が無いときと、定型文の編集画面の「既定の定型文を足す」）。</summary>
+    public static IReadOnlyList<string> DefaultInsertPhrases { get; } = new[] { "（前奏）", "（間奏 約{秒}秒）", "（後奏）" };
+
+    /// <summary>
     /// 挿入ビューの機能キー割り当て（機能 ID → キー ID）。
     /// 既定値・正規化はアプリ側（InsertViewKeyMap）が担当する。
     /// </summary>

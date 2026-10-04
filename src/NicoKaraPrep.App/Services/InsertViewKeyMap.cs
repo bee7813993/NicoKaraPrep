@@ -1,4 +1,4 @@
-using Windows.System;
+﻿using Windows.System;
 
 namespace NicoKaraPrep.App.Services;
 
@@ -6,6 +6,7 @@ namespace NicoKaraPrep.App.Services;
 public enum InsertViewAction
 {
     PlaceholderInsert,
+    PhraseInsert,
     LeadTagInsert,
     SpaceInsert,
     PlayPause,
@@ -36,6 +37,7 @@ public static class InsertViewKeyMap
     public static readonly IReadOnlyList<InsertViewActionInfo> Actions = new InsertViewActionInfo[]
     {
         new(InsertViewAction.PlaceholderInsert, "プレースホルダ（＿）挿入", "＿挿入", "B"),
+        new(InsertViewAction.PhraseInsert, "定型文挿入（続けて番号 1–0）", "定型文", "N"),
         new(InsertViewAction.LeadTagInsert, "先行タグ挿入", "先行タグ", "G"),
         new(InsertViewAction.SpaceInsert, "空白挿入（Shift で全角）", "空白", "K"),
         new(InsertViewAction.PlayPause, "再生 / 一時停止", "再/停", "Space"),

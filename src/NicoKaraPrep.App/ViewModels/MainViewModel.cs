@@ -793,6 +793,68 @@ public partial class MainViewModel : ObservableObject
     // ------------------------------------------------------------ 行編集
 
     /// <summary>行エディタの生テキストを選択行へ反映する。</summary>
+    /// <summary>行の生テキスト（タイムタグ付きのテキスト編集モードの書き方）。</summary>
+    public string GetLineRawText(int index) =>
+        index >= 0 && index < Document.Lines.Count ? TextEditModeFormat.WriteLyricLine(Document.Lines[index]) : "";
+
+    /// <summary>
+    /// 行を生テキストで置き換える（絵文字挿入ビューの簡易行エディタ。行の手動指定・文字ごとのフォントは引き継ぐ）。変えたら true。
+    /// </summary>
+    public bool ApplyRawTextToLine(int index, string rawText)
+    {
+        if (index < 0 || index >= Document.Lines.Count || index >= Lines.Count) return false;
+        if (rawText == GetLineRawText(index)) return false; // 変更なし
+        PushUndo();
+        ReplaceLineText(index, rawText);
+        MarkModified();
+        return true;
+    }
+
+    /// <summary>
+    /// 行の歌詞を生テキストで置き換える（元に戻すの記録は呼び出し側）。文字ごとのフォントは同じ文字へ、
+    /// 行の設定（表示時刻・フォント・ページの文字の大きさ・タブ分離の元の位置）は <see cref="LineViewModel.ReplaceModel"/> で引き継ぐ。
+    /// </summary>
+    private LyricsLine ReplaceLineText(int index, string rawText)
+    {
+        var old = Document.Lines[index];
+        var newLine = TextEditModeFormat.ParseLyricLine(rawText);
+        CharFontOperations.CopyCharFonts(old, newLine);
+        Document.Lines[index] = newLine;
+        Lines[index].ReplaceModel(newLine);
+        return newLine;
+    }
+
+    /// <summary>
+    /// 行の歌詞（生テキスト）と表示開始・終了をまとめて直す（絵文字挿入ビューの行の編集。1 回の Ctrl+Z で戻る）。変えたら true。
+    /// 表示時刻は行設定の欄と同じ: 値があれば手で指定した値、空なら手で指定した値だけを外す（読み込んだ値・自動調整の値は残す）。
+    /// <paramref name="resetToAuto"/> なら、空の側は読み込んだ値・自動調整の値も外して自動に戻す。
+    /// </summary>
+    public bool EditLine(int index, string rawText, int? beginCs, int? endCs, bool resetToAuto)
+    {
+        if (index < 0 || index >= Document.Lines.Count || index >= Lines.Count) return false;
+        var old = Document.Lines[index];
+        bool textChanged = rawText != GetLineRawText(index);
+        (int? Cs, ShowTimeOrigin Origin) Next(int? typed, int? cs, ShowTimeOrigin origin) =>
+            typed is int t ? (t, ShowTimeOrigin.Manual)
+            : resetToAuto || (cs is not null && origin == ShowTimeOrigin.Manual) ? (null, origin)
+            : (cs, origin);
+        var (b, bo) = Next(beginCs, old.ShowBeginCs, old.ShowBeginOrigin);
+        var (e, eo) = Next(endCs, old.ShowEndCs, old.ShowEndOrigin);
+        bool timeChanged = !(b == old.ShowBeginCs && e == old.ShowEndCs && (b is null || bo == old.ShowBeginOrigin) && (e is null || eo == old.ShowEndOrigin));
+        if (!textChanged && !timeChanged) return false;
+
+        PushUndo();
+        var line = textChanged ? ReplaceLineText(index, rawText) : old;
+        line.ShowBeginCs = b;
+        line.ShowBeginOrigin = bo;
+        line.ShowEndCs = e;
+        line.ShowEndOrigin = eo;
+        Lines[index].RaiseOverrideMark();
+        MarkModified();
+        SaveProject();
+        return true;
+    }
+
     public bool ApplyRawTextToSelectedLine(string rawText)
     {
         if (SelectedLine is null) return false;
@@ -1382,6 +1444,8 @@ public partial class MainViewModel : ObservableObject
     /// </summary>
     public int? DeleteEmojiAtViewOffset(int offset, bool forward)
     {
+        // 定型文（「（間奏）」など）はまとめて消す
+        if (DeletePhraseAtViewOffset(offset, forward) is int afterPhrase) return afterPhrase;
         if (MapInsertViewOffset(offset) is not var (lineIndex, charOffset)) return null;
         var line = Document.Lines[lineIndex];
         var matcher = CreateEmojiMatcher();

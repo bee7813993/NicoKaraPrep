@@ -48,6 +48,7 @@ public sealed partial class MainWindow
             var session = sender.PlaybackSession;
             SubtitlePreview.HasVideo = session.NaturalVideoHeight > 0;
             double seconds = session.NaturalDuration.TotalSeconds;
+            ViewModel.MediaDurationCs = seconds > 0 ? (int)Math.Round(seconds * 100) : null; // 後奏の定型文を曲の終わりまで表示する
             _updatingSeekSlider = true;
             try
             {

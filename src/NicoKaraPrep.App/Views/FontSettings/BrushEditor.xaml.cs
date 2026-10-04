@@ -46,6 +46,20 @@ public sealed partial class BrushEditor : UserControl
 
     private void OnClearColorClick(object sender, RoutedEventArgs e) => ViewModel?.ClearColor();
 
+    /// <summary>スポイト: 画面のどこからでも色を拾って、編集中の箇所の色にする（不透明度は今のまま）。</summary>
+    private async void OnEyedropperClick(object sender, RoutedEventArgs e)
+    {
+        if (ViewModel is not { } vm) return;
+        try
+        {
+            if (await Services.ScreenColorPicker.PickAsync(App.MainWindow?.AppWindow) is { } color) vm.ApplyScreenColor(color);
+        }
+        catch (Exception ex)
+        {
+            vm.ReportScreenColorError(ex.Message);
+        }
+    }
+
     private void OnAddStopClick(object sender, RoutedEventArgs e) => ViewModel?.AddStop();
 
     private void OnDistributeStopsClick(object sender, RoutedEventArgs e) => ViewModel?.DistributeStops();

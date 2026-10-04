@@ -7,6 +7,7 @@ using NicoKaraPrep.App.ViewModels;
 using NicoKaraPrep.App.Views.FontSettings;
 using NicoKaraPrep.Core.Formats;
 using NicoKaraPrep.Core.Model;
+using NicoKaraPrep.Core.Project;
 
 namespace NicoKaraPrep.App.Views;
 
@@ -729,6 +730,72 @@ public sealed partial class FontSettingsView : UserControl
     private void OnFolderFontClick(object sender, ItemClickEventArgs e)
     {
         if (ViewModel is { } vm && e.ClickedItem is FontListItem item) vm.Select(item.Id);
+    }
+
+    /// <summary>一覧の下の「まとめて消す...」: 消す種類を選んで消す（消す前の内容は控えに保存する）。</summary>
+    private async void OnClearAllClick(object sender, RoutedEventArgs e)
+    {
+        if (ViewModel is not { } vm) return;
+        var dialog = new FontClearDialog(vm);
+        if (await ShowDialogAsync(dialog) != ContentDialogResult.Primary || dialog.Choice is not { Any: true } choice) return;
+        try
+        {
+            vm.ClearFonts(choice);
+        }
+        catch (Exception ex)
+        {
+            vm.Main.StatusText = $"エラー: 控えを保存できなかったため、消していません（{ex.Message}）";
+            await ShowMessageAsync("消していません", $"消す前の控えを保存できなかったため、何も消していません。\n{ex.Message}");
+        }
+    }
+
+    /// <summary>一覧の下の「控えから戻す...」: 控えを選んで、その内容に戻す。</summary>
+    private async void OnRestoreBackupClick(object sender, RoutedEventArgs e)
+    {
+        if (ViewModel is not { } vm) return;
+        var backups = vm.ListBackups();
+        if (backups.Count == 0)
+        {
+            await ShowMessageAsync("控えがありません", "「まとめて消す」で保存した控えがありません。");
+            return;
+        }
+
+        var list = new ListView { SelectionMode = ListViewSelectionMode.Single, MaxHeight = 360 };
+        foreach (var (_, backup) in backups)
+        {
+            string song = backup.SongFonts is not null && !vm.CanRestoreSongFonts(backup) ? "\n（この曲専用は、控えを取った曲を開いているときだけ戻します）" : "";
+            list.Items.Add(new ListViewItem
+            {
+                Tag = backup,
+                Content = new TextBlock
+                {
+                    Text = $"{backup.CreatedUtc.ToLocalTime():yyyy/MM/dd HH:mm:ss} に消したもの\n{backup.Describe()}{song}",
+                    TextWrapping = TextWrapping.Wrap,
+                    Margin = new Thickness(0, 4, 0, 4),
+                },
+            });
+        }
+        var panel = new StackPanel { Spacing = 8, Width = 480 };
+        panel.Children.Add(new TextBlock
+        {
+            Text = "戻す控えを選んでください。控えにある種類は、今の内容と置き換わります（フォント設定とフォルダ分けは、戻したあと Ctrl+Z で戻す前に戻せます）。",
+            TextWrapping = TextWrapping.Wrap,
+            FontSize = 12,
+            Foreground = (Brush)Application.Current.Resources["TextFillColorSecondaryBrush"],
+        });
+        panel.Children.Add(list);
+        var dialog = new ContentDialog
+        {
+            Title = "消す前の控えから戻す",
+            Content = panel,
+            PrimaryButtonText = "戻す",
+            CloseButtonText = "キャンセル",
+            DefaultButton = ContentDialogButton.Close,
+            IsPrimaryButtonEnabled = false,
+        };
+        list.SelectionChanged += (_, _) => dialog.IsPrimaryButtonEnabled = list.SelectedItem is ListViewItem;
+        if (await ShowDialogAsync(dialog) != ContentDialogResult.Primary || (list.SelectedItem as ListViewItem)?.Tag is not N3FontBackup chosen) return;
+        vm.RestoreBackup(chosen);
     }
 
     private async void OnImportN3ProjClick(object sender, RoutedEventArgs e)
