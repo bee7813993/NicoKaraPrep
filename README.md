@@ -49,6 +49,14 @@ RhythmicaLyrics で作成したタイムタグ付き歌詞を、ニコカラメ�
 - **行エクスポート（切り出し）**: 選択行を lrc / rlf / クリップボードへ書き出し。エクスポート済み行には ✓ 済マークが付き、未エクスポート行だけを次回まとめて選択できます（済マークは `.tttproj` に保存）
 - **メディア再生**: 動画 / 音源を再生しながら編集。再生位置の行を自動ハイライト、行ダブルクリックでシーク（Ctrl+Space 再生/一時停止、Ctrl+←/→ 5 秒シーク）
 - **狭い・低い画面（FHD など）**: 動画を右の列（右のパネルの上）に置いて行リストを縦いっぱいに使える（表示メニュー。既定の自動では窓が低いときだけ右の列）。ウィンドウが低いときは動画を自動で縮めて行リストを残し、狭いときは行リストの横幅を 2 段にして歌詞の欄を広く取る。右の列の幅はつまみで変えられ、右のパネルは隠せる
+- **MCP（Claude などからの操作）**: MCP クライアント（Claude Code・Claude Desktop など）に `--mcp` 付きで登録すると、起動中のアプリを操作できる（マニュアル 18 章）。ストア版は実行エイリアス `nicokaraprep.exe`（`%LOCALAPPDATA%\Microsoft\WindowsApps`、更新しても同じ）、zip 版は exe の場所で登録する。登録は ファイル > Claude と連携 のボタン 1 つで行える
+  - 「Claude Desktop に追加」: 拡張機能のファイル（`nicokaraprep.mcpb`。manifest.json とアイコンだけで、この exe を `--mcp` で起動する）をダウンロード フォルダに作り、Claude Desktop の実行エイリアス `claude-desktop.exe` に渡す（Claude Desktop が「拡張機能をインストールしますか？」を出す。ストア版の Claude Desktop は .mcpb の関連付けを持たないため、ダブルクリックではなく引数で渡す）。入ったかは Claude Desktop の拡張機能のフォルダを読んで確かめ、画面で知らせる
+  - 「Claude Code に登録」: claude.exe（PATH・`%USERPROFILE%\.local\bin`・npm・Claude Desktop に入っているもの）を探して `claude mcp add --scope user nicokaraprep -- "exe" --mcp` を実行し（別の exe が登録されていれば消してから）、`~/.claude.json` を読み直して確かめる
+  - 手作業の登録（コマンド・Claude Desktop の構成ファイルに書く内容のコピー）は、その画面の「うまくいかないとき」の中
+  - 21 の操作: 状態・行の一覧・全文・チェックの読み取り、字幕のプレビューの画像（PNG）、ファイルを開く・n3proj の読み込み・保存・n3proj の書き出し、表示時刻のパラメーターと自動調整、行の表示時刻・フォント（行・文字）・ページのレイアウト・文字の大きさの指定と解除、元に戻す・やり直し、行を選ぶ
+  - アプリの中の MCP サーバー（公式の C# SDK）が、同じユーザーだけがつながる名前付きパイプで待ち受け、`--mcp` の橋渡し（標準入出力）がクライアントとのあいだを取り次ぐ。アプリが起動していないあいだも橋渡しは応答し（操作には「起動していません」と答える）、起動したあとの操作からつながる
+  - 操作はすべて UI スレッドで 1 件ずつ、画面の操作と同じ処理を通す（画面にすぐ出る・1 回の操作は Ctrl+Z 1 回で戻る・ステータスバーに「MCP:」を付けて出す）。ダイアログを開いているあいだは書き込みを断る。ファイル > 設定 で止められる
+- **単一インスタンス**: 1 つだけ起動し（ストア版はパッケージごと、zip 版は exe のフォルダごと）、もう一度起動したときや exe へのドロップは、起動中のウィンドウを前に出してそのファイルを開く
 
 ## ビルド
 
@@ -63,11 +71,47 @@ dotnet publish src/NicoKaraPrep.App -c Release -r win-x64 -p:Platform=x64 --self
 
 `publish\NicoKaraPrep.exe` を実行します（Windows App SDK ランタイム同梱）。
 
+検証で起動するときは、利用者の設定を読み書きしないよう、環境変数 `NICOKARAPREP_APPDATA` に作業用のフォルダを入れます（設定と crash.log の置き場所になります）。`--debug-hidden` を付けるとウィンドウを出さずに起動するので、MCP の操作の確認を画面とキーボードを使わずに行えます。
+
+「Claude と連携」の処理は、画面を出さずに `NicoKaraPrep.exe --claude-link status | code | mcpb [フォルダ] | desktop [フォルダ]` で試せます（結果は標準出力に JSON。出力をリダイレクトして使う）。`code` は Claude Code の設定に書き込むので、試すときは環境変数 `CLAUDE_CONFIG_DIR` に作業用のフォルダを入れます（Claude Code の設定ファイル `.claude.json` の置き場所になります）。`desktop` は実際の Claude Desktop にインストールの確認を出します。
+
+### Microsoft Store 提出用 MSIX パッケージ
+
+通常ビルドは非パッケージのまま。`-p:Packaged=true` を付けると MSIX 構成
+（フレームワーク依存の Windows App SDK ＋ Store 用マニフェスト）でビルドされる。
+MSIX の生成には Visual Studio （または Build Tools）の MSBuild が必要。
+
+```powershell
+# 開発者コマンドプロンプト、または MSBuild.exe のフルパスで実行
+msbuild src/NicoKaraPrep.App/NicoKaraPrep.App.csproj /restore /p:Configuration=Release /p:Platform=x64   /p:Packaged=true /p:GenerateAppxPackageOnBuild=true
+msbuild src/NicoKaraPrep.App/NicoKaraPrep.App.csproj /restore /p:Configuration=Release /p:Platform=ARM64 /p:Packaged=true /p:GenerateAppxPackageOnBuild=true
+```
+
+出力: `src\NicoKaraPrep.App\bin\<Platform>\Release\net8.0-windows10.0.19041.0\win-<arch>\AppPackages\` 配下の `.msix`。
+
+提出前のチェックリスト:
+
+1. Partner Center でアプリ名を予約し、「Product identity」の
+   `Package/Identity/Name`・`Package/Identity/Publisher` を
+   `src/NicoKaraPrep.App/Package.appxmanifest` の `<Identity>` に転記する
+   （Visual Studio の［発行 > アプリケーションを Store と関連付ける］でも可）
+2. バージョンを上げるときは `Package.appxmanifest` の `Version` を更新
+   （第 4 セグメントは Store 予約のため 0 固定）
+3. Partner Center の提出画面へ x64 / ARM64 の `.msix` を両方アップロード
+   （署名は不要。審査通過後に Microsoft が署名する）
+
+マニフェストには実行エイリアス `nicokaraprep.exe` を宣言している（MCP クライアントに `nicokaraprep.exe --mcp` を登録するため）。ストア版では、MCP の名前付きパイプと単一インスタンスの鍵にパッケージのファミリー名を使う（更新で exe の場所が変わっても同じ）。
+
+ストア版の形をローカルで試すとき（開発者モード）は、作った `.msix` を展開し、`AppxManifest.xml` の `Identity` の Name と呼び出し名を試験用に変えてから `Add-AppxPackage -Register <展開先>\AppxManifest.xml` で登録する（入っているストア版とは別のパッケージになる。終わったら `Remove-AppxPackage` で外す）。展開した中の `AppxBlockMap.xml`・`AppxSignature.p7x`・`[Content_Types].xml` は消しておく。
+
 ## 構成
 
 ```
 src/NicoKaraPrep.Core    データモデル・フォーマット(lrc/rlf/テキスト編集モード)・検証・エクスポート
-src/NicoKaraPrep.App     WinUI 3 アプリ本体
+src/NicoKaraPrep.App     WinUI 3 アプリ本体（Program.cs: 起動の入口。--mcp の橋渡し・単一インスタンス）
+  Services/Mcp          MCP サーバー（McpHost: 名前付きパイプ、NkpTools: 操作の定義）と橋渡し（McpBridge）、
+                        Claude への登録（ClaudeLink: Claude Code・Claude Desktop。画面は Views/ClaudeLinkDialog）
+  MainWindow.Mcp.cs     操作の処理（UI スレッドで 1 件ずつ）
 tests/                  xUnit テスト（ラウンドトリップ中心）
 資料/                    RhythmicaLyrics v64 ソース（フォーマット解析の参照元）
 ```

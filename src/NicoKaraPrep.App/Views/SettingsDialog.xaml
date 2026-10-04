@@ -44,6 +44,21 @@
             <TextBlock Text="メディア再生" Style="{ThemeResource SubtitleTextBlockStyle}" Margin="0,8,0,0" />
             <NumberBox x:Name="SeekSecondsBox" Header="Z / X（Ctrl+←/→）でシークする秒数" Minimum="0.5" Maximum="60" SmallChange="0.5" SpinButtonPlacementMode="Inline" />
 
+            <TextBlock Text="MCP（Claude などからの操作）" Style="{ThemeResource SubtitleTextBlockStyle}" Margin="0,8,0,0" />
+            <TextBlock TextWrapping="Wrap" Style="{ThemeResource CaptionTextBlockStyle}" Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                       Text="Claude に登録すると、起動中のこのアプリを Claude から操作できます（同じ Windows ユーザーのプログラムだけがつながります。詳しくはマニュアルの MCP の章）。" />
+            <CheckBox x:Name="McpBox" Content="MCP サーバーを有効にする" />
+            <!-- 登録の画面は別（ContentDialog は重ねて開けないので、設定を保存して閉じてから MainWindow が開く） -->
+            <Grid ColumnSpacing="12">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="*" />
+                </Grid.ColumnDefinitions>
+                <Button x:Name="ClaudeLinkButton" Content="Claude と連携..." VerticalAlignment="Center" Click="OnClaudeLinkClick" />
+                <TextBlock Grid.Column="1" VerticalAlignment="Center" TextWrapping="Wrap" Style="{ThemeResource CaptionTextBlockStyle}" Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                           Text="設定を保存して、Claude に登録する画面を開きます（ファイル > Claude と連携... と同じ）。" />
+            </Grid>
+
         </StackPanel>
     </ScrollViewer>
 </ContentDialog>

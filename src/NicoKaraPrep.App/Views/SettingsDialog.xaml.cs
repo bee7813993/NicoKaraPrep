@@ -34,8 +34,19 @@ public sealed partial class SettingsDialog : ContentDialog
         EmojiModeBox.SelectedIndex = settings.EmojiTagPerEmoji ? 0 : 1;
         PlaceholderBox.Text = settings.PlaceholderChar;
         SeekSecondsBox.Value = settings.SeekSeconds;
+        McpBox.IsChecked = settings.McpEnabled;
 
         PrimaryButtonClick += (_, _) => ApplyToSettings();
+    }
+
+    /// <summary>「Claude と連携...」で閉じたか（設定は保存済み。閉じたあとに MainWindow が登録の画面を開く）。</summary>
+    public bool OpenClaudeLinkRequested { get; private set; }
+
+    private void OnClaudeLinkClick(object sender, Microsoft.UI.Xaml.RoutedEventArgs e)
+    {
+        ApplyToSettings();
+        OpenClaudeLinkRequested = true;
+        Hide();
     }
 
     private void ApplyToSettings()
@@ -56,6 +67,7 @@ public sealed partial class SettingsDialog : ContentDialog
         _settings.EmojiTagPerEmoji = EmojiModeBox.SelectedIndex == 0;
         _settings.PlaceholderChar = PlaceholderBox.Text.Trim();
         _settings.SeekSeconds = ToDouble(SeekSecondsBox.Value, 3.0);
+        _settings.McpEnabled = McpBox.IsChecked == true;
         _settings.Save();
     }
 

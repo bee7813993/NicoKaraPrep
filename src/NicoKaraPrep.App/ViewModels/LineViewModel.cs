@@ -114,6 +114,9 @@ public partial class LineViewModel : ObservableObject
     // 横幅の判定（横幅の欄のツールチップに画面の横幅・左右余白を出す）
     private LineWidthResult? _widthResult;
 
+    /// <summary>横幅の判定（チェックのたびに更新する。空行・測れない行は null。MCP の行の一覧に出す）。</summary>
+    public LineWidthResult? WidthResult => _widthResult;
+
     /// <summary>横幅の欄のツールチップ。</summary>
     public string WidthToolTip =>
         "横幅 px（字幕のプレビューと同じ並べ方で、この行に当たるフォント設定で測った幅）と、" +
@@ -290,6 +293,9 @@ public partial class LineViewModel : ObservableObject
     private IssueSeverity? _rowSeverity;
     private IssueSeverity? _startTimeSeverity;
     private IssueSeverity? _endTimeSeverity;
+
+    /// <summary>行全体のチェックの重要度（背景色の元。ページ衝突・表示時刻・横幅のいちばん高いもの。MCP の行の一覧に出す）。</summary>
+    public IssueSeverity? RowSeverity => _rowSeverity;
 
     /// <summary>ページ衝突・表示時刻のチェックの重要度（開始時間側。挿入ビューの行情報欄の色分け用）。</summary>
     public IssueSeverity? StartTimeSeverity => _startTimeSeverity;

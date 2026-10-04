@@ -865,6 +865,30 @@ public partial class MainViewModel : ObservableObject
         StatusText = message;
     }
 
+    /// <summary>各タブの Undo 履歴のいちばん上（MCP の 1 回の操作の前に取り、操作のあとで <see cref="CollapseUndoSince"/> に渡す）。</summary>
+    internal Dictionary<TabState, LyricsDocument?> SnapshotUndoTops()
+    {
+        StoreActiveTab();
+        return Tabs.ToDictionary(t => t, t => t.UndoStack.Count > 0 ? t.UndoStack[^1] : null);
+    }
+
+    /// <summary>
+    /// MCP の 1 回の操作で、タブの Undo 履歴が 2 つ以上増えたときは、操作の前の 1 つだけを残す（Ctrl+Z 1 回で操作の前に戻るように）。
+    /// 履歴が多すぎて前のいちばん上が押し出されたときは、どこからが増えた分か分からないので何もしない。
+    /// </summary>
+    internal void CollapseUndoSince(Dictionary<TabState, LyricsDocument?> tops)
+    {
+        foreach (var (tab, top) in tops)
+        {
+            if (!Tabs.Contains(tab)) continue;
+            var stack = tab.UndoStack;
+            int start = top is null ? 0 : stack.LastIndexOf(top) + 1;
+            if (top is not null && start == 0) continue;
+            int added = stack.Count - start;
+            if (added > 1) stack.RemoveRange(start + 1, added - 1);
+        }
+    }
+
     // ------------------------------------------------------------ 行操作
 
     /// <summary>構造変更後に行 VM を作り直す（済マークはモデル側に保持されている）。</summary>
@@ -1342,7 +1366,7 @@ public partial class MainViewModel : ObservableObject
     }
 
     /// <summary>行内の表示文字オフセット → CharUnit 挿入位置（スペーサーは表示幅 0）。</summary>
-    private static int DisplayOffsetToUnitIndex(LyricsLine line, int charOffset)
+    internal static int DisplayOffsetToUnitIndex(LyricsLine line, int charOffset)
     {
         int unitIndex = 0;
         int disp = 0;

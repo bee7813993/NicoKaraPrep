@@ -118,6 +118,13 @@ public sealed class AppSettings
     /// </summary>
     public bool N3AutoImportNearby { get; set; } = true;
 
+    // ---- MCP（Claude などからの操作） ----
+    /// <summary>
+    /// MCP サーバーを動かすか（起動中の本体を、名前付きパイプ経由で「NicoKaraPrep.exe --mcp」の橋渡しから操作できるようにする）。
+    /// 同じ Windows ユーザーのプログラムだけがつながる。
+    /// </summary>
+    public bool McpEnabled { get; set; } = true;
+
     /// <summary>最後に使ったベース n3proj（曲ごとの指定が無いときの既定）。</summary>
     public string N3LastBasePath { get; set; } = "";
 
@@ -274,8 +281,19 @@ public sealed class AppSettings
         Encoder = System.Text.Encodings.Web.JavaScriptEncoder.UnsafeRelaxedJsonEscaping,
     };
 
-    public static string DefaultPath =>
-        Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "NicoKaraPrep", "settings.json");
+    /// <summary>
+    /// 設定・ログを置くフォルダ（%APPDATA%\NicoKaraPrep）。環境変数 NICOKARAPREP_APPDATA があればそのフォルダを使う
+    /// （検証で起動するアプリが、利用者の本物の設定を読み書きしないように）。
+    /// </summary>
+    public static string DataFolder =>
+        Environment.GetEnvironmentVariable(DataFolderVariable) is { Length: > 0 } custom
+            ? custom
+            : Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "NicoKaraPrep");
+
+    /// <summary>設定・ログを置くフォルダを差し替える環境変数の名前（<see cref="DataFolder"/>）。</summary>
+    public const string DataFolderVariable = "NICOKARAPREP_APPDATA";
+
+    public static string DefaultPath => Path.Combine(DataFolder, "settings.json");
 
     /// <summary>別の設定（テンプレート）の内容をこのインスタンスへ取り込む（ニコカラメーカー3 のフォント設定は除く）。</summary>
     public void CopyFrom(AppSettings other)
@@ -421,6 +439,7 @@ public sealed class AppSettings
     private static void MigrateLegacySettings(string newPath)
     {
         if (File.Exists(newPath)) return;
+        if (Environment.GetEnvironmentVariable(DataFolderVariable) is { Length: > 0 }) return; // 検証用のフォルダには引き継がない
         string legacy = Path.Combine(
             Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "TimeTagTool", "settings.json");
         if (!File.Exists(legacy)) return;

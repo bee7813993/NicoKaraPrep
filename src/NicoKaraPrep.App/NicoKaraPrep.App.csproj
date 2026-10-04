@@ -16,9 +16,17 @@
     <LangVersion>latest</LangVersion>
     <!-- MVVMTK0045: AOT 用の partial property 推奨警告。本アプリは AOT 非対象のため抑制 -->
     <NoWarn>$(NoWarn);MVVMTK0045</NoWarn>
+    <!-- 起動の入口は Program.cs（MCP の橋渡し・単一インスタンス。XAML が生成する Main は使わない） -->
+    <DefineConstants>$(DefineConstants);DISABLE_XAML_GENERATED_MAIN</DefineConstants>
+    <StartupObject>NicoKaraPrep.App.Program</StartupObject>
     <EnableMsixTooling>true</EnableMsixTooling>
-    <WindowsPackageType>None</WindowsPackageType>
-    <WindowsAppSDKSelfContained>true</WindowsAppSDKSelfContained>
+    <!-- 通常ビルドは非パッケージ（開発・zip 配布用）。
+         Store 提出用 MSIX を作るときは -p:Packaged=true を付けてビルドする（README 参照） -->
+    <WindowsPackageType Condition="'$(Packaged)' != 'true'">None</WindowsPackageType>
+    <WindowsAppSDKSelfContained Condition="'$(Packaged)' != 'true'">true</WindowsAppSDKSelfContained>
+    <PublishProfile>Properties\PublishProfiles\win-$(Platform).pubxml</PublishProfile>
+    <!-- Store 提出パッケージは審査通過後に Microsoft が署名するため自前署名は無効 -->
+    <AppxPackageSigningEnabled>false</AppxPackageSigningEnabled>
     <Version>0.2.0</Version>
   </PropertyGroup>
 
@@ -27,6 +35,7 @@
     <PackageReference Include="Microsoft.WindowsAppSDK" Version="1.6.250205002" />
     <PackageReference Include="Microsoft.Windows.SDK.BuildTools" Version="10.0.26100.1742" />
     <PackageReference Include="CommunityToolkit.Mvvm" Version="8.4.0" />
+    <PackageReference Include="ModelContextProtocol.Core" Version="2.2.0" />
   </ItemGroup>
 
   <ItemGroup>
@@ -37,6 +46,10 @@
     <Content Include="Assets\app.ico">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </Content>
+    <!-- MSIX パッケージ用ロゴ（Package.appxmanifest から参照） -->
+    <Content Include="Assets\*.png" />
+    <!-- Claude Desktop の拡張機能（nicokaraprep.mcpb）に入れるアイコン（Services\Mcp\ClaudeLink.cs） -->
+    <EmbeddedResource Include="Assets\Square44x44Logo.targetsize-256.png" LogicalName="NicoKaraPrep.McpbIcon.png" />
   </ItemGroup>
 
 </Project>

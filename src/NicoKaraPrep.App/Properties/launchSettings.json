@@ -1,0 +1,10 @@
+{
+  "profiles": {
+    "NicoKaraPrep (Unpackaged)": {
+      "commandName": "Project"
+    },
+    "NicoKaraPrep (Package)": {
+      "commandName": "MsixPackage"
+    }
+  }
+}

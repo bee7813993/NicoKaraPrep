@@ -15,8 +15,7 @@ public partial class App : Application
         {
             try
             {
-                string dir = Path.Combine(
-                    Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "NicoKaraPrep");
+                string dir = Core.Project.AppSettings.DataFolder;
                 Directory.CreateDirectory(dir);
                 File.AppendAllText(
                     Path.Combine(dir, "crash.log"),
@@ -32,6 +31,22 @@ public partial class App : Application
     protected override void OnLaunched(LaunchActivatedEventArgs args)
     {
         MainWindow = new MainWindow();
-        MainWindow.Activate();
+        // 検証用: --debug-hidden ではウィンドウを出さない（MCP の道具の確認を、画面とキーボードを使わずに行うため。
+        // あとから同じ exe が起動して引数を渡されても出さない）
+        StartedHidden = Environment.GetCommandLineArgs().Contains("--debug-hidden");
+        if (!StartedHidden) MainWindow.Activate();
+    }
+
+    /// <summary>--debug-hidden（ウィンドウを出さない検証用の起動）で起動したか。</summary>
+    public static bool StartedHidden { get; private set; }
+
+    /// <summary>
+    /// あとから起動したインスタンス（exe へのドロップ・ファイルの関連付け・2 回目の起動）の引数を受け取った（UI スレッドではない。Program.cs）。
+    /// 画面を前に出し、ファイルがあれば開く。
+    /// </summary>
+    public static void OnActivatedFromAnotherInstance(string? path)
+    {
+        if (MainWindow is not MainWindow window) return;
+        window.DispatcherQueue.TryEnqueue(() => window.OpenFromAnotherInstance(path));
     }
 }

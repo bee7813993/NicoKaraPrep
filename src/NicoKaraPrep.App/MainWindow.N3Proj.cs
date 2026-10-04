@@ -2,6 +2,7 @@
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Input;
 using NicoKaraPrep.App.Services;
+using NicoKaraPrep.App.ViewModels;
 using NicoKaraPrep.App.Views;
 using NicoKaraPrep.Core;
 using NicoKaraPrep.Core.Formats;
@@ -131,30 +132,7 @@ public sealed partial class MainWindow
 
             var choices = dialog.Result;
             TryRun(() => ViewModel.ApplyN3ProjImport(preview, choices));
-            if (focus == N3ProjImportFocus.Default)
-            {
-                // 最近使用したファイルにも入れる（開いたプロジェクトの歌詞より上に。選ぶとこの読み込みをもう一度行う）
-                ViewModel.Settings.AddRecentFile(path);
-                ViewModel.Settings.Save();
-                RefreshRecentFilesMenu();
-            }
-            string summary = lyricsNote is null ? ViewModel.StatusText : $"{lyricsNote}　／　{ViewModel.StatusText}";
-            if (choices.Media && ViewModel.MediaPath is string media && File.Exists(media))
-            {
-                OpenMedia(media);
-            }
-            foreach (var line in ViewModel.Lines) line.RaiseOverrideMark();
-            _n3FontNamesKey = null;
-            LoadQuickEmojiSettings();
-            RenderPreview();
-            RefreshN3LinePanel();
-
-            // チェックはすぐに実行し、何を読み込んだかの表示がチェック結果で消えないよう、つなげて表示する
-            _validateTimer.Stop();
-            TryRun(ViewModel.RunValidation);
-            RefreshInsertGutter();
-            RefreshLineFontPlaceholder();
-            ViewModel.StatusText = $"{summary}　／　{ViewModel.StatusText}";
+            AfterN3ProjImported(path, choices, lyricsNote, addRecent: focus == N3ProjImportFocus.Default);
         }
         catch (Exception ex)
         {
@@ -164,6 +142,37 @@ public sealed partial class MainWindow
             await ShowMessageAsync("ニコカラメーカー3 プロジェクトの読み込み中にエラーが発生しました",
                 $"{(path is null ? "" : Path.GetFileName(path) + "\n\n")}{detail}");
         }
+    }
+
+    /// <summary>
+    /// n3proj の読み込み（選んだ項目の取り込み）のあとの画面の作り直し（メニューの読み込み確認画面と MCP の import_n3proj で共通）。
+    /// addRecent なら最近使用したファイルに入れる。チェックはすぐに実行し、何を読み込んだかの表示がチェック結果で消えないよう、つなげて表示する。
+    /// </summary>
+    private void AfterN3ProjImported(string path, N3ProjImportChoices choices, string? lyricsNote, bool addRecent)
+    {
+        if (addRecent)
+        {
+            // 最近使用したファイルにも入れる（開いたプロジェクトの歌詞より上に。選ぶとこの読み込みをもう一度行う）
+            ViewModel.Settings.AddRecentFile(path);
+            ViewModel.Settings.Save();
+            RefreshRecentFilesMenu();
+        }
+        string summary = lyricsNote is null ? ViewModel.StatusText : $"{lyricsNote}　／　{ViewModel.StatusText}";
+        if (choices.Media && ViewModel.MediaPath is string media && File.Exists(media))
+        {
+            OpenMedia(media);
+        }
+        foreach (var line in ViewModel.Lines) line.RaiseOverrideMark();
+        _n3FontNamesKey = null;
+        LoadQuickEmojiSettings();
+        RenderPreview();
+        RefreshN3LinePanel();
+
+        _validateTimer.Stop();
+        TryRun(ViewModel.RunValidation);
+        RefreshInsertGutter();
+        RefreshLineFontPlaceholder();
+        ViewModel.StatusText = $"{summary}　／　{ViewModel.StatusText}";
     }
 
     /// <summary>

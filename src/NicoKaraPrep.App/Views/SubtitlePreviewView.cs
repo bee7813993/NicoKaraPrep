@@ -1,4 +1,5 @@
 ﻿using System.Numerics;
+using Microsoft.Graphics.Canvas;
 using Microsoft.Graphics.Canvas.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using NicoKaraPrep.App.Services.Subtitles;
@@ -17,7 +18,7 @@ namespace NicoKaraPrep.App.Views;
 public sealed class SubtitlePreviewView : Grid
 {
     /// <summary>動画が無い（音声だけ）ときの字幕の画面の背景。</summary>
-    private static readonly Color NoVideoColor = Color.FromArgb(255, 0x18, 0x18, 0x24);
+    internal static readonly Color NoVideoColor = Color.FromArgb(255, 0x18, 0x18, 0x24);
 
     private readonly CanvasControl _canvas;
     private SubtitlePreviewModel? _model;
@@ -91,59 +92,77 @@ public sealed class SubtitlePreviewView : Grid
 
     private void OnDraw(CanvasControl sender, CanvasDrawEventArgs args)
     {
-        var ds = args.DrawingSession;
         var model = _model;
         if (model is null) return;
         float aw = (float)sender.ActualWidth, ah = (float)sender.ActualHeight;
         if (aw < 2 || ah < 2) return;
-        float W = model.ScreenWidth, H = model.ScreenHeight;
-        float scale = Math.Min(aw / W, ah / H);
-        float ox = (aw - W * scale) / 2, oy = (ah - H * scale) / 2;
-        var screen = new Rect(ox, oy, W * scale, H * scale);
-        if (!_hasVideo) ds.FillRectangle(screen, NoVideoColor);
-        if (!_showSubtitles || double.IsNegativeInfinity(_timeMs)) return;
-
         try
         {
-            using var clip = ds.CreateLayer(1f, screen);
-            double t = _timeMs;
-            var visible = new List<PreviewLine>();
-            foreach (var line in model.Lines)
-            {
-                if (t >= line.BeginMs && t < line.EndMs) visible.Add(line);
-            }
-            // 行の画面上の四角（重なりの薄め方で、同じ場所に出る前後のページの行を見る）
-            var boxes = new Dictionary<PreviewLine, (float Left, float Top, float Right, float Bottom)>(ReferenceEqualityComparer.Instance);
-            foreach (var line in visible)
-            {
-                boxes[line] = Bounds(line, line.Source.GetLayout(), W, H, model.Pages.GetValueOrDefault((line.Tab, line.Page)));
-            }
-            bool SamePlace(PreviewLine a, PreviewLine b) =>
-                boxes.TryGetValue(a, out var x) && boxes.TryGetValue(b, out var y) &&
-                x.Left < y.Right && y.Left < x.Right && x.Top < y.Bottom && y.Top < x.Bottom;
-            foreach (var line in visible)
-            {
-                var layout = line.Source.GetLayout();
-                if (layout.Tokens.Count == 0) continue;
-                float alpha = CrossFadeAlpha(line, visible, t, SamePlace);
-                if (alpha <= 0f) continue;
-                var (x, baseline) = Position(line, layout, W, H, model.Pages.GetValueOrDefault((line.Tab, line.Page)));
-                var transform = Matrix3x2.CreateTranslation(x, baseline) * Matrix3x2.CreateScale(scale) * Matrix3x2.CreateTranslation(ox, oy);
-                if (alpha >= 1f)
-                {
-                    SubtitleRenderer.Draw(ds, layout, transform, scale, Wiped(line, layout, t / 10));
-                }
-                else
-                {
-                    using var fade = ds.CreateLayer(alpha);
-                    SubtitleRenderer.Draw(ds, layout, transform, scale, Wiped(line, layout, t / 10));
-                }
-            }
+            DrawFrame(args.DrawingSession, model, _timeMs, aw, ah, _hasVideo, _showSubtitles);
         }
         catch (Exception ex) when (!sender.Device.IsDeviceLost(ex.HResult))
         {
             // 描けない値があっても再生は止めない
         }
+    }
+
+    /// <summary>
+    /// 字幕の画面の 1 コマを描く（幅 <paramref name="aw"/> × 高さ <paramref name="ah"/> の範囲に、字幕の画面を縦横比を保って当てはめる）。
+    /// 動画の上のプレビューと、画面に出さずに画像にするとき（MCP の render_preview。<see cref="SubtitleFrameRenderer"/>）で共通。
+    /// 絵文字の画像などを読み込み中なら true を返す（読み終わったら描き直す）。
+    /// </summary>
+    internal static bool DrawFrame(CanvasDrawingSession ds, SubtitlePreviewModel model, double timeMs, float aw, float ah, bool hasVideo, bool showSubtitles)
+    {
+        float W = model.ScreenWidth, H = model.ScreenHeight;
+        float scale = Math.Min(aw / W, ah / H);
+        float ox = (aw - W * scale) / 2, oy = (ah - H * scale) / 2;
+        var screen = new Rect(ox, oy, W * scale, H * scale);
+        if (!hasVideo) ds.FillRectangle(screen, NoVideoColor);
+        if (!showSubtitles || double.IsNegativeInfinity(timeMs)) return false;
+
+        bool loading = false;
+        using var clip = ds.CreateLayer(1f, screen);
+        double t = timeMs;
+        var visible = VisibleLines(model, t);
+        // 行の画面上の四角（重なりの薄め方で、同じ場所に出る前後のページの行を見る）
+        var boxes = new Dictionary<PreviewLine, (float Left, float Top, float Right, float Bottom)>(ReferenceEqualityComparer.Instance);
+        foreach (var line in visible)
+        {
+            boxes[line] = Bounds(line, line.Source.GetLayout(), W, H, model.Pages.GetValueOrDefault((line.Tab, line.Page)));
+        }
+        bool SamePlace(PreviewLine a, PreviewLine b) =>
+            boxes.TryGetValue(a, out var x) && boxes.TryGetValue(b, out var y) &&
+            x.Left < y.Right && y.Left < x.Right && x.Top < y.Bottom && y.Top < x.Bottom;
+        foreach (var line in visible)
+        {
+            var layout = line.Source.GetLayout();
+            if (layout.Tokens.Count == 0) continue;
+            float alpha = CrossFadeAlpha(line, visible, t, SamePlace);
+            if (alpha <= 0f) continue;
+            var (x, baseline) = Position(line, layout, W, H, model.Pages.GetValueOrDefault((line.Tab, line.Page)));
+            var transform = Matrix3x2.CreateTranslation(x, baseline) * Matrix3x2.CreateScale(scale) * Matrix3x2.CreateTranslation(ox, oy);
+            if (alpha >= 1f)
+            {
+                loading |= SubtitleRenderer.Draw(ds, layout, transform, scale, Wiped(line, layout, t / 10));
+            }
+            else
+            {
+                using var fade = ds.CreateLayer(alpha);
+                loading |= SubtitleRenderer.Draw(ds, layout, transform, scale, Wiped(line, layout, t / 10));
+            }
+        }
+        return loading;
+    }
+
+    /// <summary>時刻 <paramref name="timeMs"/>（タグの時刻の基準の ms）に出ている行（表示開始 ≦ 時刻 &lt; 表示終了）。</summary>
+    internal static List<PreviewLine> VisibleLines(SubtitlePreviewModel model, double timeMs)
+    {
+        var visible = new List<PreviewLine>();
+        foreach (var line in model.Lines)
+        {
+            if (timeMs >= line.BeginMs && timeMs < line.EndMs) visible.Add(line);
+        }
+        return visible;
     }
 
     /// <summary>
