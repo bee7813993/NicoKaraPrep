@@ -367,10 +367,27 @@ internal static class ClaudeLink
         return null;
     }
 
+    /// <summary>
+    /// Claude Desktop が入っているか。起動するもの（<see cref="FindClaudeDesktop"/>）が無くても、
+    /// ストア版のデータのフォルダがあれば入っている（設定の「アプリ実行エイリアス」で claude-desktop.exe を切っているとき）。
+    /// </summary>
+    public static bool IsClaudeDesktopInstalled()
+    {
+        if (FindClaudeDesktop() is not null) return true;
+        try
+        {
+            return Directory.GetDirectories(Path.Combine(LocalAppData, "Packages"), "Claude_*").Length > 0;
+        }
+        catch (Exception)
+        {
+            return false;
+        }
+    }
+
     /// <summary>Claude Desktop にこのアプリの拡張機能が入っているか（拡張機能のフォルダの manifest.json を読むだけ）。</summary>
     public static ClaudeDesktopStatus ReadClaudeDesktopStatus()
     {
-        bool found = FindClaudeDesktop() is not null;
+        bool found = IsClaudeDesktopInstalled();
         foreach (string data in ClaudeDesktopDataDirectories())
         {
             string[] extensions;
@@ -556,8 +573,15 @@ internal static class ClaudeLink
             WorkingDirectory = Path.GetDirectoryName(mcpbPath) ?? UserProfile,
         };
         psi.ArgumentList.Add(mcpbPath);
+        // 起動中の Claude Desktop が確認の画面を前に出せるように（前に出す権利はボタンを押したこのプロセスにある）
+        AllowSetForegroundWindow(AsfwAny);
         using var process = Process.Start(psi);
     }
+
+    private const uint AsfwAny = unchecked((uint)-1);
+
+    [DllImport("user32.dll")]
+    private static extern bool AllowSetForegroundWindow(uint dwProcessId);
 
     /// <summary>エクスプローラーでファイルの場所を開く（そのファイルを選んだ状態）。</summary>
     public static void ShowInExplorer(string path)

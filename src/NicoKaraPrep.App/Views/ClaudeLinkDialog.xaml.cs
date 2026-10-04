@@ -108,7 +108,7 @@ public sealed partial class ClaudeLinkDialog : ContentDialog
     {
         if (_busy) return;
         string? launcher = ClaudeLink.FindClaudeDesktop();
-        if (launcher is null)
+        if (launcher is null && !ClaudeLink.IsClaudeDesktopInstalled())
         {
             ShowResult(
                 new ClaudeLinkResult(false, "Claude Desktop が見つかりません", "Claude Desktop を入れてから、もう一度押してください。"),
@@ -120,12 +120,26 @@ public sealed partial class ClaudeLinkDialog : ContentDialog
         {
             var before = await Task.Run(ClaudeLink.ReadClaudeDesktopStatus);
             string path = await Task.Run(() => ClaudeLink.CreateMcpb(ClaudeLink.DownloadsFolder));
+            if (launcher is null)
+            {
+                // 入っているが起動のしかたが無い（アプリ実行エイリアスを切っている）: ファイルを見せて、ドラッグで入れてもらう
+                ClaudeLink.ShowInExplorer(path);
+                if (_closed) return;
+                ShowResult(
+                    new ClaudeLinkResult(true, "拡張機能のファイルを Claude Desktop へドラッグしてください",
+                        $"Claude Desktop を開き、設定 → 拡張機能 の画面へ、いま開いたフォルダの {Path.GetFileName(path)} をドラッグします。" +
+                        "「インストールしますか？」が出たら「インストール」を押します。"),
+                    ("ファイルの場所を開く", () => ClaudeLink.ShowInExplorer(path)),
+                    informational: true);
+                StartWatching(before);
+                return;
+            }
             ClaudeLink.OpenInClaudeDesktop(launcher, path);
             if (_closed) return;
             ShowResult(
                 new ClaudeLinkResult(true, "Claude Desktop で「インストール」を押してください",
-                    "Claude Desktop に「拡張機能をインストールしますか？」が出ます。「Anthropic によって確認されていません」とも出ますが、" +
-                    "このにこぷれっぷが作った拡張機能なので、そのまま「インストール」を押してください。" +
+                    "Claude Desktop に「拡張機能をインストールしますか？」が出ます（見えないときはタスクバーの Claude を開きます）。" +
+                    "「Anthropic によって確認されていません」とも出ますが、このにこぷれっぷが作った拡張機能なので、そのまま「インストール」を押してください。" +
                     $"画面が出てこないときは、Claude Desktop の 設定 → 拡張機能 の画面へ、ダウンロード フォルダの {Path.GetFileName(path)} をドラッグして入れます。"),
                 ("ファイルの場所を開く", () => ClaudeLink.ShowInExplorer(path)),
                 informational: true);
