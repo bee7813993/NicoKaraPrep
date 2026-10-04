@@ -209,6 +209,17 @@
                     SpinButtonPlacementMode="Compact"
                     Value="{x:Bind ViewModel.AlphaValue, Mode=TwoWay}" />
                 <Button
+                    x:Name="EyedropperButton"
+                    VerticalAlignment="Bottom"
+                    Click="OnEyedropperClick"
+                    AutomationProperties.Name="スポイト（画面から色を拾う）"
+                    ToolTipService.ToolTip="スポイト: 画面のどこからでも色を拾います（押したときの画面を止めて出すので、動画の 1 コマからも拾えます）。&#x0a;クリック・Enter で決める、Esc・右クリックでやめる、矢印キーで 1 px ずつ動かす。&#x0a;Tab でにこぷれっぷの窓を隠して、後ろの窓から拾えます。不透明度は今の値のままです">
+                    <StackPanel Orientation="Horizontal" Spacing="6">
+                        <FontIcon Glyph="&#xEF3C;" FontSize="14" />
+                        <TextBlock Text="スポイト" />
+                    </StackPanel>
+                </Button>
+                <Button
                     x:Name="ClearColorButton"
                     VerticalAlignment="Bottom"
                     Content="未指定に戻す"

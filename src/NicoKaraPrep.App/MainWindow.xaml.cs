@@ -33,7 +33,14 @@ public sealed partial class MainWindow : Window
             {
                 Title = ViewModel.WindowTitle;
             }
+            // 開く・保存・タブの切り替えのあと（タイトルかステータスバーが変わる）に、上書き保存の形式を出し直す。
+            // 操作の途中で読まないよう、操作が終わってから
+            if (e.PropertyName is nameof(MainViewModel.WindowTitle) or nameof(MainViewModel.StatusText))
+            {
+                DispatcherQueue.TryEnqueue(RefreshSaveMenuTexts);
+            }
         };
+        RefreshSaveMenuTexts();
 
         StyledLyricsMenuItem.IsChecked = ViewModel.Settings.LineListStyledLyrics;
         InitializeAdaptiveLayout();
@@ -426,6 +433,22 @@ public sealed partial class MainWindow : Window
         if (path is null) return;
         TryRun(() => ViewModel.SaveFullTo(path));
         RefreshRecentFilesMenu();
+    }
+
+    /// <summary>
+    /// ファイルメニューの上書き保存の項目に、書くファイルの形式（拡張子）を出す。上書き保存はメインの歌詞ファイル、
+    /// 表示中のタブの上書き保存は前に別ファイルへ保存した先。まだ保存先が無ければ形式は出さない（名前を付けて保存の画面になる）。
+    /// </summary>
+    private void RefreshSaveMenuTexts()
+    {
+        string? main = ViewModel.ActiveTabIsMain ? ViewModel.CurrentFilePath : ViewModel.Tabs.FirstOrDefault(t => t.IsMain)?.FilePath;
+        string save = main is null ? "上書き保存（タブ含む全行）" : $"上書き保存（タブ含む全行・{FormatName(main)} 形式）";
+        string? tabPath = ViewModel.GetActiveTabCopyPath();
+        string saveTab = tabPath is null ? "表示中のタブを上書き保存" : $"表示中のタブを上書き保存（{FormatName(tabPath)} 形式）";
+        if (SaveMenuItem.Text != save) SaveMenuItem.Text = save;
+        if (SaveTabMenuItem.Text != saveTab) SaveTabMenuItem.Text = saveTab;
+
+        static string FormatName(string path) => Path.GetExtension(path).TrimStart('.').ToLowerInvariant() is { Length: > 0 } ext ? ext : "lrc";
     }
 
     /// <summary>表示中のタブへファイルを読み込んで差し替える。</summary>
@@ -1959,7 +1982,7 @@ public sealed partial class MainWindow : Window
 
         menu.Items.Add(new MenuFlyoutSeparator());
 
-        var export = new MenuFlyoutItem { Text = "選択行をエクスポート..." };
+        var export = new MenuFlyoutItem { Text = "選択行をファイルへエクスポート（lrc / rlf / txt 形式）..." };
         export.Click += OnExportFileClick;
         menu.Items.Add(export);
 
@@ -2082,7 +2105,7 @@ public sealed partial class MainWindow : Window
 
     private async void OnEmojiListClick(object sender, RoutedEventArgs e)
     {
-        var dialog = new EmojiListDialog(ViewModel.Settings, ViewModel.Document) { XamlRoot = Content.XamlRoot };
+        var dialog = new EmojiListDialog(ViewModel.Settings, ViewModel.Document, filter => ViewModel.BuildFontPickGroups(filter, forEmoji: true)) { XamlRoot = Content.XamlRoot };
         var result = await dialog.ShowAsync();
         if (result == ContentDialogResult.Primary)
         {

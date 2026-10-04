@@ -3,12 +3,26 @@
     xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
     xmlns:local="using:NicoKaraPrep.App.Views"
+    xmlns:vm="using:NicoKaraPrep.App.ViewModels"
     Title="@Emoji タグリスト編集"
     PrimaryButtonText="OK"
     CloseButtonText="キャンセル"
     DefaultButton="Primary">
 
-    <Grid RowSpacing="8" MinWidth="900">
+    <Grid x:Name="RootGrid" RowSpacing="8" MinWidth="900">
+        <Grid.Resources>
+            <!-- 「文字」の ▼ で開くフォント設定の一覧（行リストの右のフォント一覧と同じ並び・見た目） -->
+            <DataTemplate x:Key="FontNameItemTemplate" x:DataType="vm:FontPickItem">
+                <StackPanel Orientation="Horizontal" Spacing="6" Padding="0,2" ToolTipService.ToolTip="{x:Bind ToolTip}">
+                    <Border Width="10" Height="22" CornerRadius="2" BorderThickness="1" BorderBrush="{ThemeResource ControlStrokeColorDefaultBrush}" Background="{x:Bind After}" />
+                    <Border Width="10" Height="22" CornerRadius="2" BorderThickness="1" BorderBrush="{ThemeResource ControlStrokeColorDefaultBrush}" Background="{x:Bind Before}" />
+                    <TextBlock Text="{x:Bind Name}" VerticalAlignment="Center" />
+                </StackPanel>
+            </DataTemplate>
+            <DataTemplate x:Key="FontNameGroupTemplate" x:DataType="vm:FontPickGroup">
+                <TextBlock Text="{x:Bind Key}" FontSize="12" FontWeight="SemiBold" Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+            </DataTemplate>
+        </Grid.Resources>
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto" />
             <RowDefinition Height="Auto" />
@@ -96,12 +110,12 @@
             TextWrapping="Wrap"
             FontSize="12"
             Foreground="{ThemeResource TextFillColorSecondaryBrush}"
-            Text="上から20行にキー（1–0 / Q–P）が割り当てられます。21行目以降はパレットのリストからクリックで挿入できます。「曲専用」を付けた行はこの曲だけで有効、外すとアプリ共通に保存されます。" />
+            Text="上から20行にキー（1–0 / Q–P）が割り当てられます。21行目以降はパレットのリストからクリックで挿入できます。「曲専用」を付けた行はこの曲だけで有効、外すとアプリ共通に保存されます。「文字」は自由に入力できるほか、▼ でフォント設定の名前から選べます。" />
 
         <Grid Grid.Row="2" ColumnSpacing="6" Padding="4,0">
             <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="34" />
-                <ColumnDefinition Width="64" />
+                <ColumnDefinition Width="170" />
                 <ColumnDefinition Width="*" />
                 <ColumnDefinition Width="*" />
                 <ColumnDefinition Width="120" />
@@ -129,7 +143,7 @@
                     <Grid ColumnSpacing="6" Padding="0,2">
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="34" />
-                            <ColumnDefinition Width="64" />
+                            <ColumnDefinition Width="170" />
                             <ColumnDefinition Width="*" />
                             <ColumnDefinition Width="*" />
                             <ColumnDefinition Width="120" />
@@ -137,7 +151,24 @@
                             <ColumnDefinition Width="128" />
                         </Grid.ColumnDefinitions>
                         <TextBlock Text="{x:Bind KeyLabel, Mode=OneWay}" VerticalAlignment="Center" FontWeight="Bold" HorizontalAlignment="Center" />
-                        <TextBox Grid.Column="1" Text="{x:Bind ReplaceChar, Mode=TwoWay}" />
+                        <Grid Grid.Column="1" ColumnSpacing="2">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="Auto" />
+                            </Grid.ColumnDefinitions>
+                            <TextBox Text="{x:Bind ReplaceChar, Mode=TwoWay}" ToolTipService.ToolTip="画像に置き換える文字（自由に入力できます。右の ▼ でフォント設定の名前から選べます）" />
+                            <Button
+                                Grid.Column="1"
+                                Padding="6,4"
+                                MinWidth="0"
+                                VerticalAlignment="Stretch"
+                                Click="OnPickFontNameClick"
+                                Tag="{x:Bind}"
+                                AutomationProperties.Name="フォント設定の名前から選ぶ"
+                                ToolTipService.ToolTip="フォント設定の名前から選ぶ（ニコカラメーカー3 の「パート別にフォントを設定」では、この文字から先の歌詞が同じ名前のフォント設定になります）">
+                                <FontIcon Glyph="&#xE70D;" FontSize="10" />
+                            </Button>
+                        </Grid>
                         <Grid Grid.Column="2" ColumnSpacing="4">
                             <Grid.ColumnDefinitions>
                                 <ColumnDefinition Width="*" />

@@ -23,16 +23,21 @@ public partial class MainViewModel
     /// <summary>
     /// 書き出すフォント設定（書き出しの名前の並びにあるもの）を、この曲専用 → アプリ共通のフォルダごと（フォント設定ビューの階層の順）→
     /// フォルダに入っていないもの → ベースの n3proj にしか無いもの、の順にまとめる。<paramref name="filter"/> は名前の絞り込み（空なら全部）。
+    /// <paramref name="forEmoji"/> は絵文字のリストの「文字」に選ぶとき（書き出しでまとめない設定でも、にこぷれっぷのフォント設定を全部出す）。
     /// </summary>
-    public List<FontPickGroup> BuildFontPickGroups(string? filter)
+    public List<FontPickGroup> BuildFontPickGroups(string? filter, bool forEmoji = false)
     {
         var (names, _) = GetExportFontNames();
         var available = new HashSet<string>(names.Where(n => n.Length > 0), StringComparer.Ordinal);
         var own = new Dictionary<string, N3FontSet>(StringComparer.Ordinal);
-        if (N3ProjSettings.MergeFontSets)
+        if (N3ProjSettings.MergeFontSets || forEmoji)
         {
             foreach (var f in ExportFontSets) own.TryAdd(f.Name, f);
         }
+        if (forEmoji) available.UnionWith(own.Keys.Where(n => n.Length > 0));
+        string hint = forEmoji
+            ? "押すと、この名前を絵文字の「文字」に入れます"
+            : "押すと、選んだ文字（文字を選んでいなければ選んだ行）にこのフォント設定を指定します";
         var fromBase = new Dictionary<string, N3FontSet>(StringComparer.Ordinal);
         foreach (var f in GetBaseFontSets()) fromBase.TryAdd(f.Name, f);
 
@@ -52,7 +57,7 @@ public partial class MainViewModel
             }
             own.TryGetValue(name, out var o);
             fromBase.TryGetValue(name, out var b);
-            g.Add(new FontPickItem(name, Swatch(o, b, 0), Swatch(o, b, N3FontDetail.BeforeOffset), $"{name}（{where}）\n押すと、選んだ文字（文字を選んでいなければ選んだ行）にこのフォント設定を指定します"));
+            g.Add(new FontPickItem(name, Swatch(o, b, 0), Swatch(o, b, N3FontDetail.BeforeOffset), $"{name}（{where}）\n{hint}"));
         }
 
         foreach (var f in SongFontSets) Add("この曲専用", f.Name, "この曲専用");
@@ -67,7 +72,11 @@ public partial class MainViewModel
             if (node.FontId is { } id && byId.TryGetValue(id, out var font)) Add(current, font.Name, "アプリ共通");
         }
         foreach (var f in Settings.N3FontSets) Add(noFolder, f.Name, "アプリ共通");
-        foreach (string n in names) Add("ベースの n3proj だけにあるもの", n, "ベースの n3proj");
+        foreach (string n in names)
+        {
+            // 絵文字の文字には、フォント設定が無いときの仮の名前（「標準」）は出さない
+            if (!forEmoji || fromBase.ContainsKey(n)) Add("ベースの n3proj だけにあるもの", n, "ベースの n3proj");
+        }
         return groups;
     }
 }

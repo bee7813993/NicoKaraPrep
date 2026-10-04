@@ -557,6 +557,9 @@ public sealed partial class FontEditorViewModel : ObservableObject
     /// <summary>最近使った色に入れる（配色の編集欄から）。</summary>
     internal void AddRecentColor(string color, int alphaPercent) => _owner.AddRecentColor(color, alphaPercent);
 
+    /// <summary>ステータスバーに知らせる（配色の編集欄から）。</summary>
+    internal void SetStatus(string text) => _owner.Main.StatusText = text;
+
     partial void OnEditRoleTogetherChanged(bool value)
     {
         if (Font is null) return;

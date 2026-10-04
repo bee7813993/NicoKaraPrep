@@ -254,7 +254,7 @@
         <h3>7. 保存して、必要な行を書き出す</h3>
         <ul>
           <li><kbd>Ctrl+S</kbd> で上書き保存（rlf のまま保存され、RhythmicaLyrics でそのまま開けます）</li>
-          <li>必要な行を選択して <strong>選択行をエクスポート</strong>（<kbd>Ctrl+E</kbd>）で、ニコカラメーカー用の lrc を書き出します（11 章）</li>
+          <li>必要な行を選択して <strong>ファイル &gt; 選択行をファイルへエクスポート</strong>（<kbd>Ctrl+E</kbd>）で、ニコカラメーカー用の lrc を書き出します（11 章）</li>
         </ul>
       </section>
 
@@ -302,6 +302,7 @@
         <p>エンコーディングは自動判別します（Shift-JIS / UTF-8 / UTF-16）。</p>
 
         <h3>保存メニューの違い（タブ分離中は特に注意）</h3>
+        <p>ファイルメニューの保存・書き出しの項目には、書くファイルの形式が出ます。<strong>上書き保存</strong> と <strong>表示中のタブを上書き保存</strong> は保存先の形式（例: <code>上書き保存（タブ含む全行・rlf 形式）</code>。まだ保存先が無いときは出ません）、<strong>名前を付けて保存</strong> などは選べる形式（<code>lrc / rlf / txt 形式</code>）です。ニコカラメーカー3 のプロジェクトは <strong>ファイル &gt; ニコカラメーカー3 プロジェクトを書き出し（n3proj 形式）...</strong> で書きます（上書き保存は n3proj を書きません）。</p>
         <ul>
           <li><strong>上書き保存（タブ含む全行）</strong> … 分離したタブの行も<strong>時刻順にマージして</strong>元ファイルへ保存します。普段はこれを使えば行を失いません</li>
           <li><strong>表示中のタブを上書き保存</strong>（<kbd>Ctrl+Shift+S</kbd>） … 表示中のタブを前回「別ファイルへ保存」した先へそのまま上書きします（未保存なら保存ダイアログが開きます）。保存先はタブごとに記憶され、<code>.tttproj</code> にも保存されます</li>
@@ -335,7 +336,7 @@
         <p>アイコンの登録・編集はすべてこの画面で行います。</p>
         <ul>
           <li><strong>行の追加・複製・削除・並び替え</strong>（上下ボタン）。上から 20 行にキー <kbd>1</kbd>–<kbd>0</kbd> / <kbd>Q</kbd>–<kbd>P</kbd> が割り当てられます。21 行目以降もパレットのリストからクリックで挿入できます</li>
-          <li><strong>文字</strong>: 歌詞中でアイコンに置き換える文字列（例 <code>(歩夢)</code>）。複数文字も可</li>
+          <li><strong>文字</strong>: 歌詞中でアイコンに置き換える文字列（例 <code>(歩夢)</code>）。複数文字も可。自由に入力できるほか、右の <strong>▼</strong> でフォント設定の名前から選べます（名前で絞り込めます。フォント設定と同じ名前にすると、ニコカラメーカー3 の「パート別にフォントを設定」でその記号から先の歌詞がそのフォント設定になります）</li>
           <li><strong>ワイプ前 / ワイプ後画像</strong>: ニコカラメーカーの @Emoji と同じ意味です（ワイプ後は省略可）</li>
           <li><strong>オプション</strong>: <code>NoDecor,Zoom=150,MarginRight=20</code> のような @Emoji オプション文字列</li>
           <li><strong>曲専用</strong>: チェックを付けた行はこの曲だけで有効（<code>.tttproj</code> に保存）。外すとアプリ共通（グローバル）</li>
@@ -516,7 +517,7 @@
 
         <h3>エクスポートと済マーク</h3>
         <ul>
-          <li>行を選択して <strong>選択行をエクスポート</strong>（<kbd>Ctrl+E</kbd>、lrc / rlf / txt）または <strong>クリップボードへエクスポート</strong>（テキスト編集モード形式）</li>
+          <li>行を選択して <strong>ファイル &gt; 選択行をファイルへエクスポート</strong>（<kbd>Ctrl+E</kbd>、lrc / rlf / txt。行リストの右クリックでも）または <strong>エクスポート &gt; 選択行をクリップボードへエクスポート</strong>（テキスト編集モード形式）</li>
           <li>エクスポートした行には ✓ <strong>済マーク</strong>が付き、グレー表示になります（元データからは消えません）</li>
           <li><strong>未エクスポート行をすべて選択</strong> → 残りをまとめて出力、<strong>済マークを解除</strong> も可能です</li>
           <li>lrc 出力時は、使用中のアイコンの <code>@Emoji=</code> タグをヘッダへ自動出力します</li>
@@ -595,7 +596,7 @@
               <tr><td><kbd>Ctrl+O</kbd> / <kbd>Ctrl+S</kbd></td><td>開く / 上書き保存（全行マージ）</td></tr>
               <tr><td><kbd>Ctrl+Shift+S</kbd></td><td>表示中のタブを上書き保存</td></tr>
               <tr><td><kbd>Ctrl+Shift+V</kbd> / <kbd>Ctrl+Shift+C</kbd></td><td>テキスト編集モード形式の貼り付け / コピー</td></tr>
-              <tr><td><kbd>Ctrl+E</kbd></td><td>選択行をエクスポート</td></tr>
+              <tr><td><kbd>Ctrl+E</kbd></td><td>選択行をファイルへエクスポート</td></tr>
               <tr><td><kbd>Ctrl+T</kbd></td><td>選択行を新しいタブへ分離</td></tr>
               <tr><td><kbd>Ctrl+Z</kbd> / <kbd>Ctrl+Y</kbd></td><td>元に戻す / やり直し</td></tr>
               <tr><td><kbd>Ctrl+Enter</kbd> / <kbd>Ctrl+J</kbd> / <kbd>Ctrl+Shift+J</kbd></td><td>行分割 / 行結合 / スペースを挟んで結合</td></tr>

@@ -67,6 +67,7 @@ public sealed partial class EmojiListDialog : ContentDialog
 {
     private readonly AppSettings _settings;
     private readonly LyricsDocument _document;
+    private readonly Func<string?, List<FontPickGroup>>? _fontGroups;
     private EmojiSlotRow? _previewRow;
 
     public ObservableCollection<EmojiSlotRow> Rows { get; } = new();
@@ -74,10 +75,12 @@ public sealed partial class EmojiListDialog : ContentDialog
     /// <summary>OK で曲側のリストが変更されたかどうか。</summary>
     public bool SongListChanged { get; private set; }
 
-    public EmojiListDialog(AppSettings settings, LyricsDocument document)
+    /// <param name="fontGroups">「文字」の ▼ で出すフォント設定の名前の一覧（引数は名前の絞り込み。null なら ▼ で何も出さない）。</param>
+    public EmojiListDialog(AppSettings settings, LyricsDocument document, Func<string?, List<FontPickGroup>>? fontGroups = null)
     {
         _settings = settings;
         _document = document;
+        _fontGroups = fontGroups;
 
         // ContentDialog の既定最大幅(約548px)ではリストが右側で見切れるため広げる
         Resources["ContentDialogMaxWidth"] = 1150d;
@@ -190,6 +193,61 @@ public sealed partial class EmojiListDialog : ContentDialog
         Rows.Move(index, target);
         UpdateKeyLabels();
         SlotList.SelectedItem = row;
+    }
+
+    // ------------------------------------------------------------ 文字をフォント設定の名前から選ぶ
+
+    /// <summary>「文字」の ▼: フォント設定の名前の一覧（名前で絞り込める）を出し、押した名前をその行の文字にする。</summary>
+    private void OnPickFontNameClick(object sender, RoutedEventArgs e)
+    {
+        if (sender is not FrameworkElement target || target.Tag is not EmojiSlotRow row) return;
+        SlotList.SelectedItem = row;
+
+        var search = new TextBox { PlaceholderText = "名前で絞り込み" };
+        var empty = new TextBlock
+        {
+            TextWrapping = TextWrapping.Wrap,
+            FontSize = 12,
+            Foreground = (Microsoft.UI.Xaml.Media.Brush)Application.Current.Resources["TextFillColorSecondaryBrush"],
+        };
+        var source = new Microsoft.UI.Xaml.Data.CollectionViewSource { IsSourceGrouped = true };
+        var list = new ListView
+        {
+            SelectionMode = ListViewSelectionMode.None,
+            IsItemClickEnabled = true,
+            MaxHeight = 420,
+            ItemTemplate = (DataTemplate)RootGrid.Resources["FontNameItemTemplate"],
+        };
+        list.GroupStyle.Add(new GroupStyle { HeaderTemplate = (DataTemplate)RootGrid.Resources["FontNameGroupTemplate"] });
+
+        void Fill()
+        {
+            var groups = _fontGroups?.Invoke(search.Text) ?? new List<FontPickGroup>();
+            source.Source = groups;
+            list.ItemsSource = source.View;
+            bool none = groups.Count == 0;
+            empty.Text = search.Text.Trim().Length > 0
+                ? "当てはまるフォント設定がありません"
+                : "フォント設定がありません（フォント設定ビュー（F3）で作れます）";
+            empty.Visibility = none ? Visibility.Visible : Visibility.Collapsed;
+            list.Visibility = none ? Visibility.Collapsed : Visibility.Visible;
+        }
+        Fill();
+
+        var panel = new StackPanel { Spacing = 8, Width = 280 };
+        panel.Children.Add(search);
+        panel.Children.Add(empty);
+        panel.Children.Add(list);
+        var flyout = new Flyout { Content = panel, Placement = Microsoft.UI.Xaml.Controls.Primitives.FlyoutPlacementMode.BottomEdgeAlignedLeft };
+        search.TextChanged += (_, _) => Fill();
+        list.ItemClick += (_, args) =>
+        {
+            if (args.ClickedItem is not FontPickItem item) return;
+            row.ReplaceChar = item.Name;
+            flyout.Hide();
+        };
+        flyout.Opened += (_, _) => search.Focus(FocusState.Programmatic);
+        flyout.ShowAt(target);
     }
 
     // ------------------------------------------------------------ プレビュー

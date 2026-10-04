@@ -147,9 +147,25 @@
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="*" />
                     <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="Auto" />
                 </Grid.ColumnDefinitions>
                 <TextBlock Text="フォント設定" Style="{StaticResource SectionTitle}" VerticalAlignment="Center" />
-                <Button x:Name="BackButton" Grid.Column="1" Content="行リストへ戻る (Esc)" FontSize="12" Padding="8,3" Click="OnBackClick" />
+                <!-- 一覧全体の操作（まとめて消す・控えから戻す。選んだものへの操作は一覧の下のボタン） -->
+                <Button
+                    x:Name="MoreButton"
+                    Grid.Column="1"
+                    Padding="8,5"
+                    AutomationProperties.Name="その他"
+                    ToolTipService.ToolTip="その他（フォント設定をまとめて消す・消す前の控えから戻す）">
+                    <FontIcon Glyph="&#xE712;" FontSize="12" />
+                    <Button.Flyout>
+                        <MenuFlyout Placement="BottomEdgeAlignedRight">
+                            <MenuFlyoutItem x:Name="ClearAllItem" Text="まとめて消す..." Click="OnClearAllClick" ToolTipService.ToolTip="アプリ共通・この曲専用のフォント設定などを、種類を選んでまとめて消します（消す前の内容は控えに保存します）" />
+                            <MenuFlyoutItem x:Name="RestoreBackupItem" Text="消す前の控えから戻す..." Click="OnRestoreBackupClick" ToolTipService.ToolTip="「まとめて消す」で保存した控えを選んで、消す前の内容に戻します" />
+                        </MenuFlyout>
+                    </Button.Flyout>
+                </Button>
+                <Button x:Name="BackButton" Grid.Column="2" Content="行リストへ戻る (Esc)" FontSize="12" Padding="8,3" Click="OnBackClick" />
             </Grid>
             <TextBox
                 x:Name="SearchBox"

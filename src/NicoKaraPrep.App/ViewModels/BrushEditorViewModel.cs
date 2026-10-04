@@ -347,7 +347,8 @@ public sealed partial class BrushEditorViewModel : ObservableObject
     private void ApplyColor(string? hex, int? alpha, ColorSource source)
     {
         if (Model is not { } b) return;
-        bool separate = source == ColorSource.Palette;
+        bool separate = source is ColorSource.Palette or ColorSource.Screen;
+        bool recent = source != ColorSource.Palette;
         if (IsSolid)
         {
             Edit(separate ? null : Key("color"), x =>
@@ -359,7 +360,7 @@ public sealed partial class BrushEditorViewModel : ObservableObject
             SyncColorFields(b.Color, b.AlphaPercent, source);
             IsColorUnset = false;
             ColorTargetText = "単色の色";
-            if (!separate) NoteRecent(b.Color, b.AlphaPercent);
+            if (recent) NoteRecent(b.Color, b.AlphaPercent);
         }
         else if (IsStops && SelectedStop is { } s)
         {
@@ -371,18 +372,38 @@ public sealed partial class BrushEditorViewModel : ObservableObject
             });
             SyncColorFields(stop.Color, stop.AlphaPercent, source);
             s.Refresh();
-            if (!separate) NoteRecent(stop.Color, stop.AlphaPercent);
+            if (recent) NoteRecent(stop.Color, stop.AlphaPercent);
         }
     }
 
-    /// <summary>色を変えた欄（<see cref="Palette"/> は使っている色の一覧。どの欄にも書き戻す）。</summary>
+    /// <summary>
+    /// 色を変えた欄（<see cref="Palette"/> は使っている色の一覧、<see cref="Screen"/> はスポイト。どちらもどの欄にも書き戻し、
+    /// ColorPicker の操作とまとめず 1 回の 元に戻す で戻る）。
+    /// </summary>
     private enum ColorSource
     {
         Picker,
         Hex,
         Alpha,
         Palette,
+        Screen,
     }
+
+    /// <summary>
+    /// スポイトで画面から拾った色を当てる（不透明度は今のまま）。単色ならその色に、選んでいるマーカーがあればマーカーの色にし、
+    /// 最近使った色にすぐ入れる。同じ役割でまとめて変える箇所にも入る。
+    /// </summary>
+    public void ApplyScreenColor(Color color)
+    {
+        if (Model is null || !(IsSolid || (IsStops && SelectedStop is not null))) return;
+        string hex = N3BrushPreview.ToWeb16(color);
+        ApplyColor(hex, null, ColorSource.Screen);
+        FlushRecent();
+        _editor.SetStatus($"スポイトで拾った色 #{hex} にしました（Ctrl+Z で元に戻せます）");
+    }
+
+    /// <summary>スポイトを始められなかったことを知らせる。</summary>
+    public void ReportScreenColorError(string message) => _editor.SetStatus($"エラー: 画面から色を拾えませんでした（{message}）");
 
     // ------------------------------------------------------------ 使っている色
 
