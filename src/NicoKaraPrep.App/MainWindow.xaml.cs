@@ -711,13 +711,15 @@ public sealed partial class MainWindow : Window
     {
         var dialog = new SettingsDialog(ViewModel.Settings) { XamlRoot = Content.XamlRoot };
         var result = await dialog.ShowAsync();
-        if (result == ContentDialogResult.Primary)
+        // 「Claude と連携...」で閉じたときも設定は保存済み
+        if (result == ContentDialogResult.Primary || dialog.OpenClaudeLinkRequested)
         {
             LoadQuickEmojiSettings();
             ApplyMcpEnabled();
             TryRun(ViewModel.RunValidation);
             RefreshLineFontPlaceholder();
         }
+        if (dialog.OpenClaudeLinkRequested) await ShowClaudeLinkDialogAsync();
     }
 
     // ------------------------------------------ パレットの絵文字挿入クイック設定

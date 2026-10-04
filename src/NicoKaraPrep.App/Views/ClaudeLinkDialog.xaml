@@ -1,0 +1,112 @@
+﻿<ContentDialog
+    x:Class="NicoKaraPrep.App.Views.ClaudeLinkDialog"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    Title="Claude と連携"
+    CloseButtonText="閉じる">
+
+    <ScrollViewer MaxHeight="600">
+        <StackPanel Spacing="12" MinWidth="460">
+            <TextBlock
+                TextWrapping="Wrap"
+                Text="Claude（Anthropic の AI）から、起動中のにこぷれっぷを操作できるようにします。使っている Claude のボタンを押してください。登録は 1 回だけで、あとはにこぷれっぷを起動しておけば Claude から使えます。" />
+
+            <!-- MCP サーバーを止めているときだけ出す -->
+            <InfoBar
+                x:Name="McpOffBar"
+                Severity="Warning"
+                IsClosable="False"
+                Title="MCP サーバーが止まっています"
+                Message="このままでは Claude からつながりません。">
+                <InfoBar.ActionButton>
+                    <Button x:Name="EnableMcpButton" Content="有効にする" Click="OnEnableMcpClick" />
+                </InfoBar.ActionButton>
+            </InfoBar>
+
+            <!-- 登録のボタン（同じ重さの操作なので横に並べる。下にそれぞれの今の状態） -->
+            <Grid ColumnSpacing="12" RowSpacing="6">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="*" />
+                </Grid.ColumnDefinitions>
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="Auto" />
+                </Grid.RowDefinitions>
+                <TextBlock TextWrapping="Wrap" Style="{ThemeResource BodyStrongTextBlockStyle}" Text="Claude Desktop のチャットで使う" />
+                <TextBlock Grid.Column="1" TextWrapping="Wrap" Style="{ThemeResource BodyStrongTextBlockStyle}" Text="Claude Code で使う（Claude Desktop の Code タブも）" />
+                <Button
+                    x:Name="DesktopButton"
+                    Grid.Row="1"
+                    HorizontalAlignment="Stretch"
+                    Style="{ThemeResource AccentButtonStyle}"
+                    Content="Claude Desktop に追加"
+                    Click="OnDesktopClick" />
+                <Button
+                    x:Name="CodeButton"
+                    Grid.Row="1"
+                    Grid.Column="1"
+                    HorizontalAlignment="Stretch"
+                    Style="{ThemeResource AccentButtonStyle}"
+                    Content="Claude Code に登録"
+                    Click="OnCodeClick" />
+                <TextBlock
+                    x:Name="DesktopStatusText"
+                    Grid.Row="2"
+                    TextWrapping="Wrap"
+                    Style="{ThemeResource CaptionTextBlockStyle}"
+                    Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                    Text="状態を調べています…" />
+                <TextBlock
+                    x:Name="CodeStatusText"
+                    Grid.Row="2"
+                    Grid.Column="1"
+                    TextWrapping="Wrap"
+                    Style="{ThemeResource CaptionTextBlockStyle}"
+                    Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                    Text="状態を調べています…" />
+            </Grid>
+
+            <!-- ボタンの結果（失敗したときは、claude の出力を中に出す） -->
+            <InfoBar x:Name="ResultBar" IsClosable="True" />
+
+            <!-- 手作業の登録（ボタンでうまくいかないとき） -->
+            <Expander
+                x:Name="ManualExpander"
+                Header="うまくいかないとき（手作業で登録する）"
+                HorizontalAlignment="Stretch"
+                HorizontalContentAlignment="Stretch">
+                <StackPanel Spacing="8">
+                    <TextBlock TextWrapping="Wrap" Text="Claude Desktop: 拡張機能のファイル（nicokaraprep.mcpb）を作って、Claude Desktop の 設定 → 拡張機能 の画面へドラッグして入れます。" />
+                    <Button x:Name="McpbFolderButton" Content="拡張機能のファイルを作って場所を開く" Click="OnMcpbFolderClick" />
+
+                    <TextBlock TextWrapping="Wrap" Margin="0,8,0,0" Text="Claude Code: 次のコマンドを PowerShell かコマンドプロンプトに貼り付けて、1 回だけ実行します。" />
+                    <Grid ColumnSpacing="8">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
+                        <TextBox x:Name="McpCommandBox" IsReadOnly="True" TextWrapping="Wrap" FontFamily="Consolas" FontSize="12" />
+                        <Button x:Name="McpCommandCopyButton" Grid.Column="1" Content="コピー" MinWidth="128" VerticalAlignment="Top" Click="OnCopyMcpCommandClick" />
+                    </Grid>
+                    <TextBlock
+                        TextWrapping="Wrap"
+                        Style="{ThemeResource CaptionTextBlockStyle}"
+                        Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                        Text="「claude」が見つからないと言われたときは、claude.exe をフルパスで書きます（例: %USERPROFILE%\.local\bin\claude.exe。PowerShell では先頭に &amp; を付けて &amp; &quot;フルパス&quot; mcp add ...）。" />
+
+                    <TextBlock TextWrapping="Wrap" Margin="0,8,0,0" Text="Claude Desktop の構成ファイル（claude_desktop_config.json）に書く場合は、mcpServers の中に次を書きます。" />
+                    <Grid ColumnSpacing="8">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
+                        <TextBox x:Name="McpDesktopBox" IsReadOnly="True" TextWrapping="Wrap" AcceptsReturn="True" FontFamily="Consolas" FontSize="12" />
+                        <Button x:Name="McpDesktopCopyButton" Grid.Column="1" Content="コピー" MinWidth="128" VerticalAlignment="Top" Click="OnCopyMcpDesktopClick" />
+                    </Grid>
+                </StackPanel>
+            </Expander>
+        </StackPanel>
+    </ScrollViewer>
+</ContentDialog>

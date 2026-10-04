@@ -49,7 +49,10 @@ RhythmicaLyrics で作成したタイムタグ付き歌詞を、ニコカラメ�
 - **行エクスポート（切り出し）**: 選択行を lrc / rlf / クリップボードへ書き出し。エクスポート済み行には ✓ 済マークが付き、未エクスポート行だけを次回まとめて選択できます（済マークは `.tttproj` に保存）
 - **メディア再生**: 動画 / 音源を再生しながら編集。再生位置の行を自動ハイライト、行ダブルクリックでシーク（Ctrl+Space 再生/一時停止、Ctrl+←/→ 5 秒シーク）
 - **狭い・低い画面（FHD など）**: 動画を右の列（右のパネルの上）に置いて行リストを縦いっぱいに使える（表示メニュー。既定の自動では窓が低いときだけ右の列）。ウィンドウが低いときは動画を自動で縮めて行リストを残し、狭いときは行リストの横幅を 2 段にして歌詞の欄を広く取る。右の列の幅はつまみで変えられ、右のパネルは隠せる
-- **MCP（Claude などからの操作）**: MCP クライアント（Claude Code・Claude Desktop など）に `--mcp` 付きで登録すると、起動中のアプリを操作できる（マニュアル 18 章）。ストア版は実行エイリアス `nicokaraprep.exe`（`%LOCALAPPDATA%\Microsoft\WindowsApps`、更新しても同じ）、zip 版は exe の場所で登録する。登録のコマンドと Claude Desktop 用の設定は ファイル > 設定 の MCP の欄に出てコピーできる
+- **MCP（Claude などからの操作）**: MCP クライアント（Claude Code・Claude Desktop など）に `--mcp` 付きで登録すると、起動中のアプリを操作できる（マニュアル 18 章）。ストア版は実行エイリアス `nicokaraprep.exe`（`%LOCALAPPDATA%\Microsoft\WindowsApps`、更新しても同じ）、zip 版は exe の場所で登録する。登録は ファイル > Claude と連携 のボタン 1 つで行える
+  - 「Claude Desktop に追加」: 拡張機能のファイル（`nicokaraprep.mcpb`。manifest.json とアイコンだけで、この exe を `--mcp` で起動する）をダウンロード フォルダに作り、Claude Desktop の実行エイリアス `claude-desktop.exe` に渡す（Claude Desktop が「拡張機能をインストールしますか？」を出す。ストア版の Claude Desktop は .mcpb の関連付けを持たないため、ダブルクリックではなく引数で渡す）。入ったかは Claude Desktop の拡張機能のフォルダを読んで確かめ、画面で知らせる
+  - 「Claude Code に登録」: claude.exe（PATH・`%USERPROFILE%\.local\bin`・npm・Claude Desktop に入っているもの）を探して `claude mcp add --scope user nicokaraprep -- "exe" --mcp` を実行し（別の exe が登録されていれば消してから）、`~/.claude.json` を読み直して確かめる
+  - 手作業の登録（コマンド・Claude Desktop の構成ファイルに書く内容のコピー）は、その画面の「うまくいかないとき」の中
   - 21 の操作: 状態・行の一覧・全文・チェックの読み取り、字幕のプレビューの画像（PNG）、ファイルを開く・n3proj の読み込み・保存・n3proj の書き出し、表示時刻のパラメーターと自動調整、行の表示時刻・フォント（行・文字）・ページのレイアウト・文字の大きさの指定と解除、元に戻す・やり直し、行を選ぶ
   - アプリの中の MCP サーバー（公式の C# SDK）が、同じユーザーだけがつながる名前付きパイプで待ち受け、`--mcp` の橋渡し（標準入出力）がクライアントとのあいだを取り次ぐ。アプリが起動していないあいだも橋渡しは応答し（操作には「起動していません」と答える）、起動したあとの操作からつながる
   - 操作はすべて UI スレッドで 1 件ずつ、画面の操作と同じ処理を通す（画面にすぐ出る・1 回の操作は Ctrl+Z 1 回で戻る・ステータスバーに「MCP:」を付けて出す）。ダイアログを開いているあいだは書き込みを断る。ファイル > 設定 で止められる
@@ -69,6 +72,8 @@ dotnet publish src/NicoKaraPrep.App -c Release -r win-x64 -p:Platform=x64 --self
 `publish\NicoKaraPrep.exe` を実行します（Windows App SDK ランタイム同梱）。
 
 検証で起動するときは、利用者の設定を読み書きしないよう、環境変数 `NICOKARAPREP_APPDATA` に作業用のフォルダを入れます（設定と crash.log の置き場所になります）。`--debug-hidden` を付けるとウィンドウを出さずに起動するので、MCP の操作の確認を画面とキーボードを使わずに行えます。
+
+「Claude と連携」の処理は、画面を出さずに `NicoKaraPrep.exe --claude-link status | code | mcpb [フォルダ] | desktop [フォルダ]` で試せます（結果は標準出力に JSON。出力をリダイレクトして使う）。`code` は Claude Code の設定に書き込むので、試すときは環境変数 `CLAUDE_CONFIG_DIR` に作業用のフォルダを入れます（Claude Code の設定ファイル `.claude.json` の置き場所になります）。`desktop` は実際の Claude Desktop にインストールの確認を出します。
 
 ### Microsoft Store 提出用 MSIX パッケージ
 
@@ -104,7 +109,8 @@ msbuild src/NicoKaraPrep.App/NicoKaraPrep.App.csproj /restore /p:Configuration=R
 ```
 src/NicoKaraPrep.Core    データモデル・フォーマット(lrc/rlf/テキスト編集モード)・検証・エクスポート
 src/NicoKaraPrep.App     WinUI 3 アプリ本体（Program.cs: 起動の入口。--mcp の橋渡し・単一インスタンス）
-  Services/Mcp          MCP サーバー（McpHost: 名前付きパイプ、NkpTools: 操作の定義）と橋渡し（McpBridge）
+  Services/Mcp          MCP サーバー（McpHost: 名前付きパイプ、NkpTools: 操作の定義）と橋渡し（McpBridge）、
+                        Claude への登録（ClaudeLink: Claude Code・Claude Desktop。画面は Views/ClaudeLinkDialog）
   MainWindow.Mcp.cs     操作の処理（UI スレッドで 1 件ずつ）
 tests/                  xUnit テスト（ラウンドトリップ中心）
 資料/                    RhythmicaLyrics v64 ソース（フォーマット解析の参照元）

@@ -11,6 +11,7 @@ namespace NicoKaraPrep.App;
 /// 起動の入口（XAML が生成する Main の代わり。csproj の DISABLE_XAML_GENERATED_MAIN）。
 /// ・<c>--mcp</c> 付きで起動されたときは、画面を出さずに MCP の橋渡し（標準入出力 ⇄ 起動中の本体の名前付きパイプ）として動く
 /// 　（Claude Code などの MCP クライアントに「NicoKaraPrep.exe --mcp」を登録する。<see cref="McpBridge"/>）。
+/// ・<c>--claude-link</c> 付きは検証用: 画面を出さずに「Claude と連携」の画面と同じ処理（状態・Claude Code への登録・拡張機能のファイル）をする（<see cref="ClaudeLink"/>）。
 /// ・それ以外は 1 つのインスタンスだけを動かす。すでに起動していれば、引数（開くファイル）をそちらへ渡して終わる
 /// 　（同じ場所の exe ごと。別のフォルダのビルドは別のインスタンスとして動く。<see cref="McpInfo.InstanceKey"/>）。
 /// </summary>
@@ -19,6 +20,7 @@ public static class Program
     [STAThread]
     private static int Main(string[] args)
     {
+        if (ClaudeLink.IsCliInvocation(args)) return ClaudeLink.RunCli(args); // 検証用（Claude と連携の画面と同じ処理）
         if (McpBridge.IsBridgeInvocation(args)) return McpBridge.Run(args);
         return RunApp();
     }

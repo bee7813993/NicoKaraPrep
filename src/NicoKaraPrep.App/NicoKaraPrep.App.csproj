@@ -48,6 +48,8 @@
     </Content>
     <!-- MSIX パッケージ用ロゴ（Package.appxmanifest から参照） -->
     <Content Include="Assets\*.png" />
+    <!-- Claude Desktop の拡張機能（nicokaraprep.mcpb）に入れるアイコン（Services\Mcp\ClaudeLink.cs） -->
+    <EmbeddedResource Include="Assets\Square44x44Logo.targetsize-256.png" LogicalName="NicoKaraPrep.McpbIcon.png" />
   </ItemGroup>
 
 </Project>

@@ -68,6 +68,7 @@
                     <MenuFlyoutSeparator />
                     <MenuFlyoutItem Text="設定..." Click="OnSettingsClick" />
                     <MenuFlyoutItem Text="キー割り当て（挿入ビュー）..." Click="OnKeyBindingsClick" />
+                    <MenuFlyoutItem Text="Claude と連携..." Click="OnClaudeLinkClick" ToolTipService.ToolTip="Claude（Claude Desktop・Claude Code）から、このアプリを操作できるように登録します" />
                 </MenuBarItem>
                 <MenuBarItem Title="編集(E)" AccessKey="E">
                     <MenuFlyoutItem Text="元に戻す" Click="OnUndoClick">

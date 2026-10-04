@@ -88,9 +88,38 @@ public sealed partial class MainWindow
         }
         string tip = _mcpClients > 0
             ? $"Claude などの MCP クライアントがつながっています（{_mcpClients} 件）。MCP からの操作はステータスバーに「MCP:」を付けて出し、Ctrl+Z で戻せます"
-            : "Claude などの MCP クライアントからの接続を待っています（クライアントに「NicoKaraPrep.exe --mcp」を登録します。ファイル > 設定 で止められます）";
+            : "Claude などの MCP クライアントからの接続を待っています（Claude への登録は ファイル > Claude と連携... から。ファイル > 設定 で止められます）";
         if (_mcpLastTool is not null) tip += $"\n最後の操作: {_mcpLastTool}（{_mcpLastTime:HH:mm:ss}）";
         ToolTipService.SetToolTip(McpStatusText, tip);
+    }
+
+    // ------------------------------------------------------------ Claude と連携（登録の画面）
+
+    private async void OnClaudeLinkClick(object sender, Microsoft.UI.Xaml.RoutedEventArgs e) => await ShowClaudeLinkDialogAsync();
+
+    /// <summary>「Claude と連携」の画面（Claude Desktop・Claude Code への登録をボタン 1 つで行う）を開く。</summary>
+    private async Task ShowClaudeLinkDialogAsync()
+    {
+        if (IsModalDialogOpen()) return;
+        var dialog = new ClaudeLinkDialog(
+            () => ViewModel.Settings.McpEnabled,
+            () =>
+            {
+                ViewModel.Settings.McpEnabled = true;
+                ViewModel.Settings.Save();
+                ApplyMcpEnabled();
+            })
+        {
+            XamlRoot = Content.XamlRoot,
+        };
+        try
+        {
+            await dialog.ShowAsync();
+        }
+        catch (Exception ex)
+        {
+            ViewModel.StatusText = $"Claude と連携の画面を開けません: {ErrorText.Describe(ex)}";
+        }
     }
 
     // ------------------------------------------------------------ 道具の処理の入口

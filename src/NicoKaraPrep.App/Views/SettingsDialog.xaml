@@ -46,28 +46,18 @@
 
             <TextBlock Text="MCP（Claude などからの操作）" Style="{ThemeResource SubtitleTextBlockStyle}" Margin="0,8,0,0" />
             <TextBlock TextWrapping="Wrap" Style="{ThemeResource CaptionTextBlockStyle}" Foreground="{ThemeResource TextFillColorSecondaryBrush}"
-                       Text="Claude Code などの MCP クライアントに登録すると、起動中のこのアプリを Claude から操作できます（同じ Windows ユーザーのプログラムだけがつながります。詳しくはマニュアルの MCP の章）。" />
+                       Text="Claude に登録すると、起動中のこのアプリを Claude から操作できます（同じ Windows ユーザーのプログラムだけがつながります。詳しくはマニュアルの MCP の章）。" />
             <CheckBox x:Name="McpBox" Content="MCP サーバーを有効にする" />
-            <TextBlock TextWrapping="Wrap" Text="Claude Code に登録するコマンド（PowerShell かコマンドプロンプトに貼り付けて、1 回だけ実行します）" />
-            <Grid ColumnSpacing="8">
+            <!-- 登録の画面は別（ContentDialog は重ねて開けないので、設定を保存して閉じてから MainWindow が開く） -->
+            <Grid ColumnSpacing="12">
                 <Grid.ColumnDefinitions>
-                    <ColumnDefinition Width="*" />
                     <ColumnDefinition Width="Auto" />
-                </Grid.ColumnDefinitions>
-                <TextBox x:Name="McpCommandBox" IsReadOnly="True" TextWrapping="Wrap" FontFamily="Consolas" FontSize="12" />
-                <Button x:Name="McpCommandCopyButton" Grid.Column="1" Content="コピー" MinWidth="128" VerticalAlignment="Top" Click="OnCopyMcpCommandClick" />
-            </Grid>
-            <TextBlock TextWrapping="Wrap" Text="Claude Desktop（チャット）の場合: 構成ファイル（claude_desktop_config.json）の mcpServers の中に書く内容" />
-            <Grid ColumnSpacing="8">
-                <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="*" />
-                    <ColumnDefinition Width="Auto" />
                 </Grid.ColumnDefinitions>
-                <TextBox x:Name="McpDesktopBox" IsReadOnly="True" TextWrapping="Wrap" AcceptsReturn="True" FontFamily="Consolas" FontSize="12" />
-                <Button x:Name="McpDesktopCopyButton" Grid.Column="1" Content="コピー" MinWidth="128" VerticalAlignment="Top" Click="OnCopyMcpDesktopClick" />
+                <Button x:Name="ClaudeLinkButton" Content="Claude と連携..." VerticalAlignment="Center" Click="OnClaudeLinkClick" />
+                <TextBlock Grid.Column="1" VerticalAlignment="Center" TextWrapping="Wrap" Style="{ThemeResource CaptionTextBlockStyle}" Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                           Text="設定を保存して、Claude に登録する画面を開きます（ファイル > Claude と連携... と同じ）。" />
             </Grid>
-            <TextBlock TextWrapping="Wrap" Style="{ThemeResource CaptionTextBlockStyle}" Foreground="{ThemeResource TextFillColorSecondaryBrush}"
-                       Text="登録したあとに始めた Claude の会話から使えます。「claude」が見つからないと言われたときは、claude.exe をフルパスで書きます（例: %USERPROFILE%\.local\bin\claude.exe。PowerShell では先頭に &amp; を付けて &amp; &quot;フルパス&quot; mcp add ...）。" />
 
         </StackPanel>
     </ScrollViewer>
