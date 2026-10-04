@@ -811,15 +811,14 @@ public partial class MainViewModel : ObservableObject
     }
 
     /// <summary>
-    /// 行の歌詞を生テキストで置き換える（元に戻すの記録は呼び出し側）。行の手動指定・文字ごとのフォント・ページの文字の大きさ・タブ分離の位置は引き継ぐ。
+    /// 行の歌詞を生テキストで置き換える（元に戻すの記録は呼び出し側）。文字ごとのフォントは同じ文字へ、
+    /// 行の設定（表示時刻・フォント・ページの文字の大きさ・タブ分離の元の位置）は <see cref="LineViewModel.ReplaceModel"/> で引き継ぐ。
     /// </summary>
     private LyricsLine ReplaceLineText(int index, string rawText)
     {
         var old = Document.Lines[index];
         var newLine = TextEditModeFormat.ParseLyricLine(rawText);
         CharFontOperations.CopyCharFonts(old, newLine);
-        newLine.FontSizeDelta = old.FontSizeDelta;
-        newLine.SplitOrderKey = old.SplitOrderKey;
         Document.Lines[index] = newLine;
         Lines[index].ReplaceModel(newLine);
         return newLine;
