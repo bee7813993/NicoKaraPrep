@@ -16,10 +16,10 @@
             Foreground="{ThemeResource TextFillColorSecondaryBrush}"
             Text="消す種類を選んでください。消す前の内容は控えに保存するので、あとで一覧の上の「…」>「消す前の控えから戻す...」で戻せます（フォント設定とフォルダ分けは Ctrl+Z でも戻せます）。" />
         <StackPanel Spacing="2">
-            <CheckBox x:Name="CommonBox" Click="OnChoiceClick" />
-            <CheckBox x:Name="SongBox" Click="OnChoiceClick" />
-            <CheckBox x:Name="PatternsBox" Click="OnChoiceClick" />
-            <CheckBox x:Name="RecentBox" Click="OnChoiceClick" />
+            <CheckBox x:Name="CommonBox" Checked="OnChoiceChanged" Unchecked="OnChoiceChanged" />
+            <CheckBox x:Name="SongBox" Checked="OnChoiceChanged" Unchecked="OnChoiceChanged" />
+            <CheckBox x:Name="PatternsBox" Checked="OnChoiceChanged" Unchecked="OnChoiceChanged" />
+            <CheckBox x:Name="RecentBox" Checked="OnChoiceChanged" Unchecked="OnChoiceChanged" />
         </StackPanel>
         <TextBlock
             TextWrapping="Wrap"

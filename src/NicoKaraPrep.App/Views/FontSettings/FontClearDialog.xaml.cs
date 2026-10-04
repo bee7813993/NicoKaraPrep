@@ -40,5 +40,5 @@ public sealed partial class FontClearDialog : ContentDialog
         PatternsBox.IsChecked == true,
         RecentBox.IsChecked == true);
 
-    private void OnChoiceClick(object sender, RoutedEventArgs e) => IsPrimaryButtonEnabled = Current().Any;
+    private void OnChoiceChanged(object sender, RoutedEventArgs e) => IsPrimaryButtonEnabled = Current().Any;
 }
