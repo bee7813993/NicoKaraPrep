@@ -149,6 +149,100 @@ public class LineOperationsTests
         Assert.Equal("う", doc.Lines[2].GetDisplayText());
     }
 
+    /// <summary>行エディタの「適用」と同じ手順（読み直した行に、文字ごとのフォントと行の設定を写して置き換える）。</summary>
+    private static void ReplaceLineText(LyricsDocument doc, int index, string rawText)
+    {
+        var newLine = TextEditModeFormat.ParseLyricLine(rawText);
+        CharFontOperations.CopyCharFonts(doc.Lines[index], newLine);
+        newLine.CopyLineSettingsFrom(doc.Lines[index]);
+        doc.Lines[index] = newLine;
+    }
+
+    [Fact]
+    public void 行を直しても行の設定とページの文字の大きさが残る()
+    {
+        // 1 行だけのページの文字の大きさ（行設定の「文字の大きさ」）
+        var doc = Doc("[00:10:00]あ", "", "[00:20:00]う");
+        doc.AssignSplitOrderKeys();
+        doc.Lines[0].FontSizeDelta = 4;
+        doc.Lines[0].FontSetName = "（麻衣）";
+        doc.Lines[0].LayoutName = "2行";
+        doc.Lines[0].ShowBeginCs = 900;
+        doc.Lines[0].ShowBeginOrigin = ShowTimeOrigin.Auto;
+
+        ReplaceLineText(doc, 0, "[00:10:00]あお");
+
+        var line = doc.Lines[0];
+        Assert.Equal("あお", line.GetDisplayText());
+        Assert.Equal(4, line.FontSizeDelta);
+        Assert.Equal(0, line.SplitOrderKey);
+        Assert.Equal("（麻衣）", line.FontSetName);
+        Assert.Equal("2行", line.LayoutName);
+        Assert.Equal(900, line.ShowBeginCs);
+        Assert.Equal(ShowTimeOrigin.Auto, line.ShowBeginOrigin);
+        Assert.Equal(4, N3PageFontSize.LineDeltas(doc, PageSplitMode.EmptyLine, 2).GetValueOrDefault(0));
+    }
+
+    [Fact]
+    public void 分離タブで直した行も解除で元のページ区切り位置へ戻る()
+    {
+        // ページ1: あ, い ／ ページ2: う（い はページ1の末尾行。時刻順だと空行の後ろ＝次のページへ入ってしまう）
+        var doc = Doc("[00:10:00]あ", "[00:12:00]い", "", "[00:20:00]う");
+        doc.AssignSplitOrderKeys();
+        var tab = LineOperations.ExtractLines(doc, new[] { 1 });
+        LineOperations.DeleteLine(doc, 1);
+
+        ReplaceLineText(tab, 0, "[00:12:00]いえ");
+
+        LineOperations.MergeLines(doc, tab);
+        Assert.Equal("あ", doc.Lines[0].GetDisplayText());
+        Assert.Equal("いえ", doc.Lines[1].GetDisplayText());
+        Assert.True(doc.Lines[2].IsEmpty);
+        Assert.Equal("う", doc.Lines[3].GetDisplayText());
+    }
+
+    [Fact]
+    public void 行エディタで分割しても元の位置のキーとページの文字の大きさが残る()
+    {
+        var doc = Doc("[00:10:00]あ", "[00:12:00]い[00:13:00]う", "", "[00:20:00]え");
+        doc.AssignSplitOrderKeys();
+        doc.Lines[1].FontSizeDelta = -2;
+
+        // 通常ビューの分割と同じ手順（行エディタの文字列から読み直して置き換え、「い」の後で分ける）
+        ReplaceLineText(doc, 1, "[00:12:00]い[00:13:00]う");
+        LineOperations.SplitLine(doc, 1, 1);
+
+        Assert.Equal(1, doc.Lines[1].SplitOrderKey);
+        Assert.Equal(1, doc.Lines[2].SplitOrderKey); // 後半の行も元の行の位置に付いて並ぶ
+        Assert.Equal(-2, doc.Lines[1].FontSizeDelta);
+    }
+
+    [Fact]
+    public void 行の設定はすべて引き継ぐ()
+    {
+        // 歌詞（行末タグ）と、呼び出し側で扱うエクスポート済みの印のほかは、すべて写す（行の設定を足して写し忘れたら、ここで落ちる）
+        var props = typeof(LyricsLine).GetProperties()
+            .Where(p => p.CanWrite && p.Name is not (nameof(LyricsLine.EndTimeCs) or nameof(LyricsLine.Exported)))
+            .ToList();
+        var from = new LyricsLine();
+        foreach (var p in props) p.SetValue(from, SampleValue(p.PropertyType));
+
+        var to = new LyricsLine();
+        to.CopyLineSettingsFrom(from);
+
+        foreach (var p in props) Assert.True(Equals(p.GetValue(from), p.GetValue(to)), $"{p.Name} が引き継がれていない");
+    }
+
+    private static object SampleValue(Type type)
+    {
+        var t = Nullable.GetUnderlyingType(type) ?? type;
+        if (t == typeof(int)) return 7;
+        if (t == typeof(string)) return "x";
+        if (t == typeof(bool)) return true;
+        if (t.IsEnum) return Enum.GetValues(t).Cast<object>().Last();
+        throw new NotSupportedException($"{t.Name} の見本の値をここに足す");
+    }
+
     [Fact]
     public void 空行の挿入と削除()
     {

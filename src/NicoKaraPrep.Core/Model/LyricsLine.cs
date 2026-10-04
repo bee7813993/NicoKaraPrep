@@ -119,6 +119,24 @@ public sealed class LyricsLine
         return null;
     }
 
+    /// <summary>
+    /// 歌詞を書き換えて作り直した行（テキスト編集モードの書き方から読み直した行など）へ、元の行 <paramref name="from"/> の
+    /// 歌詞に依らない行の設定（タブ分離の元の行位置キー・表示時刻・行のフォント・レイアウト・ページの文字の大きさ）を写す。
+    /// 文字ごとのフォントは <see cref="CharFontOperations.CopyCharFonts"/>、エクスポート済みの印は呼び出し側で扱う。
+    /// 行の設定を足したら、ここと <see cref="Clone"/> にも足す（足し忘れると行エディタで直したときに消える）。
+    /// </summary>
+    public void CopyLineSettingsFrom(LyricsLine from)
+    {
+        SplitOrderKey = from.SplitOrderKey;
+        ShowBeginCs = from.ShowBeginCs;
+        ShowEndCs = from.ShowEndCs;
+        ShowBeginOrigin = from.ShowBeginOrigin;
+        ShowEndOrigin = from.ShowEndOrigin;
+        FontSetName = from.FontSetName;
+        LayoutName = from.LayoutName;
+        FontSizeDelta = from.FontSizeDelta;
+    }
+
     public LyricsLine Clone()
     {
         var l = new LyricsLine

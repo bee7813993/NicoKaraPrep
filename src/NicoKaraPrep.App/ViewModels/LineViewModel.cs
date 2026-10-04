@@ -391,16 +391,11 @@ public partial class LineViewModel : ObservableObject
         OnPropertyChanged(nameof(ShowEndBrush));
     }
 
-    /// <summary>モデル差し替え（行エディタからの適用時）。</summary>
+    /// <summary>モデル差し替え（行エディタからの適用時）。エクスポート済みの印と行の設定（<see cref="LyricsLine.CopyLineSettingsFrom"/>）は元の行から引き継ぐ。</summary>
     public void ReplaceModel(LyricsLine newModel)
     {
         newModel.Exported = Model.Exported;
-        newModel.ShowBeginCs = Model.ShowBeginCs;
-        newModel.ShowEndCs = Model.ShowEndCs;
-        newModel.ShowBeginOrigin = Model.ShowBeginOrigin;
-        newModel.ShowEndOrigin = Model.ShowEndOrigin;
-        newModel.FontSetName = Model.FontSetName;
-        newModel.LayoutName = Model.LayoutName;
+        newModel.CopyLineSettingsFrom(Model);
         Model = newModel;
         RaiseAllChanged();
     }
