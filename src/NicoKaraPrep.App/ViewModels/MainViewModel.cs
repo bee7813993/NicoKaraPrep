@@ -905,14 +905,10 @@ public partial class MainViewModel : ObservableObject
         cursor = SnapCursorOutsideToken(rawText, Math.Clamp(cursor, 0, rawText.Length));
         int charIndex = TextEditModeFormat.ParseLyricLine(rawText[..cursor]).Chars.Count;
 
-        // ニコカラメーカー用の手動指定（表示時刻・フォント）は分割前の行から引き継ぐ（文字ごとのフォントは同じ文字へ）
+        // 行の設定（表示時刻・フォント・ページの文字の大きさ・タブ分離の元の位置）は分割前の行から引き継ぐ（文字ごとのフォントは同じ文字へ。
+        // 元の位置のキーは SplitLine で後半の行にも付く）
         var previous = Document.Lines[index];
-        line.ShowBeginCs = previous.ShowBeginCs;
-        line.ShowEndCs = previous.ShowEndCs;
-        line.ShowBeginOrigin = previous.ShowBeginOrigin;
-        line.ShowEndOrigin = previous.ShowEndOrigin;
-        line.FontSetName = previous.FontSetName;
-        line.LayoutName = previous.LayoutName;
+        line.CopyLineSettingsFrom(previous);
         CharFontOperations.CopyCharFonts(previous, line);
         Document.Lines[index] = line;
         LineOperations.SplitLine(Document, index, charIndex);
