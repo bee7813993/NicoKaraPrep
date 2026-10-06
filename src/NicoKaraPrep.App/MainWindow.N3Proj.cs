@@ -66,10 +66,12 @@ public sealed partial class MainWindow
         RefreshN3LinePanel();
         // 表示時刻の設定で字幕のプレビュー・チェックの結果が、書き出し設定（ベース・既定のフォント設定・合わせるか）で行に当たるフォント設定が変わることがある。
         // チェックはすぐに実行し、書き出しの知らせがチェック結果で消えないよう、つなげて表示する
-        // （フォント設定ビューではチェックしない。戻るときにチェックし直す）
-        if (ViewModel.ViewMode == ViewModels.MainViewMode.FontSettings)
+        // （全画面ビュー（フォント設定・レイアウト設定）ではチェックしない。戻るときにチェックし直す。
+        // レイアウト設定ビューは、ベース・タブの固定レイアウトが替わるとレイアウトの並びが変わるので一覧を作り直す）
+        if (FullScreenViewActive)
         {
             TryRun(ViewModel.UpdateLineFonts);
+            NotifyLayoutViewDocumentChanged();
         }
         else
         {
@@ -173,6 +175,7 @@ public sealed partial class MainWindow
         RefreshInsertGutter();
         RefreshLineFontPlaceholder();
         ViewModel.StatusText = $"{summary}　／　{ViewModel.StatusText}";
+        NotifyLayoutViewDocumentChanged(); // レイアウト設定ビューを開いたまま読み込んだとき（ベース・ページの指定・字幕アクションが変わる）
     }
 
     /// <summary>
@@ -332,10 +335,11 @@ public sealed partial class MainWindow
         TryRun(() =>
         {
             int n = ViewModel.ClearLineOverrides(indexes);
-            ViewModel.StatusText = n > 0 ? $"{n} 行の表示時刻・フォント・レイアウト・文字の大きさの指定を解除しました" : "手動指定のある行はありません";
+            ViewModel.StatusText = n > 0 ? $"{n} 行の表示時刻・フォント・レイアウト・文字の大きさ・字幕アクションの指定を解除しました" : "手動指定のある行はありません";
         });
         foreach (var line in ViewModel.Lines) line.RaiseOverrideMark();
         RefreshN3LinePanel();
+        LineSide.RefreshPagePane();
         ScheduleValidation();
     }
 
@@ -541,6 +545,39 @@ public sealed partial class MainWindow
         // 行リストのレイアウトの表示とプレビューを作り直す（チェックはしないので、上の知らせは消えない）
         TryRun(ViewModel.UpdateLineFonts);
         RefreshLineLayoutBox(line);
+    }
+
+    /// <summary>
+    /// 選んだ行のページに字幕アクションを指定する（null で指定を外して曲の既定に戻す。右パネル「レイアウト」の字幕アクションの欄）。
+    /// 設定値はその種類の既定値（ニコカラメーカー3 の AddOns の設定があればその値）。元に戻す（Ctrl+Z）は 1 回で戻る。
+    /// </summary>
+    private void ApplyLineAction(string? actionId)
+    {
+        if (ViewModel.SelectedLine is not { } line || line.Model.IsEmpty)
+        {
+            ViewModel.StatusText = "行リストで行を選んでから、字幕アクションを選んでください";
+            return;
+        }
+        var indexes = SelectedIndexes;
+        if (indexes.Count == 0) indexes = new List<int> { line.Index };
+        N3SubtitleAction? action = string.IsNullOrEmpty(actionId)
+            ? null
+            : N3SubtitleActionCatalog.CreateDefault(actionId, ViewModel.Nkm3Env?.AddOnSettings.GetValueOrDefault(actionId));
+        int n = 0;
+        TryRun(() => n = ViewModel.SetLinesSubtitleAction(indexes, action));
+        if (n > 0)
+        {
+            foreach (var l in ViewModel.Lines) l.RaiseOverrideMark();
+            ViewModel.StatusText = action is null
+                ? $"選んだ行のページ（{n} 行）の字幕アクションの指定を外しました（曲の既定に戻します）"
+                : $"選んだ行のページ（{n} 行）に字幕アクション「{N3SubtitleActionCatalog.DisplayName(action.Id)}」を指定しました";
+        }
+        else
+        {
+            ViewModel.StatusText = "字幕アクションの指定は変わりませんでした";
+        }
+        // 字幕アクションは行リストの表示・プレビュー・チェックに出ないので、右パネルの欄だけを合わせる
+        LineSide.RefreshPagePane();
     }
 
     /// <summary>行設定の文字の大きさの欄（選んだ行のページすべてに、文字の大きさの増減 px を指定する。0 でそのまま）。</summary>

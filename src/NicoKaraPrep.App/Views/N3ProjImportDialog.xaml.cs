@@ -232,6 +232,27 @@ public sealed partial class N3ProjImportDialog : ContentDialog
                   "（ニコカラメーカー3 の「適用対象レイアウト」の範囲が、このプロジェクトを作ったときと今とで違うと、自動で選ぶレイアウトが変わります）";
         PageLayoutBox.IsEnabled = layoutPages > 0;
 
+        // ---- 字幕アクション ----
+        var (projectAction, actionLines) = vm.CountLineActionImports(preview);
+        if (projectAction is null)
+        {
+            LineActionsTitle.Text = "字幕アクションを取り込む（このプロジェクトの歌詞行には字幕アクションがありません）";
+            LineActionsDetail.Text = "曲の既定・行ごとの指定は今のままです";
+            LineActionsBox.IsEnabled = false;
+        }
+        else
+        {
+            var currentAction = vm.ResolveCurrentDefaultSubtitleAction(out var currentSource);
+            LineActionsTitle.Text = $"字幕アクション（曲の既定: {N3SubtitleActionCatalog.Describe(projectAction)}、行ごとの指定 {actionLines} 行）を取り込む";
+            LineActionsDetail.Text =
+                "このプロジェクトの歌詞行でいちばん多い字幕アクションを曲の既定にし" +
+                $"（現在: {N3SubtitleActionCatalog.Describe(currentAction)}（{MainViewModel.DefaultSubtitleActionSourceLabel(currentSource)}））、" +
+                (matched == 0
+                    ? "開いている歌詞と一致する行が無いため、行ごとの指定は取り込みません。"
+                    : $"それと違うアクションの {actionLines} 行を行ごとの指定にします（歌詞が同じ行だけ。同じアクションの行は指定を外して曲の既定に従わせます）。") +
+                "字幕アクションは、レイアウト設定ビュー（F4）と右のパネル「レイアウト」で変えられます";
+        }
+
         // ---- 書き出しのベース ----
         string? currentBase = vm.N3ProjSettings.BasePath;
         bool sameBase = currentBase is { Length: > 0 } && string.Equals(Path.GetFullPath(currentBase), Path.GetFullPath(preview.Path), StringComparison.OrdinalIgnoreCase);
@@ -257,6 +278,7 @@ public sealed partial class N3ProjImportDialog : ContentDialog
             IconsBox.IsChecked = IconRows.Any(r => r.IsSelected);
             MediaBox.IsChecked = MediaBox.IsEnabled && !sameMedia && (currentMedia is not { Length: > 0 } || !File.Exists(currentMedia));
             PageLayoutBox.IsChecked = PageLayoutBox.IsEnabled; // 違うページがあれば、ニコカラメーカーと同じレイアウトにする
+            LineActionsBox.IsChecked = LineActionsBox.IsEnabled; // アクションがあれば、ニコカラメーカーと同じアクションにする
         }
 
         UpdateLineShowDetail();
@@ -352,6 +374,7 @@ public sealed partial class N3ProjImportDialog : ContentDialog
             Timing = TimingBox.IsChecked == true && TimingBox.IsEnabled,
             LineShowTimes = LineShowBox.IsChecked == true && LineShowBox.IsEnabled,
             PageLayouts = PageLayoutBox.IsChecked == true && PageLayoutBox.IsEnabled,
+            LineActions = LineActionsBox.IsChecked == true && LineActionsBox.IsEnabled,
             ExportBase = BaseBox.IsChecked == true,
             FontSetNames = FontSetsBox.IsChecked == true
                 ? FontRows.Where(r => r.IsSelected).Select(r => r.Name).ToList()

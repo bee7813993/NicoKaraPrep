@@ -21,6 +21,12 @@ public sealed class N3ProjImportChoices
     /// <summary>ニコカラメーカーで設定したページのレイアウトを、自動で選ぶものと違うページだけ、ページの手動指定として取り込む。</summary>
     public bool PageLayouts { get; set; }
 
+    /// <summary>
+    /// ニコカラメーカーで設定した字幕アクションを取り込む（曲の既定 = 歌詞行でいちばん多いアクション。それと違うアクションの行だけ、
+    /// 行ごとの指定にする。行の対応はページのレイアウトと同じで、歌詞が同じ行だけ）。
+    /// </summary>
+    public bool LineActions { get; set; } = true;
+
     /// <summary>n3proj 書き出しのベースにする。</summary>
     public bool ExportBase { get; set; }
 
@@ -166,6 +172,46 @@ public partial class MainViewModel
         return result;
     }
 
+    /// <summary>
+    /// 「字幕アクションを取り込む」の試算: 曲の既定にするアクション（プロジェクトの歌詞行でいちばん多いもの。アクションが無ければ null）と、
+    /// それと違うアクションを行ごとの指定にする行の数（開いている歌詞と一致する行だけ）。
+    /// </summary>
+    public (N3SubtitleAction? Default, int Lines) CountLineActionImports(N3ProjImportPreview preview)
+    {
+        var def = ProjectDefaultSubtitleAction(preview);
+        if (def is null) return (null, 0);
+        StoreActiveTab();
+        var matcher = CreateEmojiMatcher();
+        int lines = 0;
+        foreach (var tab in Tabs)
+        {
+            var (source, _) = N3ProjImport.FindSource(tab.Document, tab.Name, preview.Tabs, matcher);
+            if (source is not null) lines += LineActionTargets(tab, source, def).Count(t => t.Action is not null);
+        }
+        return (def, lines);
+    }
+
+    /// <summary>n3proj の歌詞行でいちばん多い字幕アクション（全部の歌詞設定。アクションが無ければ null）。</summary>
+    private static N3SubtitleAction? ProjectDefaultSubtitleAction(N3ProjImportPreview preview) =>
+        N3SubtitleActionCatalog.MostCommon(preview.Tabs.SelectMany(t => t.SubtitleActions));
+
+    /// <summary>
+    /// 字幕アクションの取り込みで行に持たせるもの（行の添字と、行ごとの指定。曲の既定 <paramref name="def"/> と同じなら null = 曲の既定に従う）。
+    /// 歌詞が一致する行だけ（行の対応はページのレイアウトの取り込みと同じ）。アクションの分からない行は含めない（今のまま）。
+    /// </summary>
+    private List<(int Line, N3SubtitleAction? Action)> LineActionTargets(TabState tab, N3ProjSourceTab source, N3SubtitleAction def)
+    {
+        var result = new List<(int, N3SubtitleAction?)>();
+        var map = N3ProjImport.MatchLineIndexes(tab.Document, source, CreateEmojiMatcher());
+        foreach (var (line, s) in map.OrderBy(p => p.Key))
+        {
+            if (line < 0 || line >= tab.Document.Lines.Count || tab.Document.Lines[line].IsEmpty) continue;
+            if (s < 0 || s >= source.SubtitleActions.Count || source.SubtitleActions[s] is not { } action) continue;
+            result.Add((line, action.SameAs(def) ? null : action));
+        }
+        return result;
+    }
+
     /// <summary>n3proj を書き出しのベースにした場合のレイアウト設定の並び（読めなければ今の並び）。</summary>
     private List<N3LayoutSettings> EffectiveLayoutsFor(string projectPath)
     {
@@ -298,6 +344,37 @@ public partial class MainViewModel
             done.Add($"ページのレイアウト {pages} ページ");
         }
 
+        // 5'') 字幕アクション（ニコカラメーカーで設定したもの）→ 曲の既定 = 歌詞行でいちばん多いアクション（曲の設定へ直接入れて、最後に保存）。
+        //      それと違うアクションの行だけ行ごとの指定にし、同じ行は指定を外して曲の既定に従わせる（歌詞が同じ行だけ）
+        bool songActionChanged = false;
+        if (choices.LineActions && ProjectDefaultSubtitleAction(preview) is { } projectAction)
+        {
+            songActionChanged = !N3SubtitleAction.AreSame(N3ProjSettings.SubtitleAction, projectAction);
+            N3ProjSettings.SubtitleAction = projectAction;
+            int lines = 0;
+            bool changed = false;
+            foreach (var tab in Tabs)
+            {
+                var (source, _) = N3ProjImport.FindSource(tab.Document, tab.Name, preview.Tabs, matcher);
+                if (source is null) continue;
+                var targets = LineActionTargets(tab, source, projectAction);
+                lines += targets.Count(t => t.Action is not null);
+                var changes = targets.Where(t => !N3SubtitleAction.AreSame(tab.Document.Lines[t.Line].SubtitleAction, t.Action)).ToList();
+                if (changes.Count == 0) continue;
+                tab.UndoStack.Add(tab.Document.Clone()); // 元に戻せるように
+                tab.RedoStack.Clear();
+                foreach (var (i, action) in changes) tab.Document.Lines[i].SubtitleAction = action?.Clone();
+                tab.IsModified = true;
+                changed = true;
+            }
+            if (changed)
+            {
+                IsModified = _activeTab.IsModified;
+                UpdateTitle();
+            }
+            done.Add($"字幕アクション（曲の既定: {N3SubtitleActionCatalog.Describe(projectAction)}・行ごとの指定 {lines} 行）");
+        }
+
         // 6) アイコン（@Emoji）
         if (choices.IconNames.Count > 0)
         {
@@ -347,6 +424,7 @@ public partial class MainViewModel
 
         if (settingsChanged) Settings.Save();
         SaveProject();
+        if (songActionChanged) SongDefaultSubtitleActionChanged?.Invoke(this, EventArgs.Empty);
 
         StatusText = done.Count == 0
             ? "読み込む項目が選ばれていません"

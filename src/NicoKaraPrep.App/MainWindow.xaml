@@ -141,10 +141,19 @@
                             <KeyboardAccelerator Key="F3" Invoked="OnViewAcceleratorInvoked" />
                         </RadioMenuFlyoutItem.KeyboardAccelerators>
                     </RadioMenuFlyoutItem>
+                    <RadioMenuFlyoutItem
+                        x:Name="LayoutViewMenuItem"
+                        Text="レイアウト設定ビュー"
+                        GroupName="MainViewMode"
+                        Click="OnViewMenuClick">
+                        <RadioMenuFlyoutItem.KeyboardAccelerators>
+                            <KeyboardAccelerator Key="F4" Invoked="OnViewAcceleratorInvoked" />
+                        </RadioMenuFlyoutItem.KeyboardAccelerators>
+                    </RadioMenuFlyoutItem>
                     <MenuFlyoutSeparator />
-                    <!-- Esc で今のビューを閉じて戻る（絵文字挿入ビューは行リストへ、フォント設定ビューは直前のビューへ）。
-                         項目名は今のビューに合わせて変える（MainWindow.Views.cs の SyncViewSwitchers）。
-                         Esc は各ビューの中で受ける（フォント設定ビューでは中の部品が処理しなかったときだけ）ため、ここはキーの表示だけ -->
+                    <!-- Esc で今のビューを閉じて戻る（絵文字挿入ビューは行リストへ、フォント設定ビュー・レイアウト設定ビューは
+                         最後にいた行リストか絵文字挿入ビューへ）。項目名は今のビューに合わせて変える（MainWindow.Views.cs の SyncViewSwitchers）。
+                         Esc は各ビューの中で受ける（全画面ビューでは中の部品が処理しなかったときだけ）ため、ここはキーの表示だけ -->
                     <MenuFlyoutItem
                         x:Name="BackViewMenuItem"
                         Text="前のビューへ戻る"
@@ -196,7 +205,9 @@
                     <MenuFlyoutItem Text="選択行の済マークを解除" Click="OnClearMarksClick" />
                     <MenuFlyoutSeparator />
                     <MenuFlyoutItem Text="ニコカラメーカー3 のフォント設定を編集" KeyboardAcceleratorTextOverride="F3" Click="OnFontSettingsViewClick" />
-                    <MenuFlyoutItem Text="選択行の表示時刻・フォント指定を解除" Click="OnClearN3OverridesClick" ToolTipService.ToolTip="選んだ行の、ニコカラメーカー用の行設定（表示時刻・フォント・レイアウト・文字の大きさ）をまとめて解除します。表示時刻は、手で直した値も読み込んだ値・自動調整の値も外して、自動の計算に戻します" />
+                    <MenuFlyoutItem Text="ニコカラメーカー3 のレイアウトと字幕アクションを編集" KeyboardAcceleratorTextOverride="F4" Click="OnLayoutViewClick"
+                                    ToolTipService.ToolTip="レイアウト設定ビュー（F4）を開いて、レイアウト設定の値・ページへの指定と、字幕アクション（曲の既定・ページへの指定）を編集します" />
+                    <MenuFlyoutItem Text="選択行の表示時刻・フォント指定を解除" Click="OnClearN3OverridesClick" ToolTipService.ToolTip="選んだ行の、ニコカラメーカー用の行設定（表示時刻・フォント・レイアウト・文字の大きさ・字幕アクション）をまとめて解除します。表示時刻は、手で直した値も読み込んだ値・自動調整の値も外して、自動の計算に戻します" />
                 </MenuBarItem>
                 <MenuBarItem Title="再生(P)" AccessKey="P">
                     <MenuFlyoutItem Text="メディアを開く..." Click="OnOpenMediaClick" />
@@ -235,7 +246,7 @@
                 </MenuBarItem>
             </MenuBar>
 
-            <!-- ビューの切り替え（表示メニュー・F2・F3 と同じ。選択は ViewModel.ViewMode に追従） -->
+            <!-- ビューの切り替え（表示メニュー・F2・F3・F4 と同じ。選択は ViewModel.ViewMode に追従） -->
             <SelectorBar
                 x:Name="ViewSelector"
                 Grid.Column="1"
@@ -245,6 +256,7 @@
                 <SelectorBarItem x:Name="LinesViewTab" Text="行リスト" ToolTipService.ToolTip="行リスト（行ごとの編集）" />
                 <SelectorBarItem x:Name="EmojiViewTab" Text="絵文字挿入" ToolTipService.ToolTip="絵文字挿入ビュー (F2)" />
                 <SelectorBarItem x:Name="FontViewTab" Text="フォント設定" ToolTipService.ToolTip="ニコカラメーカー3 のフォント設定ビュー (F3)" />
+                <SelectorBarItem x:Name="LayoutViewTab" Text="レイアウト" ToolTipService.ToolTip="ニコカラメーカー3 のレイアウト設定ビュー（レイアウトと字幕アクション） (F4)" />
             </SelectorBar>
         </Grid>
 
@@ -724,7 +736,7 @@
                 </Grid>
             </fs:ColumnResizeGrip>
 
-            <!-- 右パネル（行リストのとき）: フォント一覧（押すと選んだ文字・行に指定）とレイアウト設定 -->
+            <!-- 右パネル（行リストのとき）: フォント一覧（押すと選んだ文字・行に指定）・選んだ行のページのレイアウトと字幕アクション・表示時刻 -->
             <Border
                 Grid.Row="1"
                 Grid.Column="2"
@@ -917,6 +929,14 @@
              ウィンドウの XAML では x:Load="False" の要素を FindName で作れず、x:Bind の x:Load はビルドできないため） -->
         <Border
             x:Name="FontViewHost"
+            Grid.Row="1"
+            Grid.RowSpan="2"
+            Visibility="Collapsed" />
+
+        <!-- レイアウト設定ビュー（F4。フォント設定ビューと同じ段に重ねる）。中身の LayoutView は初めて開くときにコードで作る
+             （MainWindow.Views.cs の EnsureLayoutView。理由はフォント設定ビューと同じ） -->
+        <Border
+            x:Name="LayoutViewHost"
             Grid.Row="1"
             Grid.RowSpan="2"
             Visibility="Collapsed" />

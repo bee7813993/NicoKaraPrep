@@ -9,13 +9,18 @@ using NicoKaraPrep.Core.Model;
 namespace NicoKaraPrep.App;
 
 /// <summary>
-/// メイン画面のビュー（行リスト／絵文字挿入／フォント設定）の切り替え。
+/// メイン画面のビュー（行リスト／絵文字挿入／フォント設定／レイアウト設定）の切り替え。
 /// どのビューも同じウィンドウの中で表示（Visibility）を入れ替えるだけなので、
 /// 行リストの選択・文書・再生状態は切り替えてもそのまま残る。
+/// フォント設定ビューとレイアウト設定ビューは、メニューとステータスバー以外の全体を使う「全画面ビュー」
+/// （<see cref="MainViewModel.IsFullScreenView"/>）で、戻る先は最後にいた行リストか絵文字挿入ビュー。
 /// </summary>
 public sealed partial class MainWindow
 {
-    /// <summary>直前のビュー（フォント設定ビューから戻る先）。</summary>
+    /// <summary>
+    /// 最後にいた行リストか絵文字挿入ビュー（全画面ビューから戻る先）。行リスト・絵文字挿入ビューを抜けるときだけ覚え直すので、
+    /// 全画面ビューどうしを行き来しても（F3 → F4 → Esc）、全画面ビューに入る前のビューへ戻る。
+    /// </summary>
     private MainViewMode _previousViewMode = MainViewMode.Lines;
 
     /// <summary>行リストを抜けたときにフォーカスがあった要素（行リストへ戻ったときにそこへ戻す）。</summary>
@@ -28,6 +33,9 @@ public sealed partial class MainWindow
 
     private bool InsertViewActive => ViewModel.ViewMode == MainViewMode.EmojiInsert;
 
+    /// <summary>全画面ビュー（フォント設定ビュー・レイアウト設定ビュー）を表示しているか。</summary>
+    private bool FullScreenViewActive => MainViewModel.IsFullScreenView(ViewModel.ViewMode);
+
     /// <summary>
     /// 絵文字挿入ビューの状態（カーソルのあった行・その行の中の表示文字位置・再生追従カーソル）。
     /// LineIndex が -1 のときはカーソル位置を持たない（文書が空だったとき）。
@@ -35,8 +43,8 @@ public sealed partial class MainWindow
     private sealed record InsertViewState(LyricsDocument Document, int LineIndex, int CharOffset, bool Follow);
 
     /// <summary>
-    /// 絵文字挿入ビューからフォント設定ビューへ移ったときに覚えた挿入ビューの状態。
-    /// フォント設定ビューから絵文字挿入ビューへ戻ったら元に戻し、フォント設定ビューを抜けたら（戻り先がどこでも）捨てる。
+    /// 絵文字挿入ビューから全画面ビューへ移ったときに覚えた挿入ビューの状態。全画面ビューどうしを行き来する間は持ち続け、
+    /// 全画面ビューから絵文字挿入ビューへ戻ったら元に戻し、行リストへ戻ったら捨てる。
     /// </summary>
     private InsertViewState? _suspendedInsertView;
 
@@ -46,18 +54,37 @@ public sealed partial class MainWindow
     /// <summary>次にフォント設定ビューに入ったときに選ぶフォント設定の名前（行設定の「編集...」）。</summary>
     private string? _fontViewSelectName;
 
+    /// <summary>レイアウト設定ビュー（初めて開くときに作る。以後は閉じても残し、表示だけを切り替える）。</summary>
+    private LayoutView? _layoutView;
+
+    /// <summary>次にレイアウト設定ビューに入ったときに選ぶレイアウト設定の名前（右パネルの「レイアウト設定を編集...」）。</summary>
+    private string? _layoutViewSelectName;
+
     /// <summary>フォント設定ビューを返す。まだ無ければ作って FontViewHost に置く。</summary>
     private FontSettingsView EnsureFontView()
     {
         if (_fontView is null)
         {
             _fontView = new FontSettingsView();
-            _fontView.BackRequested += OnFontViewBackRequested;
+            _fontView.BackRequested += OnFullScreenViewBackRequested;
             // n3proj からのフォント設定の取り込みは、メニューと同じ読み込み確認画面（フォント設定を選んだ状態）で行う
             _fontView.Attach(ViewModel, () => ImportN3ProjAsync(null, N3ProjImportFocus.FontSets));
             FontViewHost.Child = _fontView;
         }
         return _fontView;
+    }
+
+    /// <summary>レイアウト設定ビューを返す。まだ無ければ作って LayoutViewHost に置く。</summary>
+    private LayoutView EnsureLayoutView()
+    {
+        if (_layoutView is null)
+        {
+            _layoutView = new LayoutView();
+            _layoutView.BackRequested += OnFullScreenViewBackRequested;
+            _layoutView.Attach(ViewModel);
+            LayoutViewHost.Child = _layoutView;
+        }
+        return _layoutView;
     }
 
     /// <summary>起動時に 1 回呼ぶ。切り替えの部品を今のビューに合わせ、以後は ViewMode の変更に追従させる。</summary>
@@ -69,8 +96,12 @@ public sealed partial class MainWindow
         };
         SyncViewSwitchers();
 
-        // 閉じるときに、フォント設定ビューで保存を待っている編集を保存する（300ms ごとにまとめて保存しているため）
-        Closed += (_, _) => _fontView?.FlushPendingSave();
+        // 閉じるときに、フォント設定ビュー・レイアウト設定ビューで保存を待っている編集を保存する（300ms ごとにまとめて保存しているため）
+        Closed += (_, _) =>
+        {
+            _fontView?.FlushPendingSave();
+            _layoutView?.FlushPendingSave();
+        };
     }
 
     /// <summary>ビューを切り替える。ビューの出入りはすべてここを通す。</summary>
@@ -84,6 +115,8 @@ public sealed partial class MainWindow
             return;
         }
 
+        bool fromFullScreen = MainViewModel.IsFullScreenView(current);
+        bool toFullScreen = MainViewModel.IsFullScreenView(mode);
         _switchingView = true;
         try
         {
@@ -93,19 +126,19 @@ public sealed partial class MainWindow
                 _linesViewFocus = FocusManager.GetFocusedElement(Content.XamlRoot) as UIElement;
             }
 
-            // 絵文字挿入ビューからフォント設定ビューへ移るときは、戻ったときに続きから使えるよう
+            // 絵文字挿入ビューから全画面ビューへ移るときは、戻ったときに続きから使えるよう
             // 挿入ビューの状態を覚えておく（ExitInsertView が再生追従カーソルを OFF にするので、その前に）
-            if (current == MainViewMode.EmojiInsert && mode == MainViewMode.FontSettings)
+            if (current == MainViewMode.EmojiInsert && toFullScreen)
             {
                 _suspendedInsertView = CaptureInsertViewState();
             }
 
-            _previousViewMode = current;
+            // 戻る先は、全画面ビューに入る前にいた行リストか絵文字挿入ビュー（全画面ビューどうしの行き来では変えない）
+            if (!fromFullScreen) _previousViewMode = current;
             ViewModel.ViewMode = mode;
             ApplyViewVisibility(mode);
 
             // 今までのビューを抜ける
-            InsertViewState? resumeInsertView = null;
             switch (current)
             {
                 case MainViewMode.EmojiInsert:
@@ -113,9 +146,18 @@ public sealed partial class MainWindow
                     break;
                 case MainViewMode.FontSettings:
                     ExitFontSettingsView();
-                    resumeInsertView = _suspendedInsertView;
-                    _suspendedInsertView = null;
                     break;
+                case MainViewMode.Layout:
+                    ExitLayoutView();
+                    break;
+            }
+
+            // 全画面ビューから行リスト・絵文字挿入ビューへ戻るときに、覚えておいた挿入ビューの状態を取り出す（行リストへ戻るなら捨てる）
+            InsertViewState? resumeInsertView = null;
+            if (fromFullScreen && !toFullScreen)
+            {
+                resumeInsertView = _suspendedInsertView;
+                _suspendedInsertView = null;
             }
 
             // 新しいビューに入る
@@ -127,6 +169,9 @@ public sealed partial class MainWindow
                     break;
                 case MainViewMode.FontSettings:
                     EnterFontSettingsView();
+                    break;
+                case MainViewMode.Layout:
+                    EnterLayoutView();
                     break;
                 default:
                     RestoreLinesViewFocus();
@@ -141,8 +186,8 @@ public sealed partial class MainWindow
     }
 
     /// <summary>
-    /// F2・F3: そのビューを開く。すでに開いていれば戻る
-    /// （絵文字挿入ビューは行リストへ、フォント設定ビューは直前のビューへ）。
+    /// F2・F3・F4: そのビューを開く。すでに開いていれば戻る
+    /// （絵文字挿入ビューは行リストへ、全画面ビューは最後にいた行リストか絵文字挿入ビューへ）。
     /// </summary>
     private void ToggleView(MainViewMode mode)
     {
@@ -150,9 +195,9 @@ public sealed partial class MainWindow
         {
             SwitchView(mode);
         }
-        else if (mode == MainViewMode.FontSettings)
+        else if (MainViewModel.IsFullScreenView(mode))
         {
-            ReturnFromFontSettings();
+            ReturnFromFullScreenView();
         }
         else
         {
@@ -160,37 +205,36 @@ public sealed partial class MainWindow
         }
     }
 
-    /// <summary>フォント設定ビューから戻る先（直前のビュー）。</summary>
-    private MainViewMode FontSettingsReturnTarget =>
-        _previousViewMode == MainViewMode.FontSettings ? MainViewMode.Lines : _previousViewMode;
+    /// <summary>全画面ビューから戻る先（最後にいた行リストか絵文字挿入ビュー）。</summary>
+    private MainViewMode FullScreenReturnTarget =>
+        MainViewModel.IsFullScreenView(_previousViewMode) ? MainViewMode.Lines : _previousViewMode;
 
-    /// <summary>フォント設定ビューから直前のビューへ戻る。</summary>
-    private void ReturnFromFontSettings()
+    /// <summary>全画面ビュー（フォント設定ビュー・レイアウト設定ビュー）から、最後にいた行リストか絵文字挿入ビューへ戻る。</summary>
+    private void ReturnFromFullScreenView()
     {
-        if (ViewModel.ViewMode != MainViewMode.FontSettings) return;
-        SwitchView(FontSettingsReturnTarget);
+        if (!FullScreenViewActive) return;
+        SwitchView(FullScreenReturnTarget);
     }
 
     /// <summary>
     /// 今のビューを閉じて戻る（表示メニューの「…へ戻る (Esc)」）。Esc と同じく、
-    /// 絵文字挿入ビューは行リストへ、フォント設定ビューは直前のビューへ戻る。
+    /// 絵文字挿入ビューは行リストへ、全画面ビューは最後にいた行リストか絵文字挿入ビューへ戻る。
     /// </summary>
     private void ReturnFromCurrentView()
     {
-        switch (ViewModel.ViewMode)
+        if (ViewModel.ViewMode == MainViewMode.EmojiInsert)
         {
-            case MainViewMode.EmojiInsert:
-                SwitchView(MainViewMode.Lines);
-                break;
-            case MainViewMode.FontSettings:
-                ReturnFromFontSettings();
-                break;
+            SwitchView(MainViewMode.Lines);
+        }
+        else if (FullScreenViewActive)
+        {
+            ReturnFromFullScreenView();
         }
     }
 
     /// <summary>
     /// 行リストへ戻ったとき、行リストを抜ける前にフォーカスがあった場所へフォーカスを戻す
-    /// （F2・F3・Esc で行き来したあとも、↓ や Enter がそのまま行の操作になるように）。
+    /// （F2・F3・F4・Esc で行き来したあとも、↓ や Enter がそのまま行の操作になるように）。
     /// </summary>
     private void RestoreLinesViewFocus()
     {
@@ -233,20 +277,24 @@ public sealed partial class MainWindow
     private void ApplyViewVisibility(MainViewMode mode)
     {
         bool font = mode == MainViewMode.FontSettings;
+        bool layout = mode == MainViewMode.Layout;
+        bool fullScreen = MainViewModel.IsFullScreenView(mode);
         if (font) EnsureFontView();
+        if (layout) EnsureLayoutView();
 
-        // フォント設定ビューはメニューとステータスバー以外をすべて使う（メディア再生・メイン・チェック結果を隠す）
-        var others = font ? Visibility.Collapsed : Visibility.Visible;
+        // 全画面ビューはメニューとステータスバー以外をすべて使う（メディア再生・メイン・チェック結果を隠す）
+        var others = fullScreen ? Visibility.Collapsed : Visibility.Visible;
         MediaPanel.Visibility = others;
         MainArea.Visibility = others;
         IssuePanel.Visibility = others;
         FontViewHost.Visibility = font ? Visibility.Visible : Visibility.Collapsed;
+        LayoutViewHost.Visibility = layout ? Visibility.Visible : Visibility.Collapsed;
 
-        if (!font)
+        if (!fullScreen)
         {
             NormalView.Visibility = mode == MainViewMode.Lines ? Visibility.Visible : Visibility.Collapsed;
             InsertView.Visibility = mode == MainViewMode.EmojiInsert ? Visibility.Visible : Visibility.Collapsed;
-            // 右パネル: 行リストではフォント一覧・レイアウト設定、絵文字挿入ビューでは絵文字のパレット（表示メニューで隠せる）
+            // 右パネル: 行リストではフォント一覧・ページのレイアウト、絵文字挿入ビューでは絵文字のパレット（表示メニューで隠せる）
             ApplySidePanelVisibility(mode);
             // 行リストと絵文字挿入ビューでは、メディア再生と分け合う欄の下の欄が違うので、高さを合わせ直す
             FitPlayerHeightAfterLayout();
@@ -255,7 +303,7 @@ public sealed partial class MainWindow
 
     private void EnterFontSettingsView()
     {
-        string back = MainViewModel.ViewModeName(FontSettingsReturnTarget);
+        string back = MainViewModel.ViewModeName(FullScreenReturnTarget);
         var view = EnsureFontView();
 
         // 選ぶフォント設定: 行設定の「編集...」で選んだ名前 → 選択行のフォント指定（無ければ前回の選択のまま）
@@ -275,6 +323,46 @@ public sealed partial class MainWindow
         RefreshN3LinePanel();
         foreach (var line in ViewModel.Lines) line.RaiseOverrideMark();
         ScheduleValidation();
+    }
+
+    private void EnterLayoutView()
+    {
+        string back = MainViewModel.ViewModeName(FullScreenReturnTarget);
+        var view = EnsureLayoutView();
+
+        // 選ぶレイアウト設定: 右パネルの「レイアウト設定を編集...」で選んだ名前 → 選択行のページのレイアウトの手動指定（無ければビューに任せる）
+        string? name = _layoutViewSelectName ?? (ViewModel.SelectedLine?.Model.LayoutName is { Length: > 0 } manual ? manual : null);
+        _layoutViewSelectName = null;
+        view.SetLineContext(SelectedIndexes);
+        view.Enter(back, name);
+        ViewModel.StatusText = $"レイアウト設定ビュー: Esc（または F4）で{back}へ戻ります";
+    }
+
+    /// <summary>
+    /// レイアウト設定ビューを抜けたあと、行リスト側の表示（行設定のレイアウトの候補・右パネル・手動指定の印・チェック）を作り直す
+    /// （レイアウト設定の値・名前、ページの指定・字幕アクションが変わっていることがある）。
+    /// </summary>
+    private void ExitLayoutView()
+    {
+        // 保存待ちのレイアウト設定の編集を、行リスト側の表示を作り直す前に保存する
+        _layoutView?.Exit();
+        _n3LayoutNamesKey = null;
+        RefreshN3LinePanel();
+        LineSide.RefreshPagePane();
+        foreach (var line in ViewModel.Lines) line.RaiseOverrideMark();
+        ScheduleValidation();
+    }
+
+    /// <summary>
+    /// 外で文書・タブ・ベースが変わったとき（MCP のタブの切り替え・書き出し画面の「適用」・n3proj の読み込み・ファイルを開くなど）、
+    /// レイアウト設定ビューを開いていれば一覧を作り直す。全画面ビューではチェック（行の表示の作り直しを含む）を止めているので、
+    /// 先に行の表示（ページのレイアウト・字幕のプレビューの材料）を今の文書で作り直してから知らせる。
+    /// </summary>
+    private void NotifyLayoutViewDocumentChanged()
+    {
+        if (ViewModel.ViewMode != MainViewMode.Layout || _layoutView is null) return;
+        TryRun(ViewModel.UpdateLineFonts);
+        TryRun(_layoutView.OnDocumentChanged);
     }
 
     /// <summary>今の絵文字挿入ビューの状態（カーソル位置と再生追従カーソル）を読み取る。</summary>
@@ -314,6 +402,7 @@ public sealed partial class MainWindow
             {
                 MainViewMode.EmojiInsert => EmojiViewTab,
                 MainViewMode.FontSettings => FontViewTab,
+                MainViewMode.Layout => LayoutViewTab,
                 _ => LinesViewTab,
             };
 
@@ -322,15 +411,16 @@ public sealed partial class MainWindow
             {
                 MainViewMode.EmojiInsert => EmojiViewMenuItem,
                 MainViewMode.FontSettings => FontViewMenuItem,
+                MainViewMode.Layout => LayoutViewMenuItem,
                 _ => LinesViewMenuItem,
             };
             item.IsChecked = true;
 
-            // Esc の行き先（フォント設定ビューは行リストとは限らない）を項目名で示す
+            // Esc の行き先（全画面ビューは行リストとは限らない）を項目名で示す
             BackViewMenuItem.Text = mode switch
             {
                 MainViewMode.EmojiInsert => "行リストへ戻る",
-                MainViewMode.FontSettings => $"{MainViewModel.ViewModeName(FontSettingsReturnTarget)}へ戻る",
+                _ when MainViewModel.IsFullScreenView(mode) => $"{MainViewModel.ViewModeName(FullScreenReturnTarget)}へ戻る",
                 _ => "前のビューへ戻る",
             };
             BackViewMenuItem.IsEnabled = mode != MainViewMode.Lines;
@@ -355,6 +445,7 @@ public sealed partial class MainWindow
         }
         SwitchView(item == EmojiViewTab ? MainViewMode.EmojiInsert
             : item == FontViewTab ? MainViewMode.FontSettings
+            : item == LayoutViewTab ? MainViewMode.Layout
             : MainViewMode.Lines);
     }
 
@@ -363,17 +454,29 @@ public sealed partial class MainWindow
     {
         SwitchView(ReferenceEquals(sender, EmojiViewMenuItem) ? MainViewMode.EmojiInsert
             : ReferenceEquals(sender, FontViewMenuItem) ? MainViewMode.FontSettings
+            : ReferenceEquals(sender, LayoutViewMenuItem) ? MainViewMode.Layout
             : MainViewMode.Lines);
     }
 
     /// <summary>表示メニューの「…へ戻る (Esc)」。</summary>
     private void OnBackViewMenuClick(object sender, RoutedEventArgs e) => ReturnFromCurrentView();
 
-    /// <summary>F2・F3（表示メニューのアクセラレータ）。開いているビューのキーなら戻る。</summary>
+    /// <summary>F2・F3・F4（表示メニューのアクセラレータ）。開いているビューのキーなら戻る。</summary>
     private void OnViewAcceleratorInvoked(KeyboardAccelerator sender, KeyboardAcceleratorInvokedEventArgs args)
     {
         args.Handled = true; // メニュー項目のクリック（ラジオの選択）としては扱わない
-        ToggleView(sender.Key == Windows.System.VirtualKey.F3 ? MainViewMode.FontSettings : MainViewMode.EmojiInsert);
+        switch (sender.Key)
+        {
+            case Windows.System.VirtualKey.F2:
+                ToggleView(MainViewMode.EmojiInsert);
+                break;
+            case Windows.System.VirtualKey.F3:
+                ToggleView(MainViewMode.FontSettings);
+                break;
+            case Windows.System.VirtualKey.F4:
+                ToggleView(MainViewMode.Layout);
+                break;
+        }
     }
 
     /// <summary>右パネルの「絵文字挿入ビュー (F2)」トグル。</summary>
@@ -386,6 +489,9 @@ public sealed partial class MainWindow
     /// <summary>エクスポート > ニコカラメーカー3 のフォント設定を編集。</summary>
     private void OnFontSettingsViewClick(object sender, RoutedEventArgs e) => SwitchView(MainViewMode.FontSettings);
 
+    /// <summary>エクスポート > ニコカラメーカー3 のレイアウトと字幕アクションを編集。</summary>
+    private void OnLayoutViewClick(object sender, RoutedEventArgs e) => SwitchView(MainViewMode.Layout);
+
     /// <summary>行設定のフォントの「編集...」: フォント設定ビューを開き、欄のフォント設定を選ぶ。</summary>
     private void OnEditLineFontClick(object sender, RoutedEventArgs e)
     {
@@ -393,23 +499,39 @@ public sealed partial class MainWindow
         SwitchView(MainViewMode.FontSettings);
     }
 
-    /// <summary>
-    /// フォント設定ビューでは、元に戻す・やり直し（メニューと Ctrl+Z / Ctrl+Y）をビューの中の操作に使う。
-    /// フォント設定ビューなら true（処理済み。文字の入力欄にフォーカスがあるときは何もしない）。
-    /// </summary>
-    private bool FontViewUndoRedo(bool redo)
+    /// <summary>右パネルの「レイアウト設定を編集...」: レイアウト設定ビューを開き、選んだ行のページのレイアウトを選ぶ。</summary>
+    private void OpenLayoutViewFor(string? layoutName)
     {
-        if (ViewModel.ViewMode != MainViewMode.FontSettings || _fontView is null) return false;
-        if (redo) _fontView.TryRedo();
-        else _fontView.TryUndo();
-        return true;
+        _layoutViewSelectName = string.IsNullOrEmpty(layoutName) ? null : layoutName;
+        SwitchView(MainViewMode.Layout);
     }
 
-    private void OnFontViewBackRequested(object? sender, EventArgs e) => ReturnFromFontSettings();
+    /// <summary>
+    /// 全画面ビュー（フォント設定ビュー・レイアウト設定ビュー）では、元に戻す・やり直し（メニューと Ctrl+Z / Ctrl+Y）をビューの中の操作に使う。
+    /// 全画面ビューなら true（処理済み。文字の入力欄にフォーカスがあるときは何もしない。歌詞の 元に戻す はしない）。
+    /// </summary>
+    private bool FullScreenViewUndoRedo(bool redo)
+    {
+        switch (ViewModel.ViewMode)
+        {
+            case MainViewMode.FontSettings when _fontView is not null:
+                if (redo) _fontView.TryRedo();
+                else _fontView.TryUndo();
+                return true;
+            case MainViewMode.Layout when _layoutView is not null:
+                if (redo) _layoutView.TryRedo();
+                else _layoutView.TryUndo();
+                return true;
+            default:
+                return false;
+        }
+    }
+
+    private void OnFullScreenViewBackRequested(object? sender, EventArgs e) => ReturnFromFullScreenView();
 
     /// <summary>
-    /// フォント設定ビューの外（メニューを使ったあとのメニューバーなど）にフォーカスがあるときの Esc。
-    /// ビューの中の Esc は FontSettingsView が受けて処理済みにするので、ここへは処理されなかった Esc だけが届く。
+    /// 全画面ビューの外（メニューを使ったあとのメニューバーなど）にフォーカスがあるときの Esc。
+    /// ビューの中の Esc はビュー（FontSettingsView・LayoutView）が受けて処理済みにするので、ここへは処理されなかった Esc だけが届く。
     /// </summary>
     private void OnRootKeyDown(object sender, KeyRoutedEventArgs e)
     {
@@ -422,9 +544,9 @@ public sealed partial class MainWindow
             RefreshLineFontForSelection();
             return;
         }
-        if (ViewModel.ViewMode != MainViewMode.FontSettings) return;
+        if (!FullScreenViewActive) return;
         e.Handled = true;
-        ReturnFromFontSettings();
+        ReturnFromFullScreenView();
     }
 
     // ------------------------------------------------------------ ビューごとに使えない操作
@@ -436,46 +558,46 @@ public sealed partial class MainWindow
     private bool LineEditorOperationBlocked()
     {
         if (ViewModel.ViewMode == MainViewMode.Lines) return false;
-        if (ViewModel.ViewMode == MainViewMode.FontSettings) ShowLineOperationBlocked();
+        if (FullScreenViewActive) ShowLineOperationBlocked();
         return true;
     }
 
     /// <summary>
     /// 選択行を対象にする操作（行削除・空行挿入・タブ分離・エクスポート・済マークなど）を止めるか。
-    /// 行が見えないフォント設定ビューでだけ止める（絵文字挿入ビューでは行情報欄で選んだ行に使える）。
+    /// 行が見えない全画面ビューでだけ止める（絵文字挿入ビューでは行情報欄で選んだ行に使える）。
     /// </summary>
     private bool LineOperationBlocked()
     {
-        if (ViewModel.ViewMode != MainViewMode.FontSettings) return false;
+        if (!FullScreenViewActive) return false;
         ShowLineOperationBlocked();
         return true;
     }
 
     private void ShowLineOperationBlocked() =>
-        ViewModel.StatusText = $"フォント設定ビューでは行の操作は使えません（Esc で{MainViewModel.ViewModeName(FontSettingsReturnTarget)}へ戻ります）";
+        ViewModel.StatusText = $"{MainViewModel.ViewModeName(ViewModel.ViewMode)}では行の操作は使えません（Esc で{MainViewModel.ViewModeName(FullScreenReturnTarget)}へ戻ります）";
 
     /// <summary>
-    /// 歌詞の 元に戻す・やり直し を止めるか。行が見えないフォント設定ビューでは止め、
+    /// 歌詞の 元に戻す・やり直し を止めるか。行が見えない全画面ビューでは止め、
     /// 押しても何も起きないように見えないよう、ステータスバーで知らせる。
     /// </summary>
     private bool LyricsUndoRedoBlocked()
     {
-        if (ViewModel.ViewMode != MainViewMode.FontSettings) return false;
+        if (!FullScreenViewActive) return false;
         ViewModel.StatusText =
-            $"フォント設定ビューでは歌詞の元に戻す・やり直しは使えません（Esc で{MainViewModel.ViewModeName(FontSettingsReturnTarget)}へ戻ります）";
+            $"{MainViewModel.ViewModeName(ViewModel.ViewMode)}では歌詞の元に戻す・やり直しは使えません（Esc で{MainViewModel.ViewModeName(FullScreenReturnTarget)}へ戻ります）";
         return true;
     }
 
     /// <summary>
-    /// 今すぐチェック（F5）を止めるか。行もチェック結果も見えないフォント設定ビューでは止め、
+    /// 今すぐチェック（F5）を止めるか。行もチェック結果も見えない全画面ビューでは止め、
     /// ステータスバーの案内をチェック結果で消したり、隠れているチェック結果の開閉を変えたりしない
-    /// （戻るときに ExitFontSettingsView がチェックを予約し直す）。
+    /// （戻るときに ExitFontSettingsView・ExitLayoutView がチェックを予約し直す）。
     /// </summary>
     private bool ValidationBlocked()
     {
-        if (ViewModel.ViewMode != MainViewMode.FontSettings) return false;
+        if (!FullScreenViewActive) return false;
         ViewModel.StatusText =
-            $"フォント設定ビューではチェックは使えません（Esc で{MainViewModel.ViewModeName(FontSettingsReturnTarget)}へ戻ると、チェックし直します）";
+            $"{MainViewModel.ViewModeName(ViewModel.ViewMode)}ではチェックは使えません（Esc で{MainViewModel.ViewModeName(FullScreenReturnTarget)}へ戻ると、チェックし直します）";
         return true;
     }
 }

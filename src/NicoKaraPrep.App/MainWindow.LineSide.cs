@@ -4,7 +4,8 @@ namespace NicoKaraPrep.App;
 
 /// <summary>
 /// 行リストのときの右のパネル（<see cref="Views.LineSidePanel"/>）: フォント一覧で押したフォント設定を選んだ文字・行に指定し、
-/// レイアウト設定の編集・適用を行リストの表示とプレビューへつなぐ。
+/// 選んだ行のページへのレイアウト・字幕アクションの指定と、レイアウト設定ビュー（F4）を開くボタンを行リストの表示とプレビューへつなぐ。
+/// レイアウト設定の編集（レイアウト設定ビュー）のあとの行リストの表示・プレビューの作り直しもここ。
 /// </summary>
 public sealed partial class MainWindow
 {
@@ -12,9 +13,11 @@ public sealed partial class MainWindow
 
     private void InitializeLineSide()
     {
-        LineSide.Initialize(ViewModel);
+        LineSide.Initialize(ViewModel, () => SelectedIndexes);
         LineSide.FontPicked += (_, name) => ApplyFontFromPanel(name);
-        LineSide.LayoutApplyRequested += (_, name) => ApplyLineLayout(name);
+        LineSide.PageLayoutPicked += (_, name) => ApplyLineLayout(name);
+        LineSide.PageActionPicked += (_, actionId) => ApplyLineAction(actionId);
+        LineSide.EditLayoutsRequested += (_, name) => OpenLayoutViewFor(name);
         LineSide.ShowTimeSettingsChanged += (_, _) => OnShowTimeSettingsChanged();
         LineSide.AutoShowTimeRequested += (_, _) => RunAutoShowTimes();
         ViewModel.LayoutsChanged += (_, _) => ScheduleLayoutRefresh();

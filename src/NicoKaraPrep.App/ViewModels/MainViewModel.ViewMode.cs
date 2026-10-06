@@ -13,6 +13,9 @@ public enum MainViewMode
 
     /// <summary>フォント設定ビュー（F3。メニューとステータスバー以外の全体を使う）。</summary>
     FontSettings,
+
+    /// <summary>レイアウト設定ビュー（F4。ニコカラメーカー3 のレイアウト設定と字幕アクション。メニューとステータスバー以外の全体を使う）。</summary>
+    Layout,
 }
 
 /// <summary>メイン画面のビューの状態（切り替えの処理は MainWindow.SwitchView）。</summary>
@@ -35,6 +38,13 @@ public partial class MainViewModel
     {
         MainViewMode.EmojiInsert => "絵文字挿入ビュー",
         MainViewMode.FontSettings => "フォント設定ビュー",
+        MainViewMode.Layout => "レイアウト設定ビュー",
         _ => "行リスト",
     };
+
+    /// <summary>
+    /// メニューとステータスバー以外の全体を使うビュー（フォント設定ビュー・レイアウト設定ビュー）か。
+    /// 行リスト・チェック結果が見えないので、行の操作・歌詞の 元に戻す・チェックを止め、戻る先は最後にいた行リストか絵文字挿入ビューにする。
+    /// </summary>
+    public static bool IsFullScreenView(MainViewMode mode) => mode is MainViewMode.FontSettings or MainViewMode.Layout;
 }

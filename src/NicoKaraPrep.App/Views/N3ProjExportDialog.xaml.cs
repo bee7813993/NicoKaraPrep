@@ -4,6 +4,7 @@ using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using NicoKaraPrep.App.ViewModels;
 using NicoKaraPrep.Core.Formats;
+using NicoKaraPrep.Core.Model;
 using NicoKaraPrep.Core.Project;
 using Windows.Storage;
 using Windows.Storage.Pickers;
@@ -125,6 +126,7 @@ public sealed partial class N3ProjExportDialog : ContentDialog
 
         _baseFontNames = new List<string>();
         var layoutNames = new List<string>();
+        N3SubtitleAction? baseAction = null;
         string info;
         if (_basePath is null)
         {
@@ -137,6 +139,7 @@ public sealed partial class N3ProjExportDialog : ContentDialog
                 var s = N3ProjFormat.Read(_basePath);
                 _baseFontNames = s.FontSetNames.Where(n => n.Length > 0).ToList();
                 layoutNames = s.Layouts.Select(l => l.Name).Where(n => n.Length > 0).ToList();
+                baseAction = s.DefaultSubtitleAction;
                 info = $"画面 {s.ScreenWidth}×{s.ScreenHeight} / フォント設定 {s.Fonts.Count} 件 / レイアウト {s.Layouts.Count} 件 / 保存バージョン {s.AppVersion ?? "不明"}";
             }
             catch (Exception ex)
@@ -146,6 +149,7 @@ public sealed partial class N3ProjExportDialog : ContentDialog
             }
         }
         BaseInfoText.Text = info;
+        ShowSubtitleAction(baseAction);
 
         // ベースが無ければ書き出しの既定のレイアウト、どちらにも NicoKaraPrep で足したレイアウトを加える
         if (_basePath is null) layoutNames = N3LayoutReader.Defaults(1080).Select(l => l.Name).ToList();
@@ -171,6 +175,21 @@ public sealed partial class N3ProjExportDialog : ContentDialog
         DefaultFontBox.Text = text;
     }
 
+    /// <summary>
+    /// 書き出す字幕アクションの案内（読むだけ）: 行ごとの指定が無い歌詞行に書く曲の既定（書き出しと同じ決め方。自動ならこの画面で選んでいるベースで決める）と、
+    /// 行ごとの指定のある行の数。
+    /// </summary>
+    private void ShowSubtitleAction(N3SubtitleAction? baseAction)
+    {
+        var song = _vm.N3ProjSettings.SubtitleAction;
+        var action = N3ProjWriter.ResolveDefaultAction(song, song is null ? baseAction : null,
+            _vm.Nkm3Env?.DefaultSubtitleActionId, _vm.Nkm3Env?.AddOnSettings, out var source);
+        int manual = _vm.CountLinesWithSubtitleAction();
+        SubtitleActionText.Text =
+            $"字幕アクション: {N3SubtitleActionCatalog.Describe(action)}（{MainViewModel.DefaultSubtitleActionSourceLabel(source)}）／行ごとの指定 {manual} 行" +
+            "（レイアウト設定ビュー（F4）と右のパネル「レイアウト」で変えられます）";
+    }
+
     private async void OnBrowseBaseClick(object sender, RoutedEventArgs e)
     {
         var picker = new FileOpenPicker();
@@ -193,6 +212,8 @@ public sealed partial class N3ProjExportDialog : ContentDialog
             DefaultFontSetName = DefaultFontBox.Text.Trim(),
             MergeFontSets = MergeFontsCheck.IsChecked == true,
             MergeLayouts = MergeLayoutsCheck.IsChecked == true,
+            // この画面に無い曲の設定は今の設定を引き継ぐ（作り直した設定で置き換えるため、写さないと消える）
+            SubtitleAction = _vm.N3ProjSettings.SubtitleAction?.Clone(),
         };
         foreach (var row in Rows)
         {

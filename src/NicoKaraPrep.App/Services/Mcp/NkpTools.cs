@@ -56,11 +56,11 @@ internal sealed class NkpTools
     // ------------------------------------------------------------ 読む
 
     [McpServerTool(Name = "get_status", Title = "本体の状態", ReadOnly = true, Idempotent = true, OpenWorld = false, Destructive = false)]
-    [Description("開いているファイル・タブ・ビュー・選択行・再生位置・チェックの件数・表示時刻のパラメーター・ステータスバーの文など、本体の今の状態を返す。")]
+    [Description("開いているファイル・タブ・ビュー（view: lines = 行リスト / emojiInsert = 絵文字挿入ビュー / fontSettings = フォント設定ビュー / layout = レイアウト設定ビュー）・選択行・再生位置・チェックの件数・表示時刻のパラメーター・レイアウト設定・字幕アクション（defaultAction: 行ごとの指定が無い行に書く曲の既定と、その出どころ song / base / nicoKaraMaker3 / standard。actions: 使える字幕アクション）・ステータスバーの文など、本体の今の状態を返す。")]
     public Task<CallToolResult> GetStatus(CancellationToken ct) => Invoke(MainWindow.McpAccess.Read, w => w.McpGetStatus(), ct);
 
     [McpServerTool(Name = "get_lines", Title = "行の一覧", ReadOnly = true, Idempotent = true, OpenWorld = false, Destructive = false)]
-    [Description("行リストの行を返す。line（行番号）・text（歌詞）・singStart / singEnd（歌い出し・歌い終わり）・showBegin / showEnd（表示開始・表示終了。ニコカラメーカー3 で行が出る・消える時刻）・showBeginFrom / showEndFrom（表示時刻の出どころ: computed = 値を持たず毎回計算 / loaded = n3proj から読み込んだ値 / adjusted = 自動調整の値 / manual = 手で指定した値）・page / row（ページと下からの段）・font（当たるフォント設定。途中で変わるときは →）・fontManual / charFonts（手で指定したフォント）・layout / layoutManual・fontSizeDelta・width（横幅 px と使用率と判定）・check（チェックの印 error / warning）・overlap（同時歌唱）・exported（済マーク）。空行は pageBreak。長い曲は from と count で分けて読む。")]
+    [Description("行リストの行を返す。line（行番号）・text（歌詞）・singStart / singEnd（歌い出し・歌い終わり）・showBegin / showEnd（表示開始・表示終了。ニコカラメーカー3 で行が出る・消える時刻）・showBeginFrom / showEndFrom（表示時刻の出どころ: computed = 値を持たず毎回計算 / loaded = n3proj から読み込んだ値 / adjusted = 自動調整の値 / manual = 手で指定した値）・page / row（ページと下からの段）・font（当たるフォント設定。途中で変わるときは →）・fontManual / charFonts（手で指定したフォント）・layout / layoutManual・fontSizeDelta・action（字幕アクションの表示名。行ごとの指定が無ければ「（既定）」= 曲の既定に従う）/ actionId / actionDetail（手で指定した字幕アクションの Id と、設定値を変えていればその説明）・width（横幅 px と使用率と判定）・check（チェックの印 error / warning）・overlap（同時歌唱）・exported（済マーク）。空行は pageBreak。長い曲は from と count で分けて読む。")]
     public Task<CallToolResult> GetLines(
         [Description("タブの名前（省くと表示中のタブ。指定すると画面もそのタブに切り替わる）")] string? tab = null,
         [Description("最初の行番号（1 始まり）")] int from = 1,
@@ -121,6 +121,7 @@ internal sealed class NkpTools
         [Description("表示時刻の設定値（ワイプ前・後・表示間隔・上段）をプロジェクトから推定して取り込む")] bool timing = false,
         [Description("行ごとの表示時刻を読み込んだ値として持たせる（省くと、歌詞が一致する行があれば持たせる）")] bool? lineShowTimes = null,
         [Description("ページのレイアウトを、自動で選ぶものと違うページだけ手動指定として取り込む")] bool pageLayouts = true,
+        [Description("字幕アクションを取り込む（曲の既定 = 歌詞行でいちばん多いアクション、それと違うアクションの行だけ行ごとの指定にする）")] bool lineActions = true,
         [Description("このプロジェクトを n3proj 書き出しのベースにする（省くと、ベースが未設定なら ベースにする）")] bool? exportBase = null,
         [Description("NicoKaraPrep のフォント設定として取り込むフォント設定の名前（[\"*\"] で全部。省くと取り込まない）")] string[]? fontSets = null,
         [Description("アイコン（@Emoji）を取り込む（省くと、追加・置き換えになるものだけ取り込む）")] bool? icons = null,
@@ -128,7 +129,7 @@ internal sealed class NkpTools
         [Description("背景素材の動画をメディア再生に使う（省くと、メディアを開いていなければ使う）")] bool? media = null,
         CancellationToken ct = default) =>
         Invoke(MainWindow.McpAccess.WriteDocument,
-            w => w.McpImportN3Proj(path, openLyrics, force, checkFont, lineTimes, timing, lineShowTimes, pageLayouts, exportBase, fontSets, icons, iconsGlobal, media), ct);
+            w => w.McpImportN3Proj(path, openLyrics, force, checkFont, lineTimes, timing, lineShowTimes, pageLayouts, lineActions, exportBase, fontSets, icons, iconsGlobal, media), ct);
 
     [McpServerTool(Name = "save", Title = "保存", ReadOnly = false, Idempotent = true, OpenWorld = false, Destructive = true)]
     [Description("歌詞ファイルを保存する。scope が all（既定）はメニューの「上書き保存（タブ含む全行）」と同じ（分離タブをまとめてメインのファイルへ、別ファイルのタブはそれぞれのファイルへ）。tab は「表示中のタブを上書き保存」。path を指定すると、その場所へ名前を付けて保存する（.lrc か .rlf）。")]
@@ -182,7 +183,7 @@ internal sealed class NkpTools
         [Description("タブの名前（省くと表示中のタブ）")] string? tab = null,
         CancellationToken ct = default) => Invoke(MainWindow.McpAccess.WriteDocument, w => w.McpSetLineShowTime(tab, line, begin, end), ct);
 
-    // ------------------------------------------------------------ 行設定（フォント・レイアウト・文字の大きさ）
+    // ------------------------------------------------------------ 行設定（フォント・レイアウト・字幕アクション・文字の大きさ）
 
     [McpServerTool(Name = "set_line_font", Title = "行のフォント設定を指定", ReadOnly = false, Idempotent = true, OpenWorld = false, Destructive = false)]
     [Description("行全体に当てるニコカラメーカー3 のフォント設定を手で指定する（文字ごとの指定は消える）。font を省くと自動（パート記号で決める）に戻す。")]
@@ -210,6 +211,15 @@ internal sealed class NkpTools
         [Description("タブの名前（省くと表示中のタブ）")] string? tab = null,
         CancellationToken ct = default) => Invoke(MainWindow.McpAccess.WriteDocument, w => w.McpSetPageLayout(tab, lines, layout), ct);
 
+    [McpServerTool(Name = "set_line_action", Title = "行の字幕アクションを指定", ReadOnly = false, Idempotent = true, OpenWorld = false, Destructive = false)]
+    [Description("行にニコカラメーカー3 の字幕アクション（行の出し方・消し方。文字単位フェード・フェードイン/アウト・アクションしない など 8 種類）を手で指定する。既定では行のページ（空行で区切ったまとまり）の行すべてにそろえる（ニコカラメーカー3 はページ単位で使い分けるため）。設定値はその種類の既定値（ニコカラメーカー3 のアドオンの設定があればその値）。action に \"default\" を渡すと指定を外して曲の既定に戻す。使える Id は get_status の actions。")]
+    public Task<CallToolResult> SetLineAction(
+        [Description("行番号の一覧")] int[] lines,
+        [Description("字幕アクションの Id（SHINTA.CharFadeInFadeOut など。\"SHINTA.\" は省ける）か表示名（文字単位フェード など）。\"default\" で曲の既定に戻す")] string action,
+        [Description("行のページの行すべてにそろえる（false: 指定した行だけ）")] bool wholePage = true,
+        [Description("タブの名前（省くと表示中のタブ）")] string? tab = null,
+        CancellationToken ct = default) => Invoke(MainWindow.McpAccess.WriteDocument, w => w.McpSetLineAction(tab, lines, action, wholePage), ct);
+
     [McpServerTool(Name = "set_page_font_size", Title = "ページの文字の大きさを変える", ReadOnly = false, Idempotent = true, OpenWorld = false, Destructive = false)]
     [Description("行のページの文字の大きさの増減（px。0 でそのまま）を指定する。書き出しでは、文字の大きさだけを変えたフォント設定（「（麻衣）+4」など）を作ってそのページに当てる。")]
     public Task<CallToolResult> SetPageFontSize(
@@ -219,7 +229,7 @@ internal sealed class NkpTools
         CancellationToken ct = default) => Invoke(MainWindow.McpAccess.WriteDocument, w => w.McpSetPageFontSize(tab, lines, delta), ct);
 
     [McpServerTool(Name = "clear_line_overrides", Title = "行の指定を解除", ReadOnly = false, Idempotent = true, OpenWorld = false, Destructive = false)]
-    [Description("行の表示時刻・フォント設定・レイアウト・文字の大きさの指定（読み込んだ値・自動調整の値も含む）をすべて解除して自動に戻す。")]
+    [Description("行の表示時刻・フォント設定・レイアウト・文字の大きさ・字幕アクションの指定（読み込んだ値・自動調整の値も含む）をすべて解除して自動（字幕アクションは曲の既定）に戻す。")]
     public Task<CallToolResult> ClearLineOverrides(
         [Description("行番号の一覧")] int[] lines,
         [Description("タブの名前（省くと表示中のタブ）")] string? tab = null,

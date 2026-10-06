@@ -26,7 +26,7 @@
 
         <SelectorBar x:Name="PaneSelector" SelectionChanged="OnPaneChanged">
             <SelectorBarItem x:Name="FontPaneItem" Text="フォント" IsSelected="True" ToolTipService.ToolTip="押したフォント設定を、行リストで選んだ文字・行に指定します" />
-            <SelectorBarItem x:Name="LayoutPaneItem" Text="レイアウト" ToolTipService.ToolTip="ニコカラメーカー3 のレイアウト設定（字幕の位置）を見る・編集する" />
+            <SelectorBarItem x:Name="LayoutPaneItem" Text="レイアウト" ToolTipService.ToolTip="選んだ行のページのレイアウト設定（字幕の位置）と字幕アクションを指定します（レイアウト設定の編集はレイアウト設定ビュー（F4））" />
             <SelectorBarItem x:Name="ShowTimePaneItem" Text="表示時刻" ToolTipService.ToolTip="行の表示時刻の自動調整（パラメーターを変えて何度でも実行できます）" />
         </SelectorBar>
 
@@ -81,122 +81,39 @@
             </ListView>
         </Grid>
 
-        <!-- レイアウト: 一覧から選んで編集。見本は選んだ行のページを、選んだレイアウトで並べる -->
-        <Grid Grid.Row="1" x:Name="LayoutPane" RowSpacing="6" Visibility="Collapsed">
-            <Grid.RowDefinitions>
-                <RowDefinition Height="Auto" />
-                <RowDefinition Height="Auto" />
-                <RowDefinition Height="Auto" />
-                <RowDefinition Height="*" />
-            </Grid.RowDefinitions>
-            <ComboBox x:Name="LayoutPicker" HorizontalAlignment="Stretch" SelectionChanged="OnLayoutPicked"
-                      ToolTipService.ToolTip="編集するレイアウト設定（行を選ぶと、その行のページのレイアウトになります）">
-                <ComboBox.ItemTemplate>
-                    <DataTemplate x:DataType="views:LayoutPickItem">
-                        <TextBlock Text="{x:Bind Display}" />
-                    </DataTemplate>
-                </ComboBox.ItemTemplate>
-            </ComboBox>
-            <!-- 一覧の操作（左）と、選んだ行への適用（右） -->
-            <Grid Grid.Row="1" ColumnSpacing="4">
-                <Grid.ColumnDefinitions>
-                    <ColumnDefinition Width="Auto" />
-                    <ColumnDefinition Width="Auto" />
-                    <ColumnDefinition Width="Auto" />
-                    <ColumnDefinition Width="*" />
-                </Grid.ColumnDefinitions>
-                <Button x:Name="LayoutAddButton" Content="追加" Padding="8,4" Click="OnLayoutAddClick" ToolTipService.ToolTip="選んでいるレイアウトを元に、新しいレイアウト設定を足します" />
-                <Button Grid.Column="1" x:Name="LayoutRemoveButton" Content="元に戻す" Padding="8,4" Click="OnLayoutRemoveClick" />
-                <Button Grid.Column="3" x:Name="LayoutApplyButton" Content="選んだ行に適用" Padding="8,4" HorizontalAlignment="Right" Click="OnLayoutApplyClick"
-                        ToolTipService.ToolTip="選んでいる行のページに、このレイアウトを手動指定します（同じページの行すべてに効きます）" />
-            </Grid>
-            <Border Grid.Row="2" Height="150" Background="Black" CornerRadius="4">
-                <views:SubtitlePreviewView x:Name="LayoutPreview" />
-            </Border>
-            <ScrollViewer Grid.Row="3" VerticalScrollBarVisibility="Auto" Padding="0,0,12,0">
-                <StackPanel Spacing="6">
-                    <TextBlock x:Name="LayoutStateText" FontSize="12" TextWrapping="Wrap" Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
-                    <Grid ColumnSpacing="8" RowSpacing="6">
-                        <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="96" />
-                            <ColumnDefinition Width="*" />
-                        </Grid.ColumnDefinitions>
-                        <Grid.RowDefinitions>
-                            <RowDefinition Height="Auto" />
-                            <RowDefinition Height="Auto" />
-                            <RowDefinition Height="Auto" />
-                            <RowDefinition Height="Auto" />
-                            <RowDefinition Height="Auto" />
-                            <RowDefinition Height="Auto" />
-                        </Grid.RowDefinitions>
-                        <TextBlock Text="名前" Style="{StaticResource FieldLabel}" />
-                        <TextBox Grid.Column="1" x:Name="LayoutNameBox" KeyDown="OnLayoutNameKeyDown" LostFocus="OnLayoutNameLostFocus"
-                                 ToolTipService.ToolTip="追加したレイアウトだけ名前を変えられます（ベースにある名前を変えると別のレイアウトになるため）" />
-                        <TextBlock Grid.Row="1" Text="上下配置" Style="{StaticResource FieldLabel}" />
-                        <ComboBox Grid.Row="1" Grid.Column="1" x:Name="VerticalBox" HorizontalAlignment="Stretch" SelectionChanged="OnLayoutFieldChanged">
-                            <ComboBoxItem Content="上寄せ" />
-                            <ComboBoxItem Content="中央" />
-                            <ComboBoxItem Content="下寄せ" />
-                        </ComboBox>
-                        <TextBlock Grid.Row="2" x:Name="VerticalMarginLabel" Text="下余白 px" Style="{StaticResource FieldLabel}" />
-                        <NumberBox Grid.Row="2" Grid.Column="1" x:Name="VerticalMarginBox" SpinButtonPlacementMode="Compact" SmallChange="5" LargeChange="20" ValueChanged="OnLayoutNumberChanged"
-                                   ToolTipService.ToolTip="下寄せなら画面の下端からいちばん下の行まで、上寄せなら上端からいちばん上の行までの余白" />
-                        <TextBlock Grid.Row="3" Text="左右余白 px" Style="{StaticResource FieldLabel}" />
-                        <NumberBox Grid.Row="3" Grid.Column="1" x:Name="HorizontalMarginBox" SpinButtonPlacementMode="Compact" SmallChange="5" LargeChange="20" ValueChanged="OnLayoutNumberChanged" />
-                        <TextBlock Grid.Row="4" Text="行間 px" Style="{StaticResource FieldLabel}" />
-                        <NumberBox Grid.Row="4" Grid.Column="1" x:Name="LineSpaceBox" SpinButtonPlacementMode="Compact" SmallChange="5" LargeChange="20" ValueChanged="OnLayoutNumberChanged"
-                                   ToolTipService.ToolTip="字幕行と字幕行（親文字と親文字）の間隔。ルビの大きさより大きめに。マイナスも可" />
-                        <TextBlock Grid.Row="5" Text="スマート水平配置" Style="{StaticResource FieldLabel}" TextWrapping="Wrap" />
-                        <ComboBox Grid.Row="5" Grid.Column="1" x:Name="SmartHorizonBox" HorizontalAlignment="Stretch" SelectionChanged="OnLayoutFieldChanged"
-                                  ToolTipService.ToolTip="左寄せ・右寄せで行が短いときに中央へ寄せるか">
-                            <ComboBoxItem Content="調整しない" />
-                            <ComboBoxItem Content="中心位置揃え" />
-                            <ComboBoxItem Content="左右余白揃え" />
-                        </ComboBox>
-                    </Grid>
-
-                    <!-- 行ごとの左右（上の行から）。行を足す・消すボタンは一覧の下にまとめる -->
-                    <TextBlock Text="行ごとの左右レイアウト（上の行から）" Style="{StaticResource SectionTitle}" />
-                    <StackPanel x:Name="AlignmentRows" Spacing="4" />
-                    <Button x:Name="AddAlignmentButton" Content="行を追加" Padding="8,4" Click="OnAddAlignmentClick"
-                            ToolTipService.ToolTip="行を足します（ページの行数がこの数のときに、行数から自動で選ばれるレイアウトになります）" />
-
-                    <TextBlock Text="文字の間隔" Style="{StaticResource SectionTitle}" />
-                    <Grid ColumnSpacing="8" RowSpacing="6">
-                        <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="96" />
-                            <ColumnDefinition Width="*" />
-                        </Grid.ColumnDefinitions>
-                        <Grid.RowDefinitions>
-                            <RowDefinition Height="Auto" />
-                            <RowDefinition Height="Auto" />
-                            <RowDefinition Height="Auto" />
-                            <RowDefinition Height="Auto" />
-                            <RowDefinition Height="Auto" />
-                        </Grid.RowDefinitions>
-                        <TextBlock Text="歌詞間隔 px" Style="{StaticResource FieldLabel}" />
-                        <NumberBox Grid.Column="1" x:Name="LyricsIntervalBox" SpinButtonPlacementMode="Compact" SmallChange="1" LargeChange="5" ValueChanged="OnLayoutNumberChanged"
-                                   ToolTipService.ToolTip="歌詞の文字と文字の間隔（マイナスで重なる）" />
-                        <CheckBox Grid.Row="1" Grid.ColumnSpan="2" x:Name="AllowBitingCheck" Content="一部の文字の食い込みを許容する" Click="OnLayoutCheckClick"
-                                  ToolTipService.ToolTip="フォントの字間が詰まっている文字を食い込ませる（プレビューには描きません）" />
-                        <TextBlock Grid.Row="2" Text="ルビ間隔 px" Style="{StaticResource FieldLabel}" />
-                        <NumberBox Grid.Row="2" Grid.Column="1" x:Name="RubyIntervalBox" SpinButtonPlacementMode="Compact" SmallChange="1" LargeChange="5" ValueChanged="OnLayoutNumberChanged" />
-                        <TextBlock Grid.Row="3" Text="ルビ配置" Style="{StaticResource FieldLabel}" />
-                        <ComboBox Grid.Row="3" Grid.Column="1" x:Name="RubyAlignmentBox" HorizontalAlignment="Stretch" SelectionChanged="OnLayoutFieldChanged"
-                                  ToolTipService.ToolTip="自動配置: 親文字が英数字だけなら中央、それ以外は均等割り付け">
-                            <ComboBoxItem Content="自動配置" />
-                            <ComboBoxItem Content="センタリング" />
-                            <ComboBoxItem Content="均等割り付け" />
-                        </ComboBox>
-                        <TextBlock Grid.Row="4" Text="歌詞とルビ px" Style="{StaticResource FieldLabel}" />
-                        <NumberBox Grid.Row="4" Grid.Column="1" x:Name="LyricsAndRubyIntervalBox" SpinButtonPlacementMode="Compact" SmallChange="1" LargeChange="5" ValueChanged="OnLayoutNumberChanged"
-                                   ToolTipService.ToolTip="歌詞とルビの間隔" />
-                    </Grid>
-                    <TextBlock FontSize="11" TextWrapping="Wrap" Foreground="{ThemeResource TextFillColorSecondaryBrush}" Margin="0,6,0,0"
-                               Text="編集した内容はアプリ共通で保存し、すべての曲の n3proj の書き出しで、ベースの同じ名前のレイアウト設定に上書きします（無い名前は足します）。字幕のプレビューと行リストの表示にもすぐ反映します。" />
-                </StackPanel>
-            </ScrollViewer>
-        </Grid>
+        <!-- レイアウト: 選んだ行のページのレイアウトと字幕アクションを選ぶ（選ぶとすぐに指定する）。
+             レイアウト設定の値・追加・削除と、字幕アクションの曲の既定・設定値はレイアウト設定ビュー（F4）で編集する -->
+        <ScrollViewer Grid.Row="1" x:Name="LayoutPane" Visibility="Collapsed" VerticalScrollBarVisibility="Auto" Padding="0,0,12,0">
+            <StackPanel Spacing="8">
+                <TextBlock Text="選んだ行のページ" Style="{StaticResource SectionTitle}" />
+                <TextBlock x:Name="PageTargetText" FontSize="12" TextWrapping="Wrap" Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                           Text="行リストで行を選ぶと、その行のページのレイアウトと字幕アクションを指定できます" />
+                <Grid ColumnSpacing="8" RowSpacing="6">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="96" />
+                        <ColumnDefinition Width="*" />
+                    </Grid.ColumnDefinitions>
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
+                    </Grid.RowDefinitions>
+                    <TextBlock Text="レイアウト" Style="{StaticResource FieldLabel}" />
+                    <ComboBox Grid.Column="1" x:Name="PageLayoutBox" HorizontalAlignment="Stretch" PlaceholderText="（自動）" SelectionChanged="OnPageLayoutChanged"
+                              AutomationProperties.Name="選んだ行のページのレイアウト"
+                              ToolTipService.ToolTip="選んだ行のページに使うレイアウト設定。選ぶとすぐに指定します（「（自動）」でページの行数から選びます。同じページの行すべてに効きます）" />
+                    <TextBlock Grid.Row="1" Text="字幕アクション" Style="{StaticResource FieldLabel}" />
+                    <ComboBox Grid.Row="1" Grid.Column="1" x:Name="PageActionBox" HorizontalAlignment="Stretch" PlaceholderText="（既定）" SelectionChanged="OnPageActionChanged"
+                              AutomationProperties.Name="選んだ行のページの字幕アクション"
+                              ToolTipService.ToolTip="選んだ行のページに使う字幕アクション（ニコカラメーカー3 の行の出し方・消し方）。選ぶとすぐに指定します（「（既定）」で曲の既定に戻します。同じページの行すべてに効きます。設定値はその種類の既定値で、レイアウト設定ビュー（F4）で変えられます）" />
+                </Grid>
+                <TextBlock x:Name="PageActionDetail" FontSize="12" TextWrapping="Wrap" Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+                <Button x:Name="EditLayoutsButton" Content="レイアウト設定を編集..." HorizontalAlignment="Stretch" Click="OnEditLayoutsClick"
+                        AutomationProperties.Name="レイアウト設定を編集"
+                        ToolTipService.ToolTip="レイアウト設定ビュー（F4）を開いて、このページのレイアウト設定を選んだ状態で編集します（レイアウト設定の値・追加・削除、字幕アクションの曲の既定もここで変えます）" />
+                <TextBlock FontSize="11" TextWrapping="Wrap" Foreground="{ThemeResource TextFillColorSecondaryBrush}" Margin="0,6,0,0"
+                           Text="ここで選んだページの指定は、元に戻す（Ctrl+Z）で戻せます。レイアウト設定の値（位置・余白・行ごとの左右など）と、字幕アクションの曲の既定は、レイアウト設定ビュー（F4）で編集します。字幕アクションは字幕のプレビューには描きません。" />
+            </StackPanel>
+        </ScrollViewer>
 
         <!-- 表示時刻: 自動調整のパラメーター（アプリ共通）と実行。決めた表示時刻は行に持たせ、書き出し・プレビュー・チェックでそのまま使う -->
         <ScrollViewer Grid.Row="1" x:Name="ShowTimePane" Visibility="Collapsed" VerticalScrollBarVisibility="Auto" Padding="0,0,12,0">

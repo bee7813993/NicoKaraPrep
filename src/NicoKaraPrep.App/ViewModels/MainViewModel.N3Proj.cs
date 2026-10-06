@@ -346,6 +346,57 @@ public partial class MainViewModel
         return targets.Count;
     }
 
+    /// <summary>書き出しのベースの n3proj の歌詞行でいちばん多い字幕アクションの読み取り結果（パスと更新時刻で覚えておく）。</summary>
+    private (string Path, DateTime Stamp, N3SubtitleAction? Action)? _baseSubtitleActionCache;
+
+    /// <summary>
+    /// 書き出しのベースの n3proj（<see cref="SuggestN3ProjBasePath"/>）の歌詞行でいちばん多い字幕アクション（ベースが無い・読めない・
+    /// アクションの無いプロジェクトなら null）。ファイルが変わらなければ読み直さない。
+    /// </summary>
+    public N3SubtitleAction? ReadBaseMostCommonSubtitleAction()
+    {
+        string? path = SuggestN3ProjBasePath();
+        if (path is null) return null;
+        try
+        {
+            var stamp = File.GetLastWriteTimeUtc(path);
+            if (_baseSubtitleActionCache is { } c && c.Path == path && c.Stamp == stamp) return c.Action?.Clone();
+            var action = N3ProjFormat.MostCommonSubtitleAction(N3ProjFormat.ReadJsonObject(path));
+            _baseSubtitleActionCache = (path, stamp, action);
+            return action?.Clone();
+        }
+        catch (Exception)
+        {
+            return null; // ベースが読めなくても表示は続ける（書き出しはニコカラメーカー3 の設定 → 文字単位フェード）
+        }
+    }
+
+    /// <summary>
+    /// 行ごとの指定が無い歌詞行に書く字幕アクション（今の曲の設定・ベース・ニコカラメーカー3 の設定で、書き出しと同じ決め方。
+    /// <see cref="N3ProjWriter.ResolveDefaultAction(N3SubtitleAction, N3SubtitleAction, string, IReadOnlyDictionary{string, System.Text.Json.Nodes.JsonObject}, out N3SubtitleActionSource)"/>）と、
+    /// その出どころ（右パネル・書き出し画面・MCP の表示用）。
+    /// </summary>
+    public N3SubtitleAction ResolveCurrentDefaultSubtitleAction(out N3SubtitleActionSource source) =>
+        N3ProjWriter.ResolveDefaultAction(
+            N3ProjSettings.SubtitleAction,
+            N3ProjSettings.SubtitleAction is null ? ReadBaseMostCommonSubtitleAction() : null,
+            Nkm3Env?.DefaultSubtitleActionId,
+            Nkm3Env?.AddOnSettings,
+            out source);
+
+    /// <summary>既定の字幕アクションの出どころの短い説明（「曲の既定」「自動: ベースのまま」など。括弧の中に出す）。</summary>
+    public static string DefaultSubtitleActionSourceLabel(N3SubtitleActionSource source) => source switch
+    {
+        N3SubtitleActionSource.Song => "曲の既定",
+        N3SubtitleActionSource.Base => "自動: ベースのまま",
+        N3SubtitleActionSource.Nkm3 => "自動: ニコカラメーカー3 の設定",
+        _ => "自動",
+    };
+
+    /// <summary>全タブの、字幕アクションを手で指定した歌詞行の数。</summary>
+    public int CountLinesWithSubtitleAction() =>
+        GetAllTabs().Sum(t => t.Document.Lines.Count(l => !l.IsEmpty && l.SubtitleAction is not null));
+
     /// <summary>行に持たせた表示開始（手で直した値・読み込んだ値・自動調整の値。ページ衝突チェック用）。</summary>
     private Dictionary<int, int>? BuildManualShowBegins()
     {

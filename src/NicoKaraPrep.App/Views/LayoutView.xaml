@@ -1,0 +1,25 @@
+﻿<UserControl
+    x:Class="NicoKaraPrep.App.Views.LayoutView"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    KeyDown="OnKeyDown">
+
+    <!-- 仮の中身（骨組みの確認用）。本物のレイアウト設定ビュー（3 列: 一覧・編集・見本とページの一覧）は同じファイル名で置き換える。
+         公開するメンバー（BackRequested・Attach・SetLineContext・Enter・Exit・FlushPendingSave・TryUndo・TryRedo・OnDocumentChanged）は本物と同じ -->
+    <Grid Background="{ThemeResource ApplicationPageBackgroundThemeBrush}" Padding="12,8,12,8" RowSpacing="8">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+        </Grid.RowDefinitions>
+        <Grid ColumnSpacing="8">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="Auto" />
+            </Grid.ColumnDefinitions>
+            <TextBlock Text="レイアウト設定ビュー（準備中）" Style="{ThemeResource SubtitleTextBlockStyle}" FontSize="16" VerticalAlignment="Center" />
+            <!-- 戻るボタンの名前はフォント設定ビュー（BackButton）と分ける（画面の検証でビューを見分けるため） -->
+            <Button x:Name="LayoutBackButton" Grid.Column="1" Content="行リストへ戻る (Esc)" FontSize="12" Padding="8,3" Click="OnBackClick"
+                    ToolTipService.ToolTip="レイアウト設定ビューを閉じて、前のビューへ戻ります" />
+        </Grid>
+    </Grid>
+</UserControl>

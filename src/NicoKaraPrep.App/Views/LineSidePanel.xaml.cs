@@ -1,60 +1,83 @@
 ﻿using System.Runtime.CompilerServices;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
-using Microsoft.UI.Xaml.Input;
-using NicoKaraPrep.App.Services.Subtitles;
 using NicoKaraPrep.App.ViewModels;
-using NicoKaraPrep.Core.Formats;
 using NicoKaraPrep.Core.Model;
 
 namespace NicoKaraPrep.App.Views;
 
-/// <summary>レイアウトの画面の一覧の 1 件（Edited: NicoKaraPrep で編集したもの、Added: ベースに無い名前で足したもの）。</summary>
-public sealed record LayoutPickItem(string Name, string Display, bool Edited, bool Added);
-
 /// <summary>
 /// 行リストのときの右のパネル。「フォント」: 押したフォント設定を、行リストで選んだ文字（文字を選んでいなければ選んだ行）に指定する。
-/// 「レイアウト」: ニコカラメーカー3 のレイアウト設定を選んで編集する（編集はアプリ共通で保存。見本は選んだ行のページを、選んだレイアウトで並べる）。
+/// 「レイアウト」: 選んだ行のページのレイアウトと字幕アクションを選んで指定する（レイアウト設定の値・字幕アクションの曲の既定は
+/// レイアウト設定ビュー（F4）で編集する）。「表示時刻」: 表示時刻の自動調整のパラメーターと実行。
 /// </summary>
 public sealed partial class LineSidePanel : UserControl
 {
-    private static readonly string[] AlignmentNames = { "左寄せ", "中央", "右寄せ" };
+    /// <summary>レイアウトの欄の「自動」の項目。</summary>
+    private const string AutoLayoutItem = "（自動）";
+
+    /// <summary>字幕アクションの欄の「既定」の項目（続けて <see cref="N3SubtitleActionCatalog.Known"/> の順に並べる）。</summary>
+    private const string DefaultActionItem = "（既定）";
 
     private MainViewModel? _vm;
+
+    /// <summary>表示時刻の欄に値を入れている最中か。</summary>
     private bool _loading;
-    private bool _saving;
-    private string? _layoutName;
+
+    /// <summary>行リストで選んでいる行（ページの欄の対象。選んだ行が無ければ null）。</summary>
     private LineViewModel? _line;
+
+    /// <summary>行リストで選んでいる行の添字（表示中のタブ。メイン画面から受け取る）。</summary>
+    private Func<IReadOnlyList<int>>? _selectedLines;
+
     private string _fontsKey = "";
+
+    /// <summary>ページの欄（レイアウト・字幕アクション）に値を入れている最中か（そのあいだの選択の変化は指定にしない）。</summary>
+    private bool _pageLoading;
+
+    /// <summary>ページの欄の作り直しを予約済みか。</summary>
+    private bool _pageRefreshQueued;
+
+    /// <summary>レイアウトの欄の候補の名前（変わったときだけ作り直す）。</summary>
+    private string? _pageLayoutNamesKey;
+
+    /// <summary>選んだ行のページで今使っているレイアウト設定の名前（「レイアウト設定を編集...」で選ぶ。分からなければ null）。</summary>
+    private string? _pageLayoutName;
 
     public LineSidePanel()
     {
         InitializeComponent();
+        PageActionBox.Items.Add(DefaultActionItem);
+        foreach (var kind in N3SubtitleActionCatalog.Known) PageActionBox.Items.Add(kind.Name);
     }
 
     /// <summary>フォント設定を押した（null は「自動に戻す」）。</summary>
     public event EventHandler<string?>? FontPicked;
 
-    /// <summary>「選んだ行に適用」を押した（レイアウト設定名）。</summary>
-    public event EventHandler<string>? LayoutApplyRequested;
+    /// <summary>ページのレイアウトの欄で選んだ（レイアウト設定名。null は「（自動）」）。選んだ行のページに指定する。</summary>
+    public event EventHandler<string?>? PageLayoutPicked;
 
-    /// <summary>メイン画面の ViewModel とつなぐ（起動時に 1 回）。</summary>
-    public void Initialize(MainViewModel vm)
+    /// <summary>ページの字幕アクションの欄で選んだ（字幕アクションの Id。null は「（既定）」）。選んだ行のページに指定する。</summary>
+    public event EventHandler<string?>? PageActionPicked;
+
+    /// <summary>「レイアウト設定を編集...」を押した（選んだ行のページで使っているレイアウト設定の名前。分からなければ null）。</summary>
+    public event EventHandler<string?>? EditLayoutsRequested;
+
+    /// <summary>メイン画面の ViewModel と、行リストで選んでいる行の添字を返す処理とつなぐ（起動時に 1 回）。</summary>
+    public void Initialize(MainViewModel vm, Func<IReadOnlyList<int>> selectedLines)
     {
         _vm = vm;
-        vm.LayoutsChanged += (_, _) =>
-        {
-            if (_saving) UpdateLayoutState(); // 自分で編集したとき: 一覧の印と状態だけ
-            else RefreshLayouts();
-        };
+        _selectedLines = selectedLines;
+        // レイアウト設定の一覧（名前）・ページの指定・曲の既定の字幕アクションが変わったら、ページの欄を合わせる
+        vm.LayoutsChanged += (_, _) => RefreshPagePane();
+        vm.LineFontsUpdated += (_, _) => RefreshPagePane();
+        vm.SongDefaultSubtitleActionChanged += (_, _) => RefreshPagePane();
         vm.PreviewModelChanged += (_, _) =>
         {
             RefreshFonts();
-            RefreshLayoutPreview();
             if (IsShowTimePaneVisible) RefreshShowTimeSummary(); // 歌詞を直した・取り込んだ・自動調整した後の行数
         };
         RefreshFonts(force: true);
-        RefreshLayouts();
     }
 
     /// <summary>フォントを押したときに指定する先の説明（「10 行目の選んだ 3 文字に指定します」など）。</summary>
@@ -67,11 +90,7 @@ public sealed partial class LineSidePanel : UserControl
         FontPane.Visibility = layout || showTime ? Visibility.Collapsed : Visibility.Visible;
         LayoutPane.Visibility = layout ? Visibility.Visible : Visibility.Collapsed;
         ShowTimePane.Visibility = showTime ? Visibility.Visible : Visibility.Collapsed;
-        if (layout)
-        {
-            SelectLayoutOfLine(_line);
-            RefreshLayoutPreview();
-        }
+        if (layout) RefreshPagePane();
         if (showTime) RefreshShowTimePane();
     }
 
@@ -99,328 +118,194 @@ public sealed partial class LineSidePanel : UserControl
 
     private void OnFontAutoClick(object sender, RoutedEventArgs e) => FontPicked?.Invoke(this, null);
 
-    // ------------------------------------------------------------ レイアウト: 一覧
+    // ------------------------------------------------------------ レイアウト: 選んだ行のページ（レイアウトと字幕アクションの指定）
 
-    /// <summary>レイアウトの一覧を作り直す（選んでいる名前は保つ）。</summary>
-    public void RefreshLayouts()
-    {
-        if (_vm is null) return;
-        var items = LayoutItems();
-        _loading = true;
-        try
-        {
-            LayoutPicker.ItemsSource = items;
-            var selected = items.FirstOrDefault(i => i.Name == _layoutName) ?? items.FirstOrDefault();
-            LayoutPicker.SelectedItem = selected;
-            _layoutName = selected?.Name;
-        }
-        finally
-        {
-            _loading = false;
-        }
-        LoadLayoutFields();
-        RefreshLayoutPreview();
-    }
-
-    private List<LayoutPickItem> LayoutItems()
-    {
-        var vm = _vm!;
-        return vm.GetEffectiveLayouts().Select(l =>
-        {
-            bool edited = vm.FindEditedLayout(l.Name) is not null;
-            bool added = edited && !vm.IsBaseLayout(l.Name);
-            string mark = added ? "（追加）" : edited ? "（編集済み）" : "";
-            return new LayoutPickItem(l.Name, $"{l.Name}{mark}　{l.LineCount} 行", edited, added);
-        }).ToList();
-    }
-
-    /// <summary>行を選んだ: レイアウトの画面では、その行のページのレイアウトを選ぶ（見本もそのページ）。</summary>
-    public void SelectLayoutOfLine(LineViewModel? line)
+    /// <summary>行リストで行を選び直した: ページの欄（レイアウト・字幕アクション）を、選んだ行のページに合わせる。</summary>
+    public void SetLine(LineViewModel? line)
     {
         _line = line;
-        if (LayoutPane.Visibility != Visibility.Visible) return;
-        string name = line?.LayoutText.TrimStart('✎') ?? "";
-        if (name.Length > 0 && name != _layoutName && LayoutPicker.ItemsSource is List<LayoutPickItem> items &&
-            items.FirstOrDefault(i => i.Name == name) is { } item)
+        RefreshPagePane();
+    }
+
+    /// <summary>
+    /// ページの欄を今の歌詞・選択に合わせる（予約して、今の処理が終わってから行う。欄で選んで指定した直後の
+    /// SelectionChanged の中から呼ばれても、その欄の選択を処理の途中で変えないように）。レイアウトのタブを出していなければ何もしない。
+    /// </summary>
+    public void RefreshPagePane()
+    {
+        if (_pageRefreshQueued) return;
+        _pageRefreshQueued = true;
+        bool queued = DispatcherQueue.TryEnqueue(() =>
         {
-            _layoutName = name;
-            _loading = true;
-            try
-            {
-                LayoutPicker.SelectedItem = item;
-            }
-            finally
-            {
-                _loading = false;
-            }
-            LoadLayoutFields();
-        }
-        RefreshLayoutPreview();
+            _pageRefreshQueued = false;
+            RefreshPagePaneNow();
+        });
+        if (!queued) _pageRefreshQueued = false;
     }
 
-    private void OnLayoutPicked(object sender, SelectionChangedEventArgs e)
+    private void RefreshPagePaneNow()
     {
-        if (_loading) return;
-        _layoutName = (LayoutPicker.SelectedItem as LayoutPickItem)?.Name;
-        LoadLayoutFields();
-        RefreshLayoutPreview();
-    }
-
-    private N3LayoutSettings? CurrentSettings() => _layoutName is null ? null : _vm?.GetEffectiveLayouts().FirstOrDefault(l => l.Name == _layoutName);
-
-    /// <summary>一覧の印と、「元に戻す」ボタン・状態の説明を今の状態にする（編集したあと）。</summary>
-    private void UpdateLayoutState()
-    {
-        if (_vm is null) return;
-        var items = LayoutItems();
-        var current = items.FirstOrDefault(i => i.Name == _layoutName);
-        if (LayoutPicker.ItemsSource is List<LayoutPickItem> old && !old.SequenceEqual(items))
-        {
-            _loading = true;
-            try
-            {
-                LayoutPicker.ItemsSource = items;
-                LayoutPicker.SelectedItem = current;
-            }
-            finally
-            {
-                _loading = false;
-            }
-        }
-        LayoutRemoveButton.Content = current?.Added == true ? "削除" : "元に戻す";
-        LayoutRemoveButton.IsEnabled = current?.Edited == true;
-        LayoutNameBox.IsEnabled = current?.Added == true;
-        LayoutStateText.Text = current is null ? ""
-            : current.Added ? "NicoKaraPrep で足したレイアウト設定です（書き出しで追加します）"
-            : current.Edited ? "編集済み（書き出しで、ベースの同じ名前のレイアウト設定に上書きします。「元に戻す」でベースの値に戻ります）"
-            : "ベースの n3proj（無ければ書き出しの既定）の値です。値を変えると編集済みになります";
-    }
-
-    // ------------------------------------------------------------ レイアウト: 値の欄
-
-    private void LoadLayoutFields()
-    {
-        var s = CurrentSettings();
-        _loading = true;
+        if (_vm is null || LayoutPane.Visibility != Visibility.Visible) return;
+        var vm = _vm;
+        var doc = vm.Document;
+        _pageLoading = true;
         try
         {
-            if (s is null)
+            // レイアウトの欄の候補（ベース＋編集したレイアウト。書き出しと同じ並び）
+            var names = vm.GetEffectiveLayouts().Select(l => l.Name).Where(n => n.Length > 0).Distinct().ToList();
+            string key = string.Join("\n", names);
+            if (_pageLayoutNamesKey != key)
             {
-                LayoutNameBox.Text = "";
-                AlignmentRows.Children.Clear();
+                _pageLayoutNamesKey = key;
+                PageLayoutBox.Items.Clear();
+                PageLayoutBox.Items.Add(AutoLayoutItem);
+                foreach (string n in names) PageLayoutBox.Items.Add(n);
+            }
+
+            // 対象: 選んだ行（空行は除く。無ければ選んでいる 1 行）のページ（ページの数え方は書き出し・指定と同じ）
+            var lines = (_selectedLines?.Invoke() ?? Array.Empty<int>())
+                .Where(i => i >= 0 && i < doc.Lines.Count && !doc.Lines[i].IsEmpty)
+                .ToList();
+            var anchor = _line is { } current && current.Index >= 0 && current.Index < doc.Lines.Count
+                && ReferenceEquals(doc.Lines[current.Index], current.Model) && !current.Model.IsEmpty ? current : null;
+            if (lines.Count == 0 && anchor is not null) lines.Add(anchor.Index);
+            if (lines.Count == 0)
+            {
+                ShowNoPage();
                 return;
             }
-            LayoutNameBox.Text = s.Name;
-            VerticalBox.SelectedIndex = Math.Clamp(s.VerticalAlignment, 0, 2);
-            VerticalMarginLabel.Text = s.VerticalAlignment switch { 0 => "上余白 px", 2 => "下余白 px", _ => "上下余白 px" };
-            VerticalMarginBox.Value = s.VerticalMarginPx;
-            HorizontalMarginBox.Value = s.HorizontalMarginPx;
-            LineSpaceBox.Value = s.LineSpacePx;
-            SmartHorizonBox.SelectedIndex = Math.Clamp(s.SmartHorizon, 0, 2);
-            LyricsIntervalBox.Value = s.LyricsIntervalPx;
-            AllowBitingCheck.IsChecked = s.AllowBiting;
-            RubyIntervalBox.Value = s.RubyIntervalPx;
-            RubyAlignmentBox.SelectedIndex = Math.Clamp(s.RubyAlignment, 0, 2);
-            LyricsAndRubyIntervalBox.Value = s.LyricsAndRubyIntervalPx;
-            BuildAlignmentRows(s.HorizontalAlignments);
+
+            var pages = doc.GetPages(vm.Settings.PageMode, vm.Settings.FixedLineCount);
+            var targetPages = new List<List<int>>();
+            foreach (int i in lines)
+            {
+                var page = pages.FirstOrDefault(p => p.Contains(i)) ?? new List<int> { i };
+                if (!targetPages.Any(p => p[0] == page[0])) targetPages.Add(page);
+            }
+            var targetLines = targetPages.SelectMany(p => p).Distinct().Where(k => !doc.Lines[k].IsEmpty).OrderBy(k => k).ToList();
+            int first = anchor is not null && lines.Contains(anchor.Index) ? anchor.Index : lines[0];
+
+            PageLayoutBox.IsEnabled = true;
+            PageActionBox.IsEnabled = true;
+            PageTargetText.Text = targetPages.Count == 1
+                ? $"{first + 1} 行目のページ（{targetLines.Count} 行）に指定します"
+                : $"選んだ {lines.Count} 行のページ（{targetPages.Count} ページ・{targetLines.Count} 行）に指定します";
+
+            LoadPageLayout(targetPages, names, first);
+            LoadPageAction(targetLines);
         }
         finally
         {
-            _loading = false;
-        }
-        UpdateLayoutState();
-    }
-
-    /// <summary>行ごとの左右の欄（行ごとに「n 行目 [左寄せ/中央/右寄せ] [×]」）。</summary>
-    private void BuildAlignmentRows(IReadOnlyList<int> alignments)
-    {
-        AlignmentRows.Children.Clear();
-        for (int i = 0; i < alignments.Count; i++)
-        {
-            int row = i;
-            var grid = new Grid { ColumnSpacing = 8 };
-            grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(96) });
-            grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-            grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-            grid.Children.Add(new TextBlock { Text = $"{i + 1} 行目", FontSize = 12, VerticalAlignment = VerticalAlignment.Center });
-            var box = new ComboBox { HorizontalAlignment = HorizontalAlignment.Stretch, ItemsSource = AlignmentNames, SelectedIndex = Math.Clamp(alignments[i], 0, 2) };
-            box.SelectionChanged += (_, _) =>
-            {
-                if (_loading || box.SelectedIndex < 0) return;
-                Edit(l =>
-                {
-                    if (row < l.HorizontalAlignments.Count) l.HorizontalAlignments[row] = box.SelectedIndex;
-                });
-            };
-            Grid.SetColumn(box, 1);
-            grid.Children.Add(box);
-            var remove = new Button
-            {
-                Content = new FontIcon { Glyph = "", FontSize = 12 },
-                Padding = new Thickness(8, 6, 8, 6),
-                IsEnabled = alignments.Count > 1,
-            };
-            ToolTipService.SetToolTip(remove, "この行を消します");
-            remove.Click += (_, _) =>
-            {
-                Edit(l =>
-                {
-                    if (l.HorizontalAlignments.Count > 1 && row < l.HorizontalAlignments.Count) l.HorizontalAlignments.RemoveAt(row);
-                });
-                if (CurrentSettings() is { } s) BuildAlignmentRows(s.HorizontalAlignments);
-            };
-            Grid.SetColumn(remove, 2);
-            grid.Children.Add(remove);
-            AlignmentRows.Children.Add(grid);
+            _pageLoading = false;
         }
     }
 
-    private void OnAddAlignmentClick(object sender, RoutedEventArgs e)
+    /// <summary>行を選んでいないとき（または空行だけのとき）のページの欄。</summary>
+    private void ShowNoPage()
     {
-        Edit(l => l.HorizontalAlignments.Add(l.HorizontalAlignments.Count > 0 ? l.HorizontalAlignments[^1] : 1));
-        if (CurrentSettings() is { } s) BuildAlignmentRows(s.HorizontalAlignments);
+        PageTargetText.Text = "行リストで行を選ぶと、その行のページのレイアウトと字幕アクションを指定できます";
+        PageLayoutBox.SelectedIndex = -1;
+        PageLayoutBox.PlaceholderText = AutoLayoutItem;
+        PageLayoutBox.IsEnabled = false;
+        PageActionBox.SelectedIndex = -1;
+        PageActionBox.PlaceholderText = DefaultActionItem;
+        PageActionBox.IsEnabled = false;
+        PageActionDetail.Text = "";
+        _pageLayoutName = null;
     }
 
-    private void OnLayoutFieldChanged(object sender, SelectionChangedEventArgs e) => Edit(ReadFields);
-
-    private void OnLayoutNumberChanged(NumberBox sender, NumberBoxValueChangedEventArgs args) => Edit(ReadFields);
-
-    private void OnLayoutCheckClick(object sender, RoutedEventArgs e) => Edit(ReadFields);
-
-    /// <summary>値の欄（行ごとの左右以外）を編集するレイアウト設定へ写す（空の欄はそのまま）。</summary>
-    private void ReadFields(N3Layout l)
+    /// <summary>
+    /// レイアウトの欄: ページの手動指定（ページの中で最初に、一覧にある名前を持つ行のもの。書き出しと同じ）がみな同じならその名前を選ぶ。
+    /// 指定が無ければ薄字に自動で選ぶレイアウト、ページによって違えば「（混在）」。
+    /// </summary>
+    private void LoadPageLayout(List<List<int>> targetPages, List<string> names, int first)
     {
-        if (VerticalBox.SelectedIndex >= 0) l.VerticalAlignment = VerticalBox.SelectedIndex;
-        if (SmartHorizonBox.SelectedIndex >= 0) l.SmartHorizon = SmartHorizonBox.SelectedIndex;
-        if (RubyAlignmentBox.SelectedIndex >= 0) l.RubyAlignment = RubyAlignmentBox.SelectedIndex;
-        if (double.IsFinite(VerticalMarginBox.Value)) l.VerticalMarginPx = VerticalMarginBox.Value;
-        if (double.IsFinite(HorizontalMarginBox.Value)) l.HorizontalMarginPx = HorizontalMarginBox.Value;
-        if (double.IsFinite(LineSpaceBox.Value)) l.LineSpacePx = LineSpaceBox.Value;
-        if (double.IsFinite(LyricsIntervalBox.Value)) l.LyricsIntervalPx = LyricsIntervalBox.Value;
-        if (double.IsFinite(RubyIntervalBox.Value)) l.RubyIntervalPx = RubyIntervalBox.Value;
-        if (double.IsFinite(LyricsAndRubyIntervalBox.Value)) l.LyricsAndRubyIntervalPx = LyricsAndRubyIntervalBox.Value;
-        l.AllowBiting = AllowBitingCheck.IsChecked == true;
-        VerticalMarginLabel.Text = l.VerticalAlignment switch { 0 => "上余白 px", 2 => "下余白 px", _ => "上下余白 px" };
-    }
+        var doc = _vm!.Document;
+        var known = new HashSet<string>(names, StringComparer.Ordinal);
+        var manuals = targetPages
+            .Select(p => p.Select(k => doc.Lines[k].LayoutName).FirstOrDefault(n => n is { Length: > 0 } && known.Contains(n)))
+            .ToList();
+        // 自動のときに出すレイアウト（表示時刻の決まらない行（タイムタグの無い行など）は行リストのレイアウトの欄が空なので、決まる行のもの）
+        var shown = targetPages.Select(p => p.Select(ShownLayoutName).FirstOrDefault(s => s.Length > 0) ?? "").ToList();
+        int anchorPage = Math.Max(0, targetPages.FindIndex(p => p.Contains(first)));
+        _pageLayoutName = manuals[anchorPage] ?? (shown[anchorPage] is { Length: > 0 } s ? s : null);
 
-    /// <summary>選んでいるレイアウト設定を編集する（まだ編集していないベースのものは写してから）。保存して知らせる。</summary>
-    private void Edit(Action<N3Layout> change)
-    {
-        if (_loading || _vm is null || _layoutName is null) return;
-        var layout = _vm.EnsureEditableLayout(_layoutName);
-        if (layout is null) return;
-        change(layout);
-        _saving = true;
-        try
+        if (manuals.All(m => m is not null) && manuals.Distinct().Count() == 1)
         {
-            _vm.SaveLayouts();
+            PageLayoutBox.SelectedIndex = PageLayoutBox.Items.IndexOf(manuals[0]!);
+            PageLayoutBox.PlaceholderText = AutoLayoutItem;
         }
-        finally
+        else if (manuals.All(m => m is null))
         {
-            _saving = false;
-        }
-        RefreshLayoutPreview();
-    }
-
-    // ------------------------------------------------------------ レイアウト: 名前・追加・元に戻す・適用
-
-    private void OnLayoutNameKeyDown(object sender, KeyRoutedEventArgs e)
-    {
-        if (e.Key != Windows.System.VirtualKey.Enter) return;
-        e.Handled = true;
-        CommitLayoutName();
-    }
-
-    private void OnLayoutNameLostFocus(object sender, RoutedEventArgs e) => CommitLayoutName();
-
-    private void CommitLayoutName()
-    {
-        if (_loading || _vm is null || _layoutName is null) return;
-        string text = LayoutNameBox.Text.Trim();
-        if (text.Length == 0 || text == _layoutName)
-        {
-            LayoutNameBox.Text = _layoutName;
-            return;
-        }
-        if (_vm.RenameLayout(_layoutName, text) is { } renamed)
-        {
-            _layoutName = renamed;
-            RefreshLayouts();
+            PageLayoutBox.SelectedIndex = -1;
+            PageLayoutBox.PlaceholderText = shown.Distinct().Count() == 1 && shown[0] is { Length: > 0 } auto ? $"自動: {auto}" : AutoLayoutItem;
         }
         else
         {
-            LayoutNameBox.Text = _layoutName;
+            PageLayoutBox.SelectedIndex = -1;
+            PageLayoutBox.PlaceholderText = "（混在）";
         }
     }
 
-    private void OnLayoutAddClick(object sender, RoutedEventArgs e)
+    /// <summary>行のページで今使っているレイアウト設定の名前（行リストのレイアウトの欄から ✎ と「（文字 +4）」を除いたもの。決まらない行は空）。</summary>
+    private string ShownLayoutName(int index)
     {
-        if (_vm is null) return;
-        var source = CurrentSettings();
-        var layout = source is null ? new N3Layout() : N3Layout.FromSettings(source);
-        layout.Name = "新しいレイアウト";
-        _layoutName = _vm.AddLayout(layout).Name;
-        RefreshLayouts();
-        LayoutNameBox.Focus(FocusState.Programmatic);
-        LayoutNameBox.SelectAll();
+        var vm = _vm!;
+        if (index < 0 || index >= vm.Lines.Count) return "";
+        string text = vm.Lines[index].LayoutText.TrimStart('✎');
+        int delta = vm.PageFontSizeDelta(index);
+        string suffix = $"（文字 {N3PageFontSize.Signed(delta)}）";
+        return delta != 0 && text.EndsWith(suffix, StringComparison.Ordinal) ? text[..^suffix.Length] : text;
     }
 
-    private async void OnLayoutRemoveClick(object sender, RoutedEventArgs e)
+    /// <summary>
+    /// 字幕アクションの欄: ページの行の指定がみな同じならその種類を選ぶ（知らない Id は薄字に「そのほか（…）」）。
+    /// 指定が無ければ薄字に曲の既定、行によって違えば「（混在）」。
+    /// </summary>
+    private void LoadPageAction(List<int> targetLines)
     {
-        if (_vm is null || _layoutName is null || LayoutPicker.SelectedItem is not LayoutPickItem item || !item.Edited) return;
-        var dialog = new ContentDialog
+        var vm = _vm!;
+        var actions = targetLines.Select(k => vm.Document.Lines[k].SubtitleAction).ToList();
+        if (actions.All(a => a is null))
         {
-            XamlRoot = XamlRoot,
-            Title = item.Added ? $"レイアウト設定「{item.Name}」を削除しますか？" : $"レイアウト設定「{item.Name}」を元に戻しますか？",
-            Content = item.Added
-                ? "この名前を指定している行・タブは、ページの行数から自動で選ぶようになります。"
-                : "編集した値を消して、ベースの n3proj（無ければ書き出しの既定）の値に戻します。",
-            PrimaryButtonText = item.Added ? "削除" : "元に戻す",
-            CloseButtonText = "やめる",
-            DefaultButton = ContentDialogButton.Close,
-        };
-        if (await dialog.ShowAsync() != ContentDialogResult.Primary) return;
-        _vm.RemoveEditedLayout(item.Name);
-        if (item.Added) _layoutName = null;
-        RefreshLayouts();
-    }
-
-    private void OnLayoutApplyClick(object sender, RoutedEventArgs e)
-    {
-        if (_layoutName is not null) LayoutApplyRequested?.Invoke(this, _layoutName);
-    }
-
-    // ------------------------------------------------------------ レイアウト: 見本
-
-    /// <summary>見本: 選んだ行（無ければ最初）のページの行を、選んでいるレイアウトで並べる（ワイプ前・全部表示）。</summary>
-    private void RefreshLayoutPreview()
-    {
-        if (_vm is null || LayoutPane.Visibility != Visibility.Visible) return;
-        var model = _vm.PreviewModel;
-        var layout = CurrentSettings();
-        if (model is null || layout is null)
-        {
-            LayoutPreview.Model = null;
-            return;
+            var def = vm.ResolveCurrentDefaultSubtitleAction(out var source);
+            string name = N3SubtitleActionCatalog.Describe(def);
+            PageActionBox.SelectedIndex = -1;
+            PageActionBox.PlaceholderText = $"既定: {N3SubtitleActionCatalog.DisplayName(def.Id)}";
+            PageActionDetail.Text = $"曲の既定の字幕アクション: {name}（{MainViewModel.DefaultSubtitleActionSourceLabel(source)}）";
         }
-        var anchor = (_line is not null ? model.Lines.FirstOrDefault(p => ReferenceEquals(p.Source.Line, _line.Model)) : null)
-            ?? model.Lines.FirstOrDefault();
-        var lines = new List<PreviewLine>();
-        if (anchor is not null && model.Pages.TryGetValue((anchor.Tab, anchor.Page), out var page))
+        else if (actions[0] is { } a0 && actions.All(a => a0.SameAs(a)))
         {
-            var spacing = new SubtitleSpacing((float)layout.LyricsIntervalPx, (float)layout.RubyIntervalPx, (float)layout.LyricsAndRubyIntervalPx, layout.RubyAlignment, layout.AllowBiting);
-            lines = page.Select(p => p with
-            {
-                Source = p.Source.WithSpacing(spacing),
-                Layout = layout,
-                BeginMs = 0,
-                EndMs = int.MaxValue,
-                Wipe = Array.Empty<N3WipeTimeline.Group>(),
-            }).ToList();
+            int kind = N3SubtitleActionCatalog.Known.ToList().FindIndex(k => k.Id == a0.Id);
+            PageActionBox.SelectedIndex = kind >= 0 ? kind + 1 : -1;
+            PageActionBox.PlaceholderText = kind >= 0 ? DefaultActionItem : N3SubtitleActionCatalog.DisplayName(a0.Id);
+            PageActionDetail.Text = $"手で指定した字幕アクション: {N3SubtitleActionCatalog.Describe(a0)}";
         }
-        LayoutPreview.Model = new SubtitlePreviewModel(model.ScreenWidth, model.ScreenHeight, lines);
-        LayoutPreview.TimeMs = 1;
+        else
+        {
+            PageActionBox.SelectedIndex = -1;
+            PageActionBox.PlaceholderText = "（混在）";
+            var kinds = actions.Select(a => a is null ? DefaultActionItem : N3SubtitleActionCatalog.DisplayName(a.Id)).Distinct().ToList();
+            PageActionDetail.Text = $"行によって違います（{string.Join("・", kinds.Take(4))}{(kinds.Count > 4 ? " など" : "")}）。選ぶと、ページの行すべてをそろえます";
+        }
     }
+
+    private void OnPageLayoutChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (_pageLoading || PageLayoutBox.SelectedItem is not string choice) return;
+        PageLayoutPicked?.Invoke(this, choice == AutoLayoutItem ? null : choice);
+        RefreshPagePane(); // 指定が変わらなかったときも、欄を今の指定に戻す
+    }
+
+    private void OnPageActionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        int index = PageActionBox.SelectedIndex;
+        if (_pageLoading || index < 0) return;
+        PageActionPicked?.Invoke(this, index == 0 ? null : N3SubtitleActionCatalog.Known[index - 1].Id);
+        RefreshPagePane();
+    }
+
+    private void OnEditLayoutsClick(object sender, RoutedEventArgs e) => EditLayoutsRequested?.Invoke(this, _pageLayoutName);
 
     // ------------------------------------------------------------ 表示時刻（自動調整のパラメーターと実行）
 
