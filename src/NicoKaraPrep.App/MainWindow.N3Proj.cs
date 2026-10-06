@@ -368,6 +368,9 @@ public sealed partial class MainWindow
                 LineFontLabel.Text = "フォント";
                 LineLayoutBox.SelectedIndex = -1;
                 LineLayoutBox.PlaceholderText = "（自動）";
+                EnsureLineActionItems();
+                LineActionBox.SelectedIndex = -1;
+                LineActionBox.PlaceholderText = DefaultLineActionItem;
                 PageFontSizeBox.Value = 0;
                 UpdateSideTarget();
                 RefreshLineFontPlaceholder();
@@ -391,6 +394,7 @@ public sealed partial class MainWindow
             LineFontBox.Text = model.FontSetName ?? "";
             RefreshLineFontForSelection();
             RefreshLineLayoutBox(line);
+            RefreshLineActionBox();
             PageFontSizeBox.Value = ViewModel.PageFontSizeDelta(line.Index);
 
             if (plan is null)
@@ -556,6 +560,100 @@ public sealed partial class MainWindow
         TryRun(ViewModel.UpdateLineFonts);
         if (ViewModel.SelectedLine is { } line && !line.Model.IsEmpty) RefreshLineLayoutBox(line);
         LineSide.RefreshPagePane();
+    }
+
+    // ------------------------------------------------------------ 行の字幕アクション（行設定。選んだ行だけ）
+
+    private const string DefaultLineActionItem = "（既定）";
+
+    /// <summary>行設定の字幕アクションの欄の候補（「（既定）」と 8 種類）を入れる（初めの 1 回）。</summary>
+    private void EnsureLineActionItems()
+    {
+        if (LineActionBox.Items.Count > 0) return;
+        LineActionBox.Items.Add(DefaultLineActionItem);
+        foreach (var kind in N3SubtitleActionCatalog.Known) LineActionBox.Items.Add(kind.Name);
+    }
+
+    /// <summary>
+    /// 行設定の字幕アクションの欄を、選んだ行（空行は除く）に合わせる。指定が無ければ「（既定）」の薄字、全部同じならその種類、
+    /// 行によって違えば「（混在）」。_n3PanelLoading の中で呼ぶ（選択を合わせても指定はしない）。
+    /// </summary>
+    private void RefreshLineActionBox()
+    {
+        EnsureLineActionItems();
+        var actions = SelectedNonEmptyIndexes().Select(i => ViewModel.Document.Lines[i].SubtitleAction).ToList();
+        var def = ViewModel.ResolveCurrentDefaultSubtitleAction(out var source);
+        string defText = $"曲の既定: {ViewModel.DescribeSubtitleAction(def)}（{ViewModels.MainViewModel.DefaultSubtitleActionSourceLabel(source)}）";
+        string state;
+        if (actions.All(a => a is null))
+        {
+            LineActionBox.SelectedIndex = -1;
+            LineActionBox.PlaceholderText = DefaultLineActionItem;
+            state = $"この行は曲の既定の字幕アクションです（{defText}）";
+        }
+        else if (actions[0] is { } a0 && actions.All(a => a0.SameAs(a)))
+        {
+            int kind = N3SubtitleActionCatalog.Known.ToList().FindIndex(k => k.Id == a0.Id);
+            LineActionBox.SelectedIndex = kind >= 0 ? kind + 1 : -1;
+            LineActionBox.PlaceholderText = kind >= 0 ? DefaultLineActionItem : N3SubtitleActionCatalog.DisplayName(a0.Id);
+            state = $"手で指定した字幕アクション: {ViewModel.DescribeSubtitleAction(a0)}（{defText}）";
+        }
+        else
+        {
+            LineActionBox.SelectedIndex = -1;
+            LineActionBox.PlaceholderText = "（混在）";
+            state = $"選んだ行によって字幕アクションが違います（{defText}）";
+        }
+        ToolTipService.SetToolTip(LineActionBox,
+            $"{state}\n選ぶと、選んだ行だけに指定します（複数の行を選んでいれば、その行すべて。ページのほかの行はそのまま）。「（既定）」で曲の既定に戻します。" +
+            "ページの行すべてにそろえるときは、右のパネル「レイアウト」かレイアウト設定ビュー（F4）で指定します");
+    }
+
+    /// <summary>行設定の字幕アクションの欄で選んだ（選んだ行だけに指定。「（既定）」で外す）。</summary>
+    private void OnLineActionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        int index = LineActionBox.SelectedIndex;
+        if (_n3PanelLoading || index < 0) return;
+        ApplyLineActionToSelectedLines(index == 0 ? null : N3SubtitleActionCatalog.Known[index - 1].Id);
+    }
+
+    /// <summary>
+    /// 選んだ行（空行は除く）だけに字幕アクションを指定する（null で指定を外して曲の既定に戻す）。ページのほかの行は変えない
+    /// （ページの行すべてにそろえるのは右パネル・レイアウト設定ビュー）。設定値は <see cref="MainViewModel.CreatePageSubtitleAction"/>。
+    /// 元に戻す（Ctrl+Z）は 1 回で戻る。
+    /// </summary>
+    private void ApplyLineActionToSelectedLines(string? actionId)
+    {
+        var indexes = SelectedNonEmptyIndexes();
+        if (indexes.Count == 0) return;
+        N3SubtitleAction? action = string.IsNullOrEmpty(actionId) ? null : ViewModel.CreatePageSubtitleAction(actionId);
+        int n = 0;
+        TryRun(() => n = ViewModel.SetLinesSubtitleAction(indexes, action, wholePage: false));
+        if (n > 0)
+        {
+            foreach (var l in ViewModel.Lines) l.RaiseOverrideMark();
+            ViewModel.StatusText = action is null
+                ? $"{n} 行の字幕アクションの指定を外しました（曲の既定に戻します。Ctrl+Z で戻せます）"
+                : $"{n} 行に字幕アクション「{N3SubtitleActionCatalog.DisplayName(action.Id)}」を指定しました（選んだ行だけ。ページのほかの行はそのまま。Ctrl+Z で戻せます）";
+        }
+        else
+        {
+            ViewModel.StatusText = "字幕アクションの指定は変わりませんでした";
+        }
+        // 欄の作り直しは、SelectionChanged を抜けてから（選択の変更の中で選択を変えない）
+        DispatcherQueue.TryEnqueue(Microsoft.UI.Dispatching.DispatcherQueuePriority.Low, () =>
+        {
+            _n3PanelLoading = true;
+            try
+            {
+                RefreshLineActionBox();
+            }
+            finally
+            {
+                _n3PanelLoading = false;
+            }
+            LineSide.RefreshPagePane();
+        });
     }
 
     /// <summary>

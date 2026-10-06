@@ -565,6 +565,13 @@
                                   ToolTipService.ToolTip="この行に適用するニコカラメーカーのフォント設定名（空欄はパート記号で自動判定。空にして Enter で自動に戻す）" />
                         <Button x:Name="EditLineFontButton" Content="編集..." FontSize="12" Padding="8,3" Click="OnEditLineFontClick"
                                 ToolTipService.ToolTip="フォント設定ビュー（F3）を開いて、このフォント設定を編集します" />
+                        <!-- 行の字幕アクション（行ごと。選んだ行だけに指定する。ページの行すべてにそろえるのは右パネル「レイアウト」・レイアウト設定ビュー） -->
+                        <TextBlock Text="字幕アクション" FontSize="12" VerticalAlignment="Center" Margin="8,0,0,0"
+                                   ToolTipService.ToolTip="選んだ行の字幕アクション（ニコカラメーカー3 の行の出し方・消し方）。行ごとの指定で、複数の行を選ぶと選んだ行すべてに指定します" />
+                        <ComboBox x:Name="LineActionBox" Width="140" FontSize="12" PlaceholderText="（既定）"
+                                  SelectionChanged="OnLineActionChanged"
+                                  AutomationProperties.Name="選んだ行の字幕アクション"
+                                  ToolTipService.ToolTip="選ぶと、選んだ行だけに指定します（複数の行を選んでいれば、その行すべて。ページのほかの行はそのまま）。「（既定）」で曲の既定に戻します" />
                         <TextBlock Text="レイアウト" FontSize="12" VerticalAlignment="Center" Margin="8,0,0,0"
                                    ToolTipService.ToolTip="この行のページに使うニコカラメーカーのレイアウト設定（ページ単位。自動はページの行数から選びます）" />
                         <ComboBox x:Name="LineLayoutBox" Width="140" FontSize="12" PlaceholderText="（自動）"
