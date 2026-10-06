@@ -44,6 +44,17 @@ public partial class MainViewModel
     }
 
     /// <summary>
+    /// ページ（行）に指定する字幕アクションの値。曲の既定（自動を含む。<see cref="ResolveCurrentDefaultSubtitleAction"/>）と同じ種類なら
+    /// その値の写し（既定のままのページと同じ動きになる）、違う種類ならニコカラメーカー3 の設定（AddOns）の値、無ければ既定値。
+    /// 右パネル・レイアウト設定ビュー・MCP の set_line_action で同じものを使う（どこで選んでも同じ値を書くように）。
+    /// </summary>
+    public N3SubtitleAction CreatePageSubtitleAction(string id)
+    {
+        var song = ResolveCurrentDefaultSubtitleAction(out _);
+        return song.Id == id ? song : N3SubtitleActionCatalog.CreateDefault(id, Nkm3Env?.AddOnSettings.GetValueOrDefault(id));
+    }
+
+    /// <summary>
     /// 曲の既定の字幕アクションを変える（null = 自動）。.tttproj に保存する（歌詞の元に戻すの対象にはしない）。変わったら true。
     /// </summary>
     public bool SetSongDefaultSubtitleAction(N3SubtitleAction? action)

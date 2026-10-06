@@ -174,7 +174,9 @@ public sealed partial class LayoutViewModel : ObservableObject
         bool merge = _main.N3ProjSettings.MergeLayouts;
         IsMergeOff = !merge;
         var pages = _main.GetLayoutPages();
-        var entries = N3LayoutLibrary.Entries(_main.GetBaseLayouts(), Own, merge);
+        // 一覧は、ベースへ反映しない曲でも NicoKaraPrep のレイアウト（足したもの・編集したもの）を並べる（アプリ共通なので、ここで
+        // 名前の変更・削除ができるように。反映しない曲では、この曲の書き出しに使われないことを一覧の説明と各行のツールチップで知らせる）
+        var entries = N3LayoutLibrary.Entries(_main.GetBaseLayouts(), Own, merge: true);
         var counts = pages.GroupBy(p => p.LayoutName).ToDictionary(g => g.Key, g => g.Count(), StringComparer.Ordinal);
 
         string? keep = selectName ?? SelectedLayout?.Name;
@@ -206,7 +208,8 @@ public sealed partial class LayoutViewModel : ObservableObject
         var parts = new List<string>();
         if (edited > 0) parts.Add($"編集 {edited}");
         if (added > 0) parts.Add($"新規 {added}");
-        ListSummary = $"レイアウト設定 {entries.Count} 件{(parts.Count > 0 ? $"（{string.Join("・", parts)}）" : "")}。上からの並びが書き出しの並び（行数から自動で選ぶときの優先順）です";
+        ListSummary = $"レイアウト設定 {entries.Count} 件{(parts.Count > 0 ? $"（{string.Join("・", parts)}）" : "")}。上からの並びが書き出しの並び（行数から自動で選ぶときの優先順）です" +
+                      (merge || parts.Count == 0 ? "" : "（この曲はベースへ反映しない設定なので、「編集」はベースの値で、「新規」は入れずに書き出します）");
 
         RefreshPages(pages);
         UpdateSelectionState();
@@ -378,7 +381,7 @@ public sealed partial class LayoutViewModel : ObservableObject
         entry.Renames.Add((old, renamed));
         UpdateUndoState();
         Refresh(renamed);
-        string unique = renamed != text ? $"（「{text}」は使われているため「{renamed}」にしました）" : "";
+        string unique = renamed != text ? $"（「{text}」はほかのレイアウト設定か、ページ・タブの指定で使われているため「{renamed}」にしました）" : "";
         string refs = lines > 0 ? $"。{lines} 行のレイアウトの指定も新しい名前にしました" : "";
         SetStatus($"レイアウト設定の名前を「{old}」から「{renamed}」に変えました{unique}{refs}（Ctrl+Z で戻せます）");
         return true;
@@ -558,6 +561,9 @@ public sealed partial class LayoutViewModel : ObservableObject
     {
         CanUndo = _history.CanUndo;
         CanRedo = _history.CanRedo;
+        // ビューを抜けたあとに、このビューの操作（数値・名前の欄を離れたときの確定）で変えたとき: 変更は元に戻すの履歴に入っているので、
+        // 抜けたときの署名を取り直す（外での変更とみなして、次に入ったときに履歴を捨てないように）
+        if (!_active && _exitSignature is not null) _exitSignature = N3LayoutHistory.Signature(Own);
     }
 
     /// <summary>レイアウト設定ビューの中の操作を 1 つ戻す。</summary>

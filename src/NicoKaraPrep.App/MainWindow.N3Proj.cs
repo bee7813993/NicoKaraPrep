@@ -527,12 +527,22 @@ public sealed partial class MainWindow
         ApplyLineLayout(choice == AutoLayoutItem ? null : choice);
     }
 
+    /// <summary>
+    /// 右パネル「レイアウト」と行設定の指定の対象: 選んだ行のうち空行でない行（無ければ行リストの選択の行。空行なら空）。
+    /// 空行を押してから Shift で歌詞の行まで選んだときも、右パネルの表示（選んだ行のうち空行でない行）と同じ行に指定する。
+    /// </summary>
+    private List<int> SelectedNonEmptyIndexes()
+    {
+        var indexes = SelectedIndexes.Where(i => i >= 0 && i < ViewModel.Lines.Count && !ViewModel.Lines[i].Model.IsEmpty).ToList();
+        if (indexes.Count == 0 && ViewModel.SelectedLine is { } line && !line.Model.IsEmpty) indexes.Add(line.Index);
+        return indexes;
+    }
+
     /// <summary>選んだ行のページにレイアウトを指定する（null で自動に戻す）。</summary>
     private void ApplyLineLayout(string? name)
     {
-        if (ViewModel.SelectedLine is not { } line || line.Model.IsEmpty) return;
-        var indexes = SelectedIndexes;
-        if (indexes.Count == 0) indexes = new List<int> { line.Index };
+        var indexes = SelectedNonEmptyIndexes();
+        if (indexes.Count == 0) return;
         int n = 0;
         TryRun(() => n = ViewModel.SetLinesLayout(indexes, name));
         if (n > 0)
@@ -544,25 +554,24 @@ public sealed partial class MainWindow
         }
         // 行リストのレイアウトの表示とプレビューを作り直す（チェックはしないので、上の知らせは消えない）
         TryRun(ViewModel.UpdateLineFonts);
-        RefreshLineLayoutBox(line);
+        if (ViewModel.SelectedLine is { } line && !line.Model.IsEmpty) RefreshLineLayoutBox(line);
+        LineSide.RefreshPagePane();
     }
 
     /// <summary>
     /// 選んだ行のページに字幕アクションを指定する（null で指定を外して曲の既定に戻す。右パネル「レイアウト」の字幕アクションの欄）。
-    /// 設定値はその種類の既定値（ニコカラメーカー3 の AddOns の設定があればその値）。元に戻す（Ctrl+Z）は 1 回で戻る。
+    /// 設定値は <see cref="MainViewModel.CreatePageSubtitleAction"/>（曲の既定と同じ種類ならその値、違えばその種類の既定値。
+    /// レイアウト設定ビュー・MCP と同じ）。元に戻す（Ctrl+Z）は 1 回で戻る。
     /// </summary>
     private void ApplyLineAction(string? actionId)
     {
-        if (ViewModel.SelectedLine is not { } line || line.Model.IsEmpty)
+        var indexes = SelectedNonEmptyIndexes();
+        if (indexes.Count == 0)
         {
             ViewModel.StatusText = "行リストで行を選んでから、字幕アクションを選んでください";
             return;
         }
-        var indexes = SelectedIndexes;
-        if (indexes.Count == 0) indexes = new List<int> { line.Index };
-        N3SubtitleAction? action = string.IsNullOrEmpty(actionId)
-            ? null
-            : N3SubtitleActionCatalog.CreateDefault(actionId, ViewModel.Nkm3Env?.AddOnSettings.GetValueOrDefault(actionId));
+        N3SubtitleAction? action = string.IsNullOrEmpty(actionId) ? null : ViewModel.CreatePageSubtitleAction(actionId);
         int n = 0;
         TryRun(() => n = ViewModel.SetLinesSubtitleAction(indexes, action));
         if (n > 0)

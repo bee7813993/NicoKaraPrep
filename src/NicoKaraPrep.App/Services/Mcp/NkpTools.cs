@@ -212,7 +212,7 @@ internal sealed class NkpTools
         CancellationToken ct = default) => Invoke(MainWindow.McpAccess.WriteDocument, w => w.McpSetPageLayout(tab, lines, layout), ct);
 
     [McpServerTool(Name = "set_line_action", Title = "行の字幕アクションを指定", ReadOnly = false, Idempotent = true, OpenWorld = false, Destructive = false)]
-    [Description("行にニコカラメーカー3 の字幕アクション（行の出し方・消し方。文字単位フェード・フェードイン/アウト・アクションしない など 8 種類）を手で指定する。既定では行のページ（空行で区切ったまとまり）の行すべてにそろえる（ニコカラメーカー3 はページ単位で使い分けるため）。設定値はその種類の既定値（ニコカラメーカー3 のアドオンの設定があればその値）。action に \"default\" を渡すと指定を外して曲の既定に戻す。使える Id は get_status の actions。")]
+    [Description("行にニコカラメーカー3 の字幕アクション（行の出し方・消し方。文字単位フェード・フェードイン/アウト・アクションしない など 8 種類）を手で指定する。既定では行のページ（空行で区切ったまとまり）の行すべてにそろえる（ニコカラメーカー3 はページ単位で使い分けるため）。設定値は、曲の既定と同じ種類なら曲の既定の値、違う種類ならその種類の既定値（ニコカラメーカー3 のアドオンの設定があればその値。右のパネル・レイアウト設定ビューで選ぶのと同じ）。action に \"default\" を渡すと指定を外して曲の既定に戻す。使える Id は get_status の actions。")]
     public Task<CallToolResult> SetLineAction(
         [Description("行番号の一覧")] int[] lines,
         [Description("字幕アクションの Id（SHINTA.CharFadeInFadeOut など。\"SHINTA.\" は省ける）か表示名（文字単位フェード など）。\"default\" で曲の既定に戻す")] string action,

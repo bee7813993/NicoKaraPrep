@@ -40,7 +40,6 @@ public sealed record LayoutPageInfo(
 public partial class MainViewModel
 {
     /// <summary>ベースの n3proj の歌詞行でいちばん多い字幕アクション（パスと更新日時が同じあいだは読み直さない）。</summary>
-    private (string Path, DateTime Stamp, N3SubtitleAction? Action)? _baseActionCache;
 
     /// <summary>
     /// 全タブのページ（タブの順・ページの順）。ページの数え方（<see cref="LyricsDocument.GetPages"/>。<see cref="CreateShowTimeSettings"/> と同じ
@@ -124,37 +123,10 @@ public partial class MainViewModel
     }
 
     /// <summary>
-    /// ベースの n3proj（<see cref="SuggestN3ProjBasePath"/>）の歌詞行でいちばん多い字幕アクションの写し（ベースが無い・読めない・
-    /// アクションの無いときは null）。
-    /// </summary>
-    public N3SubtitleAction? GetBaseSubtitleAction()
-    {
-        string? path = SuggestN3ProjBasePath();
-        if (path is null) return null;
-        try
-        {
-            var stamp = File.GetLastWriteTimeUtc(path);
-            if (_baseActionCache is { } c && c.Path == path && c.Stamp == stamp) return c.Action?.Clone();
-            var action = N3ProjFormat.MostCommonSubtitleAction(N3ProjFormat.ReadJsonObject(path));
-            _baseActionCache = (path, stamp, action);
-            return action?.Clone();
-        }
-        catch (Exception)
-        {
-            return null; // ベースが読めなくても表示は続ける
-        }
-    }
-
-    /// <summary>
     /// 曲の既定の字幕アクションを「自動」にしたときに使うもの（書き出しと同じ決め方 N3ProjWriter.ResolveDefaultAction:
     /// ベースの歌詞行でいちばん多いもの → ニコカラメーカー3 の「すべて同じ字幕アクション」の Id → 文字単位フェード）と、その出どころ。
     /// </summary>
     public N3SubtitleAction ResolveAutoSubtitleAction(out N3SubtitleActionSource source) =>
-        N3ProjWriter.ResolveDefaultAction(null, GetBaseSubtitleAction(), Nkm3Env?.DefaultSubtitleActionId, Nkm3Env?.AddOnSettings, out source);
+        N3ProjWriter.ResolveDefaultAction(null, ReadBaseMostCommonSubtitleAction(), Nkm3Env?.DefaultSubtitleActionId, Nkm3Env?.AddOnSettings, out source);
 
-    /// <summary>行ごとの指定が無い歌詞行に書く字幕アクション（曲の既定があればそれ、無ければ自動）と、その出どころ。</summary>
-    public N3SubtitleAction ResolveSongSubtitleAction(out N3SubtitleActionSource source) =>
-        N3ProjSettings.SubtitleAction is { Id.Length: > 0 } song
-            ? N3ProjWriter.ResolveDefaultAction(song, null, null, null, out source)
-            : ResolveAutoSubtitleAction(out source);
 }

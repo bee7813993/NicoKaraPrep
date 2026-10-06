@@ -379,7 +379,7 @@ public partial class MainViewModel
     public N3SubtitleAction ResolveCurrentDefaultSubtitleAction(out N3SubtitleActionSource source) =>
         N3ProjWriter.ResolveDefaultAction(
             N3ProjSettings.SubtitleAction,
-            N3ProjSettings.SubtitleAction is null ? ReadBaseMostCommonSubtitleAction() : null,
+            N3ProjSettings.SubtitleAction is { Id.Length: > 0 } ? null : ReadBaseMostCommonSubtitleAction(),
             Nkm3Env?.DefaultSubtitleActionId,
             Nkm3Env?.AddOnSettings,
             out source);

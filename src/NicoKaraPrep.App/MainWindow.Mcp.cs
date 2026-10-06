@@ -1188,10 +1188,8 @@ public sealed partial class MainWindow
         McpUseTab(tab);
         var indexes = McpLineIndexes(lines);
         var kind = McpActionKind(action);
-        // 設定値はその種類の既定値（ニコカラメーカー3 の AddOns の設定があればその値。右のパネル「レイアウト」で選ぶのと同じ）
-        N3SubtitleAction? value = kind is null
-            ? null
-            : N3SubtitleActionCatalog.CreateDefault(kind.Id, ViewModel.Nkm3Env?.AddOnSettings.GetValueOrDefault(kind.Id));
+        // 設定値は曲の既定と同じ種類ならその値、違えばその種類の既定値（右のパネル「レイアウト」・レイアウト設定ビューで選ぶのと同じ）
+        N3SubtitleAction? value = kind is null ? null : ViewModel.CreatePageSubtitleAction(kind.Id);
         int n = ViewModel.SetLinesSubtitleAction(indexes, value, wholePage);
         foreach (var l in ViewModel.Lines) l.RaiseOverrideMark();
         string target = wholePage ? $"選んだ行のページ（{n} 行）" : $"{n} 行";

@@ -104,7 +104,7 @@
                     <TextBlock Grid.Row="1" Text="字幕アクション" Style="{StaticResource FieldLabel}" />
                     <ComboBox Grid.Row="1" Grid.Column="1" x:Name="PageActionBox" HorizontalAlignment="Stretch" PlaceholderText="（既定）" SelectionChanged="OnPageActionChanged"
                               AutomationProperties.Name="選んだ行のページの字幕アクション"
-                              ToolTipService.ToolTip="選んだ行のページに使う字幕アクション（ニコカラメーカー3 の行の出し方・消し方）。選ぶとすぐに指定します（「（既定）」で曲の既定に戻します。同じページの行すべてに効きます。設定値はその種類の既定値で、レイアウト設定ビュー（F4）で変えられます）" />
+                              ToolTipService.ToolTip="選んだ行のページに使う字幕アクション（ニコカラメーカー3 の行の出し方・消し方）。選ぶとすぐに指定します（「（既定）」で曲の既定に戻します。同じページの行すべてに効きます。設定値は、曲の既定と同じ種類なら曲の既定の値、違う種類ならその種類の既定値（ニコカラメーカー3 の設定があればその値）です。曲の既定の値はレイアウト設定ビュー（F4）で変えられます）" />
                 </Grid>
                 <TextBlock x:Name="PageActionDetail" FontSize="12" TextWrapping="Wrap" Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
                 <Button x:Name="EditLayoutsButton" Content="レイアウト設定を編集..." HorizontalAlignment="Stretch" Click="OnEditLayoutsClick"

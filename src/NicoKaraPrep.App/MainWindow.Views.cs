@@ -333,6 +333,9 @@ public sealed partial class MainWindow
         // 選ぶレイアウト設定: 右パネルの「レイアウト設定を編集...」で選んだ名前 → 選択行のページのレイアウトの手動指定（無ければビューに任せる）
         string? name = _layoutViewSelectName ?? (ViewModel.SelectedLine?.Model.LayoutName is { Length: > 0 } manual ? manual : null);
         _layoutViewSelectName = null;
+        // 見本の材料（字幕のプレビューの行・当たるフォント）を今の歌詞・フォント設定で作り直す（全画面ビューではチェックのタイマーが
+        // 作り直さないので、フォント設定ビューから直接移ったときや、編集の直後に入ったときに古いままにならないように）
+        TryRun(ViewModel.UpdateLineFonts);
         view.SetLineContext(SelectedIndexes);
         view.Enter(back, name);
         ViewModel.StatusText = $"レイアウト設定ビュー: Esc（または F4）で{back}へ戻ります";

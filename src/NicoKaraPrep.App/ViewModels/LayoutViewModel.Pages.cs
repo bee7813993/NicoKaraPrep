@@ -61,7 +61,7 @@ public sealed partial class LayoutViewModel
     /// </summary>
     private void RefreshPages(List<LayoutPageInfo> infos)
     {
-        var songDefault = _main.ResolveSongSubtitleAction(out _);
+        var songDefault = _main.ResolveCurrentDefaultSubtitleAction(out _);
         var keys = infos.Select(i => LayoutPageItem.PageKey(i.TabName, i.PageIndex)).ToList();
         if (Pages.Select(p => p.Key).SequenceEqual(keys))
         {
@@ -164,7 +164,8 @@ public sealed partial class LayoutViewModel
     {
         var pages = _selectedPages.ToList();
         if (pages.Count == 0) return;
-        var (lines, otherTab) = WritePages(pages, (tab, indexes) => _main.SetPageLinesLayout(tab, indexes, name));
+        var (lines, otherTab, failed) = WritePages(pages, (tab, indexes) => _main.SetPageLinesLayout(tab, indexes, name));
+        if (failed) return; // エラーの知らせを残す
         if (lines == 0)
         {
             SetStatus(name is null ? "選んだページにはレイアウトの指定がありません" : $"選んだページは、もうレイアウト設定「{name}」を指定しています");
@@ -189,7 +190,8 @@ public sealed partial class LayoutViewModel
     {
         var pages = _selectedPages.ToList();
         if (pages.Count == 0) return;
-        var (lines, otherTab) = WritePages(pages, (tab, indexes) => _main.SetPageLinesSubtitleAction(tab, indexes, action));
+        var (lines, otherTab, failed) = WritePages(pages, (tab, indexes) => _main.SetPageLinesSubtitleAction(tab, indexes, action));
+        if (failed) return; // エラーの知らせを残す
         string name = N3SubtitleActionCatalog.Describe(action);
         if (lines == 0)
         {
@@ -201,24 +203,19 @@ public sealed partial class LayoutViewModel
             : $"選んだ {pages.Count} ページ（{lines} 行）に字幕アクション「{name}」を指定しました（{UndoHint(otherTab)}）");
     }
 
-    /// <summary>
-    /// ページの字幕アクションに使うもの。曲の既定と同じ種類ならその値（曲の既定の値のままページに固定する）、違えばニコカラメーカー3 の設定の値
-    /// （AddOns。無ければ既定値）。
-    /// </summary>
-    private N3SubtitleAction ActionFor(string id)
-    {
-        var song = _main.ResolveSongSubtitleAction(out _);
-        return song.Id == id ? song : N3SubtitleActionCatalog.CreateDefault(id, AddOnDefaults(id));
-    }
+    /// <summary>ページの字幕アクションに使うもの（右パネル・MCP と同じ決め方。<see cref="MainViewModel.CreatePageSubtitleAction"/>）。</summary>
+    private N3SubtitleAction ActionFor(string id) => _main.CreatePageSubtitleAction(id);
 
     /// <summary>
     /// ページの行へ書く（タブごとに 1 回。表示中でないタブはタブを切り替えずに書く）。書いたら行リストの表示・字幕のプレビュー・一覧を作り直す。
-    /// 変えた行の数と、表示中でないタブを変えたかを返す。
+    /// 変えた行の数と、表示中でないタブを変えたか、途中で失敗したか（エラーはステータスバーに出した）を返す。
+    /// 失敗しても、行を書き換えたあとの保存（.tttproj）で失敗したことがあるので、表示は作り直す。
     /// </summary>
-    private (int Lines, bool OtherTab) WritePages(IReadOnlyList<LayoutPageItem> pages, Func<TabState, IReadOnlyList<int>, int> write)
+    private (int Lines, bool OtherTab, bool Failed) WritePages(IReadOnlyList<LayoutPageItem> pages, Func<TabState, IReadOnlyList<int>, int> write)
     {
         int lines = 0;
         bool otherTab = false;
+        bool failed = false;
         try
         {
             foreach (var group in pages.GroupBy(p => p.Info.Tab))
@@ -230,9 +227,10 @@ public sealed partial class LayoutViewModel
         }
         catch (Exception ex)
         {
+            failed = true;
             SetStatus($"エラー: ページへ指定できませんでした（{ex.Message}）");
         }
-        if (lines > 0)
+        if (lines > 0 || failed)
         {
             try
             {
@@ -246,7 +244,7 @@ public sealed partial class LayoutViewModel
             }
             Refresh(null);
         }
-        return (lines, otherTab);
+        return (lines, otherTab, failed);
     }
 
     /// <summary>ページへの指定の戻し方の説明。</summary>

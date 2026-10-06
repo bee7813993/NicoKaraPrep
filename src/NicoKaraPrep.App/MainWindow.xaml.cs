@@ -520,6 +520,7 @@ public sealed partial class MainWindow : Window
         string text = await content.GetTextAsync();
         TryRun(() => ViewModel.LoadFromText(text));
         ScheduleValidation();
+        NotifyLayoutViewDocumentChanged(); // レイアウト設定ビューを開いたまま貼り付けたとき（ページの一覧・曲の既定を作り直す）
     }
 
     private void OnCopyClick(object sender, RoutedEventArgs e)
@@ -717,6 +718,7 @@ public sealed partial class MainWindow : Window
         LoadQuickEmojiSettings();
         RefreshN3LinePanel(); // 表示時刻の設定・絵文字の指定で、行設定の自動の表示時刻と説明が変わる
         ScheduleValidation();
+        NotifyLayoutViewDocumentChanged(); // ページの区切り方が変わると、レイアウト設定ビューのページの一覧が変わる
     }
 
     private async void OnImportN3ProjClick(object sender, RoutedEventArgs e)
@@ -747,6 +749,7 @@ public sealed partial class MainWindow : Window
             ApplyMcpEnabled();
             TryRun(ViewModel.RunValidation);
             RefreshLineFontPlaceholder();
+            NotifyLayoutViewDocumentChanged(); // ページの区切り方・画面の大きさが変わると、レイアウト設定ビューのページの一覧・px の欄が変わる
         }
         if (dialog.OpenClaudeLinkRequested) await ShowClaudeLinkDialogAsync();
     }

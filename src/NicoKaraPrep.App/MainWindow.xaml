@@ -472,7 +472,7 @@
                                     <TextBlock Text="{x:Bind WidthGlyph, Mode=OneWay}" ToolTipService.ToolTip="横幅チェック結果" />
                                 </StackPanel>
                                 <TextBlock Grid.Column="4" Text="{x:Bind WidthText, Mode=OneWay}" FontSize="12" TextWrapping="Wrap" Foreground="{x:Bind WidthBrush, Mode=OneWay}" VerticalAlignment="Center" ToolTipService.ToolTip="{x:Bind WidthToolTip, Mode=OneWay}" />
-                                <TextBlock Grid.Column="5" Text="{x:Bind OverrideMark, Mode=OneWay}" FontSize="12" VerticalAlignment="Center" Foreground="{ThemeResource AccentTextFillColorPrimaryBrush}" ToolTipService.ToolTip="ニコカラメーカー用の手動指定（表示時刻・フォント・レイアウト・文字の大きさ）あり" />
+                                <TextBlock Grid.Column="5" Text="{x:Bind OverrideMark, Mode=OneWay}" FontSize="12" VerticalAlignment="Center" Foreground="{ThemeResource AccentTextFillColorPrimaryBrush}" ToolTipService.ToolTip="ニコカラメーカー用の手動指定（表示時刻・フォント・レイアウト・文字の大きさ・字幕アクション）あり" />
                                 <!-- この行に当たるフォント設定（書き出しと同じ決め方。途中で切り替わる行は最初と最後を → でつなぐ）と、下の段にこの行のページのレイアウト。
                                      中の大きさを変えたら MainWindow.Layout.cs の FontCellWidth も合わせる -->
                                 <StackPanel Grid.Column="6" VerticalAlignment="Center" Spacing="1">

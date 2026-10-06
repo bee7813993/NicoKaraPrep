@@ -121,9 +121,12 @@ public sealed partial class LayoutListItem : ObservableObject
         PageCount = pageCount;
         PageText = pageCount > 0 ? $"{pageCount} ページ" : "未使用";
         Summary = LayoutTexts.Summary(s);
-        string notUsed = !merge && entry.Origin != N3LayoutOrigin.Base
-            ? "\n（この曲は編集したレイアウト設定をベースへ反映しない設定なので、書き出しではベースの値を使います）"
-            : "";
+        string notUsed = merge ? "" : entry.Origin switch
+        {
+            N3LayoutOrigin.Edited => "\n（この曲は編集したレイアウト設定をベースへ反映しない設定なので、この曲の書き出しではベースの値を使います）",
+            N3LayoutOrigin.Added => "\n（この曲は編集したレイアウト設定をベースへ反映しない設定なので、この曲の書き出しには入りません）",
+            _ => "",
+        };
         ToolTip = $"{DisplayName}（{BadgeText}）\n{LayoutTexts.OriginNote(entry.Origin)}{notUsed}\n" +
                   $"上下配置: {LayoutTexts.Vertical(s.VerticalAlignment)}（{LayoutTexts.VerticalMarginLabel(s.VerticalAlignment).Replace(" px", "")} {s.VerticalMarginPx:0.#} px）・左右余白 {s.HorizontalMarginPx:0.#} px・行間 {s.LineSpacePx:0.#} px\n" +
                   $"行ごとの左右配置（上の行から）: {string.Join("・", s.HorizontalAlignments.Select(LayoutTexts.Horizontal))}\n" +
