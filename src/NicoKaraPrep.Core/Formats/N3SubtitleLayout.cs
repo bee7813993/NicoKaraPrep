@@ -55,33 +55,37 @@ public static class N3LayoutReader
         int index = 0;
         foreach (var node in layouts)
         {
-            if (node is not JsonObject o)
-            {
-                index++;
-                continue;
-            }
-            var aligns = new List<int>();
-            if (o["HorizontalAlignments"] is JsonArray ha)
-            {
-                foreach (var a in ha) aligns.Add(N3FontJson.Int(a?["HorizontalLayoutAlignment"]) ?? 0);
-            }
-            result.Add(new N3LayoutSettings(
-                o["SettingsName"]?.GetValue<string>() ?? "",
-                index,
-                N3FontJson.Int(o["SelectedVerticalAlignmentIndex"]) ?? 2,
-                N3FontJson.SizePx(o["LineSpace"], height),
-                N3FontJson.SizePx(o["VerticalMargin"], height),
-                N3FontJson.SizePx(o["HorizontalMargin"], height),
-                aligns,
-                N3FontJson.Int(o["SmartHorizon"]) ?? 0,
-                N3FontJson.SizePx(o["LyricsInterval"], height),
-                N3FontJson.SizePx(o["RubyInterval"], height),
-                N3FontJson.SizePx(o["LyricsAndRubyInterval"], height),
-                N3FontJson.Int(o["RubyAlignment"]) ?? 0,
-                N3FontJson.Bool(o["AllowBiting"]) ?? false));
+            if (node is JsonObject o) result.Add(ParseLayout(o, index, height));
             index++;
         }
         return result;
+    }
+
+    /// <summary>
+    /// レイアウト設定（LyricsLayoutModel）1 件を読む。n3proj の LyricsLayouts の 1 件と、レイアウト設定テンプレート（.tpl）の中身で共通。
+    /// px は <paramref name="height"/> での値、<paramref name="index"/> はレイアウト設定の並びの番号。
+    /// </summary>
+    public static N3LayoutSettings ParseLayout(JsonObject o, int index, int height)
+    {
+        var aligns = new List<int>();
+        if (o["HorizontalAlignments"] is JsonArray ha)
+        {
+            foreach (var a in ha) aligns.Add(N3FontJson.Int(a?["HorizontalLayoutAlignment"]) ?? 0);
+        }
+        return new N3LayoutSettings(
+            o["SettingsName"]?.GetValue<string>() ?? "",
+            index,
+            N3FontJson.Int(o["SelectedVerticalAlignmentIndex"]) ?? 2,
+            N3FontJson.SizePx(o["LineSpace"], height),
+            N3FontJson.SizePx(o["VerticalMargin"], height),
+            N3FontJson.SizePx(o["HorizontalMargin"], height),
+            aligns,
+            N3FontJson.Int(o["SmartHorizon"]) ?? 0,
+            N3FontJson.SizePx(o["LyricsInterval"], height),
+            N3FontJson.SizePx(o["RubyInterval"], height),
+            N3FontJson.SizePx(o["LyricsAndRubyInterval"], height),
+            N3FontJson.Int(o["RubyAlignment"]) ?? 0,
+            N3FontJson.Bool(o["AllowBiting"]) ?? false);
     }
 
     /// <summary>プロジェクトの画面（背景素材）の幅・高さ px（無ければ 1920 × 1080。幅が無ければ高さの 16:9）。</summary>

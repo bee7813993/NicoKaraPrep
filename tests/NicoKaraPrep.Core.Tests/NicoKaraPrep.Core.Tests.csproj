@@ -24,4 +24,10 @@
     <ProjectReference Include="..\..\src\NicoKaraPrep.Core\NicoKaraPrep.Core.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <!-- 実物のファイル（ニコカラメーカー3 のテンプレートなど）。テストは出力フォルダの Fixtures から読む -->
+    <None Remove="Fixtures\**" />
+    <Content Include="Fixtures\**" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
 </Project>

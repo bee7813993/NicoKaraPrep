@@ -31,6 +31,12 @@ public sealed record Nkm3Environment(
     /// <summary>この設定フォルダのフォント設定テンプレートのフォルダ（存在するかは確かめない）。</summary>
     public string TemplateFontFolder => Path.Combine(SettingsFolder, TemplateFontFolderName);
 
+    /// <summary>レイアウト設定テンプレート（.tpl）を置くフォルダの名前（設定フォルダの下）。</summary>
+    public const string TemplateLayoutFolderName = "TemplateLayout";
+
+    /// <summary>この設定フォルダのレイアウト設定テンプレートのフォルダ（存在するかは確かめない）。</summary>
+    public string TemplateLayoutFolder => Path.Combine(SettingsFolder, TemplateLayoutFolderName);
+
     public static Nkm3Environment? Detect()
     {
         try
@@ -50,15 +56,26 @@ public sealed record Nkm3Environment(
     /// Microsoft Store 版（%LOCALAPPDATA%\Packages\22724SHINTA.NicokaraMaker3_*\Settings\TemplateFont）を先に、
     /// zip 版（%APPDATA%\SHINTA\NicoKaraMaker3 の下）を後に並べる。読み取り専用で使う。
     /// </summary>
-    public static List<string> FindTemplateFontFolders()
+    public static List<string> FindTemplateFontFolders() => FindTemplateFolders(TemplateFontFolderName);
+
+    /// <summary>
+    /// このマシンにあるニコカラメーカー3 のレイアウト設定テンプレートのフォルダ（存在するものだけ）。
+    /// 探し方はフォント設定テンプレート（<see cref="FindTemplateFontFolders"/>）と同じで、
+    /// Microsoft Store 版（%LOCALAPPDATA%\Packages\22724SHINTA.NicokaraMaker3_*\Settings\TemplateLayout）を先に、
+    /// zip 版（%APPDATA%\SHINTA\NicoKaraMaker3 の下）を後に並べる。読み取り専用で使う。
+    /// </summary>
+    public static List<string> FindTemplateLayoutFolders() => FindTemplateFolders(TemplateLayoutFolderName);
+
+    /// <summary>テンプレートのフォルダ（設定フォルダの下の <paramref name="folderName"/>）のうち、存在するもの。</summary>
+    private static List<string> FindTemplateFolders(string folderName)
     {
         var candidates = new List<string>();
         try
         {
-            candidates.AddRange(StoreSettingsFolders().Select(s => Path.Combine(s, TemplateFontFolderName)));
+            candidates.AddRange(StoreSettingsFolders().Select(s => Path.Combine(s, folderName)));
             string zipRoot = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "SHINTA", "NicoKaraMaker3");
-            candidates.Add(Path.Combine(zipRoot, TemplateFontFolderName));
-            candidates.Add(Path.Combine(zipRoot, "Settings", TemplateFontFolderName));
+            candidates.Add(Path.Combine(zipRoot, folderName));
+            candidates.Add(Path.Combine(zipRoot, "Settings", folderName));
         }
         catch (Exception)
         {
