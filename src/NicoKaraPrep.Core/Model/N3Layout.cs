@@ -80,9 +80,54 @@ public sealed class N3Layout
     };
 }
 
+/// <summary>レイアウト設定の出どころ（書き出しの並びの 1 件が、どこの値か）。</summary>
+public enum N3LayoutOrigin
+{
+    /// <summary>ベースの n3proj（無ければ書き出しの既定）の値のまま。</summary>
+    Base,
+
+    /// <summary>ベースにある名前を NicoKaraPrep で編集したもの（書き出しでベースの同じ名前に上書きする）。</summary>
+    Edited,
+
+    /// <summary>ベースに無い名前で NicoKaraPrep で足したもの（書き出しで後ろへ足す）。</summary>
+    Added,
+}
+
+/// <summary>
+/// 書き出しの並びのレイアウト設定 1 件と出どころ。<paramref name="Own"/> は同じ名前の NicoKaraPrep のレイアウト（無ければ null）。
+/// 合わせない（MergeLayouts が false）の曲では、<paramref name="Settings"/> はベースの値で、<paramref name="Own"/> は書き出しに使われない。
+/// </summary>
+public sealed record N3LayoutEntry(N3LayoutSettings Settings, N3LayoutOrigin Origin, N3Layout? Own)
+{
+    public string Name => Settings.Name;
+
+    /// <summary>編集画面に出す値（NicoKaraPrep のレイアウトがあればその値、無ければ書き出しの並びの値。番号は並びの位置）。</summary>
+    public N3LayoutSettings EditingSettings => Own is { } own ? own.ToSettings(Settings.Index) : Settings;
+}
+
 /// <summary>レイアウト設定の一覧の計算（ベースと NicoKaraPrep で編集したものを合わせる）。</summary>
 public static class N3LayoutLibrary
 {
+    /// <summary>
+    /// 書き出しの並び（<see cref="Effective"/> と同じ順・同じ値）に、出どころ（ベースのまま・編集・新規）を添えたもの。
+    /// 同じ名前の NicoKaraPrep のレイアウトが複数あれば、最初のもの（<see cref="Effective"/> が使うもの）を添える。
+    /// </summary>
+    public static List<N3LayoutEntry> Entries(IReadOnlyList<N3LayoutSettings> baseLayouts, IReadOnlyList<N3Layout> own, bool merge)
+    {
+        var baseNames = new HashSet<string>(baseLayouts.Select(b => b.Name), StringComparer.Ordinal);
+        var ownByName = new Dictionary<string, N3Layout>(StringComparer.Ordinal);
+        foreach (var l in own)
+        {
+            if (!string.IsNullOrWhiteSpace(l.Name)) ownByName.TryAdd(l.Name, l);
+        }
+        return Effective(baseLayouts, own, merge).Select(s =>
+        {
+            var mine = ownByName.GetValueOrDefault(s.Name);
+            var origin = mine is null ? N3LayoutOrigin.Base : baseNames.Contains(s.Name) ? N3LayoutOrigin.Edited : N3LayoutOrigin.Added;
+            return new N3LayoutEntry(s, origin, mine);
+        }).ToList();
+    }
+
     /// <summary>
     /// 書き出すプロジェクトのレイアウト設定の並び（N3ProjWriter と同じ合わせ方）。ベースの順に、同じ名前の編集したものがあればその値にし、
     /// ベースに無い名前の編集したものを後ろへ足す（<paramref name="merge"/> が false ならベースのまま）。番号（Index）は並びの位置。
