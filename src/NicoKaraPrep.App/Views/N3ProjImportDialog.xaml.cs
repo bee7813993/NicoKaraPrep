@@ -243,10 +243,10 @@ public sealed partial class N3ProjImportDialog : ContentDialog
         else
         {
             var currentAction = vm.ResolveCurrentDefaultSubtitleAction(out var currentSource);
-            LineActionsTitle.Text = $"字幕アクション（曲の既定: {N3SubtitleActionCatalog.Describe(projectAction)}、行ごとの指定 {actionLines} 行）を取り込む";
+            LineActionsTitle.Text = $"字幕アクション（曲の既定: {vm.DescribeSubtitleAction(projectAction)}、行ごとの指定 {actionLines} 行）を取り込む";
             LineActionsDetail.Text =
                 "このプロジェクトの歌詞行でいちばん多い字幕アクションを曲の既定にし" +
-                $"（現在: {N3SubtitleActionCatalog.Describe(currentAction)}（{MainViewModel.DefaultSubtitleActionSourceLabel(currentSource)}））、" +
+                $"（現在: {vm.DescribeSubtitleAction(currentAction)}（{MainViewModel.DefaultSubtitleActionSourceLabel(currentSource)}））、" +
                 (matched == 0
                     ? "開いている歌詞と一致する行が無いため、行ごとの指定は取り込みません。"
                     : $"それと違うアクションの {actionLines} 行を行ごとの指定にします（歌詞が同じ行だけ。同じアクションの行は指定を外して曲の既定に従わせます）。") +

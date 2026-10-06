@@ -44,6 +44,12 @@ public partial class MainViewModel
     }
 
     /// <summary>
+    /// 字幕アクションの短い説明（「文字単位フェード」「フェードイン/アウト（500/250ms）」など）。設定値は、ニコカラメーカー3 の設定
+    /// （AddOns。無い項目は既定値）と違う所だけを添える（ふだん使っている設定のままなら名前だけ）。画面・MCP の説明はこれを使う。
+    /// </summary>
+    public string DescribeSubtitleAction(N3SubtitleAction? action) => N3SubtitleActionCatalog.Describe(action, Nkm3Env?.AddOnSettings);
+
+    /// <summary>
     /// ページ（行）に指定する字幕アクションの値。曲の既定（自動を含む。<see cref="ResolveCurrentDefaultSubtitleAction"/>）と同じ種類なら
     /// その値の写し（既定のままのページと同じ動きになる）、違う種類ならニコカラメーカー3 の設定（AddOns）の値、無ければ既定値。
     /// 右パネル・レイアウト設定ビュー・MCP の set_line_action で同じものを使う（どこで選んでも同じ値を書くように）。

@@ -443,7 +443,7 @@ public sealed partial class MainWindow
         if (line.SubtitleAction is { } action)
         {
             o["actionId"] = action.Id;
-            string detail = N3SubtitleActionCatalog.Describe(action); // 設定値を既定値から変えていれば「フェードイン/アウト（500/250ms）」など
+            string detail = ViewModel.DescribeSubtitleAction(action); // 設定値をニコカラメーカー3 の設定から変えていれば「フェードイン/アウト（500/250ms）」など
             if (detail != actionName) o["actionDetail"] = detail;
         }
         if (vm.WidthResult is { } w)
@@ -563,7 +563,7 @@ public sealed partial class MainWindow
             // 行ごとの指定が無い歌詞行に書く字幕アクション（書き出しと同じ決め方）と、使える字幕アクション
             ["defaultAction"] = new JsonObject
             {
-                ["name"] = N3SubtitleActionCatalog.Describe(defaultAction),
+                ["name"] = ViewModel.DescribeSubtitleAction(defaultAction),
                 ["id"] = defaultAction.Id,
                 ["from"] = ActionSourceKey(actionSource),
             },

@@ -372,7 +372,7 @@ public partial class MainViewModel
                 IsModified = _activeTab.IsModified;
                 UpdateTitle();
             }
-            done.Add($"字幕アクション（曲の既定: {N3SubtitleActionCatalog.Describe(projectAction)}・行ごとの指定 {lines} 行）");
+            done.Add($"字幕アクション（曲の既定: {DescribeSubtitleAction(projectAction)}・行ごとの指定 {lines} 行）");
         }
 
         // 6) アイコン（@Emoji）

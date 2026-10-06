@@ -74,7 +74,8 @@ public class N3SubtitleActionTests : IDisposable
         Assert.Equal(N3SubtitleActionFieldKind.Pixels, N3SubtitleActionCatalog.Find("SHINTA.SlideUpDown")!.Field("SlideAmount")!.Kind);
         var whole = N3SubtitleActionCatalog.Find("SHINTA.CharFadeInFadeOut")!.Field("WholeFadeOut")!;
         Assert.Equal(N3SubtitleActionFieldKind.Bool, whole.Kind);
-        Assert.False((bool)whole.Default);
+        Assert.True((bool)whole.Default); // ニコカラメーカー3 の初期値（スピンフリップと同じ）
+        Assert.False((bool)N3SubtitleActionCatalog.Find("SHINTA.CharFadeInFadeOut")!.Field("DelayInlineGraphics")!.Default);
         Assert.Equal("表示終了時刻を基準にフェードアウト", whole.Label);
     }
 
@@ -85,9 +86,9 @@ public class N3SubtitleActionTests : IDisposable
     {
         var a = N3SubtitleActionCatalog.CreateDefault("SHINTA.CharFadeInFadeOut", createAppVer: "Ver 13.79");
         Assert.Equal("SHINTA.CharFadeInFadeOut", a.Id);
-        // ニコカラメーカー3 が保存するのと同じ並び（前の書き出しと同じ JSON）
+        // ニコカラメーカー3 が保存するのと同じ並びで、値はニコカラメーカー3 の初期値（表示終了基準にする・アイコンを遅らせない。スピンフリップと同じ）
         Assert.Equal(
-            """{"$type":"CharFadeInFadeOutSettingsModel","IntroDelay":350,"WholeFadeOut":false,"TailDelay":250,"DelayInlineGraphics":true,"FadeInTime":250,"FadeOutTime":250,"CreateAppVer":"Ver 13.79","ModifyAppVer":""}""",
+            """{"$type":"CharFadeInFadeOutSettingsModel","IntroDelay":350,"WholeFadeOut":true,"TailDelay":250,"DelayInlineGraphics":false,"FadeInTime":250,"FadeOutTime":250,"CreateAppVer":"Ver 13.79","ModifyAppVer":""}""",
             a.Settings.ToJsonString());
 
         Assert.Equal("""{"$type":"AddOnSettingsModel","CreateAppVer":"","ModifyAppVer":""}""",
@@ -145,7 +146,7 @@ public class N3SubtitleActionTests : IDisposable
             """{"$type":"CharFadeInFadeOutSettingsModel","DelayInlineGraphics":false,"IntroDelay":350,"TailDelay":250,"FadeInTime":250,"CreateAppVer":"Ver 11.15","ModifyAppVer":"","NewOption":3}""");
         var n = N3SubtitleActionCatalog.Normalize(changed, "Ver 13.79");
         Assert.Equal(
-            """{"$type":"CharFadeInFadeOutSettingsModel","IntroDelay":350,"WholeFadeOut":false,"TailDelay":250,"DelayInlineGraphics":false,"FadeInTime":250,"FadeOutTime":250,"NewOption":3,"CreateAppVer":"Ver 11.15","ModifyAppVer":""}""",
+            """{"$type":"CharFadeInFadeOutSettingsModel","IntroDelay":350,"WholeFadeOut":true,"TailDelay":250,"DelayInlineGraphics":false,"FadeInTime":250,"FadeOutTime":250,"NewOption":3,"CreateAppVer":"Ver 11.15","ModifyAppVer":""}""",
             n.Settings.ToJsonString());
 
         // 型判別子が違う（旧書式の「アクションしない」など）ときは、知らない項目を持ち込まない
@@ -214,7 +215,9 @@ public class N3SubtitleActionTests : IDisposable
         var oldFormat = Act("SHINTA.CharFadeInFadeOut", OldCharFade);
         var newFormat = Act("SHINTA.CharFadeInFadeOut", NewCharFade);
         Assert.True(oldFormat.SameAs(newFormat));
-        Assert.True(newFormat.SameAs(N3SubtitleActionCatalog.CreateDefault("SHINTA.CharFadeInFadeOut", createAppVer: "Ver 13.90")));
+        Assert.False(newFormat.SameAs(N3SubtitleActionCatalog.CreateDefault("SHINTA.CharFadeInFadeOut", createAppVer: "Ver 13.90"))); // 実データの値は初期値と違う
+        var userSettings = Obj("""{"IntroDelay":350,"WholeFadeOut":false,"TailDelay":250,"DelayInlineGraphics":true,"FadeInTime":250,"FadeOutTime":250}""");
+        Assert.True(newFormat.SameAs(N3SubtitleActionCatalog.CreateDefault("SHINTA.CharFadeInFadeOut", userSettings, "Ver 13.90"))); // ユーザーの設定とは同じ
 
         var noDelay = newFormat.Clone();
         noDelay.Set("DelayInlineGraphics", false);
@@ -282,7 +285,8 @@ public class N3SubtitleActionTests : IDisposable
         Assert.Equal("そのほか（Plain）", N3SubtitleActionCatalog.DisplayName("Plain"));
 
         // 既定値のままなら名前だけ
-        Assert.Equal("文字単位フェード", N3SubtitleActionCatalog.Describe(Act("SHINTA.CharFadeInFadeOut", OldCharFade)));
+        Assert.Equal("文字単位フェード", N3SubtitleActionCatalog.Describe(N3SubtitleActionCatalog.CreateDefault("SHINTA.CharFadeInFadeOut")));
+        Assert.Equal("文字単位フェード（表示終了基準にしない・アイコンを遅らせる）", N3SubtitleActionCatalog.Describe(Act("SHINTA.CharFadeInFadeOut", OldCharFade)));
         Assert.Equal("アクションしない", N3SubtitleActionCatalog.Describe(N3SubtitleActionCatalog.CreateDefault("SHINTA.NoAction")));
         Assert.Equal("（既定）", N3SubtitleActionCatalog.Describe(null));
         Assert.Equal("そのほか（Future）", N3SubtitleActionCatalog.Describe(Act("SHINTA.Future", """{"$type":"FutureSettingsModel","Amount":3}""")));
@@ -297,13 +301,24 @@ public class N3SubtitleActionTests : IDisposable
         fadeIn.Set("FadeOutTime", 900);
         Assert.Equal("フェードイン", N3SubtitleActionCatalog.Describe(fadeIn));
 
-        // する・しないを変えたら短い説明（実データ Proof.n3proj の形）
-        var proof = N3SubtitleActionCatalog.CreateDefault("SHINTA.CharFadeInFadeOut");
-        proof.Set("WholeFadeOut", true);
-        proof.Set("DelayInlineGraphics", false);
-        Assert.Equal("文字単位フェード（表示終了基準・アイコンを遅らせない）", N3SubtitleActionCatalog.Describe(proof));
-        proof.Set("TailDelay", 400);
-        Assert.Equal("文字単位フェード（350/400/250/250ms・表示終了基準・アイコンを遅らせない）", N3SubtitleActionCatalog.Describe(proof));
+        // する・しないを変えたら短い説明（実データのほとんどの形。ユーザーのニコカラメーカー3 の設定）
+        var usual = N3SubtitleActionCatalog.CreateDefault("SHINTA.CharFadeInFadeOut");
+        usual.Set("WholeFadeOut", false);
+        usual.Set("DelayInlineGraphics", true);
+        Assert.Equal("文字単位フェード（表示終了基準にしない・アイコンを遅らせる）", N3SubtitleActionCatalog.Describe(usual));
+        usual.Set("TailDelay", 400);
+        Assert.Equal("文字単位フェード（350/400/250/250ms・表示終了基準にしない・アイコンを遅らせる）", N3SubtitleActionCatalog.Describe(usual));
+
+        // ニコカラメーカー3 の設定を渡すと、その値との違いだけを添える（ふだんの設定のままなら名前だけ）
+        var addOns = new Dictionary<string, JsonObject>
+        {
+            ["SHINTA.CharFadeInFadeOut"] = Obj("""{"IntroDelay":350,"WholeFadeOut":false,"TailDelay":250,"DelayInlineGraphics":true,"FadeInTime":250,"FadeOutTime":250}"""),
+        };
+        usual.Set("TailDelay", 250);
+        Assert.Equal("文字単位フェード", N3SubtitleActionCatalog.Describe(usual, addOns));
+        Assert.Equal("文字単位フェード（表示終了基準・アイコンを遅らせない）",
+            N3SubtitleActionCatalog.Describe(N3SubtitleActionCatalog.CreateDefault("SHINTA.CharFadeInFadeOut"), addOns));
+        Assert.Equal("スピンフリップ", N3SubtitleActionCatalog.Describe(N3SubtitleActionCatalog.CreateDefault("SHINTA.SpinFlip"), addOns)); // 設定の無い種類は既定値と比べる
 
         // 既定値が逆のスピンフリップは、逆向きの説明
         var spin = N3SubtitleActionCatalog.CreateDefault("SHINTA.SpinFlip");

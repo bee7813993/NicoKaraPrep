@@ -269,7 +269,7 @@ public sealed partial class LineSidePanel : UserControl
         if (actions.All(a => a is null))
         {
             var def = vm.ResolveCurrentDefaultSubtitleAction(out var source);
-            string name = N3SubtitleActionCatalog.Describe(def);
+            string name = vm.DescribeSubtitleAction(def);
             PageActionBox.SelectedIndex = -1;
             PageActionBox.PlaceholderText = $"既定: {N3SubtitleActionCatalog.DisplayName(def.Id)}";
             PageActionDetail.Text = $"曲の既定の字幕アクション: {name}（{MainViewModel.DefaultSubtitleActionSourceLabel(source)}）";
@@ -279,7 +279,7 @@ public sealed partial class LineSidePanel : UserControl
             int kind = N3SubtitleActionCatalog.Known.ToList().FindIndex(k => k.Id == a0.Id);
             PageActionBox.SelectedIndex = kind >= 0 ? kind + 1 : -1;
             PageActionBox.PlaceholderText = kind >= 0 ? DefaultActionItem : N3SubtitleActionCatalog.DisplayName(a0.Id);
-            PageActionDetail.Text = $"手で指定した字幕アクション: {N3SubtitleActionCatalog.Describe(a0)}";
+            PageActionDetail.Text = $"手で指定した字幕アクション: {vm.DescribeSubtitleAction(a0)}";
         }
         else
         {

@@ -478,9 +478,9 @@
                                     SelectionChanged="OnSongActionKindChanged" />
                                 <Button
                                     x:Name="SongActionResetButton"
-                                    Content="ニコカラメーカー3 の既定値に戻す"
+                                    Content="ニコカラメーカー3 の設定に戻す"
                                     IsEnabled="{x:Bind ViewModel.CanResetSongAction, Mode=OneWay}"
-                                    ToolTipService.ToolTip="選んでいる字幕アクションの値を、ニコカラメーカー3 の設定の値（設定フォルダの AddOns。無ければ既定値）に戻します"
+                                    ToolTipService.ToolTip="選んでいる字幕アクションの値を、ニコカラメーカー3 の設定の値（ニコカラメーカー3 で新しい行に使う値。設定フォルダの AddOns。設定を変えていなければニコカラメーカー3 の初期値）に戻します"
                                     Click="OnSongActionResetClick" />
                             </StackPanel>
                             <!-- 選んだ種類の設定項目（時間・大きさの欄は 2 列、する・しないは下に並べる） -->

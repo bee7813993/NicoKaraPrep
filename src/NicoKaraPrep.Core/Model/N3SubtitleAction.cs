@@ -246,11 +246,14 @@ public static class N3SubtitleActionCatalog
             WriteOrder = new[] { "FadeInTime", "FadeOutTime" },
         },
         new(LineFadeInFadeOutId, "フェードイン/アウト", LineFadeTypeName, new[] { FadeIn(), FadeOut() }),
-        new(CharFadeInFadeOutId, "文字単位フェード", CharFadeTypeName, CharFadeFields(wholeFadeOut: false, delayInlineGraphics: true))
+        // 既定値はニコカラメーカー3 の初期値（表示終了基準にする・アイコンを遅らせない）。ユーザーは「アイコンを遅らせる」を入れ、
+        // 「表示終了基準」を外して使っている（AddOns\SHINTA.CharFadeInFadeOut.json）。実データでも、設定が初期状態に戻った時期（2024-10）の
+        // n3proj だけがこの組み合わせで、同じ型のスピンフリップ（見本で設定を変えていない）も同じ値
+        new(CharFadeInFadeOutId, "文字単位フェード", CharFadeTypeName, CharFadeFields(wholeFadeOut: true, delayInlineGraphics: false))
         {
             WriteOrder = CharFadeWriteOrder,
         },
-        // 以下 3 種類の既定値は見本の n3proj の値（スピンフリップは文字単位フェードと同じ型・項目で、見本では表示終了基準・アイコンを遅らせない）
+        // 以下 3 種類の既定値は見本の n3proj の値（ユーザーは設定を変えていない。スピンフリップは文字単位フェードと同じ型・項目）
         new(SpinFlipId, "スピンフリップ", CharFadeTypeName, CharFadeFields(wholeFadeOut: true, delayInlineGraphics: false))
         {
             WriteOrder = CharFadeWriteOrder,
@@ -351,16 +354,21 @@ public static class N3SubtitleActionCatalog
     /// （「フェードイン/アウト（500/250ms）」）、大きさを変えていれば px（「上下スライド（-80px）」）、する・しないを変えていればその短い説明を足す
     /// （「文字単位フェード（表示終了基準・アイコンを遅らせない）」）。
     /// </summary>
-    public static string Describe(N3SubtitleAction? action)
+    /// <param name="addOnSettings">
+    /// ニコカラメーカー3 の設定（Id → AddOns の値。<see cref="Nkm3Environment.AddOnSettings"/>）。渡すと、その値（無い項目は既定値）と違う所だけを添える
+    /// （ふだん使っている設定のままなら名前だけになる）。null なら既定値と比べる。
+    /// </param>
+    public static string Describe(N3SubtitleAction? action, IReadOnlyDictionary<string, JsonObject>? addOnSettings = null)
     {
         if (action is null) return DisplayName(null);
         var kind = Find(action.Id);
         if (kind is null) return DisplayName(action.Id);
 
         var n = Normalize(action, "");
+        var baseline = CreateDefault(kind.Id, addOnSettings?.GetValueOrDefault(kind.Id));
         var parts = new List<string>();
         var times = kind.VisibleFields.Where(f => f.Kind == N3SubtitleActionFieldKind.Milliseconds).ToList();
-        if (times.Any(f => n.GetInt(f.Key) != Convert.ToInt32(f.Default, CultureInfo.InvariantCulture)))
+        if (times.Any(f => n.GetInt(f.Key) != baseline.GetInt(f.Key)))
         {
             parts.Add(string.Join("/", times.Select(f => n.GetInt(f.Key))) + "ms");
         }
@@ -369,14 +377,14 @@ public static class N3SubtitleActionCatalog
             if (f.Kind == N3SubtitleActionFieldKind.Pixels)
             {
                 var node = n.Settings[f.Key];
-                double defaultPx = Convert.ToDouble(f.Default, CultureInfo.InvariantCulture);
+                double defaultPx = PixelsAt(baseline.Settings[f.Key], PixelsReference) ?? Convert.ToDouble(f.Default, CultureInfo.InvariantCulture);
                 if (PixelsAt(node, PixelsReference) is double atReference && Math.Abs(atReference - defaultPx) >= 0.5)
                 {
                     double shown = N3FontJson.Number((node as JsonObject)?["Size"]) ?? atReference;
                     parts.Add(shown.ToString("0.#", CultureInfo.InvariantCulture) + "px");
                 }
             }
-            else if (f.Kind == N3SubtitleActionFieldKind.Bool && n.GetBool(f.Key) is bool value && value != Convert.ToBoolean(f.Default, CultureInfo.InvariantCulture))
+            else if (f.Kind == N3SubtitleActionFieldKind.Bool && n.GetBool(f.Key) is bool value && value != (baseline.GetBool(f.Key) ?? Convert.ToBoolean(f.Default, CultureInfo.InvariantCulture)))
             {
                 string text = value ? f.TrueText : f.FalseText;
                 if (text.Length > 0) parts.Add(text);

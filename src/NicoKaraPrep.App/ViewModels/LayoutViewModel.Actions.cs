@@ -29,7 +29,7 @@ public sealed partial class LayoutViewModel
     /// <summary>前に知らせた種類（自動か・Id。設定欄を作り直すかの判断に使う）。</summary>
     private string? _songActionKind;
 
-    /// <summary>「ニコカラメーカー3 の既定値に戻す」を押せるか（種類を選んでいて、値がその既定値と違う）。</summary>
+    /// <summary>「ニコカラメーカー3 の設定に戻す」を押せるか（種類を選んでいて、値がニコカラメーカー3 の設定の値と違う）。</summary>
     [ObservableProperty]
     private bool canResetSongAction;
 
@@ -51,7 +51,7 @@ public sealed partial class LayoutViewModel
     public void RefreshSongAction(bool rebuildFields)
     {
         var auto = _main.ResolveAutoSubtitleAction(out var source);
-        string autoName = N3SubtitleActionCatalog.Describe(auto);
+        string autoName = _main.DescribeSubtitleAction(auto);
         string sourceText = source switch
         {
             N3SubtitleActionSource.Base => "ベースのまま",
@@ -72,7 +72,7 @@ public sealed partial class LayoutViewModel
         var action = isAuto ? auto : song!.Clone();
         SongAction = new SongActionState(isAuto, action, source, label, autoNote);
 
-        SongActionSummary = isAuto ? $"自動（{sourceText}: {autoName}）" : N3SubtitleActionCatalog.Describe(action);
+        SongActionSummary = isAuto ? $"自動（{sourceText}: {autoName}）" : _main.DescribeSubtitleAction(action);
         string save = _main.CanSaveSongFontSets ? "" : "\n歌詞ファイルを保存していないため、曲の既定は .tttproj に保存されません（歌詞ファイルを保存すると保存します）。";
         SongActionNote = (isAuto ? autoNote : "行ごと（ページごと）に指定の無い歌詞行に、この字幕アクションを書き出します。") +
                          "ページごとの指定は、右のページの一覧で行います。" + save;
@@ -141,7 +141,7 @@ public sealed partial class LayoutViewModel
         _main.SetSongDefaultSubtitleAction(next);
     }
 
-    /// <summary>「ニコカラメーカー3 の既定値に戻す」: 選んでいる種類の値を、ニコカラメーカー3 の設定（AddOns。無ければ既定値）にする。</summary>
+    /// <summary>「ニコカラメーカー3 の設定に戻す」: 選んでいる種類の値を、ニコカラメーカー3 の設定（AddOns。無ければニコカラメーカー3 の初期値）にする。</summary>
     public void ResetSongActionValues()
     {
         if (_main.N3ProjSettings.SubtitleAction is not { Id.Length: > 0 } current || !N3SubtitleActionCatalog.IsKnown(current.Id)) return;
@@ -149,7 +149,7 @@ public sealed partial class LayoutViewModel
         if (_main.SetSongDefaultSubtitleAction(N3SubtitleActionCatalog.CreateDefault(current.Id, AddOnDefaults(current.Id))))
         {
             SetStatus($"曲の既定の字幕アクション「{N3SubtitleActionCatalog.DisplayName(current.Id)}」の値を、" +
-                      (fromAddOn ? "ニコカラメーカー3 の設定の値に戻しました" : "ニコカラメーカー3 の既定値に戻しました"));
+                      (fromAddOn ? "ニコカラメーカー3 の設定の値に戻しました" : "ニコカラメーカー3 の初期値に戻しました（ニコカラメーカー3 の設定が見つからないため）"));
             RefreshSongAction(rebuildFields: true);
         }
     }

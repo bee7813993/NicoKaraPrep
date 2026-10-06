@@ -140,10 +140,11 @@ public sealed partial class LayoutListItem : ObservableObject
 /// <summary>レイアウト設定ビューの右のページの一覧の 1 行（全タブのページ 1 つ）。</summary>
 public sealed partial class LayoutPageItem : ObservableObject
 {
-    public LayoutPageItem(LayoutPageInfo info, N3SubtitleAction songDefault)
+    /// <param name="describe">字幕アクションの説明の作り方（<see cref="MainViewModel.DescribeSubtitleAction"/>）。</param>
+    public LayoutPageItem(LayoutPageInfo info, N3SubtitleAction songDefault, Func<N3SubtitleAction?, string> describe)
     {
         Info = info;
-        Update(info, songDefault);
+        Update(info, songDefault, describe);
     }
 
     /// <summary>ページの中身（タブ・行・レイアウト・アクション）。</summary>
@@ -182,7 +183,7 @@ public sealed partial class LayoutPageItem : ObservableObject
     private string toolTip = "";
 
     /// <summary>中身を新しいページの情報に合わせる（同じページの行を使い回して、一覧の選択を保つ）。</summary>
-    public void Update(LayoutPageInfo info, N3SubtitleAction songDefault)
+    public void Update(LayoutPageInfo info, N3SubtitleAction songDefault, Func<N3SubtitleAction?, string> describe)
     {
         Info = info;
         Title = $"{info.TabName} p.{info.PageIndex + 1}";
@@ -194,10 +195,10 @@ public sealed partial class LayoutPageItem : ObservableObject
         var a = info.Action;
         ActionText = a.State switch
         {
-            N3PageActionState.Manual => $"{N3SubtitleActionCatalog.Describe(a.Action)}（手動）",
+            N3PageActionState.Manual => $"{describe(a.Action)}（手動）",
             N3PageActionState.Mixed when a.DefaultLines > 0 => $"混在（手動 {a.ManualLines} 行・既定 {a.DefaultLines} 行）",
             N3PageActionState.Mixed => $"混在（{a.ManualKinds} 種類）",
-            _ => $"{N3SubtitleActionCatalog.Describe(songDefault)}（既定）",
+            _ => $"{describe(songDefault)}（既定）",
         };
         IsManualAction = a.State != N3PageActionState.Default;
         string layoutHow = info.LayoutChoice.Source switch

@@ -65,7 +65,7 @@ public sealed partial class LayoutViewModel
         var keys = infos.Select(i => LayoutPageItem.PageKey(i.TabName, i.PageIndex)).ToList();
         if (Pages.Select(p => p.Key).SequenceEqual(keys))
         {
-            for (int i = 0; i < infos.Count; i++) Pages[i].Update(infos[i], songDefault);
+            for (int i = 0; i < infos.Count; i++) Pages[i].Update(infos[i], songDefault, _main.DescribeSubtitleAction);
         }
         else
         {
@@ -74,7 +74,7 @@ public sealed partial class LayoutViewModel
             try
             {
                 Pages.Clear();
-                foreach (var info in infos) Pages.Add(new LayoutPageItem(info, songDefault));
+                foreach (var info in infos) Pages.Add(new LayoutPageItem(info, songDefault, _main.DescribeSubtitleAction));
             }
             finally
             {
@@ -192,7 +192,7 @@ public sealed partial class LayoutViewModel
         if (pages.Count == 0) return;
         var (lines, otherTab, failed) = WritePages(pages, (tab, indexes) => _main.SetPageLinesSubtitleAction(tab, indexes, action));
         if (failed) return; // エラーの知らせを残す
-        string name = N3SubtitleActionCatalog.Describe(action);
+        string name = _main.DescribeSubtitleAction(action);
         if (lines == 0)
         {
             SetStatus(action is null ? "選んだページには字幕アクションの指定がありません" : $"選んだページは、もう字幕アクション「{name}」を指定しています");

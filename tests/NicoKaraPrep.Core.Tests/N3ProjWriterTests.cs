@@ -452,7 +452,7 @@ public class N3ProjWriterTests
     private const string OldLineFade =
         """{"$type":"SubtitleActionSettingsModel","FadeInTimeVisibility":0,"FadeInTime":250,"FadeInTimeTag":"[00:00:25]","FadeOutTimeVisibility":0,"FadeOutTime":250,"FadeOutTimeTag":"[00:00:25]"}""";
 
-    /// <summary>新しい書式の文字単位フェードの既定値（版数だけ変える）。</summary>
+    /// <summary>新しい書式の文字単位フェード（実データのほとんどの値: 表示終了基準にしない・アイコンを遅らせる。版数だけ変える）。</summary>
     private static string NewCharFade(string ver) =>
         $$"""{"$type":"CharFadeInFadeOutSettingsModel","IntroDelay":350,"WholeFadeOut":false,"TailDelay":250,"DelayInlineGraphics":true,"FadeInTime":250,"FadeOutTime":250,"CreateAppVer":"{{ver}}","ModifyAppVer":""}""";
 
@@ -563,7 +563,10 @@ public class N3ProjWriterTests
             Assert.Equal(500, a.GetInt("IntroDelay"));
             Assert.Equal(250, a.GetInt("TailDelay"));
         }
-        Assert.Equal(NewCharFade(""), N3ProjWriter.ResolveDefaultAction(null, new N3ProjExportOptions()).Settings.ToJsonString());
+        // ベースもニコカラメーカー3 の設定も無ければ、ニコカラメーカー3 の初期値（表示終了基準にする・アイコンを遅らせない）
+        Assert.Equal(
+            """{"$type":"CharFadeInFadeOutSettingsModel","IntroDelay":350,"WholeFadeOut":true,"TailDelay":250,"DelayInlineGraphics":false,"FadeInTime":250,"FadeOutTime":250,"CreateAppVer":"","ModifyAppVer":""}""",
+            N3ProjWriter.ResolveDefaultAction(null, new N3ProjExportOptions()).Settings.ToJsonString());
     }
 
     [Fact]

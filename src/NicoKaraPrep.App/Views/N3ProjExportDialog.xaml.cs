@@ -186,7 +186,7 @@ public sealed partial class N3ProjExportDialog : ContentDialog
             _vm.Nkm3Env?.DefaultSubtitleActionId, _vm.Nkm3Env?.AddOnSettings, out var source);
         int manual = _vm.CountLinesWithSubtitleAction();
         SubtitleActionText.Text =
-            $"字幕アクション: {N3SubtitleActionCatalog.Describe(action)}（{MainViewModel.DefaultSubtitleActionSourceLabel(source)}）／行ごとの指定 {manual} 行" +
+            $"字幕アクション: {_vm.DescribeSubtitleAction(action)}（{MainViewModel.DefaultSubtitleActionSourceLabel(source)}）／行ごとの指定 {manual} 行" +
             "（レイアウト設定ビュー（F4）と右のパネル「レイアウト」で変えられます）";
     }
 
