@@ -101,14 +101,14 @@ public sealed partial class N3ProjExportDialog : ContentDialog
             ? $"背景素材: {m}（メディア再生パネルのファイル）"
             : "背景素材: 未設定（ベースのまま。メディア再生パネルに動画を読み込むと設定されます）";
 
-        // 表示時刻のパラメーターと自動調整は、行リストの右のパネル「表示時刻」で行う（ここでは今の値と、行に持たせた表示時刻の数を案内する）
+        // 表示時刻のパラメーターと自動調整は、「表示時刻の自動調整」（行設定の「自動調整...」）で行う（ここでは今の値と、行に持たせた表示時刻の数を案内する）
         var st = vm.Settings;
         var (counts, _) = vm.ShowTimeSummary();
         string stored = counts.Manual + counts.Loaded + counts.Auto > 0
             ? $"表示中のタブでは、手で直した {counts.Manual} 行・読み込んだ {counts.Loaded} 行・自動調整の {counts.Auto} 行は、その表示時刻のまま書き出します。"
             : "";
         ShowTimeNote.Text =
-            "行の表示時刻は、行リストの右のパネル「表示時刻」で決めます（自動調整のパラメーターと実行）。" + stored +
+            "行の表示時刻は、「表示時刻の自動調整」（行設定の「自動調整...」）で決めます（自動調整のパラメーターと実行）。" + stored +
             $"表示時刻を持たない行は、書き出しのときに今のパラメーター（ワイプ前 {st.DisplayLeadSeconds:0.0#} 秒・ワイプ後 {st.DisplayTailSeconds:0.0#} 秒・表示間隔 {st.N3IntervalSeconds:0.0#} 秒・" +
             $"重ねてよい {st.N3OverlapSeconds:0.0#} 秒・上段を{(st.N3TopLong ? "長め" : "短め")}に・絵文字の分だけ遅らせる {(st.N3EmojiLeadYield ? "オン" : "オフ")}）で計算します。";
 
@@ -187,7 +187,7 @@ public sealed partial class N3ProjExportDialog : ContentDialog
         int manual = _vm.CountLinesWithSubtitleAction();
         SubtitleActionText.Text =
             $"字幕アクション: {_vm.DescribeSubtitleAction(action)}（{MainViewModel.DefaultSubtitleActionSourceLabel(source)}）／行ごとの指定 {manual} 行" +
-            "（レイアウト設定ビュー（F4）と右のパネル「レイアウト」で変えられます）";
+            "（行リストの右のパネル「字幕アクション」で変えられます）";
     }
 
     private async void OnBrowseBaseClick(object sender, RoutedEventArgs e)

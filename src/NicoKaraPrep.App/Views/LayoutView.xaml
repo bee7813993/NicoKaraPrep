@@ -44,7 +44,7 @@
         </Style>
     </UserControl.Resources>
 
-    <!-- 3 列: 左 = レイアウト設定の一覧 / 中央 = 編集・使っているページ・曲の既定の字幕アクション / 右 = 見本・ページの一覧。一覧と編集のあいだのつまみで一覧の幅を変えられる -->
+    <!-- 3 列: 左 = レイアウト設定の一覧 / 中央 = 編集・使っているページ / 右 = 見本・ページの一覧。一覧と編集のあいだのつまみで一覧の幅を変えられる -->
     <Grid x:Name="RootGrid" Background="{ThemeResource ApplicationPageBackgroundThemeBrush}" Padding="12,8,12,8">
         <Grid.ColumnDefinitions>
             <ColumnDefinition x:Name="ListColumn" Width="300" />
@@ -195,7 +195,7 @@
             </Grid>
         </fs:ColumnResizeGrip>
 
-        <!-- ================= 中央: 編集・使っているページ・曲の既定の字幕アクション ================= -->
+        <!-- ================= 中央: 編集・使っているページ ================= -->
         <Grid Grid.Column="2">
             <TextBlock
                 x:Name="NoLayoutText"
@@ -462,39 +462,6 @@
                         </StackPanel>
                     </Border>
 
-                    <!-- 字幕アクションの既定（曲全体）: 行ごと（ページごと）の指定が無い歌詞行に書く字幕アクション -->
-                    <Border x:Name="SongActionCard" Style="{StaticResource Card}">
-                        <StackPanel Spacing="8">
-                            <StackPanel Orientation="Horizontal" Spacing="8">
-                                <TextBlock Text="字幕アクションの既定（曲全体）" Style="{StaticResource SectionTitle}" />
-                                <TextBlock x:Name="SongActionSummaryText" Text="{x:Bind ViewModel.SongActionSummary, Mode=OneWay}" Style="{StaticResource Note}" VerticalAlignment="Center" />
-                            </StackPanel>
-                            <StackPanel Orientation="Horizontal" Spacing="8">
-                                <ComboBox
-                                    x:Name="LayoutSongActionBox"
-                                    MinWidth="300"
-                                    AutomationProperties.Name="曲の既定の字幕アクション"
-                                    ToolTipService.ToolTip="行ごと（ページごと）に指定の無い歌詞行に書き出す字幕アクション。自動にすると、ベースの n3proj → ニコカラメーカー3 の設定 → 文字単位フェード の順に決めます（.tttproj に保存します）"
-                                    SelectionChanged="OnSongActionKindChanged" />
-                                <Button
-                                    x:Name="SongActionResetButton"
-                                    Content="ニコカラメーカー3 の設定に戻す"
-                                    IsEnabled="{x:Bind ViewModel.CanResetSongAction, Mode=OneWay}"
-                                    ToolTipService.ToolTip="選んでいる字幕アクションの値を、ニコカラメーカー3 の設定の値（ニコカラメーカー3 で新しい行に使う値。設定フォルダの AddOns。設定を変えていなければニコカラメーカー3 の初期値）に戻します"
-                                    Click="OnSongActionResetClick" />
-                            </StackPanel>
-                            <!-- 選んだ種類の設定項目（時間・大きさの欄は 2 列、する・しないは下に並べる） -->
-                            <Grid x:Name="SongActionNumbers" ColumnSpacing="16" RowSpacing="8">
-                                <Grid.ColumnDefinitions>
-                                    <ColumnDefinition Width="*" />
-                                    <ColumnDefinition Width="*" />
-                                </Grid.ColumnDefinitions>
-                            </Grid>
-                            <StackPanel x:Name="SongActionChecks" Spacing="2" />
-                            <TextBlock x:Name="SongActionFieldsNote" Style="{StaticResource Note}" Visibility="Collapsed" />
-                            <TextBlock x:Name="SongActionNoteText" Text="{x:Bind ViewModel.SongActionNote, Mode=OneWay}" Style="{StaticResource Note}" />
-                        </StackPanel>
-                    </Border>
                 </StackPanel>
             </ScrollViewer>
         </Grid>
@@ -522,7 +489,6 @@
             </Border>
             <StackPanel Grid.Row="2" Spacing="2">
                 <TextBlock x:Name="LayoutPreviewNoteText" Style="{StaticResource Note}" />
-                <TextBlock Style="{StaticResource Note}" Text="字幕アクションは見本に反映されません（フェードなどは描きません）" />
             </StackPanel>
             <StackPanel Grid.Row="3" Spacing="2" Margin="0,8,0,0">
                 <TextBlock Text="ページ" Style="{StaticResource PaneTitle}" />
@@ -545,12 +511,11 @@
                             </StackPanel>
                             <TextBlock Text="{x:Bind FirstText, Mode=OneWay}" FontSize="12" TextTrimming="CharacterEllipsis" />
                             <TextBlock Text="{x:Bind LayoutText, Mode=OneWay}" FontSize="11" TextTrimming="CharacterEllipsis" Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
-                            <TextBlock Text="{x:Bind ActionText, Mode=OneWay}" FontSize="11" TextTrimming="CharacterEllipsis" Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
                         </StackPanel>
                     </DataTemplate>
                 </ListView.ItemTemplate>
             </ListView>
-            <!-- 選んだページへの指定（同じ種類の操作は同じ行。字幕アクションの種類の欄はボタンのすぐ上） -->
+            <!-- 選んだページへのレイアウトの指定 -->
             <StackPanel Grid.Row="5" Spacing="6">
                 <TextBlock x:Name="LayoutPageTargetText" Text="{x:Bind ViewModel.PageTargetText, Mode=OneWay}" Style="{StaticResource Note}" />
                 <TextBlock Text="レイアウト" FontSize="12" FontWeight="SemiBold" />
@@ -572,32 +537,6 @@
                         AutomationProperties.Name="レイアウトを自動に戻す"
                         ToolTipService.ToolTip="レイアウトを自動に戻す: 選んだページのレイアウトの手動指定をやめ、タブの固定かページの行数から自動で選ぶようにします（行リストへ戻って Ctrl+Z で戻せます）"
                         Click="OnAutoPageLayoutClick" />
-                </StackPanel>
-                <TextBlock Text="字幕アクション" FontSize="12" FontWeight="SemiBold" />
-                <ComboBox
-                    x:Name="LayoutPageActionBox"
-                    HorizontalAlignment="Stretch"
-                    AutomationProperties.Name="ページの字幕アクション"
-                    ToolTipService.ToolTip="選んだページに指定する字幕アクション（（既定）は曲の既定を使います）。選んでから「このページに」を押します"
-                    ItemsSource="{x:Bind ViewModel.PageActionChoices}"
-                    SelectedIndex="{x:Bind ViewModel.PageActionIndex, Mode=TwoWay}" />
-                <StackPanel Orientation="Horizontal" Spacing="4">
-                    <Button
-                        x:Name="ApplyPageActionButton"
-                        Content="このページに"
-                        FontSize="12"
-                        Padding="8,4"
-                        IsEnabled="{x:Bind ViewModel.HasPageSelection, Mode=OneWay}"
-                        ToolTipService.ToolTip="上で選んだ字幕アクションを、選んだページの行すべてに指定します（行リストへ戻って Ctrl+Z で戻せます）"
-                        Click="OnApplyPageActionClick" />
-                    <Button
-                        x:Name="DefaultPageActionButton"
-                        Content="アクションを既定に戻す"
-                        FontSize="12"
-                        Padding="8,4"
-                        IsEnabled="{x:Bind ViewModel.HasPageSelection, Mode=OneWay}"
-                        ToolTipService.ToolTip="選んだページの字幕アクションの指定をやめ、曲の既定を使うようにします（行リストへ戻って Ctrl+Z で戻せます）"
-                        Click="OnDefaultPageActionClick" />
                 </StackPanel>
                 <TextBlock Style="{StaticResource Note}" Text="ページへの指定は歌詞の変更です。行リストへ戻って Ctrl+Z で戻せます（表示中でないタブのページは、そのタブを表示して Ctrl+Z）。" />
             </StackPanel>

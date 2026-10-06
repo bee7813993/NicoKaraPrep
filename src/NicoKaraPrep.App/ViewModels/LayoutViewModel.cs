@@ -8,12 +8,12 @@ using NicoKaraPrep.Core.Model;
 namespace NicoKaraPrep.App.ViewModels;
 
 /// <summary>
-/// レイアウト設定ビュー（F4）の状態。左 = レイアウト設定の一覧（書き出しの並び）、中央 = 選んだレイアウトの編集と曲の既定の字幕アクション、
-/// 右 = 見本とページの一覧（全タブ）。
+/// レイアウト設定ビュー（F4）の状態。左 = レイアウト設定の一覧（書き出しの並び）、中央 = 選んだレイアウトの編集、
+/// 右 = 見本とページの一覧（全タブ）。字幕アクションは扱わない（行リストの右のパネル「字幕アクション」）。
 /// レイアウトの値はアプリ共通（<see cref="Core.Project.AppSettings.N3Layouts"/>）で、変えると 300ms ごとにまとめて保存する
 /// （<see cref="MainViewModel.SaveLayouts"/>。行リスト・字幕のプレビューの作り直しはメイン画面が受け持つ）。
 /// レイアウトの値・追加・削除・名前の変更・取り込みは、このビューの 元に戻す（<see cref="N3LayoutHistory"/>）で戻す。
-/// ページへの指定（レイアウト・字幕アクション）は歌詞の変更なので、行リストへ戻って Ctrl+Z で戻す。曲の既定の字幕アクションは 元に戻す の対象にしない。
+/// ページへのレイアウトの指定は歌詞の変更なので、行リストへ戻って Ctrl+Z で戻す。
 /// </summary>
 public sealed partial class LayoutViewModel : ObservableObject
 {
@@ -52,17 +52,15 @@ public sealed partial class LayoutViewModel : ObservableObject
         if (_main.Settings.LoadFailed) SaveNote = NotSavedNote;
         _main.DocumentReplacing += (_, _) => FlushPendingSave();
         _main.LayoutsChanged += OnMainLayoutsChanged;
-        _main.SongDefaultSubtitleActionChanged += (_, _) => OnSongDefaultActionChanged();
         _main.PreviewModelChanged += (_, _) =>
         {
             if (_active) PreviewChanged?.Invoke(this, EventArgs.Empty);
         };
-        PageActionChoices = new[] { new LayoutActionChoice(null, "（既定）") }
-            .Concat(N3SubtitleActionCatalog.Known.Select(k => new LayoutActionChoice(k.Id, k.Name)))
-            .ToList();
         Refresh(null);
-        RefreshSongAction(rebuildFields: true);
     }
+
+    /// <summary>大きさ（px）の値に使う画面の高さ（書き出すプロジェクトの画面の高さ。テンプレートの取り込み）。</summary>
+    public int ScreenHeight => _main.GetScreenSize().Height;
 
     /// <summary>メイン画面の ViewModel（行・タブ・設定）。</summary>
     public MainViewModel Main => _main;
@@ -472,7 +470,6 @@ public sealed partial class LayoutViewModel : ObservableObject
         {
             SelectByName(selectLayoutName);
         }
-        RefreshSongAction(rebuildFields: true);
         EditorReloadRequested?.Invoke(this, EventArgs.Empty);
         PreviewChanged?.Invoke(this, EventArgs.Empty);
     }
@@ -486,13 +483,12 @@ public sealed partial class LayoutViewModel : ObservableObject
 
     /// <summary>
     /// 外で文書・タブ・ベースが変わった（MCP のタブの切り替え・書き出し画面の「適用」・n3proj の読み込み）: 出しているあいだは一覧と
-    /// ページの一覧・曲の既定の字幕アクションを作り直す（選択は名前・ページで保つ）。
+    /// ページの一覧を作り直す（選択は名前・ページで保つ）。
     /// </summary>
     public void OnDocumentChanged()
     {
         if (!_active) return;
         Refresh(null);
-        RefreshSongAction(rebuildFields: true);
         EditorReloadRequested?.Invoke(this, EventArgs.Empty);
     }
 
@@ -509,7 +505,7 @@ public sealed partial class LayoutViewModel : ObservableObject
     public string SaveNoteToolTip =>
         "レイアウト設定は、変更するとすぐに設定ファイル（%APPDATA%\\NicoKaraPrep\\settings.json）へ自動で保存されます（アプリ共通。保存の操作はいりません）。" +
         "すべての曲の n3proj の書き出しで、ベースの同じ名前のレイアウト設定に上書きします（無い名前は足します）。\n" +
-        "ページへのレイアウト・字幕アクションの指定と曲の既定の字幕アクションは、歌詞ファイルの隣の .tttproj に保存されます。";
+        "ページへのレイアウトの指定は、歌詞ファイルの隣の .tttproj に保存されます。";
 
     /// <summary>左の一覧の幅（px。設定に保存したもの）。</summary>
     public double ListWidth => _main.Settings.LayoutListWidthPx;

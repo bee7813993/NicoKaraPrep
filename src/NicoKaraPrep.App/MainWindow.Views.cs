@@ -520,7 +520,7 @@ public sealed partial class MainWindow
     /// <summary>エクスポート > ニコカラメーカー3 のフォント設定を編集。</summary>
     private void OnFontSettingsViewClick(object sender, RoutedEventArgs e) => SwitchView(MainViewMode.FontSettings);
 
-    /// <summary>エクスポート > ニコカラメーカー3 のレイアウトと字幕アクションを編集。</summary>
+    /// <summary>エクスポート > ニコカラメーカー3 のレイアウト設定を編集。</summary>
     private void OnLayoutViewClick(object sender, RoutedEventArgs e) => SwitchView(MainViewMode.Layout);
 
     /// <summary>行設定のフォントの「編集...」: フォント設定ビューを開き、欄のフォント設定を選ぶ。</summary>

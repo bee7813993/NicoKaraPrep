@@ -15,7 +15,7 @@ public sealed class N3ProjImportChoices
     /// <summary>表示時刻の設定値（ワイプ前・ワイプ後・表示間隔・上段の表示）を取り込む。</summary>
     public bool Timing { get; set; }
 
-    /// <summary>ニコカラメーカーの表示時刻を、歌詞が同じ行すべてに、読み込んだ値としてそのまま持たせる（自動調整は右のパネル「表示時刻」で実行する）。</summary>
+    /// <summary>ニコカラメーカーの表示時刻を、歌詞が同じ行すべてに、読み込んだ値としてそのまま持たせる（自動調整は「表示時刻の自動調整」で実行する）。</summary>
     public bool LineShowTimes { get; set; }
 
     /// <summary>ニコカラメーカーで設定したページのレイアウトを、自動で選ぶものと違うページだけ、ページの手動指定として取り込む。</summary>
@@ -287,7 +287,7 @@ public partial class MainViewModel
             done.Add($"実際の表示区間 {preview.Settings.LineTimes.Count} 行分");
         }
 
-        // 4) 表示時刻 → 歌詞が同じ行すべてに、読み込んだ値としてそのまま持たせる（自動調整は右のパネル「表示時刻」で実行する）
+        // 4) 表示時刻 → 歌詞が同じ行すべてに、読み込んだ値としてそのまま持たせる（自動調整は「表示時刻の自動調整」で実行する）
         if (choices.LineShowTimes)
         {
             int lines = 0;

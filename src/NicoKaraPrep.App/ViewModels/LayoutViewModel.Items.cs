@@ -140,14 +140,13 @@ public sealed partial class LayoutListItem : ObservableObject
 /// <summary>レイアウト設定ビューの右のページの一覧の 1 行（全タブのページ 1 つ）。</summary>
 public sealed partial class LayoutPageItem : ObservableObject
 {
-    /// <param name="describe">字幕アクションの説明の作り方（<see cref="MainViewModel.DescribeSubtitleAction"/>）。</param>
-    public LayoutPageItem(LayoutPageInfo info, N3SubtitleAction songDefault, Func<N3SubtitleAction?, string> describe)
+    public LayoutPageItem(LayoutPageInfo info)
     {
         Info = info;
-        Update(info, songDefault, describe);
+        Update(info);
     }
 
-    /// <summary>ページの中身（タブ・行・レイアウト・アクション）。</summary>
+    /// <summary>ページの中身（タブ・行・レイアウト）。</summary>
     public LayoutPageInfo Info { get; private set; }
 
     /// <summary>ページを見分ける鍵（タブの名前とページの番号。一覧を作り直したあとに選び直すのに使う）。</summary>
@@ -171,19 +170,13 @@ public sealed partial class LayoutPageItem : ObservableObject
     private string layoutText = "";
 
     [ObservableProperty]
-    private string actionText = "";
-
-    [ObservableProperty]
     private bool isManualLayout;
-
-    [ObservableProperty]
-    private bool isManualAction;
 
     [ObservableProperty]
     private string toolTip = "";
 
     /// <summary>中身を新しいページの情報に合わせる（同じページの行を使い回して、一覧の選択を保つ）。</summary>
-    public void Update(LayoutPageInfo info, N3SubtitleAction songDefault, Func<N3SubtitleAction?, string> describe)
+    public void Update(LayoutPageInfo info)
     {
         Info = info;
         Title = $"{info.TabName} p.{info.PageIndex + 1}";
@@ -192,38 +185,18 @@ public sealed partial class LayoutPageItem : ObservableObject
         FirstText = LayoutTexts.Excerpt(info.FirstText);
         LayoutText = $"{(info.LayoutName.Length > 0 ? info.LayoutName : "（なし）")}（{LayoutTexts.Source(info.LayoutChoice.Source)}）";
         IsManualLayout = info.LayoutChoice.Source == N3PageLayoutSource.Manual;
-        var a = info.Action;
-        ActionText = a.State switch
-        {
-            N3PageActionState.Manual => $"{describe(a.Action)}（手動）",
-            N3PageActionState.Mixed when a.DefaultLines > 0 => $"混在（手動 {a.ManualLines} 行・既定 {a.DefaultLines} 行）",
-            N3PageActionState.Mixed => $"混在（{a.ManualKinds} 種類）",
-            _ => $"{describe(songDefault)}（既定）",
-        };
-        IsManualAction = a.State != N3PageActionState.Default;
         string layoutHow = info.LayoutChoice.Source switch
         {
             N3PageLayoutSource.Manual => "このページに手動で指定したレイアウト",
             N3PageLayoutSource.TabFixed => "タブに固定したレイアウト（n3proj の書き出しの設定）",
             _ => $"ページの行数（{info.Lines.Count} 行）から自動で選んだレイアウト",
         };
-        string actionHow = a.State switch
-        {
-            N3PageActionState.Manual => "このページに手動で指定した字幕アクション",
-            N3PageActionState.Mixed => "行によって違う字幕アクション（「このページに」でそろえられます）",
-            _ => "曲の既定の字幕アクション",
-        };
         string where = info.IsActiveTab ? "" : "\n（表示中でないタブのページです。指定を変えたときは、そのタブを表示して Ctrl+Z で戻せます）";
         ToolTip = $"{Title}（{info.Lines.Count} 行・{info.Lines[0] + 1}〜{info.Lines[^1] + 1} 行目・歌い出し {StartText}）\n{info.FirstText}\n" +
-                  $"{layoutHow}: {(info.LayoutName.Length > 0 ? info.LayoutName : "（なし）")}\n{actionHow}: {ActionText}{where}";
+                  $"{layoutHow}: {(info.LayoutName.Length > 0 ? info.LayoutName : "（なし）")}{where}";
     }
 
     /// <summary>読み上げ・UI オートメーションでの名前（一覧の行の名前になる）。</summary>
-    public override string ToString() => $"{Title} {LineCountText} {StartText} {LayoutText} {ActionText}";
+    public override string ToString() => $"{Title} {LineCountText} {StartText} {LayoutText}";
 }
 
-/// <summary>字幕アクションの種類の選択肢（コンボの 1 項目。Id が null は「自動」・「（既定）」）。</summary>
-public sealed record LayoutActionChoice(string? Id, string Label)
-{
-    public override string ToString() => Label;
-}

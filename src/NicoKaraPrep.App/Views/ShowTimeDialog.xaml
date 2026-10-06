@@ -1,0 +1,81 @@
+﻿<ContentDialog
+    x:Class="NicoKaraPrep.App.Views.ShowTimeDialog"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    Title="表示時刻の自動調整"
+    CloseButtonText="閉じる"
+    DefaultButton="Close">
+
+    <ContentDialog.Resources>
+        <Style x:Key="FieldLabel" TargetType="TextBlock">
+            <Setter Property="FontSize" Value="12" />
+            <Setter Property="VerticalAlignment" Value="Center" />
+        </Style>
+        <Style x:Key="SectionTitle" TargetType="TextBlock">
+            <Setter Property="FontSize" Value="12" />
+            <Setter Property="FontWeight" Value="SemiBold" />
+            <Setter Property="Margin" Value="0,6,0,0" />
+        </Style>
+    </ContentDialog.Resources>
+
+    <!-- 自動調整のパラメーター（アプリ共通。変えるとすぐ保存）と実行。決めた表示時刻は行に持たせ、書き出し・プレビュー・チェックでそのまま使う -->
+    <ScrollViewer MaxHeight="560" VerticalScrollBarVisibility="Auto" Padding="0,0,12,0">
+        <StackPanel Width="440" Spacing="8">
+            <TextBlock FontSize="12" TextWrapping="Wrap" Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                       Text="ニコカラメーカー3 の「自動で表示開始時刻・表示終了時刻を設定」と同じ計算で、行の表示時刻を決めます。決めた表示時刻は、書き出し・字幕のプレビュー・チェックでそのまま使います（パラメーターや歌詞を変えても、実行し直すまで変わりません）。" />
+            <TextBlock x:Name="ShowTimeSummaryText" FontSize="12" TextWrapping="Wrap" />
+
+            <TextBlock Text="パラメーター（アプリ共通）" Style="{StaticResource SectionTitle}" />
+            <Grid ColumnSpacing="8" RowSpacing="6">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="*" />
+                </Grid.ColumnDefinitions>
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="Auto" />
+                </Grid.RowDefinitions>
+                <TextBlock Text="ワイプ前（秒）" Style="{StaticResource FieldLabel}" />
+                <NumberBox Grid.Column="1" x:Name="StLeadBox" Minimum="0" Maximum="30" SmallChange="0.1" LargeChange="0.5" SpinButtonPlacementMode="Compact"
+                           ValueChanged="OnShowTimeNumberChanged" ToolTipService.ToolTip="行を歌い出しの何秒前から表示するか（ニコカラメーカーの「ワイプ前の表示時間」）" />
+                <TextBlock Grid.Row="1" Text="ワイプ後（秒）" Style="{StaticResource FieldLabel}" />
+                <NumberBox Grid.Row="1" Grid.Column="1" x:Name="StTailBox" Minimum="0" Maximum="30" SmallChange="0.1" LargeChange="0.5" SpinButtonPlacementMode="Compact"
+                           ValueChanged="OnShowTimeNumberChanged" ToolTipService.ToolTip="行を歌い終わりの何秒後まで表示するか（「ワイプ後の表示時間」）" />
+                <TextBlock Grid.Row="2" Text="表示間隔（秒）" Style="{StaticResource FieldLabel}" />
+                <NumberBox Grid.Row="2" Grid.Column="1" x:Name="StIntervalBox" Minimum="0" Maximum="30" SmallChange="0.1" LargeChange="0.5" SpinButtonPlacementMode="Compact"
+                           ValueChanged="OnShowTimeNumberChanged" ToolTipService.ToolTip="前のページの同じ段の行が消えてから次の行を出すまでの間隔。ページ区切りと段落区切り（間奏など）も分けます" />
+                <TextBlock Grid.Row="3" Text="最短表示後（秒）" Style="{StaticResource FieldLabel}" />
+                <NumberBox Grid.Row="3" Grid.Column="1" x:Name="StProtectBox" Minimum="0" Maximum="30" SmallChange="0.1" LargeChange="0.5" SpinButtonPlacementMode="Compact"
+                           ValueChanged="OnShowTimeNumberChanged" ToolTipService.ToolTip="次のページと重なるとき、前の行を歌い終わりの何秒後まで短縮してよいか（0 = 自動: ワイプ前後の小さい方の半分。ニコカラメーカーの表示保護時間）" />
+                <TextBlock Grid.Row="4" Text="重ねてよい（秒）" Style="{StaticResource FieldLabel}" />
+                <NumberBox Grid.Row="4" Grid.Column="1" x:Name="StOverlapBox" Minimum="0" Maximum="10" SmallChange="0.1" LargeChange="0.5" SpinButtonPlacementMode="Compact"
+                           ValueChanged="OnShowTimeNumberChanged" ToolTipService.ToolTip="前後のページの同じ段の行を、何秒まで重ねて表示してよいか（0 = 重ねない。ニコカラメーカー3 と同じ計算）。字幕アクションが「文字単位フェード」のときなど、少しの重なりなら見づらくない場合に使います（ニコカラメーカー3 には無い機能）" />
+            </Grid>
+            <CheckBox x:Name="StTopLongCheck" Click="OnShowTimeCheckClick" MinWidth="0">
+                <TextBlock TextWrapping="Wrap" Text="上段の行をページの最後まで表示する（上段歌詞を長めに表示）" />
+            </CheckBox>
+            <CheckBox x:Name="StEmojiYieldCheck" Click="OnShowTimeCheckClick" MinWidth="0"
+                      AutomationProperties.Name="前のページの同じ段と重なるときは、絵文字の分だけ行の表示を遅らせる"
+                      ToolTipService.ToolTip="絵文字の表示秒数は、ワイプ前の表示時間まで縮めます（表示秒数がそれより短い絵文字は縮めません）。それでも重なるときは、前の行のワイプ後を削ります。前の行のワイプ終了から歌い出しまでがそれより短いときだけ、前の行をワイプの最後まで見せるため、さらに縮めます">
+                <TextBlock TextWrapping="Wrap" Text="前のページの同じ段と重なるときは、絵文字の分だけ行の表示を遅らせる（ニコカラメーカー3 には無い機能）" />
+            </CheckBox>
+            <CheckBox x:Name="StLayoutAwareCheck" Click="OnShowTimeCheckClick" MinWidth="0"
+                      AutomationProperties.Name="レイアウトで画面の位置が違う行は、前後のページの同じ段でも重ならないものとして扱う"
+                      ToolTipService.ToolTip="字幕のプレビューで重ならない行（上寄せ 5 行のページの次の下寄せ 2 行のページ、左寄せ 5 行と右寄せ 5 行のページなど）は、表示時刻を詰めず、チェックのページ衝突・表示時刻でも知らせません。ニコカラメーカー3 は段（下から何行目）だけで組にするので、外すと同じ計算になります">
+                <TextBlock TextWrapping="Wrap" Text="レイアウトで画面の位置が違う行は、前後のページの同じ段でも重ならないものとして扱う（ニコカラメーカー3 には無い機能）" />
+            </CheckBox>
+            <!-- 値を添えると長くなるので、パネルの幅で折り返す（切れないように） -->
+            <Button x:Name="StImportNkm3Button" FontSize="12" Padding="8,3" HorizontalAlignment="Stretch" HorizontalContentAlignment="Left" Click="OnStImportNkm3Click" Visibility="Collapsed">
+                <TextBlock x:Name="StImportNkm3Text" Text="ニコカラメーカーの設定値を取り込む" TextWrapping="Wrap" />
+            </Button>
+
+            <Button x:Name="RunAutoShowTimeButton" Content="自動調整を実行" Style="{ThemeResource AccentButtonStyle}" HorizontalAlignment="Stretch" Margin="0,4,0,0"
+                    Click="OnRunAutoShowTimeClick" ToolTipService.ToolTip="今のパラメーターで、全タブの行の表示時刻を決め直します（元に戻すで、歌詞設定タブごとに戻せます）" />
+            <TextBlock FontSize="12" TextWrapping="Wrap" Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                       Text="手で直した表示時刻（行リストの ✎・行設定の欄の値）はそのままにして、ほかの行（読み込んだ値・前回の自動調整の値・未設定）を計算し直します。表示時刻を持たない行は、パラメーターを変えるとすぐに計算し直します。" />
+        </StackPanel>
+    </ScrollViewer>
+</ContentDialog>

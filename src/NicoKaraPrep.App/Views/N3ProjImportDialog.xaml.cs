@@ -219,7 +219,7 @@ public sealed partial class N3ProjImportDialog : ContentDialog
         }
 
         LineShowBox.IsEnabled = matched > 0;
-        LineShowBox.IsChecked = matched > 0; // 読み込んだプロジェクトの表示時刻のまま見る・直す・書き出す（自動調整は右のパネル「表示時刻」で実行する）
+        LineShowBox.IsChecked = matched > 0; // 読み込んだプロジェクトの表示時刻のまま見る・直す・書き出す（自動調整は「表示時刻の自動調整」で実行する）
 
         // ---- レイアウト ----
         int layoutPages = matched > 0 ? vm.CountPageLayoutImports(preview) : 0;
@@ -250,7 +250,7 @@ public sealed partial class N3ProjImportDialog : ContentDialog
                 (matched == 0
                     ? "開いている歌詞と一致する行が無いため、行ごとの指定は取り込みません。"
                     : $"それと違うアクションの {actionLines} 行を行ごとの指定にします（歌詞が同じ行だけ。同じアクションの行は指定を外して曲の既定に従わせます）。") +
-                "字幕アクションは、レイアウト設定ビュー（F4）と右のパネル「レイアウト」で変えられます";
+                "字幕アクションは、行リストの右のパネル「字幕アクション」で変えられます";
         }
 
         // ---- 書き出しのベース ----
@@ -292,7 +292,7 @@ public sealed partial class N3ProjImportDialog : ContentDialog
         LineShowDetail.Text = _matchedLines == 0
             ? "開いている歌詞と一致する行がありません"
             : $"歌詞が同じ {_matchedLines} 行の表示開始・終了を、ニコカラメーカーの値のまま行に持たせます。字幕のプレビュー・チェック・書き出しはその値のままです。" +
-              "自動調整は、行リストの右のパネル「表示時刻」で実行します（手で直した行はそのまま）";
+              "自動調整は、「表示時刻の自動調整」（行設定の「自動調整...」）で実行します（手で直した行はそのまま）";
     }
 
     private void UpdateFontSetsState()

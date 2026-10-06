@@ -203,7 +203,7 @@ public sealed class AppSettings
     public double LayoutListWidthPx { get; set; } = 300;
 
     /// <summary>
-    /// 行リストの右のパネル「レイアウト」の字幕アクションの一覧で、押したアクションを選んだ行のページの行すべてにそろえるか
+    /// 行リストの右のパネル「字幕アクション」の一覧で、押したアクションを選んだ行のページの行すべてにそろえるか
     /// （false なら選んだ行だけ。フォントと同じ）。
     /// </summary>
     public bool SideActionWholePage { get; set; }

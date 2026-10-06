@@ -7,7 +7,7 @@ using NicoKaraPrep.Core.Model;
 namespace NicoKaraPrep.App.ViewModels;
 
 /// <summary>
-/// レイアウト設定ビューの右のページの一覧（全タブ。書き出しと同じページの数え方）と、選んだページへの指定（レイアウト・字幕アクション）、
+/// レイアウト設定ビューの右のページの一覧（全タブ。書き出しと同じページの数え方）と、選んだページへのレイアウトの指定、
 /// 中央の「使っているページ」、見本。ページへの指定は歌詞の変更（タブごとの 元に戻す の履歴に積む）。
 /// </summary>
 public sealed partial class LayoutViewModel
@@ -25,13 +25,6 @@ public sealed partial class LayoutViewModel
 
     /// <summary>ページの一覧で選んでいるページ。</summary>
     public IReadOnlyList<LayoutPageItem> SelectedPages => _selectedPages;
-
-    /// <summary>ページの字幕アクションの選択肢（（既定）＋ 8 種類）。</summary>
-    public IReadOnlyList<LayoutActionChoice> PageActionChoices { get; }
-
-    /// <summary>ページの字幕アクションのコンボで選んでいるもの（<see cref="PageActionChoices"/> の番号）。</summary>
-    [ObservableProperty]
-    private int pageActionIndex;
 
     [ObservableProperty]
     private string pageSummary = "";
@@ -61,11 +54,10 @@ public sealed partial class LayoutViewModel
     /// </summary>
     private void RefreshPages(List<LayoutPageInfo> infos)
     {
-        var songDefault = _main.ResolveCurrentDefaultSubtitleAction(out _);
         var keys = infos.Select(i => LayoutPageItem.PageKey(i.TabName, i.PageIndex)).ToList();
         if (Pages.Select(p => p.Key).SequenceEqual(keys))
         {
-            for (int i = 0; i < infos.Count; i++) Pages[i].Update(infos[i], songDefault, _main.DescribeSubtitleAction);
+            for (int i = 0; i < infos.Count; i++) Pages[i].Update(infos[i]);
         }
         else
         {
@@ -74,7 +66,7 @@ public sealed partial class LayoutViewModel
             try
             {
                 Pages.Clear();
-                foreach (var info in infos) Pages.Add(new LayoutPageItem(info, songDefault, _main.DescribeSubtitleAction));
+                foreach (var info in infos) Pages.Add(new LayoutPageItem(info));
             }
             finally
             {
@@ -85,10 +77,9 @@ public sealed partial class LayoutViewModel
 
         int tabs = infos.Select(i => i.TabName).Distinct().Count();
         int manualLayouts = infos.Count(i => i.LayoutChoice.Source == N3PageLayoutSource.Manual);
-        int manualActions = infos.Count(i => i.Action.State != N3PageActionState.Default);
         PageSummary = infos.Count == 0
             ? "歌詞のページがありません"
-            : $"全 {infos.Count} ページ（{tabs} タブ）・レイアウトの手動指定 {manualLayouts} ページ・字幕アクションの指定 {manualActions} ページ";
+            : $"全 {infos.Count} ページ（{tabs} タブ）・レイアウトの手動指定 {manualLayouts} ページ";
     }
 
     /// <summary>ページの一覧でページを選ぶ（ビューに一覧の選択を合わせるよう知らせる）。</summary>
@@ -116,7 +107,7 @@ public sealed partial class LayoutViewModel
         CanApplyLayout = count > 0 && SelectedLayout is not null;
         int lines = _selectedPages.Sum(p => p.Info.Lines.Count);
         PageTargetText = count == 0
-            ? "ページの一覧でページを選ぶと、レイアウト・字幕アクションを指定できます（Ctrl・Shift を押しながら押すと複数選べます）"
+            ? "ページの一覧でページを選ぶと、レイアウトを指定できます（Ctrl・Shift を押しながら押すと複数選べます）"
             : $"選んだページ: {_selectedPages[0].Title}{(count > 1 ? $" ほか {count - 1} ページ" : "")}（{lines} 行）";
         ApplyLayoutToolTip = SelectedLayout is { } layout
             ? $"選んだページに、レイアウト設定「{layout.Name}」を手動指定します（ページの行すべてに書きます。行リストへ戻って Ctrl+Z で戻せます）"
@@ -175,36 +166,6 @@ public sealed partial class LayoutViewModel
             ? $"選んだ {pages.Count} ページ（{lines} 行）のレイアウトの指定を自動に戻しました（{UndoHint(otherTab)}）"
             : $"選んだ {pages.Count} ページ（{lines} 行）にレイアウト設定「{name}」を指定しました（{UndoHint(otherTab)}）");
     }
-
-    /// <summary>コンボで選んだ字幕アクションを、選んだページに指定する（（既定）なら既定に戻す）。</summary>
-    public void ApplyActionToSelectedPages()
-    {
-        var choice = PageActionChoices[Math.Clamp(PageActionIndex, 0, PageActionChoices.Count - 1)];
-        ApplyAction(choice.Id is null ? null : ActionFor(choice.Id));
-    }
-
-    /// <summary>「アクションを既定に戻す」。</summary>
-    public void ResetActionOfSelectedPages() => ApplyAction(null);
-
-    private void ApplyAction(N3SubtitleAction? action)
-    {
-        var pages = _selectedPages.ToList();
-        if (pages.Count == 0) return;
-        var (lines, otherTab, failed) = WritePages(pages, (tab, indexes) => _main.SetPageLinesSubtitleAction(tab, indexes, action));
-        if (failed) return; // エラーの知らせを残す
-        string name = _main.DescribeSubtitleAction(action);
-        if (lines == 0)
-        {
-            SetStatus(action is null ? "選んだページには字幕アクションの指定がありません" : $"選んだページは、もう字幕アクション「{name}」を指定しています");
-            return;
-        }
-        SetStatus(action is null
-            ? $"選んだ {pages.Count} ページ（{lines} 行）の字幕アクションを曲の既定に戻しました（{UndoHint(otherTab)}）"
-            : $"選んだ {pages.Count} ページ（{lines} 行）に字幕アクション「{name}」を指定しました（{UndoHint(otherTab)}）");
-    }
-
-    /// <summary>ページの字幕アクションに使うもの（右パネル・MCP と同じ決め方。<see cref="MainViewModel.CreatePageSubtitleAction"/>）。</summary>
-    private N3SubtitleAction ActionFor(string id) => _main.CreatePageSubtitleAction(id);
 
     /// <summary>
     /// ページの行へ書く（タブごとに 1 回。表示中でないタブはタブを切り替えずに書く）。書いたら行リストの表示・字幕のプレビュー・一覧を作り直す。

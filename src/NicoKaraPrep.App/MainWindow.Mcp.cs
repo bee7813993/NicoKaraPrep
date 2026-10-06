@@ -1011,11 +1011,11 @@ public sealed partial class MainWindow
         if (layoutAware is bool la) s.N3LayoutAwareRows = la;
         s.Save();
 
-        LineSide.RefreshShowTimePane();
+        _showTimeDialog?.Refresh();
         OnShowTimeSettingsChanged();
         ViewModel.StatusText = "表示時刻のパラメーターを変えました（行に持たせた表示時刻は、自動調整を実行するまで変わりません）";
         ValidateNowKeepingStatus();
-        LineSide.RefreshShowTimeSummary();
+        _showTimeDialog?.RefreshSummary();
         return new JsonObject
         {
             ["settings"] = McpShowTimeSettingsJson(withSummary: true),
@@ -1188,7 +1188,7 @@ public sealed partial class MainWindow
         McpUseTab(tab);
         var indexes = McpLineIndexes(lines);
         var kind = McpActionKind(action);
-        // 設定値は曲の既定と同じ種類ならその値、違えばその種類の既定値（右のパネル「レイアウト」・レイアウト設定ビューで選ぶのと同じ）
+        // 設定値は曲の既定と同じ種類ならその値、違えばその種類の既定値（右のパネル「字幕アクション」・行設定の欄で選ぶのと同じ）
         N3SubtitleAction? value = kind is null ? null : ViewModel.CreatePageSubtitleAction(kind.Id);
         int n = ViewModel.SetLinesSubtitleAction(indexes, value, wholePage);
         foreach (var l in ViewModel.Lines) l.RaiseOverrideMark();

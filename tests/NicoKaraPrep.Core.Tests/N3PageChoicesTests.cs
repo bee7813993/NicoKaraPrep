@@ -83,45 +83,6 @@ public class N3PageChoicesTests
     }
 
     [Fact]
-    public void アクション_既定_手動_混在()
-    {
-        var doc = FourLines();
-        var pages = doc.GetPages(PageSplitMode.EmptyLine);
-        var none = N3PageChoices.SummarizeActions(doc, pages[0]);
-        Assert.Equal(N3PageActionState.Default, none.State);
-        Assert.Null(none.Action);
-        Assert.Equal(2, none.DefaultLines);
-
-        // 同じ設定値なら別のオブジェクトでも同じ指定
-        doc.Lines[0].SubtitleAction = N3SubtitleActionCatalog.CreateDefault(N3SubtitleActionCatalog.LineFadeInId);
-        doc.Lines[1].SubtitleAction = N3SubtitleActionCatalog.CreateDefault(N3SubtitleActionCatalog.LineFadeInId);
-        var manual = N3PageChoices.SummarizeActions(doc, pages[0]);
-        Assert.Equal(N3PageActionState.Manual, manual.State);
-        Assert.Equal(N3SubtitleActionCatalog.LineFadeInId, manual.Action!.Id);
-        Assert.Equal(2, manual.ManualLines);
-
-        // 指定のある行と無い行
-        doc.Lines[3].SubtitleAction = N3SubtitleActionCatalog.CreateDefault(N3SubtitleActionCatalog.NoActionId);
-        var partly = N3PageChoices.SummarizeActions(doc, pages[1]);
-        Assert.Equal(N3PageActionState.Mixed, partly.State);
-        Assert.Equal((1, 2, 1), (partly.ManualLines, partly.DefaultLines, partly.ManualKinds));
-
-        // 違うアクション・同じ Id で違う値
-        doc.Lines[4].SubtitleAction = N3SubtitleActionCatalog.CreateDefault(N3SubtitleActionCatalog.LineFadeOutId);
-        doc.Lines[5].SubtitleAction = N3SubtitleActionCatalog.CreateDefault(N3SubtitleActionCatalog.LineFadeOutId);
-        doc.Lines[5].SubtitleAction!.Set("FadeOutTime", 500);
-        var mixed = N3PageChoices.SummarizeActions(doc, pages[1]);
-        Assert.Equal(N3PageActionState.Mixed, mixed.State);
-        Assert.Equal(3, mixed.ManualKinds);
-        Assert.Equal(0, mixed.DefaultLines);
-
-        // Id が空の指定は指定なし（書き出しと同じ）
-        doc.Lines[0].SubtitleAction = new N3SubtitleAction("", null);
-        doc.Lines[1].SubtitleAction = null;
-        Assert.Equal(N3PageActionState.Default, N3PageChoices.SummarizeActions(doc, pages[0]).State);
-    }
-
-    [Fact]
     public void ページへ広げる_空行と範囲の外は飛ばし同じページの行をそろえる()
     {
         var doc = FourLines();

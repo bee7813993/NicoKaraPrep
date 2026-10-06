@@ -5,7 +5,7 @@ namespace NicoKaraPrep.App.ViewModels;
 /// <summary>
 /// 字幕アクション（ニコカラメーカー3 の行のアクション）の指定。行ごとの指定（<see cref="LyricsLine.SubtitleAction"/>、null = 曲の既定）と、
 /// 曲の既定（<see cref="Core.Project.N3ProjSongSettings.SubtitleAction"/>、null = 自動: ベース → ニコカラメーカー3 の設定 → 文字単位フェード）。
-/// レイアウト設定ビュー（F4）と右パネルの「レイアウト」タブから使う。
+/// 右パネルの「字幕アクション」タブ・行設定の欄・曲の既定のポップアップ・MCP から使う。
 /// </summary>
 public partial class MainViewModel
 {

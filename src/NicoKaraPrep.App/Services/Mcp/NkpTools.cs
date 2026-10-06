@@ -98,7 +98,7 @@ internal sealed class NkpTools
     }
 
     [McpServerTool(Name = "get_show_time_settings", Title = "表示時刻のパラメーター", ReadOnly = true, Idempotent = true, OpenWorld = false, Destructive = false)]
-    [Description("右のパネル「表示時刻」のパラメーター（ワイプ前・ワイプ後・表示間隔・最短表示後・重ねてよい・上段を長めに・絵文字の分だけ遅らせる・レイアウトで位置が違う行）と、表示時刻の出どころごとの行数を返す。")]
+    [Description("「表示時刻の自動調整」のパラメーター（ワイプ前・ワイプ後・表示間隔・最短表示後・重ねてよい・上段を長めに・絵文字の分だけ遅らせる・レイアウトで位置が違う行）と、表示時刻の出どころごとの行数を返す。")]
     public Task<CallToolResult> GetShowTimeSettings(CancellationToken ct) => Invoke(MainWindow.McpAccess.Read, w => w.McpShowTimeSettingsJson(withSummary: true), ct);
 
     // ------------------------------------------------------------ ファイル
@@ -157,7 +157,7 @@ internal sealed class NkpTools
     // ------------------------------------------------------------ 表示時刻
 
     [McpServerTool(Name = "set_show_time_settings", Title = "表示時刻のパラメーターを変える", ReadOnly = false, Idempotent = true, OpenWorld = false, Destructive = false)]
-    [Description("右のパネル「表示時刻」のパラメーターを変える（指定した項目だけ。秒は小数可）。表示時刻を持たない行はすぐ新しい値で計算され、持たせた値は run_show_time_adjust を実行するまで変わらない。")]
+    [Description("「表示時刻の自動調整」のパラメーターを変える（指定した項目だけ。秒は小数可）。表示時刻を持たない行はすぐ新しい値で計算され、持たせた値は run_show_time_adjust を実行するまで変わらない。")]
     public Task<CallToolResult> SetShowTimeSettings(
         [Description("ワイプ前の表示時間（秒）")] double? lead = null,
         [Description("ワイプ後の表示時間（秒）")] double? tail = null,
@@ -171,7 +171,7 @@ internal sealed class NkpTools
         Invoke(MainWindow.McpAccess.Write, w => w.McpSetShowTimeSettings(lead, tail, interval, protect, overlap, topLong, emojiYield, layoutAware), ct);
 
     [McpServerTool(Name = "run_show_time_adjust", Title = "表示時刻の自動調整を実行", ReadOnly = false, Idempotent = true, OpenWorld = false, Destructive = false)]
-    [Description("右のパネル「表示時刻」の「自動調整を実行」と同じ。全タブの行に、今のパラメーターで計算した表示時刻を持たせる（手で指定した行はそのまま。読み込んだ値・前回の自動調整の値は計算し直す）。Ctrl+Z で戻せる。")]
+    [Description("「表示時刻の自動調整」の「自動調整を実行」と同じ。全タブの行に、今のパラメーターで計算した表示時刻を持たせる（手で指定した行はそのまま。読み込んだ値・前回の自動調整の値は計算し直す）。Ctrl+Z で戻せる。")]
     public Task<CallToolResult> RunShowTimeAdjust(CancellationToken ct) => Invoke(MainWindow.McpAccess.WriteDocument, w => w.McpRunShowTimeAdjust(), ct);
 
     [McpServerTool(Name = "set_line_show_time", Title = "行の表示時刻を指定", ReadOnly = false, Idempotent = true, OpenWorld = false, Destructive = false)]

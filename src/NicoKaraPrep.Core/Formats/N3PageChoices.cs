@@ -21,29 +21,8 @@ public enum N3PageLayoutSource
 /// <param name="ManualName">効いている手動指定の名前（手動でなければ null）。</param>
 public sealed record N3PageLayoutChoice(int LayoutIndex, N3PageLayoutSource Source, string? ManualName);
 
-/// <summary>ページの字幕アクションの指定のされ方。</summary>
-public enum N3PageActionState
-{
-    /// <summary>どの行も指定が無い（曲の既定を使う）。</summary>
-    Default,
-
-    /// <summary>すべての行に同じアクションを指定している。</summary>
-    Manual,
-
-    /// <summary>行によって違う（指定のある行と無い行がある、または違うアクションを指定している）。</summary>
-    Mixed,
-}
-
-/// <summary>ページの字幕アクションのまとめ。</summary>
-/// <param name="State">指定のされ方。</param>
-/// <param name="Action">すべての行が同じ指定のときのアクション（最初の行のもの。写しではない）。それ以外は null。</param>
-/// <param name="ManualLines">指定のある行の数。</param>
-/// <param name="DefaultLines">指定の無い（曲の既定を使う）行の数。</param>
-/// <param name="ManualKinds">指定のある行のアクションの種類の数（同じ設定値のものを 1 つと数える）。</param>
-public sealed record N3PageActionSummary(N3PageActionState State, N3SubtitleAction? Action, int ManualLines, int DefaultLines, int ManualKinds);
-
 /// <summary>
-/// ページ（<see cref="LyricsDocument.GetPages"/> の 1 件。書き出しと同じ数え方）ごとのレイアウト・字幕アクションの決まり方。
+/// ページ（<see cref="LyricsDocument.GetPages"/> の 1 件。書き出しと同じ数え方）ごとのレイアウトの決まり方と、ページへ広げる処理。
 /// n3proj の書き出し（<see cref="N3ProjWriter"/>）とレイアウト設定ビューのページの一覧で同じものを使う。
 /// </summary>
 public static class N3PageChoices
@@ -62,29 +41,6 @@ public static class N3PageChoices
             }
         }
         return new N3PageLayoutChoice(layouts.Resolve(page.Count), layouts.IsFixed ? N3PageLayoutSource.TabFixed : N3PageLayoutSource.Auto, null);
-    }
-
-    /// <summary>
-    /// ページの字幕アクションのまとめ。行の指定（<see cref="LyricsLine.SubtitleAction"/>。Id が空のものは指定なしとみなす。書き出しと同じ）を
-    /// 比べ（<see cref="N3SubtitleAction.SameAs"/>）、どの行も指定なし・すべて同じ指定・混在 のどれかにする。空のページは指定なし。
-    /// </summary>
-    public static N3PageActionSummary SummarizeActions(LyricsDocument doc, IReadOnlyList<int> page)
-    {
-        var manual = new List<N3SubtitleAction>();
-        int defaults = 0;
-        foreach (int i in page)
-        {
-            if (doc.Lines[i].SubtitleAction is { Id.Length: > 0 } action) manual.Add(action);
-            else defaults++;
-        }
-        var kinds = new List<N3SubtitleAction>();
-        foreach (var a in manual)
-        {
-            if (!kinds.Any(k => k.SameAs(a))) kinds.Add(a);
-        }
-        if (manual.Count == 0) return new N3PageActionSummary(N3PageActionState.Default, null, 0, defaults, 0);
-        if (defaults == 0 && kinds.Count == 1) return new N3PageActionSummary(N3PageActionState.Manual, manual[0], manual.Count, 0, 1);
-        return new N3PageActionSummary(N3PageActionState.Mixed, null, manual.Count, defaults, kinds.Count);
     }
 
     /// <summary>

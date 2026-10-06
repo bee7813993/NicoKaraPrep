@@ -205,8 +205,12 @@
                     <MenuFlyoutItem Text="選択行の済マークを解除" Click="OnClearMarksClick" />
                     <MenuFlyoutSeparator />
                     <MenuFlyoutItem Text="ニコカラメーカー3 のフォント設定を編集" KeyboardAcceleratorTextOverride="F3" Click="OnFontSettingsViewClick" />
-                    <MenuFlyoutItem Text="ニコカラメーカー3 のレイアウトと字幕アクションを編集" KeyboardAcceleratorTextOverride="F4" Click="OnLayoutViewClick"
-                                    ToolTipService.ToolTip="レイアウト設定ビュー（F4）を開いて、レイアウト設定の値・ページへの指定と、字幕アクション（曲の既定・ページへの指定）を編集します" />
+                    <MenuFlyoutItem Text="ニコカラメーカー3 のレイアウト設定を編集" KeyboardAcceleratorTextOverride="F4" Click="OnLayoutViewClick"
+                                    ToolTipService.ToolTip="レイアウト設定ビュー（F4）を開いて、レイアウト設定の値・ページへの指定を編集します" />
+                    <MenuFlyoutItem Text="字幕アクションの曲の既定..." Click="OnSongActionDialogClick"
+                                    ToolTipService.ToolTip="行ごとに字幕アクションを指定していない歌詞行に使う、曲の既定の字幕アクション（種類と設定値）を選びます。行ごとの指定は、右のパネル「字幕アクション」で行います" />
+                    <MenuFlyoutItem Text="表示時刻の自動調整..." Click="OnShowTimeDialogClick"
+                                    ToolTipService.ToolTip="表示時刻の自動調整のパラメーター（ワイプ前・ワイプ後・表示間隔など。アプリ共通）を変えて、自動調整を実行します" />
                     <MenuFlyoutItem Text="選択行の表示時刻・フォント指定を解除" Click="OnClearN3OverridesClick" ToolTipService.ToolTip="選んだ行の、ニコカラメーカー用の行設定（表示時刻・フォント・レイアウト・文字の大きさ・字幕アクション）をまとめて解除します。表示時刻は、手で直した値も読み込んだ値・自動調整の値も外して、自動の計算に戻します" />
                 </MenuBarItem>
                 <MenuBarItem Title="再生(P)" AccessKey="P">
@@ -256,7 +260,7 @@
                 <SelectorBarItem x:Name="LinesViewTab" Text="行リスト" ToolTipService.ToolTip="行リスト（行ごとの編集）" />
                 <SelectorBarItem x:Name="EmojiViewTab" Text="絵文字挿入" ToolTipService.ToolTip="絵文字挿入ビュー (F2)" />
                 <SelectorBarItem x:Name="FontViewTab" Text="フォント設定" ToolTipService.ToolTip="ニコカラメーカー3 のフォント設定ビュー (F3)" />
-                <SelectorBarItem x:Name="LayoutViewTab" Text="レイアウト" ToolTipService.ToolTip="ニコカラメーカー3 のレイアウト設定ビュー（レイアウトと字幕アクション） (F4)" />
+                <SelectorBarItem x:Name="LayoutViewTab" Text="レイアウト" ToolTipService.ToolTip="ニコカラメーカー3 のレイアウト設定ビュー（レイアウト設定の値とページへの指定） (F4)" />
             </SelectorBar>
         </Grid>
 
@@ -555,6 +559,9 @@
                         <TextBox x:Name="ShowEndBox" Width="104" FontFamily="Consolas" FontSize="12" PlaceholderText="--:--:--"
                                  GotFocus="OnShowTimeBoxGotFocus" LostFocus="OnShowTimeBoxLostFocus" KeyDown="OnShowTimeBoxKeyDown" ToolTipService.ToolTip="mm:ss:cc 形式で手で指定（自動調整を実行し直しても変わりません）。空欄なら薄字の値（読み込んだ値・自動調整の値・自動計算）を使います" />
                         <Button Content="自動に戻す" FontSize="12" Padding="8,3" Click="OnResetShowTimeClick" />
+                        <Button x:Name="ShowTimeDialogButton" Content="自動調整..." FontSize="12" Padding="8,3" Click="OnShowTimeDialogClick"
+                                AutomationProperties.Name="表示時刻の自動調整"
+                                ToolTipService.ToolTip="表示時刻の自動調整のパラメーター（ワイプ前・ワイプ後・表示間隔など。アプリ共通）を変えて、全タブの行の表示時刻を決め直します（ポップアップ）" />
                     </StackPanel>
                     <StackPanel x:Name="N3FontGroup" Grid.Column="1" Orientation="Horizontal" Spacing="6">
                         <TextBlock x:Name="LineFontLabel" Text="フォント" FontSize="12" VerticalAlignment="Center"
@@ -565,7 +572,7 @@
                                   ToolTipService.ToolTip="この行に適用するニコカラメーカーのフォント設定名（空欄はパート記号で自動判定。空にして Enter で自動に戻す）" />
                         <Button x:Name="EditLineFontButton" Content="編集..." FontSize="12" Padding="8,3" Click="OnEditLineFontClick"
                                 ToolTipService.ToolTip="フォント設定ビュー（F3）を開いて、このフォント設定を編集します" />
-                        <!-- 行の字幕アクション（行ごと。選んだ行だけに指定する。ページの行すべてにそろえるのは右パネル「レイアウト」・レイアウト設定ビュー） -->
+                        <!-- 行の字幕アクション（行ごと。選んだ行だけに指定する。ページの行すべてにそろえるのは右パネル「字幕アクション」の「ページの行すべてにそろえる」） -->
                         <TextBlock Text="字幕アクション" FontSize="12" VerticalAlignment="Center" Margin="8,0,0,0"
                                    ToolTipService.ToolTip="選んだ行の字幕アクション（ニコカラメーカー3 の行の出し方・消し方）。行ごとの指定で、複数の行を選ぶと選んだ行すべてに指定します" />
                         <ComboBox x:Name="LineActionBox" Width="140" FontSize="12" PlaceholderText="（既定）"
@@ -743,7 +750,7 @@
                 </Grid>
             </fs:ColumnResizeGrip>
 
-            <!-- 右パネル（行リストのとき）: フォント一覧（押すと選んだ文字・行に指定）・選んだ行のページのレイアウトと字幕アクション・表示時刻 -->
+            <!-- 右パネル（行リストのとき）: フォント・レイアウト・字幕アクションの一覧（押すと選んだ文字・行・ページに指定） -->
             <Border
                 Grid.Row="1"
                 Grid.Column="2"

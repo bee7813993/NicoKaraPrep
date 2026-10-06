@@ -77,7 +77,7 @@ public partial class MainViewModel
             : null;
 
     /// <summary>
-    /// 行設定パネルの説明に足す、絵文字の分だけ行の表示を遅らせる規則（右のパネル「表示時刻」の設定）の結果（表示中のタブの行）。
+    /// 行設定パネルの説明に足す、絵文字の分だけ行の表示を遅らせる規則（「表示時刻の自動調整」の設定）の結果（表示中のタブの行）。
     /// 規則で表示を遅らせた行・絵文字を縮めた行だけ「・絵文字の分だけ遅らせた（絵文字 2.0→1.5 秒）」のような文を返す（それ以外は空）。
     /// 絵文字はワイプ前の表示時間（表示秒数がそれより短い絵文字はその秒数）までしか縮めず、それでも重なるときは前の行のワイプ後を削る。
     /// それより短くなる行は理由を書く（手で指定した表示時刻・前の行をワイプの最後まで見せるため など）。
@@ -209,7 +209,7 @@ public partial class MainViewModel
     internal void KeepNoticeBeforeCheck() => _noticeBeforeCheck = StatusText;
 
     /// <summary>
-    /// 表示時刻の自動調整を実行する（右のパネル「表示時刻」。全タブ）。手で指定した表示時刻は残し、ほかの値（読み込んだ値・前回の自動調整の値・未設定）を
+    /// 表示時刻の自動調整を実行する（「表示時刻の自動調整」。全タブ）。手で指定した表示時刻は残し、ほかの値（読み込んだ値・前回の自動調整の値・未設定）を
     /// 今の設定で計算し直して、自動調整の値として行に持たせる（<see cref="N3ShowTimeAdjuster"/>）。変わったタブは元に戻せる。結果をステータスに出す。
     /// </summary>
     public N3ShowTimeAdjustResult RunAutoShowTimes()
@@ -261,7 +261,7 @@ public partial class MainViewModel
         return true;
     }
 
-    /// <summary>表示中のタブの、表示時刻の出どころごとの行数と、いま自動調整を実行し直すと変わる行の数（右のパネル「表示時刻」）。</summary>
+    /// <summary>表示中のタブの、表示時刻の出どころごとの行数と、いま自動調整を実行し直すと変わる行の数（「表示時刻の自動調整」）。</summary>
     public (N3ShowTimeOriginCounts Counts, int Outdated) ShowTimeSummary() =>
         (N3ShowTimeAdjuster.Count(Document), N3ShowTimeAdjuster.CountOutdated(Document, CreateShowTimeSettings(_activeTab.Name)));
 

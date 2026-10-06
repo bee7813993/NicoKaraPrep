@@ -15,7 +15,6 @@ namespace NicoKaraPrep.App.ViewModels;
 /// <param name="FirstText">最初の行の歌詞。</param>
 /// <param name="Layout">ページのレイアウト（並びが空なら null）。</param>
 /// <param name="LayoutChoice">レイアウトの決まり方（手動・タブ固定・自動）。</param>
-/// <param name="Action">字幕アクションの指定のまとめ（既定・手動・混在）。</param>
 public sealed record LayoutPageInfo(
     TabState Tab,
     int TabIndex,
@@ -25,8 +24,7 @@ public sealed record LayoutPageInfo(
     int? StartMs,
     string FirstText,
     N3LayoutSettings? Layout,
-    N3PageLayoutChoice LayoutChoice,
-    N3PageActionSummary Action)
+    N3PageLayoutChoice LayoutChoice)
 {
     public string TabName => Tab.Name;
 
@@ -34,13 +32,11 @@ public sealed record LayoutPageInfo(
 }
 
 /// <summary>
-/// レイアウト設定ビュー（F4）のページの一覧と、表示中でないタブも含めたページへの指定（レイアウト・字幕アクション）、
+/// レイアウト設定ビュー（F4）のページの一覧と、表示中でないタブも含めたページへのレイアウトの指定、
 /// 曲の既定の字幕アクションの「自動」の中身。
 /// </summary>
 public partial class MainViewModel
 {
-    /// <summary>ベースの n3proj の歌詞行でいちばん多い字幕アクション（パスと更新日時が同じあいだは読み直さない）。</summary>
-
     /// <summary>
     /// 全タブのページ（タブの順・ページの順）。ページの数え方（<see cref="LyricsDocument.GetPages"/>。<see cref="CreateShowTimeSettings"/> と同じ
     /// 空行区切りか固定行数）とレイアウトの決め方（<see cref="N3PageChoices.ChooseLayout"/>: 手動指定 → タブの固定 → 行数から自動）は書き出しと同じ。
@@ -71,7 +67,7 @@ public partial class MainViewModel
                 }
                 result.Add(new LayoutPageInfo(
                     tab, t, ReferenceEquals(tab, _activeTab), p, page, start, doc.Lines[page[0]].GetDisplayText(),
-                    layout, choice, N3PageChoices.SummarizeActions(doc, page)));
+                    layout, choice));
             }
         }
         return result;
@@ -88,18 +84,6 @@ public partial class MainViewModel
         if (ReferenceEquals(tab, _activeTab)) return SetLinesLayout(lines, name);
         string? value = string.IsNullOrWhiteSpace(name) ? null : name.Trim();
         return WriteOtherTabPages(tab, lines, l => l.LayoutName != value, l => l.LayoutName = value);
-    }
-
-    /// <summary>
-    /// タブの行のページに字幕アクションを手で指定する（null = 曲の既定に戻す。ページの行すべてにそろえる）。
-    /// 表示中のタブは <see cref="SetLinesSubtitleAction"/> と同じ。表示中でないタブはタブを切り替えずに書く（<see cref="SetPageLinesLayout"/> と同じ）。
-    /// 変えた行の数を返す。
-    /// </summary>
-    public int SetPageLinesSubtitleAction(TabState tab, IReadOnlyList<int> lines, N3SubtitleAction? action)
-    {
-        if (!Tabs.Contains(tab)) return 0;
-        if (ReferenceEquals(tab, _activeTab)) return SetLinesSubtitleAction(lines, action, wholePage: true);
-        return WriteOtherTabPages(tab, lines, l => !N3SubtitleAction.AreSame(l.SubtitleAction, action), l => l.SubtitleAction = action?.Clone());
     }
 
     /// <summary>

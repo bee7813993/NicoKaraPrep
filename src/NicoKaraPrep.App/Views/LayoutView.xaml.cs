@@ -11,8 +11,9 @@ using NicoKaraPrep.Core.Model;
 namespace NicoKaraPrep.App.Views;
 
 /// <summary>
-/// ニコカラメーカー3 のレイアウト設定ビュー（F4）。左 = レイアウト設定の一覧（書き出しの並び）、中央 = 選んだレイアウトの編集・使っているページ・
-/// 曲の既定の字幕アクション、右 = 見本（選んだページの歌詞を選んだレイアウトで並べる）・ページの一覧（全タブ）とページへの指定。
+/// ニコカラメーカー3 のレイアウト設定ビュー（F4）。左 = レイアウト設定の一覧（書き出しの並び）、中央 = 選んだレイアウトの編集・使っているページ、
+/// 右 = 見本（選んだページの歌詞を選んだレイアウトで並べる）・ページの一覧（全タブ）とページへのレイアウトの指定。
+/// 字幕アクションはここでは扱わない（行リストの右のパネル「字幕アクション」。レイアウトとは別のもの）。
 /// メインウィンドウの中で表示を入れ替えるだけなので、閉じても行リストの選択・文書・再生状態はそのまま残る。
 /// レイアウトの値は 300ms ごとにまとめて保存する（アプリ共通。settings.json）。
 /// </summary>
@@ -23,9 +24,6 @@ public sealed partial class LayoutView : UserControl
 
     /// <summary>編集欄に値を読み込んでいる最中か（そのあいだの欄の変化は編集として扱わない）。</summary>
     private bool _loading;
-
-    /// <summary>曲の既定の字幕アクションのカードを作り直している最中か。</summary>
-    private bool _songLoading;
 
     /// <summary>ページの一覧の選択をコードから合わせている最中か（そのあいだの選択の変化は ViewModel へ返さない）。</summary>
     private bool _syncingPages;
@@ -97,8 +95,6 @@ public sealed partial class LayoutView : UserControl
         ViewModel.EditorReloadRequested += (_, _) => QueueLoadFields();
         ViewModel.PreviewChanged += (_, _) => RefreshPreview();
         ViewModel.PagesSelectRequested += (_, pages) => ApplyPageSelection(pages);
-        // 曲の既定の字幕アクションの欄は、変えた欄（コンボ・数値の欄）のイベントが終わってから作り直す
-        ViewModel.SongActionChanged += (_, rebuildFields) => DispatcherQueue.TryEnqueue(() => RefreshSongActionCard(rebuildFields));
         ViewModel.PropertyChanged += OnViewModelPropertyChanged;
         Bindings.Update();
 
@@ -106,7 +102,6 @@ public sealed partial class LayoutView : UserControl
         ListColumn.Width = new GridLength(Math.Clamp(ViewModel.ListWidth, MinListWidth, 1600));
 
         LoadFields();
-        RefreshSongActionCard(rebuildFields: true);
         RefreshPreview();
     }
 
@@ -664,10 +659,6 @@ public sealed partial class LayoutView : UserControl
 
     private void OnAutoPageLayoutClick(object sender, RoutedEventArgs e) => ViewModel?.ResetLayoutOfSelectedPages();
 
-    private void OnApplyPageActionClick(object sender, RoutedEventArgs e) => ViewModel?.ApplyActionToSelectedPages();
-
-    private void OnDefaultPageActionClick(object sender, RoutedEventArgs e) => ViewModel?.ResetActionOfSelectedPages();
-
     // ------------------------------------------------------------ 見本
 
     /// <summary>見本を描き直す（選んだページの歌詞を、選んだレイアウトの編集中の値で並べる）。</summary>
@@ -679,148 +670,6 @@ public sealed partial class LayoutView : UserControl
         LayoutPreview.TimeMs = 1;
         LayoutPreviewNoteText.Text = note;
     }
-
-    // ------------------------------------------------------------ 曲の既定の字幕アクション
-
-    /// <summary>
-    /// 曲の既定の字幕アクションのカードを今の状態にする（コンボの項目と選択・説明。<paramref name="rebuildFields"/> なら設定欄も作り直す。
-    /// 値だけ変えたときは、使っている欄をそのまま残す）。
-    /// </summary>
-    private void RefreshSongActionCard(bool rebuildFields)
-    {
-        if (ViewModel is not { } vm) return;
-        var state = vm.SongAction;
-        var items = new List<LayoutActionChoice> { new(null, state.AutoLabel) };
-        items.AddRange(N3SubtitleActionCatalog.Known.Select(k => new LayoutActionChoice(k.Id, k.Name)));
-        if (!state.IsAuto && !N3SubtitleActionCatalog.IsKnown(state.Action.Id))
-        {
-            // 知らない Id（新しい版のニコカラメーカー3 のものなど）は表示だけする（値はそのまま書き出す）
-            items.Add(new LayoutActionChoice(state.Action.Id, N3SubtitleActionCatalog.DisplayName(state.Action.Id)));
-        }
-        _songLoading = true;
-        try
-        {
-            if (LayoutSongActionBox.ItemsSource is not List<LayoutActionChoice> old || !old.SequenceEqual(items)) LayoutSongActionBox.ItemsSource = items;
-            LayoutSongActionBox.SelectedIndex = state.IsAuto ? 0 : Math.Max(0, items.FindIndex(i => i.Id == state.Action.Id));
-        }
-        finally
-        {
-            _songLoading = false;
-        }
-        if (rebuildFields) BuildSongActionFields(vm, state);
-    }
-
-    /// <summary>
-    /// 選んだ種類の設定欄を作る（カタログの項目から: 時間は ms の数値の欄、大きさは px の数値の欄、する・しないはチェック）。
-    /// 自動のときは、自動で決まるアクションの値を変えられない形で出す。
-    /// </summary>
-    private void BuildSongActionFields(LayoutViewModel vm, SongActionState state)
-    {
-        SongActionNumbers.Children.Clear();
-        SongActionNumbers.RowDefinitions.Clear();
-        SongActionChecks.Children.Clear();
-        var kind = N3SubtitleActionCatalog.Find(state.Action.Id);
-        var fields = kind?.VisibleFields.ToList() ?? new List<N3SubtitleActionField>();
-        string fieldsNote = kind is null
-            ? "設定項目の分からない字幕アクションです（値はそのまま書き出します）"
-            : fields.Count == 0 ? "この字幕アクションに設定項目はありません"
-            : state.IsAuto ? "自動のあいだは値を変えられません（種類を選ぶと変えられます）" : "";
-        SongActionFieldsNote.Text = fieldsNote;
-        SongActionFieldsNote.Visibility = fieldsNote.Length > 0 ? Visibility.Visible : Visibility.Collapsed;
-
-        _songLoading = true;
-        try
-        {
-            int numbers = 0;
-            int height = vm.ScreenHeight;
-            foreach (var field in fields)
-            {
-                if (field.Kind == N3SubtitleActionFieldKind.Bool)
-                {
-                    bool value = state.Action.GetBool(field.Key) ?? Convert.ToBoolean(field.Default, System.Globalization.CultureInfo.InvariantCulture);
-                    var check = new CheckBox { Content = new TextBlock { Text = field.Label, TextWrapping = TextWrapping.Wrap }, IsChecked = value, IsEnabled = !state.IsAuto };
-                    AutomationProperties.SetName(check, field.Label);
-                    string onOff = field.TrueText.Length > 0 || field.FalseText.Length > 0 ? $"（オン: {field.TrueText}／オフ: {field.FalseText}）" : "";
-                    ToolTipService.SetToolTip(check, field.Label + onOff);
-                    check.Click += (_, _) =>
-                    {
-                        if (!_songLoading) vm.SetSongActionValue(field, double.NaN, check.IsChecked == true);
-                    };
-                    SongActionChecks.Children.Add(check);
-                    continue;
-                }
-
-                bool pixels = field.Kind == N3SubtitleActionFieldKind.Pixels;
-                double current = pixels
-                    ? state.Action.GetPixels(field.Key, height) ?? Convert.ToDouble(field.Default, System.Globalization.CultureInfo.InvariantCulture) * height / N3SubtitleActionCatalog.PixelsReference
-                    : state.Action.GetInt(field.Key) ?? Convert.ToInt32(field.Default, System.Globalization.CultureInfo.InvariantCulture);
-                string unit = pixels ? "px" : "ms";
-                var box = new NumberBox
-                {
-                    Header = new TextBlock { Text = $"{field.Label}（{unit}）", TextWrapping = TextWrapping.Wrap },
-                    Value = Math.Round(current),
-                    SpinButtonPlacementMode = NumberBoxSpinButtonPlacementMode.Compact,
-                    SmallChange = pixels ? 5 : 10,
-                    LargeChange = pixels ? 20 : 50,
-                    Minimum = pixels ? -10000 : 0,
-                    Maximum = pixels ? 10000 : 60000,
-                    IsEnabled = !state.IsAuto,
-                    HorizontalAlignment = HorizontalAlignment.Stretch,
-                };
-                AutomationProperties.SetName(box, $"{field.Label}（{unit}）");
-                ToolTipService.SetToolTip(box, pixels
-                    ? $"{field.Label}（書き出すプロジェクトの画面の高さ {height} での px）"
-                    : $"{field.Label}（ミリ秒）");
-                box.ValueChanged += (sender, args) =>
-                {
-                    if (_songLoading) return;
-                    if (!double.IsFinite(args.NewValue))
-                    {
-                        // 空にした欄は今の値に戻す（欄の処理が終わってから）
-                        DispatcherQueue.TryEnqueue(() => RestoreSongActionNumber(sender, field));
-                        return;
-                    }
-                    vm.SetSongActionValue(field, args.NewValue, false);
-                };
-                if (numbers % 2 == 0) SongActionNumbers.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
-                Grid.SetRow(box, numbers / 2);
-                Grid.SetColumn(box, numbers % 2);
-                SongActionNumbers.Children.Add(box);
-                numbers++;
-            }
-        }
-        finally
-        {
-            _songLoading = false;
-        }
-    }
-
-    /// <summary>空にした字幕アクションの数値の欄を、今の値に戻す。</summary>
-    private void RestoreSongActionNumber(NumberBox box, N3SubtitleActionField field)
-    {
-        if (ViewModel is not { } vm) return;
-        var action = vm.SongAction.Action;
-        double? value = field.Kind == N3SubtitleActionFieldKind.Pixels ? action.GetPixels(field.Key, vm.ScreenHeight) : action.GetInt(field.Key);
-        if (value is null) return;
-        _songLoading = true;
-        try
-        {
-            box.Value = Math.Round(value.Value);
-        }
-        finally
-        {
-            _songLoading = false;
-        }
-    }
-
-    /// <summary>曲の既定の字幕アクションの種類を選んだ（先頭は自動）。</summary>
-    private void OnSongActionKindChanged(object sender, SelectionChangedEventArgs e)
-    {
-        if (_songLoading || ViewModel is not { } vm || LayoutSongActionBox.SelectedItem is not LayoutActionChoice choice) return;
-        vm.ChangeSongActionKind(choice.Id);
-    }
-
-    private void OnSongActionResetClick(object sender, RoutedEventArgs e) => ViewModel?.ResetSongActionValues();
 
     // ------------------------------------------------------------ ダイアログ
 
