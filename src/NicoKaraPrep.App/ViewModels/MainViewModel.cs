@@ -924,6 +924,9 @@ public partial class MainViewModel : ObservableObject
         RebuildLines();
         RefreshEmojiSlots();
         MarkModified();
+        // 行の設定（表示時刻・フォント・レイアウト・字幕アクションなど）は .tttproj にすぐ保存しているので、戻したあとの状態も保存する
+        // （保存しないと、歌詞を保存せずに閉じて開き直したとき、戻す前の指定がよみがえる）
+        SaveProject();
         StatusText = message;
     }
 

@@ -97,68 +97,65 @@
 
         <!-- レイアウト: 押したレイアウト設定・字幕アクションを、行リストで選んだ行（ページ）に指定する（フォントのタブと同じ使い方）。
              レイアウト設定の値・追加・削除と、字幕アクションの曲の既定・設定値はレイアウト設定ビュー（F4）で編集する -->
-        <Grid Grid.Row="1" x:Name="LayoutPane" Visibility="Collapsed" RowSpacing="4">
-            <Grid.RowDefinitions>
-                <RowDefinition Height="Auto" />
-                <RowDefinition Height="Auto" />
-                <RowDefinition Height="3*" MinHeight="90" />
-                <RowDefinition Height="Auto" />
-                <RowDefinition Height="2*" MinHeight="90" />
-                <RowDefinition Height="Auto" />
-            </Grid.RowDefinitions>
-            <TextBlock x:Name="PageTargetText" FontSize="12" TextWrapping="Wrap" Foreground="{ThemeResource TextFillColorSecondaryBrush}"
-                       Text="行リストで行を選んでから、レイアウト設定・字幕アクションを押してください" />
+        <!-- 一覧は中身の高さだけ取り、パネル全体でスクロールする（2 つの一覧の高さを比率で分けると、項目の少ない一覧の下に大きな空きができる） -->
+        <ScrollViewer Grid.Row="1" x:Name="LayoutPane" Visibility="Collapsed" VerticalScrollBarVisibility="Auto" Padding="0,0,12,0">
+            <StackPanel Spacing="4">
+                <TextBlock x:Name="PageTargetText" FontSize="12" TextWrapping="Wrap" Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                           Text="行リストで行を選んでから、レイアウト設定・字幕アクションを押してください" />
 
-            <StackPanel Grid.Row="1" Spacing="2">
-                <TextBlock Text="レイアウト（ページ単位）" Style="{StaticResource SectionTitle}" />
-                <TextBlock x:Name="PageLayoutNote" FontSize="12" TextWrapping="Wrap" Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
-            </StackPanel>
-            <ListView
-                Grid.Row="2"
-                x:Name="PageLayoutList"
-                SelectionMode="None"
-                IsItemClickEnabled="True"
-                ItemClick="OnPageLayoutClick"
-                ItemTemplate="{StaticResource SidePickTemplate}"
-                AutomationProperties.Name="レイアウト設定の一覧（押すと選んだ行のページに指定）">
-                <ListView.ItemContainerStyle>
-                    <Style TargetType="ListViewItem" BasedOn="{StaticResource DefaultListViewItemStyle}">
-                        <Setter Property="MinHeight" Value="30" />
-                        <Setter Property="Padding" Value="8,0,8,0" />
-                    </Style>
-                </ListView.ItemContainerStyle>
-            </ListView>
+                <StackPanel Spacing="2">
+                    <TextBlock Text="レイアウト（ページ単位）" Style="{StaticResource SectionTitle}" />
+                    <TextBlock x:Name="PageLayoutNote" FontSize="12" TextWrapping="Wrap" Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+                </StackPanel>
+                <ListView
+                    x:Name="PageLayoutList"
+                    ScrollViewer.VerticalScrollMode="Disabled"
+                    ScrollViewer.VerticalScrollBarVisibility="Disabled"
+                    SelectionMode="None"
+                    IsItemClickEnabled="True"
+                    ItemClick="OnPageLayoutClick"
+                    ItemTemplate="{StaticResource SidePickTemplate}"
+                    AutomationProperties.Name="レイアウト設定の一覧（押すと選んだ行のページに指定）">
+                    <ListView.ItemContainerStyle>
+                        <Style TargetType="ListViewItem" BasedOn="{StaticResource DefaultListViewItemStyle}">
+                            <Setter Property="MinHeight" Value="30" />
+                            <Setter Property="Padding" Value="8,0,8,0" />
+                        </Style>
+                    </ListView.ItemContainerStyle>
+                </ListView>
 
-            <StackPanel Grid.Row="3" Spacing="2">
-                <TextBlock Text="字幕アクション" Style="{StaticResource SectionTitle}" />
-                <CheckBox x:Name="PageActionWholePageCheck" Content="ページの行すべてにそろえる" MinWidth="0" Click="OnPageActionWholePageClick"
-                          ToolTipService.ToolTip="入れると、押した字幕アクションを、選んだ行のページの行すべてに指定します（ニコカラメーカー3 でページごとに使い分けるとき）。外すと、選んだ行だけに指定します（フォントと同じ）" />
-                <TextBlock x:Name="PageActionNote" FontSize="12" TextWrapping="Wrap" Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
-            </StackPanel>
-            <ListView
-                Grid.Row="4"
-                x:Name="PageActionList"
-                SelectionMode="None"
-                IsItemClickEnabled="True"
-                ItemClick="OnPageActionClick"
-                ItemTemplate="{StaticResource SidePickTemplate}"
-                AutomationProperties.Name="字幕アクションの一覧（押すと選んだ行に指定）">
-                <ListView.ItemContainerStyle>
-                    <Style TargetType="ListViewItem" BasedOn="{StaticResource DefaultListViewItemStyle}">
-                        <Setter Property="MinHeight" Value="30" />
-                        <Setter Property="Padding" Value="8,0,8,0" />
-                    </Style>
-                </ListView.ItemContainerStyle>
-            </ListView>
+                <StackPanel Spacing="2">
+                    <TextBlock Text="字幕アクション" Style="{StaticResource SectionTitle}" />
+                    <CheckBox x:Name="PageActionWholePageCheck" Content="ページの行すべてにそろえる" MinWidth="0" Click="OnPageActionWholePageClick"
+                              ToolTipService.ToolTip="入れると、押した字幕アクションを、選んだ行のページの行すべてに指定します（ニコカラメーカー3 でページごとに使い分けるとき）。外すと、選んだ行だけに指定します（フォントと同じ）" />
+                    <TextBlock x:Name="PageActionNote" FontSize="12" TextWrapping="Wrap" Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+                </StackPanel>
+                <ListView
+                    x:Name="PageActionList"
+                    ScrollViewer.VerticalScrollMode="Disabled"
+                    ScrollViewer.VerticalScrollBarVisibility="Disabled"
+                    SelectionMode="None"
+                    IsItemClickEnabled="True"
+                    ItemClick="OnPageActionClick"
+                    ItemTemplate="{StaticResource SidePickTemplate}"
+                    AutomationProperties.Name="字幕アクションの一覧（押すと選んだ行に指定）">
+                    <ListView.ItemContainerStyle>
+                        <Style TargetType="ListViewItem" BasedOn="{StaticResource DefaultListViewItemStyle}">
+                            <Setter Property="MinHeight" Value="30" />
+                            <Setter Property="Padding" Value="8,0,8,0" />
+                        </Style>
+                    </ListView.ItemContainerStyle>
+                </ListView>
 
-            <StackPanel Grid.Row="5" Spacing="4" Margin="0,4,0,0">
-                <Button x:Name="EditLayoutsButton" Content="レイアウト設定を編集..." HorizontalAlignment="Stretch" Click="OnEditLayoutsClick"
-                        AutomationProperties.Name="レイアウト設定を編集"
-                        ToolTipService.ToolTip="レイアウト設定ビュー（F4）を開いて、このページのレイアウト設定を選んだ状態で編集します（レイアウト設定の値・追加・削除、字幕アクションの曲の既定と設定値）" />
-                <TextBlock FontSize="11" TextWrapping="Wrap" Foreground="{ThemeResource TextFillColorSecondaryBrush}"
-                           Text="押した指定は、元に戻す（Ctrl+Z）で戻せます。レイアウト設定の値と、字幕アクションの曲の既定・設定値は、レイアウト設定ビュー（F4）で編集します。字幕アクションは字幕のプレビューには描きません。" />
+                <StackPanel Spacing="4" Margin="0,4,0,0">
+                    <Button x:Name="EditLayoutsButton" Content="レイアウト設定を編集..." HorizontalAlignment="Stretch" Click="OnEditLayoutsClick"
+                            AutomationProperties.Name="レイアウト設定を編集"
+                            ToolTipService.ToolTip="レイアウト設定ビュー（F4）を開いて、このページのレイアウト設定を選んだ状態で編集します（レイアウト設定の値・追加・削除、字幕アクションの曲の既定と設定値）" />
+                    <TextBlock FontSize="11" TextWrapping="Wrap" Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                               Text="押した指定は、元に戻す（Ctrl+Z）で戻せます。レイアウト設定の値と、字幕アクションの曲の既定・設定値は、レイアウト設定ビュー（F4）で編集します。字幕アクションは字幕のプレビューには描きません。" />
+                </StackPanel>
             </StackPanel>
-        </Grid>
+        </ScrollViewer>
 
         <!-- 表示時刻: 自動調整のパラメーター（アプリ共通）と実行。決めた表示時刻は行に持たせ、書き出し・プレビュー・チェックでそのまま使う -->
         <ScrollViewer Grid.Row="1" x:Name="ShowTimePane" Visibility="Collapsed" VerticalScrollBarVisibility="Auto" Padding="0,0,12,0">
