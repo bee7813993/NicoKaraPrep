@@ -85,7 +85,7 @@ public class N3LayoutTests
         doc.Lines[3].LayoutName = "無い名前";   // 無い名前は行数から選ぶ
         var infos = N3LayoutReader.Defaults(1080).Select(l => l.Info).ToList();
         var layouts = new N3ProjWriter.LayoutResolver(infos, null, null, null, new List<string>(), "t");
-        var action = ("SHINTA.CharFadeInFadeOut", new JsonObject { ["$type"] = "CharFadeInFadeOutSettingsModel" });
+        var action = new N3SubtitleAction("SHINTA.CharFadeInFadeOut", new JsonObject { ["$type"] = "CharFadeInFadeOutSettingsModel" });
         var lines = N3ProjWriter.BuildLineInfos(doc, new N3ShowTimeSettings(), doc.EmojiEntries, new N3FontResolver(new[] { "標準" }, null, true), layouts, action, "Ver 13.79", out _);
         var indexes = lines.Where(l => l!["Kind"]!.GetValue<int>() == 1).Select(l => l!["LayoutIndex"]!.GetValue<int>()).ToList();
         int top2 = infos.First(i => i.Name == "上寄せ2行").Index;

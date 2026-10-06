@@ -58,6 +58,12 @@ public sealed record N3ProjSettings(
 {
     /// <summary>フォント設定名の一覧（LyricsFonts の順）。</summary>
     public List<string> FontSetNames => Fonts.OrderBy(f => f.Index).Select(f => f.SettingsName ?? "").ToList();
+
+    /// <summary>
+    /// 歌詞行でいちばん多い字幕アクション（同数なら最初に出たもの。歌詞行にアクションが無ければ null）。
+    /// 書き出しの既定の字幕アクションを自動で決めるときの「ベースのまま」（<see cref="N3ProjWriter.ResolveDefaultAction(N3SubtitleAction, N3SubtitleAction, string, IReadOnlyDictionary{string, JsonObject}, out N3SubtitleActionSource)"/>）。
+    /// </summary>
+    public N3SubtitleAction? DefaultSubtitleAction { get; init; }
 }
 
 /// <summary>
@@ -194,7 +200,69 @@ public static class N3ProjFormat
             CollectLineTimes(root, lineTimes);
         }
 
-        return new N3ProjSettings(width, height, mainFont, fonts, lineTimes, layouts, appVersion);
+        // 歌詞行の字幕アクションでいちばん多いもの（読み込んだ JSON の文書から切り離して持つ）
+        var lineActions = new List<N3SubtitleAction?>();
+        if (root.TryGetProperty("SourceLyricsInfos", out var actionSources) && actionSources.ValueKind == JsonValueKind.Array)
+        {
+            foreach (var source in actionSources.EnumerateArray())
+            {
+                if (source.ValueKind != JsonValueKind.Object || !source.TryGetProperty("LineInfos", out var lines) || lines.ValueKind != JsonValueKind.Array) continue;
+                foreach (var line in lines.EnumerateArray())
+                {
+                    if (line.ValueKind != JsonValueKind.Object
+                        || !line.TryGetProperty("Kind", out var kind) || !kind.TryGetInt32(out int k) || k != 1
+                        || !line.TryGetProperty("SubtitleActionId", out var idElement) || idElement.ValueKind != JsonValueKind.String
+                        || idElement.GetString() is not { Length: > 0 } id)
+                    {
+                        continue;
+                    }
+                    lineActions.Add(new N3SubtitleAction(id,
+                        line.TryGetProperty("SubtitleActionSettings", out var st) && st.ValueKind == JsonValueKind.Object
+                            ? JsonObject.Create(st)
+                            : N3SubtitleActionCatalog.CreateDefault(id).Settings));
+                }
+            }
+        }
+        var defaultAction = N3SubtitleActionCatalog.MostCommon(lineActions);
+        if (defaultAction is not null)
+        {
+            defaultAction = new N3SubtitleAction(defaultAction.Id, JsonNode.Parse(defaultAction.Settings.ToJsonString()) as JsonObject);
+        }
+
+        return new N3ProjSettings(width, height, mainFont, fonts, lineTimes, layouts, appVersion) { DefaultSubtitleAction = defaultAction };
+    }
+
+    /// <summary>
+    /// n3proj の行（LineInfos の 1 件）の字幕アクション（SubtitleActionId が空・無ければ null）。
+    /// 設定値（SubtitleActionSettings）は写して持つ（無ければ Id の既定値）。
+    /// </summary>
+    public static N3SubtitleAction? ReadLineSubtitleAction(JsonObject line) =>
+        LineSubtitleActionView(line) is { } view ? view.Clone() : null;
+
+    /// <summary>
+    /// ベースの n3proj の歌詞設定（SourceLyricsInfos）の歌詞行（Kind 1）でいちばん多い字幕アクションの写し
+    /// （<see cref="N3SubtitleAction.SameAs"/> で同じものをまとめて数え、同数なら最初に出たもの。無ければ null）。
+    /// </summary>
+    public static N3SubtitleAction? MostCommonSubtitleAction(JsonObject? root)
+    {
+        if (root?["SourceLyricsInfos"] is not JsonArray infos) return null;
+        var actions = new List<N3SubtitleAction?>();
+        foreach (var info in infos)
+        {
+            if (info?["LineInfos"] is not JsonArray lines) continue;
+            foreach (var l in lines)
+            {
+                if (l is JsonObject line && N3FontJson.Int(line["Kind"]) == 1) actions.Add(LineSubtitleActionView(line));
+            }
+        }
+        return N3SubtitleActionCatalog.MostCommon(actions);
+    }
+
+    /// <summary>行の字幕アクション（設定値は写さずにそのまま指す。読むだけに使う）。</summary>
+    private static N3SubtitleAction? LineSubtitleActionView(JsonObject line)
+    {
+        if (line["SubtitleActionId"] is not JsonValue v || !v.TryGetValue(out string? id) || string.IsNullOrEmpty(id)) return null;
+        return new N3SubtitleAction(id, line["SubtitleActionSettings"] as JsonObject ?? N3SubtitleActionCatalog.CreateDefault(id).Settings);
     }
 
     /// <summary>

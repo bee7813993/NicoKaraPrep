@@ -1,4 +1,5 @@
 ﻿using System.Text.Json.Nodes;
+using NicoKaraPrep.Core.Model;
 
 namespace NicoKaraPrep.Core.Formats;
 
@@ -14,7 +15,7 @@ namespace NicoKaraPrep.Core.Formats;
 /// <param name="IntervalMs">「歌詞の表示間隔」ms。</param>
 /// <param name="LayoutSelectableBegin">レイアウト自動設定の適用対象範囲（先頭のレイアウト名）。</param>
 /// <param name="LayoutSelectableEnd">レイアウト自動設定の適用対象範囲（末尾のレイアウト名）。</param>
-/// <param name="CharFadeSettings">字幕アクション「文字単位フェード」の設定 JSON。</param>
+/// <param name="CharFadeSettings">字幕アクション「文字単位フェード」の設定 JSON（<see cref="AddOnSettings"/> の文字単位フェードと同じもの。前からの呼び出し用）。</param>
 public sealed record Nkm3Environment(
     string SettingsFolder,
     string? AppVersion,
@@ -30,6 +31,21 @@ public sealed record Nkm3Environment(
 
     /// <summary>この設定フォルダのフォント設定テンプレートのフォルダ（存在するかは確かめない）。</summary>
     public string TemplateFontFolder => Path.Combine(SettingsFolder, TemplateFontFolderName);
+
+    /// <summary>レイアウト設定テンプレート（.tpl）を置くフォルダの名前（設定フォルダの下）。</summary>
+    public const string TemplateLayoutFolderName = "TemplateLayout";
+
+    /// <summary>この設定フォルダのレイアウト設定テンプレートのフォルダ（存在するかは確かめない）。</summary>
+    public string TemplateLayoutFolder => Path.Combine(SettingsFolder, TemplateLayoutFolderName);
+
+    /// <summary>
+    /// 「すべて同じ字幕アクションにする」で使う字幕アクションの Id（AddOns\SHINTA.UnificationSubtitleActionSelector.json の SubtitleActionId。
+    /// 無ければ null）。書き出しの既定の字幕アクションを自動で決めるとき、ベースの n3proj が無ければ使う。
+    /// </summary>
+    public string? DefaultSubtitleActionId { get; init; }
+
+    /// <summary>字幕アクションのアドオンの設定（知っている Id → AddOns\&lt;Id&gt;.json の中身。<c>$type</c> なし。ファイルのあるものだけ）。</summary>
+    public IReadOnlyDictionary<string, JsonObject> AddOnSettings { get; init; } = new Dictionary<string, JsonObject>();
 
     public static Nkm3Environment? Detect()
     {
@@ -50,15 +66,24 @@ public sealed record Nkm3Environment(
     /// Microsoft Store 版（%LOCALAPPDATA%\Packages\22724SHINTA.NicokaraMaker3_*\Settings\TemplateFont）を先に、
     /// zip 版（%APPDATA%\SHINTA\NicoKaraMaker3 の下）を後に並べる。読み取り専用で使う。
     /// </summary>
-    public static List<string> FindTemplateFontFolders()
+    public static List<string> FindTemplateFontFolders() => FindTemplateFolders(TemplateFontFolderName);
+
+    /// <summary>
+    /// このマシンにあるニコカラメーカー3 のレイアウト設定テンプレートのフォルダ（存在するものだけ。探し方は <see cref="FindTemplateFontFolders"/> と同じ）。
+    /// 読み取り専用で使う。
+    /// </summary>
+    public static List<string> FindTemplateLayoutFolders() => FindTemplateFolders(TemplateLayoutFolderName);
+
+    /// <summary>設定フォルダの下のテンプレートのフォルダ（Store 版を先に、zip 版を後に。存在するものだけ）。</summary>
+    private static List<string> FindTemplateFolders(string folderName)
     {
         var candidates = new List<string>();
         try
         {
-            candidates.AddRange(StoreSettingsFolders().Select(s => Path.Combine(s, TemplateFontFolderName)));
+            candidates.AddRange(StoreSettingsFolders().Select(s => Path.Combine(s, folderName)));
             string zipRoot = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "SHINTA", "NicoKaraMaker3");
-            candidates.Add(Path.Combine(zipRoot, TemplateFontFolderName));
-            candidates.Add(Path.Combine(zipRoot, "Settings", TemplateFontFolderName));
+            candidates.Add(Path.Combine(zipRoot, folderName));
+            candidates.Add(Path.Combine(zipRoot, "Settings", folderName));
         }
         catch (Exception)
         {
@@ -97,9 +122,20 @@ public sealed record Nkm3Environment(
         string? layoutBegin = layoutSelector?["SelectableBegin"]?["SettingsName"]?.GetValue<string>();
         string? layoutEnd = layoutSelector?["SelectableEnd"]?["SettingsName"]?.GetValue<string>();
 
-        var fade = TryReadJson(Path.Combine(folder, "AddOns", "SHINTA.CharFadeInFadeOut.json"));
+        // 字幕アクション: 知っている Id ごとのアドオンの設定と、「すべて同じ字幕アクションにする」の Id
+        var addOns = new Dictionary<string, JsonObject>(StringComparer.Ordinal);
+        foreach (var kind in N3SubtitleActionCatalog.Known)
+        {
+            if (TryReadJson(Path.Combine(folder, "AddOns", kind.Id + ".json")) is { } addOn) addOns[kind.Id] = addOn;
+        }
+        var unification = TryReadJson(Path.Combine(folder, "AddOns", N3SubtitleActionCatalog.UnificationSelectorId + ".json"));
+        string? actionId = N3FontJson.Str(unification?["SubtitleActionId"])?.Trim();
 
-        return new Nkm3Environment(folder, version, pre, post, interval, layoutBegin, layoutEnd, fade);
+        return new Nkm3Environment(folder, version, pre, post, interval, layoutBegin, layoutEnd, addOns.GetValueOrDefault(N3SubtitleActionCatalog.CharFadeInFadeOutId))
+        {
+            DefaultSubtitleActionId = string.IsNullOrEmpty(actionId) ? null : actionId,
+            AddOnSettings = addOns,
+        };
     }
 
     private static JsonObject? TryReadJson(string path)

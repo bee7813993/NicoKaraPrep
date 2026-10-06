@@ -36,6 +36,12 @@ public sealed class N3ProjSourceTab
     /// <summary><see cref="Document"/> の各行にニコカラメーカーが設定したレイアウト設定の名前。空行・不明は null。</summary>
     public List<string?> LayoutNames { get; } = new();
 
+    /// <summary>
+    /// <see cref="Document"/> の各行にニコカラメーカーが設定した字幕アクション（<see cref="LayoutNames"/> と同じ並び）。
+    /// 空行・アクションの Id が空の行は null。
+    /// </summary>
+    public List<N3SubtitleAction?> SubtitleActions { get; } = new();
+
     /// <summary>歌詞行の数。</summary>
     public int LyricLineCount => Document.Lines.Count(l => !l.IsEmpty);
 
@@ -266,6 +272,7 @@ public static class N3ProjImport
                     tab.Document.Lines.Add(new LyricsLine());
                     tab.ShowTimes.Add(null);
                     tab.LayoutNames.Add(null);
+                    tab.SubtitleActions.Add(null);
                 }
                 pendingBreak = false;
 
@@ -287,6 +294,7 @@ public static class N3ProjImport
                 int end = l["ShowEndTime"]?.GetValue<int>() ?? -1;
                 tab.Document.Lines.Add(LrcFormat.ParseLyricLine(raw));
                 tab.ShowTimes.Add(begin >= 0 && end >= begin ? (begin, end) : null);
+                tab.SubtitleActions.Add(N3ProjFormat.ReadLineSubtitleAction(l));
                 if (l["LayoutIndex"] is JsonValue li && li.TryGetValue(out int layoutIndex))
                 {
                     usedLayouts.Add(layoutIndex);

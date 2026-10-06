@@ -479,7 +479,9 @@ public partial class MainViewModel
             DefaultFontSetName = settings.DefaultFontSetName is { Length: > 0 } dn ? dn : null,
             LayoutSelectableBegin = Nkm3Env?.LayoutSelectableBegin,
             LayoutSelectableEnd = Nkm3Env?.LayoutSelectableEnd,
-            CharFadeSettings = Nkm3Env?.CharFadeSettings,
+            AddOnSettings = Nkm3Env?.AddOnSettings,
+            DefaultSubtitleAction = settings.SubtitleAction,
+            DefaultSubtitleActionIdFromNkm3 = Nkm3Env?.DefaultSubtitleActionId,
             AppVersion = Nkm3Env?.AppVersion ?? baseVersion ?? N3ProjWriter.DefaultAppVersion,
             LrcEncoding = LrcEncoding,
         };

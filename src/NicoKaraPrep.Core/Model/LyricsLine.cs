@@ -60,20 +60,27 @@ public sealed class LyricsLine
     /// </summary>
     public int FontSizeDelta { get; set; }
 
+    /// <summary>
+    /// 行の字幕アクション（ニコカラメーカー3 の SubtitleActionId と設定値）の手動指定。null は曲の既定（曲の設定、無ければベースの n3proj・
+    /// ニコカラメーカー3 の設定から決めたもの。<c>N3ProjWriter.ResolveDefaultAction</c>）。
+    /// ニコカラメーカー3 と同じく行ごとに効く（行の全文字に同じアクション）。
+    /// </summary>
+    public N3SubtitleAction? SubtitleAction { get; set; }
+
     /// <summary>文字単位のフォント設定名の手動指定（<see cref="CharUnit.FontSetName"/>）を 1 つでも持つか。</summary>
     public bool HasCharFonts => Chars.Any(c => c.FontSetName is not null);
 
     /// <summary>
-    /// ニコカラメーカー3 書き出し用の行設定（表示時刻・行のフォント・文字のフォントなど）を 1 つでも持つか（保存する行・解除できる行）。
+    /// ニコカラメーカー3 書き出し用の行設定（表示時刻・行のフォント・文字のフォント・字幕アクションなど）を 1 つでも持つか（保存する行・解除できる行）。
     /// 表示時刻は出どころを問わない（読み込んだ値・自動調整の値も含む）。
     /// </summary>
-    public bool HasN3Overrides => ShowBeginCs is not null || ShowEndCs is not null || FontSetName is not null || LayoutName is not null || FontSizeDelta != 0 || HasCharFonts;
+    public bool HasN3Overrides => ShowBeginCs is not null || ShowEndCs is not null || FontSetName is not null || LayoutName is not null || FontSizeDelta != 0 || SubtitleAction is not null || HasCharFonts;
 
     /// <summary>
     /// 手で指定したニコカラメーカー3 書き出し用の行設定を 1 つでも持つか（行リストの ✎）。
     /// 表示時刻は手で指定したものだけを数える（読み込んだ値・自動調整の値は数えない）。
     /// </summary>
-    public bool HasManualN3Overrides => HasManualShowBegin || HasManualShowEnd || FontSetName is not null || LayoutName is not null || FontSizeDelta != 0 || HasCharFonts;
+    public bool HasManualN3Overrides => HasManualShowBegin || HasManualShowEnd || FontSetName is not null || LayoutName is not null || FontSizeDelta != 0 || SubtitleAction is not null || HasCharFonts;
 
     /// <summary>空行（ページ区切り）かどうか。</summary>
     public bool IsEmpty => Chars.Count == 0 && EndTimeCs is null;
@@ -121,7 +128,7 @@ public sealed class LyricsLine
 
     /// <summary>
     /// 歌詞を書き換えて作り直した行（テキスト編集モードの書き方から読み直した行など）へ、元の行 <paramref name="from"/> の
-    /// 歌詞に依らない行の設定（タブ分離の元の行位置キー・表示時刻・行のフォント・レイアウト・ページの文字の大きさ）を写す。
+    /// 歌詞に依らない行の設定（タブ分離の元の行位置キー・表示時刻・行のフォント・レイアウト・ページの文字の大きさ・字幕アクション）を写す。
     /// 文字ごとのフォントは <see cref="CharFontOperations.CopyCharFonts"/>、エクスポート済みの印は呼び出し側で扱う。
     /// 行の設定を足したら、ここと <see cref="Clone"/> にも足す（足し忘れると行エディタで直したときに消える）。
     /// </summary>
@@ -135,6 +142,7 @@ public sealed class LyricsLine
         FontSetName = from.FontSetName;
         LayoutName = from.LayoutName;
         FontSizeDelta = from.FontSizeDelta;
+        SubtitleAction = from.SubtitleAction?.Clone();
     }
 
     public LyricsLine Clone()
@@ -151,6 +159,7 @@ public sealed class LyricsLine
             FontSetName = FontSetName,
             LayoutName = LayoutName,
             FontSizeDelta = FontSizeDelta,
+            SubtitleAction = SubtitleAction?.Clone(),
         };
         foreach (var c in Chars) l.Chars.Add(c.Clone());
         return l;
