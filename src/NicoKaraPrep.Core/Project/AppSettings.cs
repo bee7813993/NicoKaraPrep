@@ -203,6 +203,12 @@ public sealed class AppSettings
     public double LayoutListWidthPx { get; set; } = 300;
 
     /// <summary>
+    /// 行リストの右のパネル「レイアウト」の字幕アクションの一覧で、押したアクションを選んだ行のページの行すべてにそろえるか
+    /// （false なら選んだ行だけ。フォントと同じ）。
+    /// </summary>
+    public bool SideActionWholePage { get; set; }
+
+    /// <summary>
     /// 行リスト・絵文字挿入ビューの右のパネル（フォント・レイアウト、絵文字のパレット）の幅 px（左との境のつまみで変更）。
     /// ウィンドウが狭くて左が狭くなりすぎるときは、表示ではこれより狭める（この値は変えない）。
     /// </summary>

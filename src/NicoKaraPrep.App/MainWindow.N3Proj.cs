@@ -614,33 +614,40 @@ public sealed partial class MainWindow
     {
         int index = LineActionBox.SelectedIndex;
         if (_n3PanelLoading || index < 0) return;
-        ApplyLineActionToSelectedLines(index == 0 ? null : N3SubtitleActionCatalog.Known[index - 1].Id);
+        ApplyLineAction(index == 0 ? null : N3SubtitleActionCatalog.Known[index - 1].Id, wholePage: false);
     }
 
     /// <summary>
-    /// 選んだ行（空行は除く）だけに字幕アクションを指定する（null で指定を外して曲の既定に戻す）。ページのほかの行は変えない
-    /// （ページの行すべてにそろえるのは右パネル・レイアウト設定ビュー）。設定値は <see cref="MainViewModel.CreatePageSubtitleAction"/>。
+    /// 選んだ行（空行は除く）に字幕アクションを指定する（null で指定を外して曲の既定に戻す）。<paramref name="wholePage"/> なら、選んだ行の
+    /// ページの行すべてにそろえる（右パネル「レイアウト」の「ページの行すべてにそろえる」）。行設定の欄と右パネルの一覧から使う。
+    /// 設定値は <see cref="MainViewModel.CreatePageSubtitleAction"/>（曲の既定と同じ種類ならその値。レイアウト設定ビュー・MCP と同じ）。
     /// 元に戻す（Ctrl+Z）は 1 回で戻る。
     /// </summary>
-    private void ApplyLineActionToSelectedLines(string? actionId)
+    private void ApplyLineAction(string? actionId, bool wholePage)
     {
         var indexes = SelectedNonEmptyIndexes();
-        if (indexes.Count == 0) return;
+        if (indexes.Count == 0)
+        {
+            ViewModel.StatusText = "行リストで行を選んでから、字幕アクションを選んでください";
+            return;
+        }
         N3SubtitleAction? action = string.IsNullOrEmpty(actionId) ? null : ViewModel.CreatePageSubtitleAction(actionId);
         int n = 0;
-        TryRun(() => n = ViewModel.SetLinesSubtitleAction(indexes, action, wholePage: false));
+        TryRun(() => n = ViewModel.SetLinesSubtitleAction(indexes, action, wholePage));
         if (n > 0)
         {
             foreach (var l in ViewModel.Lines) l.RaiseOverrideMark();
+            string target = wholePage ? $"選んだ行のページ（{n} 行）" : $"{n} 行";
+            string scope = wholePage ? "" : "選んだ行だけ。ページのほかの行はそのまま。";
             ViewModel.StatusText = action is null
-                ? $"{n} 行の字幕アクションの指定を外しました（曲の既定に戻します。Ctrl+Z で戻せます）"
-                : $"{n} 行に字幕アクション「{N3SubtitleActionCatalog.DisplayName(action.Id)}」を指定しました（選んだ行だけ。ページのほかの行はそのまま。Ctrl+Z で戻せます）";
+                ? $"{target}の字幕アクションの指定を外しました（曲の既定に戻します。{scope}Ctrl+Z で戻せます）"
+                : $"{target}に字幕アクション「{N3SubtitleActionCatalog.DisplayName(action.Id)}」を指定しました（{scope}Ctrl+Z で戻せます）";
         }
         else
         {
             ViewModel.StatusText = "字幕アクションの指定は変わりませんでした";
         }
-        // 欄の作り直しは、SelectionChanged を抜けてから（選択の変更の中で選択を変えない）
+        // 行設定の欄と右パネルの一覧の作り直しは、今の SelectionChanged・ItemClick を抜けてから（選択の変更の中で選択を変えない）
         DispatcherQueue.TryEnqueue(Microsoft.UI.Dispatching.DispatcherQueuePriority.Low, () =>
         {
             _n3PanelLoading = true;
@@ -654,37 +661,6 @@ public sealed partial class MainWindow
             }
             LineSide.RefreshPagePane();
         });
-    }
-
-    /// <summary>
-    /// 選んだ行のページに字幕アクションを指定する（null で指定を外して曲の既定に戻す。右パネル「レイアウト」の字幕アクションの欄）。
-    /// 設定値は <see cref="MainViewModel.CreatePageSubtitleAction"/>（曲の既定と同じ種類ならその値、違えばその種類の既定値。
-    /// レイアウト設定ビュー・MCP と同じ）。元に戻す（Ctrl+Z）は 1 回で戻る。
-    /// </summary>
-    private void ApplyLineAction(string? actionId)
-    {
-        var indexes = SelectedNonEmptyIndexes();
-        if (indexes.Count == 0)
-        {
-            ViewModel.StatusText = "行リストで行を選んでから、字幕アクションを選んでください";
-            return;
-        }
-        N3SubtitleAction? action = string.IsNullOrEmpty(actionId) ? null : ViewModel.CreatePageSubtitleAction(actionId);
-        int n = 0;
-        TryRun(() => n = ViewModel.SetLinesSubtitleAction(indexes, action));
-        if (n > 0)
-        {
-            foreach (var l in ViewModel.Lines) l.RaiseOverrideMark();
-            ViewModel.StatusText = action is null
-                ? $"選んだ行のページ（{n} 行）の字幕アクションの指定を外しました（曲の既定に戻します）"
-                : $"選んだ行のページ（{n} 行）に字幕アクション「{N3SubtitleActionCatalog.DisplayName(action.Id)}」を指定しました";
-        }
-        else
-        {
-            ViewModel.StatusText = "字幕アクションの指定は変わりませんでした";
-        }
-        // 字幕アクションは行リストの表示・プレビュー・チェックに出ないので、右パネルの欄だけを合わせる
-        LineSide.RefreshPagePane();
     }
 
     /// <summary>行設定の文字の大きさの欄（選んだ行のページすべてに、文字の大きさの増減 px を指定する。0 でそのまま）。</summary>

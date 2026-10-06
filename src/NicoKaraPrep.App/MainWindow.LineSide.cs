@@ -16,7 +16,7 @@ public sealed partial class MainWindow
         LineSide.Initialize(ViewModel, () => SelectedIndexes);
         LineSide.FontPicked += (_, name) => ApplyFontFromPanel(name);
         LineSide.PageLayoutPicked += (_, name) => ApplyLineLayout(name);
-        LineSide.PageActionPicked += (_, actionId) => ApplyLineAction(actionId);
+        LineSide.PageActionPicked += (_, pick) => ApplyLineAction(pick.Id, pick.WholePage);
         LineSide.EditLayoutsRequested += (_, name) => OpenLayoutViewFor(name);
         LineSide.ShowTimeSettingsChanged += (_, _) => OnShowTimeSettingsChanged();
         LineSide.AutoShowTimeRequested += (_, _) => RunAutoShowTimes();
