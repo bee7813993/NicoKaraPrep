@@ -395,17 +395,8 @@ public static class N3ProjWriter
         var layoutOfLine = new Dictionary<int, int>();
         foreach (var page in pages)
         {
-            // ページの中で最初に手動指定のある行のレイアウト（無い名前なら行数から選ぶ）
-            int? manual = null;
-            foreach (int i in page)
-            {
-                if (doc.Lines[i].LayoutName is { Length: > 0 } name && layouts.FindIndex(name) is int found)
-                {
-                    manual = found;
-                    break;
-                }
-            }
-            int layout = manual ?? layouts.Resolve(page.Count);
+            // ページの中で最初に手動指定のある行のレイアウト（無い名前なら行数から選ぶ。レイアウト設定ビューのページの一覧と同じ決め方）
+            int layout = N3PageChoices.ChooseLayout(doc, page, layouts).LayoutIndex;
             foreach (int i in page) layoutOfLine[i] = layout;
         }
         var matcher = new EmojiMatcher(emoji.Select(e => e.ReplaceChar));
@@ -717,6 +708,9 @@ public static class N3ProjWriter
 
         /// <summary>名前のレイアウト設定の番号（無ければ null）。</summary>
         public int? FindIndex(string name) => _layouts.FirstOrDefault(l => l.Name == name)?.Index;
+
+        /// <summary>タブに固定したレイアウトを使うか（固定の名前が並びにあるとき。<see cref="Resolve"/> は行数によらずそれを返す）。</summary>
+        public bool IsFixed => _fixed is not null;
 
         /// <summary>
         /// ページの行数に応じたレイアウトの番号。ニコカラメーカー3 の「行数に応じてレイアウトを設定」と同じく、適用対象の範囲（環境設定）の中から、

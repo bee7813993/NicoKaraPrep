@@ -199,6 +199,9 @@ public sealed class AppSettings
     /// <summary>フォント設定ビューの左の一覧の幅 px（一覧と編集欄のあいだのつまみで変更）。</summary>
     public double FontListWidthPx { get; set; } = 300;
 
+    /// <summary>レイアウト設定ビューの左の一覧の幅 px（一覧と編集欄のあいだのつまみで変更）。</summary>
+    public double LayoutListWidthPx { get; set; } = 300;
+
     /// <summary>
     /// 行リスト・絵文字挿入ビューの右のパネル（フォント・レイアウト、絵文字のパレット）の幅 px（左との境のつまみで変更）。
     /// ウィンドウが狭くて左が狭くなりすぎるときは、表示ではこれより狭める（この値は変えない）。
