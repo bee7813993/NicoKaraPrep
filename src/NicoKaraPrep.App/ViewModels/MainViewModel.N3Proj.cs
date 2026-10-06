@@ -338,6 +338,7 @@ public partial class MainViewModel
             line.FontSetName = null;
             line.LayoutName = null;
             line.FontSizeDelta = 0;
+            line.SubtitleAction = null;
             CharFontOperations.Clear(line);
         }
         MarkModified();

@@ -1,0 +1,60 @@
+﻿using NicoKaraPrep.Core.Model;
+
+namespace NicoKaraPrep.App.ViewModels;
+
+/// <summary>
+/// 字幕アクション（ニコカラメーカー3 の行のアクション）の指定。行ごとの指定（<see cref="LyricsLine.SubtitleAction"/>、null = 曲の既定）と、
+/// 曲の既定（<see cref="Core.Project.N3ProjSongSettings.SubtitleAction"/>、null = 自動: ベース → ニコカラメーカー3 の設定 → 文字単位フェード）。
+/// レイアウト設定ビュー（F4）と右パネルの「レイアウト」タブから使う。
+/// </summary>
+public partial class MainViewModel
+{
+    /// <summary>
+    /// 行に字幕アクションを手で指定する（null = 曲の既定に戻す）。<paramref name="wholePage"/> なら、ニコカラメーカー3 のページ単位の使い方に合わせて
+    /// 指定した行と同じページの行すべてにそろえる（ページの数え方は書き出しと同じ）。元に戻す（Ctrl+Z）は 1 回で戻る。変えた行の数を返す。
+    /// </summary>
+    public int SetLinesSubtitleAction(IReadOnlyList<int> indexes, N3SubtitleAction? action, bool wholePage = true)
+    {
+        var targets = new SortedSet<int>();
+        if (wholePage)
+        {
+            var show = CreateShowTimeSettings(_activeTab.Name);
+            var pages = Document.GetPages(show.PageMode, show.FixedLineCount);
+            foreach (int i in indexes)
+            {
+                if (i < 0 || i >= Document.Lines.Count || Document.Lines[i].IsEmpty) continue;
+                var page = pages.FirstOrDefault(p => p.Contains(i));
+                foreach (int k in page ?? new List<int> { i }) targets.Add(k);
+            }
+        }
+        else
+        {
+            foreach (int i in indexes)
+            {
+                if (i >= 0 && i < Document.Lines.Count && !Document.Lines[i].IsEmpty) targets.Add(i);
+            }
+        }
+        var changed = targets.Where(i => !N3SubtitleAction.AreSame(Document.Lines[i].SubtitleAction, action)).ToList();
+        if (changed.Count == 0) return 0;
+        PushUndo();
+        foreach (int i in changed) Document.Lines[i].SubtitleAction = action?.Clone();
+        MarkModified();
+        SaveProject();
+        return changed.Count;
+    }
+
+    /// <summary>
+    /// 曲の既定の字幕アクションを変える（null = 自動）。.tttproj に保存する（歌詞の元に戻すの対象にはしない）。変わったら true。
+    /// </summary>
+    public bool SetSongDefaultSubtitleAction(N3SubtitleAction? action)
+    {
+        if (N3SubtitleAction.AreSame(N3ProjSettings.SubtitleAction, action)) return false;
+        N3ProjSettings.SubtitleAction = action?.Clone();
+        SaveProject();
+        SongDefaultSubtitleActionChanged?.Invoke(this, EventArgs.Empty);
+        return true;
+    }
+
+    /// <summary>曲の既定の字幕アクションが変わった（レイアウト設定ビューと右パネルの表示を合わせる）。</summary>
+    public event EventHandler? SongDefaultSubtitleActionChanged;
+}
