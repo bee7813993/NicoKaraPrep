@@ -477,9 +477,37 @@ public sealed partial class MainWindow
                 ToggleView(MainViewMode.FontSettings);
                 break;
             case Windows.System.VirtualKey.F4:
-                ToggleView(MainViewMode.Layout);
+                ToggleLayoutViewByKey();
                 break;
         }
+    }
+
+    /// <summary>F4（レイアウト設定ビューの切り替え）を最後に処理した時刻（メニューのアクセラレータと根の PreviewKeyDown の二重発火を防ぐ）。</summary>
+    private DateTime _lastLayoutViewKey = DateTime.MinValue;
+
+    /// <summary>F4 でレイアウト設定ビューを切り替える（150ms 以内の 2 回目は同じキーの二重発火として捨てる）。</summary>
+    private void ToggleLayoutViewByKey()
+    {
+        var now = DateTime.UtcNow;
+        if ((now - _lastLayoutViewKey).TotalMilliseconds < 150) return;
+        _lastLayoutViewKey = now;
+        ToggleView(MainViewMode.Layout);
+    }
+
+    /// <summary>
+    /// 根の PreviewKeyDown（フォーカスのある部品より先に受ける）: 修飾キーなしの F4 でレイアウト設定ビューを切り替える。
+    /// ComboBox は F4 でドロップダウンを開くので、右パネル・行設定・レイアウト設定ビューのコンボを選んだ直後（フォーカスがコンボに残る）に
+    /// F4 を押すと、メニューのアクセラレータに届かずにドロップダウンが開いていた。開いているドロップダウン・ダイアログ・メニューの中のキーは
+    /// 別のポップアップなのでここを通らない（ドロップダウンを閉じる F4 はそのまま効く）。
+    /// </summary>
+    private void OnRootPreviewKeyDown(object sender, KeyRoutedEventArgs e)
+    {
+        if (e.Handled || e.Key != Windows.System.VirtualKey.F4) return;
+        static bool Down(Windows.System.VirtualKey key) =>
+            (Microsoft.UI.Input.InputKeyboardSource.GetKeyStateForCurrentThread(key) & Windows.UI.Core.CoreVirtualKeyStates.Down) != 0;
+        if (Down(Windows.System.VirtualKey.Menu) || Down(Windows.System.VirtualKey.Control) || Down(Windows.System.VirtualKey.Shift)) return; // Alt+F4 などはそのまま
+        e.Handled = true;
+        ToggleLayoutViewByKey();
     }
 
     /// <summary>右パネルの「絵文字挿入ビュー (F2)」トグル。</summary>

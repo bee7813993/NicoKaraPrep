@@ -9,7 +9,7 @@
     xmlns:val="using:NicoKaraPrep.Core.Validation">
 
     <!-- 画面の大きさに合わせた並べ方（プレイヤーの高さ・右のパネルの幅・行リストの列・行設定の段）は MainWindow.Layout.cs -->
-    <Grid x:Name="RootGrid" KeyDown="OnRootKeyDown">
+    <Grid x:Name="RootGrid" KeyDown="OnRootKeyDown" PreviewKeyDown="OnRootPreviewKeyDown">
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto" />
             <RowDefinition Height="*" />
