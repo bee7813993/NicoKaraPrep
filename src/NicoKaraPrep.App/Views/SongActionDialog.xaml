@@ -5,7 +5,8 @@
     Title="字幕アクションの曲の既定"
     PrimaryButtonText="OK"
     CloseButtonText="キャンセル"
-    DefaultButton="Primary">
+    DefaultButton="None">
+    <!-- DefaultButton を付けない: 数値の欄で値を確定する Enter で、確定する前に OK にならないように -->
 
     <!-- 行ごとに指定していない歌詞行に書き出す字幕アクション（曲の既定。.tttproj に保存）。種類と設定値を選ぶ。OK で書き込む -->
     <ScrollViewer MaxHeight="560" VerticalScrollBarVisibility="Auto" Padding="0,0,12,0">

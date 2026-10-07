@@ -4,7 +4,8 @@
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
     Title="表示時刻の自動調整"
     CloseButtonText="閉じる"
-    DefaultButton="Close">
+    DefaultButton="None">
+    <!-- DefaultButton を付けない: 数値の欄で値を確定する Enter で、ポップアップが閉じないように -->
 
     <ContentDialog.Resources>
         <Style x:Key="FieldLabel" TargetType="TextBlock">
