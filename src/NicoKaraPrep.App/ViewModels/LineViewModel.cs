@@ -138,6 +138,26 @@ public partial class LineViewModel : ObservableObject
 
     public bool HasLayoutText => LayoutText.Length > 0;
 
+    /// <summary>
+    /// この行の字幕アクション（行リストの「字幕アクション」の列。手で指定した行は先頭に ✎、指定の無い行は曲の既定の名前）。空行は空。
+    /// <see cref="MainViewModel.UpdateLineActions"/> で作り直す。
+    /// </summary>
+    [ObservableProperty]
+    private string actionText = "";
+
+    /// <summary>字幕アクションの中身と決まり方の説明（ツールチップ）。</summary>
+    [ObservableProperty]
+    private string actionToolTip = "";
+
+    /// <summary>この行に字幕アクションを手で指定しているか（強調の色で出す）。</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(ActionBrush))]
+    private bool isManualAction;
+
+    /// <summary>字幕アクションの列の文字の色（手で指定した行は強調の色、曲の既定のままの行は薄い色。表示時刻の手動指定と同じ）。</summary>
+    public Microsoft.UI.Xaml.Media.Brush ActionBrush =>
+        (Microsoft.UI.Xaml.Media.Brush)Microsoft.UI.Xaml.Application.Current.Resources[IsManualAction ? "AccentTextFillColorPrimaryBrush" : "TextFillColorSecondaryBrush"];
+
     /// <summary>歌詞を字幕の見た目で描く材料（null なら文字のまま表示する）。チェックのたびに更新する。</summary>
     public Services.Subtitles.LineRenderSource? RenderSource { get; private set; }
 

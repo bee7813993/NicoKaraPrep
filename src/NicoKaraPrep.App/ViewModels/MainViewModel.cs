@@ -538,6 +538,7 @@ public partial class MainViewModel : ObservableObject
         {
             Lines.Add(new LineViewModel(Document.Lines[i], i));
         }
+        UpdateLineActions();
     }
 
     // ------------------------------------------------------------ 保存

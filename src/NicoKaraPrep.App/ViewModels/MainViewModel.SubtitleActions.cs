@@ -40,7 +40,46 @@ public partial class MainViewModel
         foreach (int i in changed) Document.Lines[i].SubtitleAction = action?.Clone();
         MarkModified();
         SaveProject();
+        UpdateLineActions();
         return changed.Count;
+    }
+
+    /// <summary>行リストの「字幕アクション」の列（<see cref="LineViewModel.ActionText"/>）を、行の指定と曲の既定で作り直したとき。</summary>
+    public event EventHandler? LineActionsUpdated;
+
+    /// <summary>
+    /// 行リストの「字幕アクション」の列を、今の行の指定と曲の既定で作り直す（手で指定した行は「✎フェードイン」、指定の無い行は曲の既定の名前）。
+    /// 行の一覧・フォントの表示の作り直し、字幕アクションの指定・曲の既定・行の設定の解除のあとに呼ぶ。
+    /// </summary>
+    public void UpdateLineActions()
+    {
+        var def = ResolveCurrentDefaultSubtitleAction(out var source);
+        string defName = N3SubtitleActionCatalog.DisplayName(def.Id);
+        string defTip = $"曲の既定の字幕アクション: {DescribeSubtitleAction(def)}（{DefaultSubtitleActionSourceLabel(source)}）";
+        foreach (var line in Lines)
+        {
+            var model = line.Model;
+            if (model.IsEmpty)
+            {
+                line.ActionText = "";
+                line.ActionToolTip = "";
+                line.IsManualAction = false;
+            }
+            else if (model.SubtitleAction is { Id.Length: > 0 } action)
+            {
+                line.ActionText = $"✎{N3SubtitleActionCatalog.DisplayName(action.Id)}";
+                line.ActionToolTip = $"この行に手で指定した字幕アクション: {DescribeSubtitleAction(action)}\n{defTip}\n" +
+                                     "右のパネル「字幕アクション」・行設定の欄で変えられます（「（既定）」で曲の既定に戻ります）";
+                line.IsManualAction = true;
+            }
+            else
+            {
+                line.ActionText = defName;
+                line.ActionToolTip = $"{defTip}\nこの行は手で指定していないので、曲の既定を使います（右のパネル「字幕アクション」・行設定の欄で行ごとに指定できます）";
+                line.IsManualAction = false;
+            }
+        }
+        LineActionsUpdated?.Invoke(this, EventArgs.Empty);
     }
 
     /// <summary>
@@ -68,6 +107,7 @@ public partial class MainViewModel
         if (N3SubtitleAction.AreSame(N3ProjSettings.SubtitleAction, action)) return false;
         N3ProjSettings.SubtitleAction = action?.Clone();
         SaveProject();
+        UpdateLineActions();
         SongDefaultSubtitleActionChanged?.Invoke(this, EventArgs.Empty);
         return true;
     }

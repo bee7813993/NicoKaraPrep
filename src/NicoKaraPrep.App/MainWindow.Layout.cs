@@ -79,6 +79,9 @@ public sealed partial class MainWindow
 
     private const double LayoutNameSize = 11;
 
+    /// <summary>字幕アクションの欄の文字の大きさ（テンプレートと同じ）。</summary>
+    private const double ActionNameSize = 11;
+
     /// <summary>行設定を 1 行に並べるときに、右の説明（自動の表示時刻など）に最低限残す幅 px（足りない分は … で切り、全文はツールチップ）。</summary>
     private const double MinN3InfoWidth = 40;
 
@@ -125,6 +128,7 @@ public sealed partial class MainWindow
         N3TimeGroup.SizeChanged += (_, _) => FitN3LinePanel();
         N3FontGroup.SizeChanged += (_, _) => FitN3LinePanel();
         ViewModel.LineFontsUpdated += (_, _) => FitLineListFontColumn();
+        ViewModel.LineActionsUpdated += (_, _) => FitLineListActionColumn();
 
         // 右の列の境のつまみ（右へ動かすと右の列が狭くなる）
         SideResizeGrip.DragStarted += (_, _) => _sideWidthAtDragStart = SideColumn.Width.Value;
@@ -395,6 +399,16 @@ public sealed partial class MainWindow
         double width = 0;
         foreach (var line in ViewModel.Lines) width = Math.Max(width, FontCellWidth(line));
         LineListLayout.Current.FontContentWidth = width;
+        FitLineListColumns();
+    }
+
+    /// <summary>字幕アクションの欄を、いちばん長い行の中身がちょうど入る幅にする（出すものが無ければ閉じる）。</summary>
+    private void FitLineListActionColumn()
+    {
+        double width = 0;
+        foreach (var line in ViewModel.Lines) width = Math.Max(width, TextWidth(line.ActionText, ActionNameSize));
+        if (Math.Abs(LineListLayout.Current.ActionContentWidth - width) < 0.5) return;
+        LineListLayout.Current.ActionContentWidth = width;
         FitLineListColumns();
     }
 

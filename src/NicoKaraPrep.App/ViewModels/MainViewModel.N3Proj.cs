@@ -343,6 +343,7 @@ public partial class MainViewModel
         }
         MarkModified();
         SaveProject();
+        UpdateLineActions();
         return targets.Count;
     }
 
