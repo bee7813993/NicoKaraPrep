@@ -419,11 +419,12 @@ public sealed partial class MainWindow
         var font = line.AppliedFont;
         if (font.IsVisible)
         {
-            // [色見本][名前]（途中で切り替わる行は [→][色見本][2 つ目の名前（72px まで）] を足す）
-            width = FontSwatchesWidth + FontCellGap + TextWidth(font.First.Name, FontNameSize);
+            // [色見本][名前][すき間]（テンプレートの Grid は 3 列なので、途中で切り替わらない行でも 3 列目の前のすき間を取る。
+            // 途中で切り替わる行は [→][色見本][2 つ目の名前（72px まで）] を足す）
+            width = FontSwatchesWidth + FontCellGap + TextWidth(font.First.Name, FontNameSize) + FontCellGap;
             if (font.HasLast)
             {
-                width += FontCellGap + TextWidth(font.Arrow, FontNameSize) + FontCellGap + FontSwatchesWidth + FontCellGap
+                width += TextWidth(font.Arrow, FontNameSize) + FontCellGap + FontSwatchesWidth + FontCellGap
                     + Math.Min(FontLastNameMaxWidth, TextWidth(font.Last.Name, FontNameSize));
             }
         }

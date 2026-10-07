@@ -504,10 +504,10 @@
                                     <TextBlock Text="{x:Bind LayoutText, Mode=OneWay}" FontSize="11" Foreground="{ThemeResource TextFillColorSecondaryBrush}" TextTrimming="CharacterEllipsis"
                                                Visibility="{x:Bind HasLayoutText, Mode=OneWay}" ToolTipService.ToolTip="{x:Bind LayoutToolTip, Mode=OneWay}" />
                                 </StackPanel>
-                                <!-- 歌詞: 字幕の見た目（フォント設定の書体・配色・ルビ・アイコン）で描く。文字をクリック・ドラッグで選べる。空行・タグだけの行と、表示を切ったときは文字のまま -->
                                 <!-- この行の字幕アクション（手で指定した行は ✎＋名前を強調の色で、指定の無い行は曲の既定の名前を薄い色で） -->
                                 <TextBlock Grid.Column="7" Text="{x:Bind ActionText, Mode=OneWay}" FontSize="11" VerticalAlignment="Center" TextTrimming="CharacterEllipsis"
                                            Foreground="{x:Bind ActionBrush, Mode=OneWay}" ToolTipService.ToolTip="{x:Bind ActionToolTip, Mode=OneWay}" />
+                                <!-- 歌詞: 字幕の見た目（フォント設定の書体・配色・ルビ・アイコン）で描く。文字をクリック・ドラッグで選べる。空行・タグだけの行と、表示を切ったときは文字のまま -->
                                 <Grid Grid.Column="8">
                                     <TextBlock Text="{x:Bind DisplayText, Mode=OneWay}" TextTrimming="CharacterEllipsis" Visibility="{x:Bind ShowPlainText, Mode=OneWay}" />
                                     <views:LyricLineView Height="44" Line="{x:Bind}" Visibility="{x:Bind ShowStyledText, Mode=OneWay}" CharSelecting="OnLyricCharSelecting" />
