@@ -83,8 +83,20 @@ public sealed class N3ProjExportOptions
 
     public string? LayoutSelectableEnd { get; set; }
 
-    /// <summary>字幕アクション「文字単位フェード」の設定（ニコカラメーカーのアドオン設定 JSON。null = 既定値）。</summary>
-    public JsonObject? CharFadeSettings { get; set; }
+    /// <summary>
+    /// ニコカラメーカー3 のアドオンの設定（字幕アクションの Id → AddOns\&lt;Id&gt;.json の中身。<c>$type</c> なし）。
+    /// 自動で決めた既定の字幕アクションの値に使う（無い Id・null は既定値）。
+    /// </summary>
+    public IReadOnlyDictionary<string, JsonObject>? AddOnSettings { get; set; }
+
+    /// <summary>曲の既定の字幕アクション（行ごとの指定が無い歌詞行に書くもの）。null = 自動（<see cref="N3ProjWriter.ResolveDefaultAction(JsonObject, N3ProjExportOptions)"/>）。</summary>
+    public N3SubtitleAction? DefaultSubtitleAction { get; set; }
+
+    /// <summary>
+    /// ニコカラメーカー3 の「すべて同じ字幕アクションにする」の Id（自動のとき、ベースの n3proj に歌詞行のアクションが無ければ使う。
+    /// null・知らない Id は文字単位フェード）。
+    /// </summary>
+    public string? DefaultSubtitleActionIdFromNkm3 { get; set; }
 
     /// <summary>CreateAppVer / ModifyAppVer に書くバージョン文字列。</summary>
     public string AppVersion { get; set; } = N3ProjWriter.DefaultAppVersion;
@@ -269,7 +281,8 @@ public static class N3ProjWriter
         lineCount = 0;
         // 全タブで 1 つを使い、タブごとにタブの最初のフォントから決め直す（ニコカラメーカー3 はタブをまたいで引き継がない。実データで確認）
         var fontResolver = new N3FontResolver(fontNames.Select(f => f.Name).ToList(), options.DefaultFontSetName, options.ContinueFontAcrossLines);
-        var action = ResolveSubtitleAction(baseRoot, options.CharFadeSettings, ver);
+        // 行ごとの指定が無い歌詞行の字幕アクション（ベースの歌詞行を書き換える前に決める）
+        var defaultAction = ResolveDefaultAction(baseRoot, options);
         // ページの文字の大きさの増減: 大きさだけを変えたフォント設定を、使うものだけ後ろへ足す（フォントを決める並びには入れない）
         var sizeVariants = new FontSizeVariants(fonts, height, ver);
         for (int t = 0; t < sources.Count; t++)
@@ -278,7 +291,7 @@ public static class N3ProjWriter
             var show = TabShowSettings(src.Tab, options);
             fontResolver.StartDocument(src.Tab.StartFontSetName);
             var layoutResolver = new LayoutResolver(layoutInfos, src.Tab.LayoutName, options.LayoutSelectableBegin, options.LayoutSelectableEnd, warnings, src.Tab.Name);
-            var lines = BuildLineInfos(src.Tab.Document, show, options.EmojiEntries, fontResolver, layoutResolver, action, ver, out int count, sizeVariants);
+            var lines = BuildLineInfos(src.Tab.Document, show, options.EmojiEntries, fontResolver, layoutResolver, defaultAction, ver, out int count, sizeVariants, height);
             lineCount += count;
             infos.Add(BuildLyricsInfo(src, t, projectDir, lines, show, ver));
         }
@@ -356,21 +369,24 @@ public static class N3ProjWriter
 
     /// <summary>
     /// 歌詞行（LineInfos）を生成する。空行の直前にページ区切り／段落区切りの合成行を挿入し、
-    /// 各歌詞行に文字の時刻・フォント・レイアウト・表示時刻・字幕アクションを付ける。
+    /// 各歌詞行に文字の時刻・フォント・レイアウト・表示時刻・字幕アクション（行の指定 <see cref="LyricsLine.SubtitleAction"/>、無ければ
+    /// <paramref name="defaultAction"/>。どちらも <see cref="N3SubtitleActionCatalog.Normalize"/> で新しい書式にそろえて書く）を付ける。
     /// 絵文字の先行を譲る規則（<see cref="N3ShowTimeSettings.EmojiLeadYield"/>）がオンなら、文字の時刻・Raw・区切りの種類は
     /// 絵文字の開始を表示開始へ寄せた歌詞から、表示時刻は元の歌詞で計算した値から作る（<see cref="N3EmojiLead.PrepareTab"/>。lrc の書き出しと同じ）。
     /// </summary>
     /// <param name="sizeVariants">ページの文字の大きさの増減に使う、大きさを変えたフォント設定（null なら増減しない）。</param>
+    /// <param name="screenHeight">書き出すプロジェクトの画面の高さ（字幕アクションの大きさ（px）の項目をこの高さの値にする。0 ならそのまま）。</param>
     internal static JsonArray BuildLineInfos(
         LyricsDocument source,
         N3ShowTimeSettings show,
         IReadOnlyList<EmojiEntry> emoji,
         N3FontResolver fonts,
         LayoutResolver layouts,
-        (string Id, JsonObject Settings) action,
+        N3SubtitleAction defaultAction,
         string ver,
         out int lyricCount,
-        FontSizeVariants? sizeVariants = null)
+        FontSizeVariants? sizeVariants = null,
+        int screenHeight = 0)
     {
         var arr = new JsonArray();
         var (plans, doc) = N3EmojiLead.PrepareTab(source, show);
@@ -379,20 +395,13 @@ public static class N3ProjWriter
         var layoutOfLine = new Dictionary<int, int>();
         foreach (var page in pages)
         {
-            // ページの中で最初に手動指定のある行のレイアウト（無い名前なら行数から選ぶ）
-            int? manual = null;
-            foreach (int i in page)
-            {
-                if (doc.Lines[i].LayoutName is { Length: > 0 } name && layouts.FindIndex(name) is int found)
-                {
-                    manual = found;
-                    break;
-                }
-            }
-            int layout = manual ?? layouts.Resolve(page.Count);
+            // ページの中で最初に手動指定のある行のレイアウト（無い名前なら行数から選ぶ。レイアウト設定ビューのページの一覧と同じ決め方）
+            int layout = N3PageChoices.ChooseLayout(doc, page, layouts).LayoutIndex;
             foreach (int i in page) layoutOfLine[i] = layout;
         }
         var matcher = new EmojiMatcher(emoji.Select(e => e.ReplaceChar));
+        var normalizedDefault = N3SubtitleActionCatalog.Normalize(defaultAction, ver, screenHeight);
+        var normalized = new Dictionary<N3SubtitleAction, N3SubtitleAction>(ReferenceEqualityComparer.Instance);
 
         int pendingBlank = 0;
         bool started = false;
@@ -438,6 +447,17 @@ public static class N3ProjWriter
             }
             var chars = BuildCharInfos(tokens, fontByUnit, line.EndTimeCs);
             plans.TryGetValue(i, out var plan);
+            var action = normalizedDefault;
+            if (line.SubtitleAction is { Id.Length: > 0 } own)
+            {
+                // 行の指定（同じオブジェクトは 1 回だけそろえる）
+                if (!normalized.TryGetValue(own, out var ownNormalized))
+                {
+                    ownNormalized = N3SubtitleActionCatalog.Normalize(own, ver, screenHeight);
+                    normalized[own] = ownNormalized;
+                }
+                action = ownNormalized;
+            }
             arr.Add(LineInfo(
                 1,
                 chars,
@@ -563,41 +583,60 @@ public static class N3ProjWriter
         ["ModifyAppVer"] = "",
     };
 
-    /// <summary>歌詞行の字幕アクション。ベースの最初の歌詞行の設定を引き継ぎ、無ければ文字単位フェードの既定値。</summary>
-    private static (string Id, JsonObject Settings) ResolveSubtitleAction(JsonObject? baseRoot, JsonObject? charFade, string ver)
-    {
-        if (baseRoot?["SourceLyricsInfos"] is JsonArray infos)
-        {
-            foreach (var info in infos)
-            {
-                if (info?["LineInfos"] is not JsonArray lines) continue;
-                foreach (var l in lines)
-                {
-                    if (l is JsonObject lo &&
-                        (lo["Kind"]?.GetValue<int>() ?? -1) == 1 &&
-                        lo["SubtitleActionId"]?.GetValue<string>() is { Length: > 0 } id &&
-                        lo["SubtitleActionSettings"] is JsonObject st &&
-                        st["$type"] is not null)
-                    {
-                        return (id, (JsonObject)st.DeepClone());
-                    }
-                }
-            }
-        }
+    /// <summary>
+    /// 行ごとの指定が無い歌詞行に書く字幕アクション（書き出し・画面の表示とも、この関数で決める）。
+    /// 曲の既定（<see cref="N3ProjExportOptions.DefaultSubtitleAction"/>）があればそれ。無ければ自動で、①ベースの n3proj の歌詞行でいちばん多い
+    /// アクション（同数なら最初に出たもの）②ニコカラメーカー3 の「すべて同じ字幕アクションにする」の Id（<see cref="N3ProjExportOptions.DefaultSubtitleActionIdFromNkm3"/>）
+    /// ③文字単位フェード の順。②③の値はニコカラメーカー3 の AddOns\&lt;Id&gt;.json（<see cref="N3ProjExportOptions.AddOnSettings"/>）があればその値、無ければ既定値。
+    /// 返すのは写し（書式はそろえていない。書き出しでは <see cref="N3SubtitleActionCatalog.Normalize"/> を通す）。
+    /// </summary>
+    public static N3SubtitleAction ResolveDefaultAction(JsonObject? baseRoot, N3ProjExportOptions options) =>
+        ResolveDefaultAction(baseRoot, options, out _);
 
-        var s = new JsonObject
+    /// <inheritdoc cref="ResolveDefaultAction(JsonObject, N3ProjExportOptions)"/>
+    /// <param name="source">決めた出どころ（画面の「自動: ベースのまま」などの表示用）。</param>
+    public static N3SubtitleAction ResolveDefaultAction(JsonObject? baseRoot, N3ProjExportOptions options, out N3SubtitleActionSource source) =>
+        ResolveDefaultAction(
+            options.DefaultSubtitleAction,
+            options.DefaultSubtitleAction is null ? N3ProjFormat.MostCommonSubtitleAction(baseRoot) : null,
+            options.DefaultSubtitleActionIdFromNkm3,
+            options.AddOnSettings,
+            out source);
+
+    /// <summary>
+    /// <see cref="ResolveDefaultAction(JsonObject, N3ProjExportOptions)"/> の決め方の本体（ベースを読み込み済みのとき用。
+    /// <paramref name="baseAction"/> は <see cref="N3ProjSettings.DefaultSubtitleAction"/> など、ベースの歌詞行でいちばん多いアクション）。
+    /// </summary>
+    public static N3SubtitleAction ResolveDefaultAction(
+        N3SubtitleAction? songAction,
+        N3SubtitleAction? baseAction,
+        string? nkm3ActionId,
+        IReadOnlyDictionary<string, JsonObject>? addOnSettings,
+        out N3SubtitleActionSource source)
+    {
+        if (songAction is { Id.Length: > 0 })
         {
-            ["$type"] = "CharFadeInFadeOutSettingsModel",
-            ["IntroDelay"] = charFade?["IntroDelay"]?.GetValue<int>() ?? 350,
-            ["WholeFadeOut"] = charFade?["WholeFadeOut"]?.GetValue<bool>() ?? false,
-            ["TailDelay"] = charFade?["TailDelay"]?.GetValue<int>() ?? 250,
-            ["DelayInlineGraphics"] = charFade?["DelayInlineGraphics"]?.GetValue<bool>() ?? true,
-            ["FadeInTime"] = charFade?["FadeInTime"]?.GetValue<int>() ?? 250,
-            ["FadeOutTime"] = charFade?["FadeOutTime"]?.GetValue<int>() ?? 250,
-            ["CreateAppVer"] = ver,
-            ["ModifyAppVer"] = "",
-        };
-        return ("SHINTA.CharFadeInFadeOut", s);
+            source = N3SubtitleActionSource.Song;
+            return songAction.Clone();
+        }
+        if (baseAction is { Id.Length: > 0 })
+        {
+            source = N3SubtitleActionSource.Base;
+            return baseAction.Clone();
+        }
+        // ニコカラメーカー3 の Id が知らないもの（設定項目の分からないアクション）なら、書き出しで読めなくならないよう文字単位フェードにする
+        string id;
+        if (N3SubtitleActionCatalog.IsKnown(nkm3ActionId))
+        {
+            id = nkm3ActionId!;
+            source = N3SubtitleActionSource.Nkm3;
+        }
+        else
+        {
+            id = N3SubtitleActionCatalog.StandardId;
+            source = N3SubtitleActionSource.Standard;
+        }
+        return N3SubtitleActionCatalog.CreateDefault(id, addOnSettings?.GetValueOrDefault(id));
     }
 
     /// <summary>
@@ -669,6 +708,9 @@ public static class N3ProjWriter
 
         /// <summary>名前のレイアウト設定の番号（無ければ null）。</summary>
         public int? FindIndex(string name) => _layouts.FirstOrDefault(l => l.Name == name)?.Index;
+
+        /// <summary>タブに固定したレイアウトを使うか（固定の名前が並びにあるとき。<see cref="Resolve"/> は行数によらずそれを返す）。</summary>
+        public bool IsFixed => _fixed is not null;
 
         /// <summary>
         /// ページの行数に応じたレイアウトの番号。ニコカラメーカー3 の「行数に応じてレイアウトを設定」と同じく、適用対象の範囲（環境設定）の中から、

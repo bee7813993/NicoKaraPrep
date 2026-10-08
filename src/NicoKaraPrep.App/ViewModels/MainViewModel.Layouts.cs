@@ -88,15 +88,32 @@ public partial class MainViewModel
         newName = newName.Trim();
         if (newName.Length == 0 || newName == oldName || IsBaseLayout(oldName)) return null;
         if (FindEditedLayout(oldName) is not { } layout) return null;
-        newName = UniqueLayoutName(newName);
+        newName = UniqueLayoutNameForRename(newName, oldName);
         layout.Name = newName;
+        RenameLayoutReferences(oldName, newName);
+        SaveLayouts();
+        return newName;
+    }
+
+    /// <summary>
+    /// レイアウト設定の名前を指定している行（全タブ・元に戻すとやり直しの履歴の中も）と、タブの固定レイアウトの指定を、新しい名前に付け替える
+    /// （名前の変更と、レイアウト設定ビューでその変更を元に戻す・やり直すときに使う。歌詞の文字は変えないので、歌詞の変更の印は付けない）。
+    /// 曲の設定（.tttproj）も保存する。今の文書で付け替えた行の数を返す。
+    /// </summary>
+    public int RenameLayoutReferences(string oldName, string newName)
+    {
+        if (oldName.Length == 0 || newName.Length == 0 || oldName == newName) return 0;
+        int count = 0;
         foreach (var tab in GetAllTabs())
         {
             foreach (var doc in tab.UndoStack.Concat(tab.RedoStack).Append(tab.Document))
             {
+                bool current = ReferenceEquals(doc, tab.Document);
                 foreach (var line in doc.Lines)
                 {
-                    if (line.LayoutName == oldName) line.LayoutName = newName;
+                    if (line.LayoutName != oldName) continue;
+                    line.LayoutName = newName;
+                    if (current) count++;
                 }
             }
         }
@@ -105,13 +122,48 @@ public partial class MainViewModel
             N3ProjSettings.TabLayouts[key] = newName;
         }
         SaveProject();
-        SaveLayouts();
-        return newName;
+        return count;
     }
 
-    private string UniqueLayoutName(string name)
+    /// <summary>
+    /// 書き出しの並びにも NicoKaraPrep のレイアウト設定にも無い名前にする（重なれば末尾に「 2」「 3」… を付ける）。
+    /// 追加・複製・テンプレートの取り込みの名前に使う。
+    /// </summary>
+    public string UniqueLayoutName(string name) => UniqueName(name, LayoutNamesInUse());
+
+    /// <summary>
+    /// 名前の変更に使う一意の名前。<see cref="UniqueLayoutName"/> が避ける名前に加えて、行（全タブ・元に戻すとやり直しの履歴の中も）と
+    /// タブの固定レイアウトが指定している名前も避ける（変更前の名前は除く）。指定だけが残った名前（削除したレイアウトの名前など）へ変えると、
+    /// その指定まで新しいレイアウトに付き、レイアウト設定ビューで名前の変更を元に戻すときに一緒に付け替わってしまうため。
+    /// </summary>
+    public string UniqueLayoutNameForRename(string name, string oldName)
     {
-        var names = new HashSet<string>(GetEffectiveLayouts().Select(l => l.Name), StringComparer.Ordinal);
+        var names = LayoutNamesInUse();
+        foreach (var tab in GetAllTabs())
+        {
+            foreach (var doc in tab.UndoStack.Concat(tab.RedoStack).Append(tab.Document))
+            {
+                foreach (var line in doc.Lines)
+                {
+                    if (!string.IsNullOrEmpty(line.LayoutName)) names.Add(line.LayoutName);
+                }
+            }
+        }
+        foreach (string fixedName in N3ProjSettings.TabLayouts.Values)
+        {
+            if (!string.IsNullOrEmpty(fixedName)) names.Add(fixedName);
+        }
+        names.Remove(oldName);
+        return UniqueName(name, names);
+    }
+
+    /// <summary>書き出しの並びと NicoKaraPrep のレイアウト設定の名前。</summary>
+    private HashSet<string> LayoutNamesInUse() =>
+        new(GetEffectiveLayouts().Select(l => l.Name).Concat(Settings.N3Layouts.Select(l => l.Name)), StringComparer.Ordinal);
+
+    /// <summary><paramref name="names"/> に無い名前にする（重なれば末尾に「 2」「 3」… を付ける）。</summary>
+    private static string UniqueName(string name, HashSet<string> names)
+    {
         if (!names.Contains(name)) return name;
         for (int i = 2; ; i++)
         {

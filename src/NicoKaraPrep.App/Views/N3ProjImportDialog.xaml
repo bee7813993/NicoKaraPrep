@@ -111,12 +111,18 @@
                 </StackPanel>
             </CheckBox>
 
-            <!-- レイアウト -->
-            <TextBlock Text="レイアウト" Style="{StaticResource SectionTitle}" />
+            <!-- レイアウト・字幕アクション -->
+            <TextBlock Text="レイアウト・字幕アクション" Style="{StaticResource SectionTitle}" />
             <CheckBox x:Name="PageLayoutBox">
                 <StackPanel>
                     <TextBlock Text="ニコカラメーカーで設定したページのレイアウトを、ページごとの手動指定として取り込む" TextWrapping="Wrap" />
                     <TextBlock x:Name="PageLayoutDetail" Style="{StaticResource ItemDetail}" />
+                </StackPanel>
+            </CheckBox>
+            <CheckBox x:Name="LineActionsBox" AutomationProperties.Name="字幕アクションを取り込む">
+                <StackPanel>
+                    <TextBlock x:Name="LineActionsTitle" Text="字幕アクションを取り込む" TextWrapping="Wrap" />
+                    <TextBlock x:Name="LineActionsDetail" Style="{StaticResource ItemDetail}" />
                 </StackPanel>
             </CheckBox>
 

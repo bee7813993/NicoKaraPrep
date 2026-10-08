@@ -54,7 +54,7 @@ public class N3FontResolverTests
         var doc = Doc("@Emoji=（麻衣）,a.png", "@Emoji=（のりこ）,b.png",
             "[00:01:00]（麻衣）[00:02:00][00:01:00]（のりこ）[00:02:00]踊[00:03:00]");
         var layouts = new N3ProjWriter.LayoutResolver(new List<N3ProjLayoutInfo> { new("下寄せ2行", 0, 2) }, null, null, null, new List<string>(), "t");
-        var action = ("SHINTA.CharFadeInFadeOut", new JsonObject { ["$type"] = "CharFadeInFadeOutSettingsModel" });
+        var action = new N3SubtitleAction("SHINTA.CharFadeInFadeOut", new JsonObject { ["$type"] = "CharFadeInFadeOutSettingsModel" });
         var lines = N3ProjWriter.BuildLineInfos(doc, new N3ShowTimeSettings(), doc.EmojiEntries, new N3FontResolver(Names, null, true), layouts, action, "Ver 13.79", out _);
 
         var chars = lines[0]!["LyricsCharInfos"]!.AsArray();
@@ -276,7 +276,7 @@ public class N3FontResolverTests
             "[00:04:00]（のりこ）[00:04:50]詞[00:05:00]",
             "[00:06:00]続[00:07:00]");
         var layouts = new N3ProjWriter.LayoutResolver(new List<N3ProjLayoutInfo> { new("下寄せ2行", 0, 2) }, null, null, null, new List<string>(), "t");
-        var action = ("SHINTA.CharFadeInFadeOut", new JsonObject { ["$type"] = "CharFadeInFadeOutSettingsModel" });
+        var action = new N3SubtitleAction("SHINTA.CharFadeInFadeOut", new JsonObject { ["$type"] = "CharFadeInFadeOutSettingsModel" });
         var written = N3ProjWriter.BuildLineInfos(doc, new N3ShowTimeSettings(), doc.EmojiEntries, new N3FontResolver(Names, null, true), layouts, action, "Ver 13.79", out _)
             .Where(l => l!["Kind"]!.GetValue<int>() == 1)
             .Select(l => l!["LyricsCharInfos"]!.AsArray().Select(c => c!["FontIndex"]!.GetValue<int>()).Distinct().ToArray())

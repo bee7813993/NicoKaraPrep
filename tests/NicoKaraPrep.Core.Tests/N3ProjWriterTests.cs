@@ -13,8 +13,8 @@ public class N3ProjWriterTests
     private static N3ProjWriter.LayoutResolver Layouts(params (string Name, int Count)[] layouts) =>
         new(layouts.Select((l, i) => new N3ProjLayoutInfo(l.Name, i, l.Count)).ToList(), null, null, null, new List<string>(), "t");
 
-    private static (string, JsonObject) Action() =>
-        ("SHINTA.CharFadeInFadeOut", new JsonObject { ["$type"] = "CharFadeInFadeOutSettingsModel", ["FadeInTime"] = 250 });
+    private static N3SubtitleAction Action() =>
+        new("SHINTA.CharFadeInFadeOut", new JsonObject { ["$type"] = "CharFadeInFadeOutSettingsModel", ["FadeInTime"] = 250 });
 
     private static JsonArray Build(LyricsDocument doc, N3ShowTimeSettings? show = null, N3FontResolver? fonts = null, N3ProjWriter.LayoutResolver? layouts = null)
     {
@@ -440,6 +440,187 @@ public class N3ProjWriterTests
         }
     }
 
+    // ------------------------------------------------------------ 字幕アクション
+
+    private static JsonObject Obj(string json) => JsonNode.Parse(json)!.AsObject();
+
+    /// <summary>旧書式（画面用の項目入り）の文字単位フェード（実データ What is my LIFE.n3proj の写し）。</summary>
+    private const string OldCharFade =
+        """{"$type":"CharFadeInFadeOutSettingsModel","IntroDelay":350,"IntroDelayTimeTag":"[00:00:35]","WholeFadeOut":false,"DelayInlineGraphicsIsEnabled":true,"TailDelayVisibility":0,"TailDelay":250,"TailDelayTimeTag":"[00:00:25]","DelayInlineGraphics":true,"FadeInTimeVisibility":0,"FadeInTime":250,"FadeInTimeTag":"[00:00:25]","FadeOutTimeVisibility":0,"FadeOutTime":250,"FadeOutTimeTag":"[00:00:25]"}""";
+
+    /// <summary>旧書式の行フェード（実データ What is my LIFE.n3proj のフェードイン/アウトの写し）。</summary>
+    private const string OldLineFade =
+        """{"$type":"SubtitleActionSettingsModel","FadeInTimeVisibility":0,"FadeInTime":250,"FadeInTimeTag":"[00:00:25]","FadeOutTimeVisibility":0,"FadeOutTime":250,"FadeOutTimeTag":"[00:00:25]"}""";
+
+    /// <summary>新しい書式の文字単位フェード（実データのほとんどの値: 表示終了基準にしない・アイコンを遅らせる。版数だけ変える）。</summary>
+    private static string NewCharFade(string ver) =>
+        $$"""{"$type":"CharFadeInFadeOutSettingsModel","IntroDelay":350,"WholeFadeOut":false,"TailDelay":250,"DelayInlineGraphics":true,"FadeInTime":250,"FadeOutTime":250,"CreateAppVer":"{{ver}}","ModifyAppVer":""}""";
+
+    /// <summary>歌詞行の字幕アクションだけを持つベースの n3proj（タブごとの歌詞行。各歌詞行の後ろに区切り行を挟む）。</summary>
+    private static JsonObject BaseWithActions(params (string Id, string Settings)[][] tabs)
+    {
+        var infos = new JsonArray();
+        foreach (var tab in tabs)
+        {
+            var lines = new JsonArray();
+            foreach (var (id, settings) in tab)
+            {
+                lines.Add(new JsonObject { ["Kind"] = 1, ["SubtitleActionId"] = id, ["SubtitleActionSettings"] = Obj(settings) });
+                lines.Add(new JsonObject { ["Kind"] = 2, ["SubtitleActionId"] = "SHINTA.NoAction", ["SubtitleActionSettings"] = Obj("""{"$type":"AddOnSettingsModel"}""") });
+            }
+            infos.Add(new JsonObject { ["SettingsName"] = "メイン", ["LineInfos"] = lines });
+        }
+        return new JsonObject { ["SourceLyricsInfos"] = infos };
+    }
+
+    [Fact]
+    public void 字幕アクション_行の指定が優先し_無い行は既定_どれも新しい書式で書く()
+    {
+        var doc = Doc("[00:01:00]あ[00:02:00]", "[00:02:00]い[00:03:00]", "", "[00:04:00]う[00:05:00]", "[00:05:00]え[00:06:00]");
+        var shared = new N3SubtitleAction("SHINTA.LineFadeInFadeOut", Obj(OldLineFade));
+        doc.Lines[1].SubtitleAction = shared;
+        doc.Lines[4].SubtitleAction = shared; // 同じオブジェクトを 2 行に持たせても書ける
+        doc.Lines[3].SubtitleAction = new N3SubtitleAction("SHINTA.Future", Obj("""{"TailDelay":250,"$type":"FutureSettingsModel","DelayInlineGraphics":false}"""));
+
+        var lines = N3ProjWriter.BuildLineInfos(doc, new N3ShowTimeSettings(), doc.EmojiEntries, Fonts("標準"), Layouts(("下寄せ2行", 2)),
+            new N3SubtitleAction("SHINTA.CharFadeInFadeOut", Obj(OldCharFade)), "Ver 13.79", out _);
+
+        string Id(int n) => LyricLine(lines, n)["SubtitleActionId"]!.GetValue<string>();
+        string Settings(int n) => LyricLine(lines, n)["SubtitleActionSettings"]!.ToJsonString();
+        Assert.Equal(new[] { "SHINTA.CharFadeInFadeOut", "SHINTA.LineFadeInFadeOut", "SHINTA.Future", "SHINTA.LineFadeInFadeOut" }, Enumerable.Range(0, 4).Select(Id));
+        Assert.Equal(NewCharFade("Ver 13.79"), Settings(0)); // 既定（旧書式）も新しい書式で
+        Assert.Equal("""{"$type":"SubtitleActionSettingsModel","FadeInTime":250,"FadeOutTime":250,"CreateAppVer":"Ver 13.79","ModifyAppVer":""}""", Settings(1));
+        Assert.Equal(Settings(1), Settings(3));
+        // 知らない Id は中身のまま（型判別子だけ最初へ）
+        Assert.Equal("""{"$type":"FutureSettingsModel","TailDelay":250,"DelayInlineGraphics":false}""", Settings(2));
+        Assert.Equal(OldLineFade, shared.Settings.ToJsonString()); // 行の指定そのものは変えない
+
+        // 区切り行・空行は今のまま（Id は空、AddOnSettingsModel）
+        var separator = lines.OfType<JsonObject>().First(l => l["Kind"]!.GetValue<int>() == 2);
+        Assert.Equal("", separator["SubtitleActionId"]!.GetValue<string>());
+        Assert.Equal("""{"$type":"AddOnSettingsModel","CreateAppVer":"Ver 13.79","ModifyAppVer":""}""", separator["SubtitleActionSettings"]!.ToJsonString());
+    }
+
+    [Fact]
+    public void 字幕アクション_絵文字の先行を譲る規則で歌詞を写しても行の指定を書く()
+    {
+        var doc = CircleOfLove();
+        Assert.StartsWith("(愛)鮮", doc.Lines[3].GetDisplayText());
+        doc.Lines[3].SubtitleAction = N3SubtitleActionCatalog.CreateDefault("SHINTA.LineFadeIn");
+
+        var lines = N3ProjWriter.BuildLineInfos(doc, YieldShow(doc), doc.EmojiEntries, Fonts("標準"), Layouts(("下寄せ2行", 2)), Action(), "Ver 13.79", out _);
+        Assert.Equal("SHINTA.CharFadeInFadeOut", LyricLine(lines, 0)["SubtitleActionId"]!.GetValue<string>());
+        Assert.Equal("SHINTA.LineFadeIn", LyricLine(lines, 2)["SubtitleActionId"]!.GetValue<string>());
+        Assert.Equal("SHINTA.CharFadeInFadeOut", LyricLine(lines, 3)["SubtitleActionId"]!.GetValue<string>());
+    }
+
+    [Fact]
+    public void 字幕アクション_既定は曲の既定_ベースでいちばん多いもの_ニコカラメーカー3のId_文字単位フェードの順()
+    {
+        // ベース: 最初の歌詞行はフェードイン/アウトだが、文字単位フェード（旧書式と新しい書式）が 2 行でいちばん多い
+        var baseRoot = BaseWithActions(
+            new[] { ("SHINTA.LineFadeInFadeOut", OldLineFade), ("SHINTA.CharFadeInFadeOut", OldCharFade) },
+            new[] { ("SHINTA.CharFadeInFadeOut", NewCharFade("Ver 11.15")), ("SHINTA.NoAction", """{"$type":"AddOnSettingsModel"}""") });
+        var addOns = new Dictionary<string, JsonObject>
+        {
+            ["SHINTA.LineFadeOut"] = Obj("""{"FadeInTime":250,"FadeOutTime":600,"CreateAppVer":"Ver 12.00","ModifyAppVer":""}"""),
+            ["SHINTA.CharFadeInFadeOut"] = Obj("""{"IntroDelay":500}"""),
+        };
+
+        // 曲の既定があればそれ（写しを返す）
+        var song = N3SubtitleActionCatalog.CreateDefault("SHINTA.NoAction");
+        var a = N3ProjWriter.ResolveDefaultAction(baseRoot, new N3ProjExportOptions { DefaultSubtitleAction = song, DefaultSubtitleActionIdFromNkm3 = "SHINTA.LineFadeOut" }, out var source);
+        Assert.Equal(N3SubtitleActionSource.Song, source);
+        Assert.True(song.SameAs(a));
+        Assert.NotSame(song, a);
+
+        // 自動: ベースの歌詞行でいちばん多いもの（区切り行の「アクションしない」は数えない）
+        a = N3ProjWriter.ResolveDefaultAction(baseRoot, new N3ProjExportOptions { DefaultSubtitleActionIdFromNkm3 = "SHINTA.LineFadeOut" }, out source);
+        Assert.Equal(N3SubtitleActionSource.Base, source);
+        Assert.Equal("SHINTA.CharFadeInFadeOut", a.Id);
+        Assert.Equal(OldCharFade, a.Settings.ToJsonString()); // そのグループで最初に出たものの写し（書式は書き出しでそろえる）
+
+        // ベースが無い・歌詞行にアクションが無ければ、ニコカラメーカー3 の「すべて同じ字幕アクションにする」の Id（値はアドオンの設定）
+        foreach (var noActions in new JsonObject?[] { null, new JsonObject { ["SourceLyricsInfos"] = new JsonArray() } })
+        {
+            a = N3ProjWriter.ResolveDefaultAction(noActions, new N3ProjExportOptions { DefaultSubtitleActionIdFromNkm3 = "SHINTA.LineFadeOut", AddOnSettings = addOns }, out source);
+            Assert.Equal(N3SubtitleActionSource.Nkm3, source);
+            Assert.Equal("SHINTA.LineFadeOut", a.Id);
+            Assert.Equal(600, a.GetInt("FadeOutTime"));
+        }
+
+        // ニコカラメーカー3 の Id はカタログの 8 種類どれでもよい
+        a = N3ProjWriter.ResolveDefaultAction(null, new N3ProjExportOptions { DefaultSubtitleActionIdFromNkm3 = "SHINTA.SpinFlip" }, out source);
+        Assert.Equal(N3SubtitleActionSource.Nkm3, source);
+        Assert.Equal("SHINTA.SpinFlip", a.Id);
+
+        // Id が無い・知らない（設定項目の分からない）Id なら文字単位フェード（値はアドオンの設定、無い項目は既定値）
+        foreach (string? id in new[] { null, "", "SHINTA.Future" })
+        {
+            a = N3ProjWriter.ResolveDefaultAction(null, new N3ProjExportOptions { DefaultSubtitleActionIdFromNkm3 = id, AddOnSettings = addOns }, out source);
+            Assert.Equal(N3SubtitleActionSource.Standard, source);
+            Assert.Equal("SHINTA.CharFadeInFadeOut", a.Id);
+            Assert.Equal(500, a.GetInt("IntroDelay"));
+            Assert.Equal(250, a.GetInt("TailDelay"));
+        }
+        // ベースもニコカラメーカー3 の設定も無ければ、ニコカラメーカー3 の初期値（表示終了基準にする・アイコンを遅らせない）
+        Assert.Equal(
+            """{"$type":"CharFadeInFadeOutSettingsModel","IntroDelay":350,"WholeFadeOut":true,"TailDelay":250,"DelayInlineGraphics":false,"FadeInTime":250,"FadeOutTime":250,"CreateAppVer":"","ModifyAppVer":""}""",
+            N3ProjWriter.ResolveDefaultAction(null, new N3ProjExportOptions()).Settings.ToJsonString());
+    }
+
+    [Fact]
+    public void 字幕アクション_上下スライド量は書き出すプロジェクトの画面の高さで書く()
+    {
+        var doc = Doc("[00:01:00]あ[00:02:00]", "[00:02:00]い[00:03:00]");
+        doc.Lines[1].SubtitleAction = N3SubtitleActionCatalog.CreateDefault("SHINTA.SlideUpDown"); // 1080 の画面で -50px
+        var options = new N3ProjExportOptions { DefaultFont = new N3FontSet { Name = "標準" }, ScreenWidth = 1280, ScreenHeight = 720 };
+        var root = N3ProjWriter.BuildProjectJson(@"C:\v\b.n3proj", new[] { Tab("メイン", doc, @"C:\v\b.lrc") }, options, null, new List<string>(), out _, out _);
+
+        var amount = LyricLine(root["SourceLyricsInfos"]![0]!["LineInfos"]!.AsArray(), 1)["SubtitleActionSettings"]!["SlideAmount"]!.AsObject();
+        Assert.Equal(-33, amount["Size"]!.GetValue<int>());
+        Assert.Equal(720, amount["Reference"]!.GetValue<int>());
+        Assert.Equal(-50.0 / 1080, amount["Ratio"]!.GetValue<double>(), 12);
+        Assert.Equal(1080, doc.Lines[1].SubtitleAction!.Settings["SlideAmount"]!["Reference"]!.GetValue<int>()); // 行の指定は変えない
+    }
+
+    [Fact]
+    public void 字幕アクション_旧書式のベースから書き出すと全歌詞行を新しい書式で書く()
+    {
+        var baseRoot = BaseWithActions(new[]
+        {
+            ("SHINTA.LineFadeIn", """{"$type":"SubtitleActionSettingsModel","FadeInTimeVisibility":0,"FadeInTime":250,"FadeInTimeTag":"[00:00:25]","FadeOutTimeVisibility":1,"FadeOutTime":250,"FadeOutTimeTag":"[00:00:25]"}"""),
+            ("SHINTA.CharFadeInFadeOut", OldCharFade),
+            ("SHINTA.CharFadeInFadeOut", OldCharFade),
+        });
+        var doc = Doc("[00:01:00]あ[00:02:00]", "", "[00:03:00]い[00:04:00]", "[00:04:00]う[00:05:00]");
+        doc.Lines[2].SubtitleAction = N3SubtitleActionCatalog.CreateDefault("SHINTA.NoAction");
+
+        JsonArray Export(JsonObject root, N3SubtitleAction? songDefault)
+        {
+            var options = new N3ProjExportOptions { BaseProject = root, DefaultFont = new N3FontSet { Name = "標準" }, AppVersion = "Ver 13.90", DefaultSubtitleAction = songDefault };
+            var built = N3ProjWriter.BuildProjectJson(@"C:\v\b.n3proj", new[] { Tab("メイン", doc, @"C:\v\b.lrc") }, options, root, new List<string>(), out _, out _);
+            Assert.Equal("SHINTA.UnificationSubtitleActionSelector", built["SourceLyricsInfos"]![0]!["LastSelectedAddOns"]!["SubtitleActionSelectorId"]!.GetValue<string>());
+            return built["SourceLyricsInfos"]![0]!["LineInfos"]!.AsArray();
+        }
+
+        // 自動: ベースでいちばん多い文字単位フェード（最初の行のフェードインではない）を、画面用の項目を落とした新しい書式で
+        var lines = Export(baseRoot.DeepClone().AsObject(), null);
+        Assert.Equal("SHINTA.CharFadeInFadeOut", LyricLine(lines, 0)["SubtitleActionId"]!.GetValue<string>());
+        Assert.Equal(NewCharFade("Ver 13.90"), LyricLine(lines, 0)["SubtitleActionSettings"]!.ToJsonString());
+        Assert.Equal("SHINTA.NoAction", LyricLine(lines, 1)["SubtitleActionId"]!.GetValue<string>()); // 行の指定
+        Assert.Equal("""{"$type":"AddOnSettingsModel","CreateAppVer":"Ver 13.90","ModifyAppVer":""}""", LyricLine(lines, 1)["SubtitleActionSettings"]!.ToJsonString());
+        Assert.Equal("SHINTA.CharFadeInFadeOut", LyricLine(lines, 2)["SubtitleActionId"]!.GetValue<string>());
+
+        // 曲の既定があればベースより優先（行の指定はそのまま）
+        var song = N3SubtitleActionCatalog.CreateDefault("SHINTA.LineFadeInFadeOut");
+        song.Set("FadeInTime", 500);
+        lines = Export(baseRoot.DeepClone().AsObject(), song);
+        Assert.Equal("""{"$type":"SubtitleActionSettingsModel","FadeInTime":500,"FadeOutTime":250,"CreateAppVer":"Ver 13.90","ModifyAppVer":""}""", LyricLine(lines, 0)["SubtitleActionSettings"]!.ToJsonString());
+        Assert.Equal("SHINTA.NoAction", LyricLine(lines, 1)["SubtitleActionId"]!.GetValue<string>());
+        Assert.Equal("SHINTA.LineFadeInFadeOut", LyricLine(lines, 2)["SubtitleActionId"]!.GetValue<string>());
+    }
+
     // ------------------------------------------------------------ 絵文字の先行を譲る規則
 
     /// <summary>Circle of Love 冒頭 3 ページ（上段の行頭に (愛)。ページ1→2・2→3 の上段が重なる）。</summary>
@@ -747,13 +928,28 @@ public class N3ProjWriterTests
             var outPaths = new SortedSet<string>();
             CollectPaths(baseRoot, "", basePaths);
             CollectPaths(written, "", outPaths);
-            var missing = basePaths.Except(outPaths).ToList();
+            // 字幕アクションの設定値の中身は、書き出すアクション（ベースの歌詞行でいちばん多いもの）を新しい書式にそろえたものなので比べない
+            // （ベースの旧書式の画面用の項目・ほかのアクションの項目は出力に無い）。代わりに下で、全歌詞行がそのアクションかを確かめる
+            static bool InActionSettings(string p) => p.Contains("/SubtitleActionSettings/");
+            var missing = basePaths.Except(outPaths).Where(p => !InActionSettings(p)).ToList();
             // 古いバージョンで保存されたベースには字幕アクション設定の版数情報が無いことがある（現行版は書く）
             var extra = outPaths.Except(basePaths)
-                .Where(p => !p.EndsWith("/CreateAppVer") && !p.EndsWith("/ModifyAppVer"))
+                .Where(p => !p.EndsWith("/CreateAppVer") && !p.EndsWith("/ModifyAppVer") && !InActionSettings(p))
                 .ToList();
             Assert.True(missing.Count == 0 && extra.Count == 0,
                 $"ベースにあって出力に無いキー: {string.Join(", ", missing.Take(10))}\n出力にだけあるキー: {string.Join(", ", extra.Take(10))}");
+
+            var expectedAction = N3ProjFormat.MostCommonSubtitleAction(baseRoot);
+            var lyricLines = written["SourceLyricsInfos"]!.AsArray()
+                .SelectMany(i => i!["LineInfos"]!.AsArray()).OfType<JsonObject>()
+                .Where(l => l["Kind"]!.GetValue<int>() == 1).ToList();
+            Assert.All(lyricLines, l =>
+            {
+                var settings = l["SubtitleActionSettings"]!.AsObject();
+                Assert.Equal("$type", settings.First().Key);
+                Assert.DoesNotContain(settings, kv => N3SubtitleActionCatalog.IsScreenItem(kv.Key));
+                if (expectedAction is not null) Assert.True(expectedAction.SameAs(N3ProjFormat.ReadLineSubtitleAction(l)), "ベースでいちばん多いアクションではない");
+            });
 
             var settings = N3ProjFormat.Read(projectPath);
             Assert.True(settings.LineTimes.Count > 0);

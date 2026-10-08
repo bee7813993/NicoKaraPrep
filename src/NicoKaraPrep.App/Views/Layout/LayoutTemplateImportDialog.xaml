@@ -1,0 +1,61 @@
+﻿<ContentDialog
+    x:Class="NicoKaraPrep.App.Views.Layout.LayoutTemplateImportDialog"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:local="using:NicoKaraPrep.App.Views.Layout"
+    Title="ニコカラメーカー3 のテンプレートから取り込み"
+    PrimaryButtonText="取り込む"
+    CloseButtonText="キャンセル"
+    DefaultButton="Primary">
+
+    <!-- ニコカラメーカー3 のレイアウト設定テンプレート（TemplateLayout\*.tpl）の一覧。テンプレートは読むだけで変更しない -->
+    <Grid Width="760" RowSpacing="8">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+        </Grid.RowDefinitions>
+        <TextBlock x:Name="FolderText" TextWrapping="Wrap" FontSize="12" Foreground="{ThemeResource TextFillColorSecondaryBrush}" IsTextSelectionEnabled="True" />
+        <Grid Grid.Row="1" ColumnSpacing="8">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="Auto" />
+                <ColumnDefinition Width="Auto" />
+            </Grid.ColumnDefinitions>
+            <TextBox
+                x:Name="SearchBox"
+                PlaceholderText="名前・配置で検索"
+                AutomationProperties.Name="テンプレートの検索"
+                ToolTipService.ToolTip="名前か、配置の説明（「下寄せ」「2 行」など）に含まれるものだけを並べます"
+                TextChanged="OnSearchChanged" />
+            <Button x:Name="SelectAllButton" Grid.Column="1" Content="表示中をすべて選択" ToolTipService.ToolTip="いま並べているテンプレートをすべて選びます" Click="OnSelectAllClick" />
+            <Button x:Name="SelectNoneButton" Grid.Column="2" Content="すべて解除" ToolTipService.ToolTip="選んだテンプレートをすべて外します" Click="OnSelectNoneClick" />
+        </Grid>
+        <ListView
+            x:Name="TemplateList"
+            Grid.Row="2"
+            Height="420"
+            SelectionMode="None"
+            AutomationProperties.Name="レイアウト設定テンプレートの一覧"
+            ItemsSource="{x:Bind VisibleRows}">
+            <ListView.ItemTemplate>
+                <DataTemplate x:DataType="local:LayoutTemplateRow">
+                    <Grid ColumnSpacing="8" Padding="0,2" ToolTipService.ToolTip="{x:Bind ToolTip}">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto" />
+                            <ColumnDefinition Width="220" />
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
+                        <CheckBox MinWidth="0" IsChecked="{x:Bind IsSelected, Mode=TwoWay}" AutomationProperties.Name="{x:Bind Name}" />
+                        <TextBlock Grid.Column="1" Text="{x:Bind Name}" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
+                        <TextBlock Grid.Column="2" Text="{x:Bind Summary}" FontSize="12" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+                        <TextBlock Grid.Column="3" Text="{x:Bind Note}" FontSize="12" VerticalAlignment="Center" Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+                    </Grid>
+                </DataTemplate>
+            </ListView.ItemTemplate>
+        </ListView>
+        <TextBlock x:Name="CountText" Grid.Row="3" TextWrapping="Wrap" FontSize="12" />
+    </Grid>
+</ContentDialog>

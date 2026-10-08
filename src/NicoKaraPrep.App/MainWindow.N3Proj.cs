@@ -66,10 +66,12 @@ public sealed partial class MainWindow
         RefreshN3LinePanel();
         // 表示時刻の設定で字幕のプレビュー・チェックの結果が、書き出し設定（ベース・既定のフォント設定・合わせるか）で行に当たるフォント設定が変わることがある。
         // チェックはすぐに実行し、書き出しの知らせがチェック結果で消えないよう、つなげて表示する
-        // （フォント設定ビューではチェックしない。戻るときにチェックし直す）
-        if (ViewModel.ViewMode == ViewModels.MainViewMode.FontSettings)
+        // （全画面ビュー（フォント設定・レイアウト設定）ではチェックしない。戻るときにチェックし直す。
+        // レイアウト設定ビューは、ベース・タブの固定レイアウトが替わるとレイアウトの並びが変わるので一覧を作り直す）
+        if (FullScreenViewActive)
         {
             TryRun(ViewModel.UpdateLineFonts);
+            NotifyLayoutViewDocumentChanged();
         }
         else
         {
@@ -173,6 +175,7 @@ public sealed partial class MainWindow
         RefreshInsertGutter();
         RefreshLineFontPlaceholder();
         ViewModel.StatusText = $"{summary}　／　{ViewModel.StatusText}";
+        NotifyLayoutViewDocumentChanged(); // レイアウト設定ビューを開いたまま読み込んだとき（ベース・ページの指定・字幕アクションが変わる）
     }
 
     /// <summary>
@@ -332,10 +335,11 @@ public sealed partial class MainWindow
         TryRun(() =>
         {
             int n = ViewModel.ClearLineOverrides(indexes);
-            ViewModel.StatusText = n > 0 ? $"{n} 行の表示時刻・フォント・レイアウト・文字の大きさの指定を解除しました" : "手動指定のある行はありません";
+            ViewModel.StatusText = n > 0 ? $"{n} 行の表示時刻・フォント・レイアウト・文字の大きさ・字幕アクションの指定を解除しました" : "手動指定のある行はありません";
         });
         foreach (var line in ViewModel.Lines) line.RaiseOverrideMark();
         RefreshN3LinePanel();
+        LineSide.RefreshPagePane();
         ScheduleValidation();
     }
 
@@ -364,6 +368,9 @@ public sealed partial class MainWindow
                 LineFontLabel.Text = "フォント";
                 LineLayoutBox.SelectedIndex = -1;
                 LineLayoutBox.PlaceholderText = "（自動）";
+                EnsureLineActionItems();
+                LineActionBox.SelectedIndex = -1;
+                LineActionBox.PlaceholderText = DefaultLineActionItem;
                 PageFontSizeBox.Value = 0;
                 UpdateSideTarget();
                 RefreshLineFontPlaceholder();
@@ -387,6 +394,7 @@ public sealed partial class MainWindow
             LineFontBox.Text = model.FontSetName ?? "";
             RefreshLineFontForSelection();
             RefreshLineLayoutBox(line);
+            RefreshLineActionBox();
             PageFontSizeBox.Value = ViewModel.PageFontSizeDelta(line.Index);
 
             if (plan is null)
@@ -523,12 +531,22 @@ public sealed partial class MainWindow
         ApplyLineLayout(choice == AutoLayoutItem ? null : choice);
     }
 
+    /// <summary>
+    /// 右パネル（レイアウト・字幕アクション）と行設定の指定の対象: 選んだ行のうち空行でない行（無ければ行リストの選択の行。空行なら空）。
+    /// 空行を押してから Shift で歌詞の行まで選んだときも、右パネルの表示（選んだ行のうち空行でない行）と同じ行に指定する。
+    /// </summary>
+    private List<int> SelectedNonEmptyIndexes()
+    {
+        var indexes = SelectedIndexes.Where(i => i >= 0 && i < ViewModel.Lines.Count && !ViewModel.Lines[i].Model.IsEmpty).ToList();
+        if (indexes.Count == 0 && ViewModel.SelectedLine is { } line && !line.Model.IsEmpty) indexes.Add(line.Index);
+        return indexes;
+    }
+
     /// <summary>選んだ行のページにレイアウトを指定する（null で自動に戻す）。</summary>
     private void ApplyLineLayout(string? name)
     {
-        if (ViewModel.SelectedLine is not { } line || line.Model.IsEmpty) return;
-        var indexes = SelectedIndexes;
-        if (indexes.Count == 0) indexes = new List<int> { line.Index };
+        var indexes = SelectedNonEmptyIndexes();
+        if (indexes.Count == 0) return;
         int n = 0;
         TryRun(() => n = ViewModel.SetLinesLayout(indexes, name));
         if (n > 0)
@@ -540,7 +558,109 @@ public sealed partial class MainWindow
         }
         // 行リストのレイアウトの表示とプレビューを作り直す（チェックはしないので、上の知らせは消えない）
         TryRun(ViewModel.UpdateLineFonts);
-        RefreshLineLayoutBox(line);
+        if (ViewModel.SelectedLine is { } line && !line.Model.IsEmpty) RefreshLineLayoutBox(line);
+        LineSide.RefreshPagePane();
+    }
+
+    // ------------------------------------------------------------ 行の字幕アクション（行設定。選んだ行だけ）
+
+    private const string DefaultLineActionItem = "（既定）";
+
+    /// <summary>行設定の字幕アクションの欄の候補（「（既定）」と 8 種類）を入れる（初めの 1 回）。</summary>
+    private void EnsureLineActionItems()
+    {
+        if (LineActionBox.Items.Count > 0) return;
+        LineActionBox.Items.Add(DefaultLineActionItem);
+        foreach (var kind in N3SubtitleActionCatalog.Known) LineActionBox.Items.Add(kind.Name);
+    }
+
+    /// <summary>
+    /// 行設定の字幕アクションの欄を、選んだ行（空行は除く）に合わせる。指定が無ければ「（既定）」の薄字、全部同じならその種類、
+    /// 行によって違えば「（混在）」。_n3PanelLoading の中で呼ぶ（選択を合わせても指定はしない）。
+    /// </summary>
+    private void RefreshLineActionBox()
+    {
+        EnsureLineActionItems();
+        var actions = SelectedNonEmptyIndexes().Select(i => ViewModel.Document.Lines[i].SubtitleAction).ToList();
+        var def = ViewModel.ResolveCurrentDefaultSubtitleAction(out var source);
+        string defText = $"曲の既定: {ViewModel.DescribeSubtitleAction(def)}（{ViewModels.MainViewModel.DefaultSubtitleActionSourceLabel(source)}）";
+        string state;
+        if (actions.All(a => a is null))
+        {
+            LineActionBox.SelectedIndex = -1;
+            LineActionBox.PlaceholderText = DefaultLineActionItem;
+            state = $"この行は曲の既定の字幕アクションです（{defText}）";
+        }
+        else if (actions[0] is { } a0 && actions.All(a => a0.SameAs(a)))
+        {
+            int kind = N3SubtitleActionCatalog.Known.ToList().FindIndex(k => k.Id == a0.Id);
+            LineActionBox.SelectedIndex = kind >= 0 ? kind + 1 : -1;
+            LineActionBox.PlaceholderText = kind >= 0 ? DefaultLineActionItem : N3SubtitleActionCatalog.DisplayName(a0.Id);
+            state = $"手で指定した字幕アクション: {ViewModel.DescribeSubtitleAction(a0)}（{defText}）";
+        }
+        else
+        {
+            LineActionBox.SelectedIndex = -1;
+            LineActionBox.PlaceholderText = "（混在）";
+            state = $"選んだ行によって字幕アクションが違います（{defText}）";
+        }
+        ToolTipService.SetToolTip(LineActionBox,
+            $"{state}\n選ぶと、選んだ行だけに指定します（複数の行を選んでいれば、その行すべて。ページのほかの行はそのまま）。「（既定）」で曲の既定に戻します。" +
+            "ページの行すべてにそろえるときは、右のパネル「字幕アクション」の「ページの行すべてにそろえる」で指定します");
+    }
+
+    /// <summary>行設定の字幕アクションの欄で選んだ（選んだ行だけに指定。「（既定）」で外す）。</summary>
+    private void OnLineActionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        int index = LineActionBox.SelectedIndex;
+        if (_n3PanelLoading || index < 0) return;
+        ApplyLineAction(index == 0 ? null : N3SubtitleActionCatalog.Known[index - 1].Id, wholePage: false);
+    }
+
+    /// <summary>
+    /// 選んだ行（空行は除く）に字幕アクションを指定する（null で指定を外して曲の既定に戻す）。<paramref name="wholePage"/> なら、選んだ行の
+    /// ページの行すべてにそろえる（右パネル「字幕アクション」の「ページの行すべてにそろえる」）。行設定の欄と右パネルの一覧から使う。
+    /// 設定値は <see cref="MainViewModel.CreatePageSubtitleAction"/>（曲の既定と同じ種類ならその値。レイアウト設定ビュー・MCP と同じ）。
+    /// 元に戻す（Ctrl+Z）は 1 回で戻る。
+    /// </summary>
+    private void ApplyLineAction(string? actionId, bool wholePage)
+    {
+        var indexes = SelectedNonEmptyIndexes();
+        if (indexes.Count == 0)
+        {
+            ViewModel.StatusText = "行リストで行を選んでから、字幕アクションを選んでください";
+            return;
+        }
+        N3SubtitleAction? action = string.IsNullOrEmpty(actionId) ? null : ViewModel.CreatePageSubtitleAction(actionId);
+        int n = 0;
+        TryRun(() => n = ViewModel.SetLinesSubtitleAction(indexes, action, wholePage));
+        if (n > 0)
+        {
+            foreach (var l in ViewModel.Lines) l.RaiseOverrideMark();
+            string target = wholePage ? $"選んだ行のページ（{n} 行）" : $"{n} 行";
+            string scope = wholePage ? "" : "選んだ行だけ。ページのほかの行はそのまま。";
+            ViewModel.StatusText = action is null
+                ? $"{target}の字幕アクションの指定を外しました（曲の既定に戻します。{scope}Ctrl+Z で戻せます）"
+                : $"{target}に字幕アクション「{N3SubtitleActionCatalog.DisplayName(action.Id)}」を指定しました（{scope}Ctrl+Z で戻せます）";
+        }
+        else
+        {
+            ViewModel.StatusText = "字幕アクションの指定は変わりませんでした";
+        }
+        // 行設定の欄と右パネルの一覧の作り直しは、今の SelectionChanged・ItemClick を抜けてから（選択の変更の中で選択を変えない）
+        DispatcherQueue.TryEnqueue(Microsoft.UI.Dispatching.DispatcherQueuePriority.Low, () =>
+        {
+            _n3PanelLoading = true;
+            try
+            {
+                RefreshLineActionBox();
+            }
+            finally
+            {
+                _n3PanelLoading = false;
+            }
+            LineSide.RefreshPagePane();
+        });
     }
 
     /// <summary>行設定の文字の大きさの欄（選んだ行のページすべてに、文字の大きさの増減 px を指定する。0 でそのまま）。</summary>

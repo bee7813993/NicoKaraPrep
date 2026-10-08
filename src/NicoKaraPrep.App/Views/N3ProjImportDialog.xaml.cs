@@ -219,7 +219,7 @@ public sealed partial class N3ProjImportDialog : ContentDialog
         }
 
         LineShowBox.IsEnabled = matched > 0;
-        LineShowBox.IsChecked = matched > 0; // 読み込んだプロジェクトの表示時刻のまま見る・直す・書き出す（自動調整は右のパネル「表示時刻」で実行する）
+        LineShowBox.IsChecked = matched > 0; // 読み込んだプロジェクトの表示時刻のまま見る・直す・書き出す（自動調整は「表示時刻の自動調整」で実行する）
 
         // ---- レイアウト ----
         int layoutPages = matched > 0 ? vm.CountPageLayoutImports(preview) : 0;
@@ -231,6 +231,27 @@ public sealed partial class N3ProjImportDialog : ContentDialog
                   "行リストのレイアウトの欄に ✎ が付き、字幕のプレビュー・n3proj 書き出しもそのレイアウトになります" +
                   "（ニコカラメーカー3 の「適用対象レイアウト」の範囲が、このプロジェクトを作ったときと今とで違うと、自動で選ぶレイアウトが変わります）";
         PageLayoutBox.IsEnabled = layoutPages > 0;
+
+        // ---- 字幕アクション ----
+        var (projectAction, actionLines) = vm.CountLineActionImports(preview);
+        if (projectAction is null)
+        {
+            LineActionsTitle.Text = "字幕アクションを取り込む（このプロジェクトの歌詞行には字幕アクションがありません）";
+            LineActionsDetail.Text = "曲の既定・行ごとの指定は今のままです";
+            LineActionsBox.IsEnabled = false;
+        }
+        else
+        {
+            var currentAction = vm.ResolveCurrentDefaultSubtitleAction(out var currentSource);
+            LineActionsTitle.Text = $"字幕アクション（曲の既定: {vm.DescribeSubtitleAction(projectAction)}、行ごとの指定 {actionLines} 行）を取り込む";
+            LineActionsDetail.Text =
+                "このプロジェクトの歌詞行でいちばん多い字幕アクションを曲の既定にし" +
+                $"（現在: {vm.DescribeSubtitleAction(currentAction)}（{MainViewModel.DefaultSubtitleActionSourceLabel(currentSource)}））、" +
+                (matched == 0
+                    ? "開いている歌詞と一致する行が無いため、行ごとの指定は取り込みません。"
+                    : $"それと違うアクションの {actionLines} 行を行ごとの指定にします（歌詞が同じ行だけ。同じアクションの行は指定を外して曲の既定に従わせます）。") +
+                "字幕アクションは、行リストの右のパネル「字幕アクション」で変えられます";
+        }
 
         // ---- 書き出しのベース ----
         string? currentBase = vm.N3ProjSettings.BasePath;
@@ -257,6 +278,7 @@ public sealed partial class N3ProjImportDialog : ContentDialog
             IconsBox.IsChecked = IconRows.Any(r => r.IsSelected);
             MediaBox.IsChecked = MediaBox.IsEnabled && !sameMedia && (currentMedia is not { Length: > 0 } || !File.Exists(currentMedia));
             PageLayoutBox.IsChecked = PageLayoutBox.IsEnabled; // 違うページがあれば、ニコカラメーカーと同じレイアウトにする
+            LineActionsBox.IsChecked = LineActionsBox.IsEnabled; // アクションがあれば、ニコカラメーカーと同じアクションにする
         }
 
         UpdateLineShowDetail();
@@ -270,7 +292,7 @@ public sealed partial class N3ProjImportDialog : ContentDialog
         LineShowDetail.Text = _matchedLines == 0
             ? "開いている歌詞と一致する行がありません"
             : $"歌詞が同じ {_matchedLines} 行の表示開始・終了を、ニコカラメーカーの値のまま行に持たせます。字幕のプレビュー・チェック・書き出しはその値のままです。" +
-              "自動調整は、行リストの右のパネル「表示時刻」で実行します（手で直した行はそのまま）";
+              "自動調整は、「表示時刻の自動調整」（行設定の「自動調整...」）で実行します（手で直した行はそのまま）";
     }
 
     private void UpdateFontSetsState()
@@ -352,6 +374,7 @@ public sealed partial class N3ProjImportDialog : ContentDialog
             Timing = TimingBox.IsChecked == true && TimingBox.IsEnabled,
             LineShowTimes = LineShowBox.IsChecked == true && LineShowBox.IsEnabled,
             PageLayouts = PageLayoutBox.IsChecked == true && PageLayoutBox.IsEnabled,
+            LineActions = LineActionsBox.IsChecked == true && LineActionsBox.IsEnabled,
             ExportBase = BaseBox.IsChecked == true,
             FontSetNames = FontSetsBox.IsChecked == true
                 ? FontRows.Where(r => r.IsSelected).Select(r => r.Name).ToList()

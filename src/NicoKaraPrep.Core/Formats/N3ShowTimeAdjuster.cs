@@ -16,7 +16,7 @@ public sealed record N3ShowTimeAdjustResult(int AutoLines, int ManualLines, int 
 public sealed record N3ShowTimeOriginCounts(int Manual, int Loaded, int Auto, int Live);
 
 /// <summary>
-/// 表示時刻の自動調整（行リストの右のパネル「表示時刻」の「自動調整を実行」）。
+/// 表示時刻の自動調整（「表示時刻の自動調整」（行設定の「自動調整...」）の「自動調整を実行」）。
 /// 手で指定した表示時刻（<see cref="ShowTimeOrigin.Manual"/>）は残し、ほかの値（n3proj から読み込んだ値・前回の自動調整の値・未設定）を
 /// <see cref="N3ShowTimePlanner"/> で計算し直して、自動調整の値（<see cref="ShowTimeOrigin.Auto"/>）として行に持たせる。
 /// 行に持たせた表示時刻は、その後の書き出し・字幕のプレビュー・チェックでそのまま使う（歌詞や設定を変えても、実行し直すまで変わらない）。

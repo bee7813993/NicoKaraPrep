@@ -61,9 +61,9 @@ public sealed partial class MainWindow : Window
         _validateTimer.IsRepeating = false;
         _validateTimer.Tick += (_, _) =>
         {
-            // フォント設定ビューでは行もチェック結果も見えないので、チェックしない（ステータスバーの案内をチェック結果で消さない）。
-            // 戻るときに ExitFontSettingsView がチェックを予約し直す
-            if (ViewModel.ViewMode == MainViewMode.FontSettings) return;
+            // 全画面ビュー（フォント設定ビュー・レイアウト設定ビュー）では行もチェック結果も見えないので、チェックしない
+            // （ステータスバーの案内をチェック結果で消さない）。戻るときに ExitFontSettingsView・ExitLayoutView がチェックを予約し直す
+            if (FullScreenViewActive) return;
             TryRun(ViewModel.RunValidation);
             RefreshInsertGutter(); // 挿入ビュー表示中なら横幅などの再計算結果を行情報欄へ反映
             RefreshLineFontPlaceholder(); // 行設定のフォントの欄の薄字（当たるフォント設定）も新しい結果に
@@ -301,6 +301,7 @@ public sealed partial class MainWindow : Window
         {
             OpenMedia(mp);
         }
+        NotifyLayoutViewDocumentChanged(); // レイアウト設定ビューを開いたまま開いたとき（ほかのインスタンスから渡されたファイルなど）
     }
 
     private IntPtr Hwnd => WinRT.Interop.WindowNative.GetWindowHandle(this);
@@ -329,6 +330,7 @@ public sealed partial class MainWindow : Window
         LineEditor.Text = "";
         RenderPreview();
         ScheduleValidation();
+        NotifyLayoutViewDocumentChanged();
     }
 
     /// <summary>メディアを閉じる（新規作成・ファイルを閉じる時）。</summary>
@@ -518,6 +520,7 @@ public sealed partial class MainWindow : Window
         string text = await content.GetTextAsync();
         TryRun(() => ViewModel.LoadFromText(text));
         ScheduleValidation();
+        NotifyLayoutViewDocumentChanged(); // レイアウト設定ビューを開いたまま貼り付けたとき（ページの一覧・曲の既定を作り直す）
     }
 
     private void OnCopyClick(object sender, RoutedEventArgs e)
@@ -614,7 +617,7 @@ public sealed partial class MainWindow : Window
         {
             ViewModel.ClearCharSelection();
         }
-        LineSide.SelectLayoutOfLine(ViewModel.SelectedLine);
+        LineSide.SetLine(ViewModel.SelectedLine);
         LineEditor.Text = ViewModel.SelectedLine?.RawText ?? "";
         RenderPreview();
         RefreshN3LinePanel();
@@ -715,6 +718,7 @@ public sealed partial class MainWindow : Window
         LoadQuickEmojiSettings();
         RefreshN3LinePanel(); // 表示時刻の設定・絵文字の指定で、行設定の自動の表示時刻と説明が変わる
         ScheduleValidation();
+        NotifyLayoutViewDocumentChanged(); // ページの区切り方が変わると、レイアウト設定ビューのページの一覧が変わる
     }
 
     private async void OnImportN3ProjClick(object sender, RoutedEventArgs e)
@@ -745,6 +749,7 @@ public sealed partial class MainWindow : Window
             ApplyMcpEnabled();
             TryRun(ViewModel.RunValidation);
             RefreshLineFontPlaceholder();
+            NotifyLayoutViewDocumentChanged(); // ページの区切り方・画面の大きさが変わると、レイアウト設定ビューのページの一覧・px の欄が変わる
         }
         if (dialog.OpenClaudeLinkRequested) await ShowClaudeLinkDialogAsync();
     }
@@ -843,9 +848,9 @@ public sealed partial class MainWindow : Window
 
     private void PerformUndo()
     {
-        // フォント設定ビューでは、ビューの中の操作（フォント設定の編集）を戻す
-        if (FontViewUndoRedo(redo: false)) return;
-        // フォント設定ビューでは歌詞の変更を戻さない（見えない行が変わるため。ビューの中の操作はビュー側で扱う）
+        // 全画面ビュー（フォント設定ビュー・レイアウト設定ビュー）では、ビューの中の操作（フォント設定・レイアウト設定の編集）を戻す
+        if (FullScreenViewUndoRedo(redo: false)) return;
+        // 全画面ビューでは歌詞の変更を戻さない（見えない行が変わるため。ビューの中の操作はビュー側で扱う）
         if (LyricsUndoRedoBlocked()) return;
         if (!DebounceUndoRedo()) return;
         if (!ViewModel.Undo()) return;
@@ -854,7 +859,7 @@ public sealed partial class MainWindow : Window
 
     private void PerformRedo()
     {
-        if (FontViewUndoRedo(redo: true)) return; // PerformUndo と同じ
+        if (FullScreenViewUndoRedo(redo: true)) return; // PerformUndo と同じ
         if (LyricsUndoRedoBlocked()) return;
         if (!DebounceUndoRedo()) return;
         if (!ViewModel.Redo()) return;
@@ -909,6 +914,7 @@ public sealed partial class MainWindow : Window
             UpdateInsertCursorInfo();
         }
         ScheduleValidation();
+        NotifyLayoutViewDocumentChanged(); // MCP でタブを切り替えたとき（レイアウト設定ビューのページの一覧を作り直す）
     }
 
     private void OnTabSelectionChanged(object sender, SelectionChangedEventArgs e)
@@ -1237,7 +1243,7 @@ public sealed partial class MainWindow : Window
             ObservePlayer();
             ViewModel.MediaPath = path;
             ViewModel.SaveProject();
-            if (ViewModel.ViewMode != MainViewMode.FontSettings) MediaPanel.Visibility = Visibility.Visible; // フォント設定ビューでは隠したまま
+            if (!FullScreenViewActive) MediaPanel.Visibility = Visibility.Visible; // 全画面ビュー（フォント設定・レイアウト設定）では隠したまま
             MediaPanel.IsExpanded = true;
             ViewModel.StatusText = $"メディアを開きました: {Path.GetFileName(path)}（Ctrl+Space で再生/一時停止）";
 

@@ -9,7 +9,7 @@
     xmlns:val="using:NicoKaraPrep.Core.Validation">
 
     <!-- 画面の大きさに合わせた並べ方（プレイヤーの高さ・右のパネルの幅・行リストの列・行設定の段）は MainWindow.Layout.cs -->
-    <Grid x:Name="RootGrid" KeyDown="OnRootKeyDown">
+    <Grid x:Name="RootGrid" KeyDown="OnRootKeyDown" PreviewKeyDown="OnRootPreviewKeyDown">
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto" />
             <RowDefinition Height="*" />
@@ -141,10 +141,19 @@
                             <KeyboardAccelerator Key="F3" Invoked="OnViewAcceleratorInvoked" />
                         </RadioMenuFlyoutItem.KeyboardAccelerators>
                     </RadioMenuFlyoutItem>
+                    <RadioMenuFlyoutItem
+                        x:Name="LayoutViewMenuItem"
+                        Text="レイアウト設定ビュー"
+                        GroupName="MainViewMode"
+                        Click="OnViewMenuClick">
+                        <RadioMenuFlyoutItem.KeyboardAccelerators>
+                            <KeyboardAccelerator Key="F4" Invoked="OnViewAcceleratorInvoked" />
+                        </RadioMenuFlyoutItem.KeyboardAccelerators>
+                    </RadioMenuFlyoutItem>
                     <MenuFlyoutSeparator />
-                    <!-- Esc で今のビューを閉じて戻る（絵文字挿入ビューは行リストへ、フォント設定ビューは直前のビューへ）。
-                         項目名は今のビューに合わせて変える（MainWindow.Views.cs の SyncViewSwitchers）。
-                         Esc は各ビューの中で受ける（フォント設定ビューでは中の部品が処理しなかったときだけ）ため、ここはキーの表示だけ -->
+                    <!-- Esc で今のビューを閉じて戻る（絵文字挿入ビューは行リストへ、フォント設定ビュー・レイアウト設定ビューは
+                         最後にいた行リストか絵文字挿入ビューへ）。項目名は今のビューに合わせて変える（MainWindow.Views.cs の SyncViewSwitchers）。
+                         Esc は各ビューの中で受ける（全画面ビューでは中の部品が処理しなかったときだけ）ため、ここはキーの表示だけ -->
                     <MenuFlyoutItem
                         x:Name="BackViewMenuItem"
                         Text="前のビューへ戻る"
@@ -196,7 +205,13 @@
                     <MenuFlyoutItem Text="選択行の済マークを解除" Click="OnClearMarksClick" />
                     <MenuFlyoutSeparator />
                     <MenuFlyoutItem Text="ニコカラメーカー3 のフォント設定を編集" KeyboardAcceleratorTextOverride="F3" Click="OnFontSettingsViewClick" />
-                    <MenuFlyoutItem Text="選択行の表示時刻・フォント指定を解除" Click="OnClearN3OverridesClick" ToolTipService.ToolTip="選んだ行の、ニコカラメーカー用の行設定（表示時刻・フォント・レイアウト・文字の大きさ）をまとめて解除します。表示時刻は、手で直した値も読み込んだ値・自動調整の値も外して、自動の計算に戻します" />
+                    <MenuFlyoutItem Text="ニコカラメーカー3 のレイアウト設定を編集" KeyboardAcceleratorTextOverride="F4" Click="OnLayoutViewClick"
+                                    ToolTipService.ToolTip="レイアウト設定ビュー（F4）を開いて、レイアウト設定の値・ページへの指定を編集します" />
+                    <MenuFlyoutItem Text="字幕アクションの曲の既定..." Click="OnSongActionDialogClick"
+                                    ToolTipService.ToolTip="行ごとに字幕アクションを指定していない歌詞行に使う、曲の既定の字幕アクション（種類と設定値）を選びます。行ごとの指定は、右のパネル「字幕アクション」で行います" />
+                    <MenuFlyoutItem Text="表示時刻の自動調整..." Click="OnShowTimeDialogClick"
+                                    ToolTipService.ToolTip="表示時刻の自動調整のパラメーター（ワイプ前・ワイプ後・表示間隔など。アプリ共通）を変えて、自動調整を実行します" />
+                    <MenuFlyoutItem Text="選択行の表示時刻・フォント指定を解除" Click="OnClearN3OverridesClick" ToolTipService.ToolTip="選んだ行の、ニコカラメーカー用の行設定（表示時刻・フォント・レイアウト・文字の大きさ・字幕アクション）をまとめて解除します。表示時刻は、手で直した値も読み込んだ値・自動調整の値も外して、自動の計算に戻します" />
                 </MenuBarItem>
                 <MenuBarItem Title="再生(P)" AccessKey="P">
                     <MenuFlyoutItem Text="メディアを開く..." Click="OnOpenMediaClick" />
@@ -235,7 +250,7 @@
                 </MenuBarItem>
             </MenuBar>
 
-            <!-- ビューの切り替え（表示メニュー・F2・F3 と同じ。選択は ViewModel.ViewMode に追従） -->
+            <!-- ビューの切り替え（表示メニュー・F2・F3・F4 と同じ。選択は ViewModel.ViewMode に追従） -->
             <SelectorBar
                 x:Name="ViewSelector"
                 Grid.Column="1"
@@ -245,6 +260,7 @@
                 <SelectorBarItem x:Name="LinesViewTab" Text="行リスト" ToolTipService.ToolTip="行リスト（行ごとの編集）" />
                 <SelectorBarItem x:Name="EmojiViewTab" Text="絵文字挿入" ToolTipService.ToolTip="絵文字挿入ビュー (F2)" />
                 <SelectorBarItem x:Name="FontViewTab" Text="フォント設定" ToolTipService.ToolTip="ニコカラメーカー3 のフォント設定ビュー (F3)" />
+                <SelectorBarItem x:Name="LayoutViewTab" Text="レイアウト" ToolTipService.ToolTip="ニコカラメーカー3 のレイアウト設定ビュー（レイアウト設定の値とページへの指定） (F4)" />
             </SelectorBar>
         </Grid>
 
@@ -425,6 +441,7 @@
                                     <ColumnDefinition Width="{x:Bind vm:LineListLayout.Current.WidthColumnWidth, Mode=OneWay}" />
                                     <ColumnDefinition Width="14" />
                                     <ColumnDefinition Width="{x:Bind vm:LineListLayout.Current.FontColumnWidth, Mode=OneWay}" />
+                                    <ColumnDefinition Width="{x:Bind vm:LineListLayout.Current.ActionColumnWidth, Mode=OneWay}" />
                                     <ColumnDefinition Width="*" />
                                 </Grid.ColumnDefinitions>
                                 <CheckBox Grid.Column="0" MinWidth="0" Padding="0" IsChecked="{x:Bind IsSelected, Mode=OneWay}" Click="OnRowCheckClick" Tag="{x:Bind}" ToolTipService.ToolTip="選択（複数選択してエクスポートなどに使用）" />
@@ -460,7 +477,7 @@
                                     <TextBlock Text="{x:Bind WidthGlyph, Mode=OneWay}" ToolTipService.ToolTip="横幅チェック結果" />
                                 </StackPanel>
                                 <TextBlock Grid.Column="4" Text="{x:Bind WidthText, Mode=OneWay}" FontSize="12" TextWrapping="Wrap" Foreground="{x:Bind WidthBrush, Mode=OneWay}" VerticalAlignment="Center" ToolTipService.ToolTip="{x:Bind WidthToolTip, Mode=OneWay}" />
-                                <TextBlock Grid.Column="5" Text="{x:Bind OverrideMark, Mode=OneWay}" FontSize="12" VerticalAlignment="Center" Foreground="{ThemeResource AccentTextFillColorPrimaryBrush}" ToolTipService.ToolTip="ニコカラメーカー用の手動指定（表示時刻・フォント・レイアウト・文字の大きさ）あり" />
+                                <TextBlock Grid.Column="5" Text="{x:Bind OverrideMark, Mode=OneWay}" FontSize="12" VerticalAlignment="Center" Foreground="{ThemeResource AccentTextFillColorPrimaryBrush}" ToolTipService.ToolTip="ニコカラメーカー用の手動指定（表示時刻・フォント・レイアウト・文字の大きさ・字幕アクション）あり" />
                                 <!-- この行に当たるフォント設定（書き出しと同じ決め方。途中で切り替わる行は最初と最後を → でつなぐ）と、下の段にこの行のページのレイアウト。
                                      中の大きさを変えたら MainWindow.Layout.cs の FontCellWidth も合わせる -->
                                 <StackPanel Grid.Column="6" VerticalAlignment="Center" Spacing="1">
@@ -487,8 +504,11 @@
                                     <TextBlock Text="{x:Bind LayoutText, Mode=OneWay}" FontSize="11" Foreground="{ThemeResource TextFillColorSecondaryBrush}" TextTrimming="CharacterEllipsis"
                                                Visibility="{x:Bind HasLayoutText, Mode=OneWay}" ToolTipService.ToolTip="{x:Bind LayoutToolTip, Mode=OneWay}" />
                                 </StackPanel>
+                                <!-- この行の字幕アクション（手で指定した行は ✎＋名前を強調の色で、指定の無い行は曲の既定の名前を薄い色で） -->
+                                <TextBlock Grid.Column="7" Text="{x:Bind ActionText, Mode=OneWay}" FontSize="11" VerticalAlignment="Center" TextTrimming="CharacterEllipsis"
+                                           Foreground="{x:Bind ActionBrush, Mode=OneWay}" ToolTipService.ToolTip="{x:Bind ActionToolTip, Mode=OneWay}" />
                                 <!-- 歌詞: 字幕の見た目（フォント設定の書体・配色・ルビ・アイコン）で描く。文字をクリック・ドラッグで選べる。空行・タグだけの行と、表示を切ったときは文字のまま -->
-                                <Grid Grid.Column="7">
+                                <Grid Grid.Column="8">
                                     <TextBlock Text="{x:Bind DisplayText, Mode=OneWay}" TextTrimming="CharacterEllipsis" Visibility="{x:Bind ShowPlainText, Mode=OneWay}" />
                                     <views:LyricLineView Height="44" Line="{x:Bind}" Visibility="{x:Bind ShowStyledText, Mode=OneWay}" CharSelecting="OnLyricCharSelecting" />
                                 </Grid>
@@ -543,6 +563,9 @@
                         <TextBox x:Name="ShowEndBox" Width="104" FontFamily="Consolas" FontSize="12" PlaceholderText="--:--:--"
                                  GotFocus="OnShowTimeBoxGotFocus" LostFocus="OnShowTimeBoxLostFocus" KeyDown="OnShowTimeBoxKeyDown" ToolTipService.ToolTip="mm:ss:cc 形式で手で指定（自動調整を実行し直しても変わりません）。空欄なら薄字の値（読み込んだ値・自動調整の値・自動計算）を使います" />
                         <Button Content="自動に戻す" FontSize="12" Padding="8,3" Click="OnResetShowTimeClick" />
+                        <Button x:Name="ShowTimeDialogButton" Content="自動調整..." FontSize="12" Padding="8,3" Click="OnShowTimeDialogClick"
+                                AutomationProperties.Name="表示時刻の自動調整"
+                                ToolTipService.ToolTip="表示時刻の自動調整のパラメーター（ワイプ前・ワイプ後・表示間隔など。アプリ共通）を変えて、全タブの行の表示時刻を決め直します（ポップアップ）" />
                     </StackPanel>
                     <StackPanel x:Name="N3FontGroup" Grid.Column="1" Orientation="Horizontal" Spacing="6">
                         <TextBlock x:Name="LineFontLabel" Text="フォント" FontSize="12" VerticalAlignment="Center"
@@ -553,6 +576,13 @@
                                   ToolTipService.ToolTip="この行に適用するニコカラメーカーのフォント設定名（空欄はパート記号で自動判定。空にして Enter で自動に戻す）" />
                         <Button x:Name="EditLineFontButton" Content="編集..." FontSize="12" Padding="8,3" Click="OnEditLineFontClick"
                                 ToolTipService.ToolTip="フォント設定ビュー（F3）を開いて、このフォント設定を編集します" />
+                        <!-- 行の字幕アクション（行ごと。選んだ行だけに指定する。ページの行すべてにそろえるのは右パネル「字幕アクション」の「ページの行すべてにそろえる」） -->
+                        <TextBlock Text="字幕アクション" FontSize="12" VerticalAlignment="Center" Margin="8,0,0,0"
+                                   ToolTipService.ToolTip="選んだ行の字幕アクション（ニコカラメーカー3 の行の出し方・消し方）。行ごとの指定で、複数の行を選ぶと選んだ行すべてに指定します" />
+                        <ComboBox x:Name="LineActionBox" Width="140" FontSize="12" PlaceholderText="（既定）"
+                                  SelectionChanged="OnLineActionChanged"
+                                  AutomationProperties.Name="選んだ行の字幕アクション"
+                                  ToolTipService.ToolTip="選ぶと、選んだ行だけに指定します（複数の行を選んでいれば、その行すべて。ページのほかの行はそのまま）。「（既定）」で曲の既定に戻します" />
                         <TextBlock Text="レイアウト" FontSize="12" VerticalAlignment="Center" Margin="8,0,0,0"
                                    ToolTipService.ToolTip="この行のページに使うニコカラメーカーのレイアウト設定（ページ単位。自動はページの行数から選びます）" />
                         <ComboBox x:Name="LineLayoutBox" Width="140" FontSize="12" PlaceholderText="（自動）"
@@ -724,7 +754,7 @@
                 </Grid>
             </fs:ColumnResizeGrip>
 
-            <!-- 右パネル（行リストのとき）: フォント一覧（押すと選んだ文字・行に指定）とレイアウト設定 -->
+            <!-- 右パネル（行リストのとき）: フォント・レイアウト・字幕アクションの一覧（押すと選んだ文字・行・ページに指定） -->
             <Border
                 Grid.Row="1"
                 Grid.Column="2"
@@ -733,151 +763,184 @@
                 <views:LineSidePanel x:Name="LineSide" />
             </Border>
 
-            <!-- 右パネル（絵文字挿入ビューのとき）: @Emoji パレット -->
-            <Grid
+            <!-- 右パネル（絵文字挿入ビューのとき）: @Emoji パレット。どの段も中身の高さにする。右の列に動画を置くときは、動画を縮めて
+                 この中身が入る高さを残す（MainWindow.Layout.cs の SidePlayerHeight。動画は最小の高さまで）。それでも入らない低い窓では、パレットごとスクロールする -->
+            <ScrollViewer
                 Grid.Row="1"
                 Grid.Column="2"
                 x:Name="EmojiSidePanel"
                 Visibility="Collapsed"
-                Padding="8"
-                RowSpacing="8">
-                <Grid.RowDefinitions>
-                    <RowDefinition Height="Auto" />
-                    <RowDefinition Height="Auto" />
-                    <RowDefinition Height="Auto" />
-                    <RowDefinition Height="*" />
-                    <RowDefinition Height="Auto" />
-                    <RowDefinition Height="Auto" />
-                </Grid.RowDefinitions>
-
-                <!-- F2 のキーは 表示 メニューにある（右パネルを隠すフォント設定ビューでも効くように） -->
-                <ToggleButton
-                    x:Name="EmojiModeToggle"
-                    Grid.Row="0"
-                    HorizontalAlignment="Stretch"
-                    Content="絵文字挿入ビュー (F2)"
-                    Checked="OnEmojiModeChanged"
-                    Unchecked="OnEmojiModeChanged" />
-                <Button Grid.Row="1" HorizontalAlignment="Stretch" Content="リスト編集..." Click="OnEmojiListClick" />
-
-                <!-- 絵文字挿入設定のクイック調整（設定ダイアログと同じ項目を常時表示） -->
-                <Grid Grid.Row="2" ColumnSpacing="6" RowSpacing="4">
-                    <Grid.ColumnDefinitions>
-                        <ColumnDefinition Width="Auto" />
-                        <ColumnDefinition Width="*" />
-                    </Grid.ColumnDefinitions>
+                HorizontalScrollBarVisibility="Disabled"
+                VerticalScrollBarVisibility="Auto">
+                <!-- 上寄せにして、表示の枠より低いときも中身の高さのままにする（引き伸ばすと SidePlayerHeight が読む高さが枠の高さになり、
+                     一度縮んだ動画が戻らない） -->
+                <Grid
+                    x:Name="EmojiPaletteContent"
+                    VerticalAlignment="Top"
+                    Padding="8"
+                    RowSpacing="8">
                     <Grid.RowDefinitions>
                         <RowDefinition Height="Auto" />
                         <RowDefinition Height="Auto" />
                         <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
                     </Grid.RowDefinitions>
-                    <TextBlock Text="表示秒数" FontSize="12" VerticalAlignment="Center"
-                               ToolTipService.ToolTip="アイコン・＿・先行タグ（G）を直後の文字の何秒前から表示するか。新しく挿入する分に適用します（既存のアイコン・＿は 絵文字 > 絵文字タイムタグ再計算 で付け直せます。G の先行タグは再計算では変わりません）。書き出しでは、前のページの同じ段と重なる行だけ短くなることがあります（ふつうはワイプ前の表示時間まで。それより短い表示秒数は、前の行をワイプの最後まで見せるときだけ縮めます。書き出し画面の設定）" />
-                    <Grid Grid.Column="1" ColumnSpacing="4">
+
+                    <!-- ビューの切り替えと絵文字のリストの編集（1 行に並べて、絵文字の枠に高さを残す）。
+                         F2 のキーは 表示 メニューにある（右パネルを隠すフォント設定ビューでも効くように） -->
+                    <Grid Grid.Row="0" ColumnSpacing="6">
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="*" />
                             <ColumnDefinition Width="Auto" />
                         </Grid.ColumnDefinitions>
-                        <NumberBox x:Name="QuickEmojiLeadBox" Minimum="0" Maximum="30" SmallChange="0.5"
-                                   SpinButtonPlacementMode="Compact" ValueChanged="OnQuickEmojiLeadChanged" />
-                        <ToggleButton Grid.Column="1" x:Name="QuickLeadZeroToggle" Content="0秒" Padding="8,5"
-                                      Checked="OnQuickLeadZeroToggled" Unchecked="OnQuickLeadZeroToggled"
-                                      ToolTipService.ToolTip="ワイプしない絵文字用に表示秒数を 0 にする（もう一度押すと元の秒数へ戻す）" />
+                        <ToggleButton
+                            x:Name="EmojiModeToggle"
+                            HorizontalAlignment="Stretch"
+                            Content="絵文字挿入ビュー (F2)"
+                            Checked="OnEmojiModeChanged"
+                            Unchecked="OnEmojiModeChanged" />
+                        <Button Grid.Column="1" Content="リスト編集..." Click="OnEmojiListClick" />
                     </Grid>
-                    <TextBlock Grid.Row="1" Text="連続タグ" FontSize="12" VerticalAlignment="Center"
-                               ToolTipService.ToolTip="連続する絵文字のタグ付け方" />
-                    <ComboBox Grid.Row="1" Grid.Column="1" x:Name="QuickEmojiModeBox" HorizontalAlignment="Stretch"
-                              SelectionChanged="OnQuickEmojiModeChanged">
-                        <ComboBoxItem Content="各絵文字ごと" />
-                        <ComboBoxItem Content="先頭と末尾のみ" />
-                    </ComboBox>
-                    <TextBlock Grid.Row="2" Text="＿文字" FontSize="12" VerticalAlignment="Center"
-                               ToolTipService.ToolTip="プレースホルダ文字（挿入ビューの B キーで挿入）" />
-                    <TextBox Grid.Row="2" Grid.Column="1" x:Name="QuickPlaceholderBox" MaxLength="4"
-                             TextChanged="OnQuickPlaceholderChanged" />
-                </Grid>
 
-                <GridView
-                    Grid.Row="3"
-                    ItemsSource="{x:Bind ViewModel.EmojiSlots}"
-                    IsItemClickEnabled="True"
-                    ItemClick="OnEmojiSlotClick"
-                    CanDragItems="True"
-                    CanReorderItems="True"
-                    AllowDrop="True"
-                    SelectionMode="None">
-                    <GridView.ItemTemplate>
-                        <DataTemplate x:DataType="vm:EmojiSlotViewModel">
-                            <Grid Width="60" Height="80" ToolTipService.ToolTip="{x:Bind ToolTipText, Mode=OneWay}">
-                                <Grid.RowDefinitions>
-                                    <RowDefinition Height="Auto" />
-                                    <RowDefinition Height="*" />
-                                    <RowDefinition Height="Auto" />
-                                </Grid.RowDefinitions>
-                                <TextBlock Grid.Row="0" Text="{x:Bind KeyLabel}" FontSize="11" FontWeight="Bold" HorizontalAlignment="Center" Foreground="{ThemeResource AccentTextFillColorPrimaryBrush}" />
-                                <Image Grid.Row="1" Source="{x:Bind Thumbnail, Mode=OneWay}" Stretch="Uniform" MaxHeight="40" />
-                                <TextBlock Grid.Row="2" Text="{x:Bind ReplaceChar, Mode=OneWay}" HorizontalAlignment="Center" FontSize="11" TextTrimming="CharacterEllipsis" />
-                            </Grid>
-                        </DataTemplate>
-                    </GridView.ItemTemplate>
-                </GridView>
-
-                <!-- スロット外の曲内 @Emoji（クリックで挿入） -->
-                <ListView
-                    Grid.Row="4"
-                    MaxHeight="140"
-                    ItemsSource="{x:Bind ViewModel.UnslottedEmoji}"
-                    IsItemClickEnabled="True"
-                    ItemClick="OnUnslottedEmojiClick"
-                    SelectionMode="None">
-                    <ListView.ItemTemplate>
-                        <DataTemplate x:DataType="core:EmojiEntry">
-                            <Grid ColumnSpacing="6">
-                                <Grid.ColumnDefinitions>
-                                    <ColumnDefinition Width="*" />
-                                    <ColumnDefinition Width="Auto" />
-                                </Grid.ColumnDefinitions>
-                                <TextBlock Text="{x:Bind ReplaceChar}" FontSize="12" VerticalAlignment="Center" ToolTipService.ToolTip="{x:Bind ImageBefore}" />
-                                <Button Grid.Column="1" Content="キーへ" FontSize="10" Padding="6,2" Click="OnPromoteEmojiClick" Tag="{x:Bind}" ToolTipService.ToolTip="キー付きスロットへ割り当てる" />
-                            </Grid>
-                        </DataTemplate>
-                    </ListView.ItemTemplate>
-                </ListView>
-
-                <!-- 定型文（「（後奏）」など。押すか、N のあとに番号で、前後の歌に合わせたタイムタグで入れる） -->
-                <StackPanel Grid.Row="5" Spacing="4">
-                    <Grid ColumnSpacing="6">
+                    <!-- 絵文字挿入設定のクイック調整（設定ダイアログと同じ項目を常時表示） -->
+                    <Grid Grid.Row="1" ColumnSpacing="6" RowSpacing="4">
                         <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="*" />
                             <ColumnDefinition Width="Auto" />
+                            <ColumnDefinition Width="*" />
                         </Grid.ColumnDefinitions>
-                        <TextBlock
-                            x:Name="PhraseHeaderText"
-                            Text="定型文"
-                            FontSize="12"
-                            FontWeight="SemiBold"
-                            VerticalAlignment="Center"
-                            ToolTipService.ToolTip="「（間奏）」などの決まった文字列を入れます。行頭・行末・空行に入れると、定型文だけのページにして（前後に空行を置きます）、前後のページと表示が重ならない時刻にします（前のページが消えてからワイプ前の秒数のあと 〜 次のページが出るワイプ後の秒数前まで画面に出します。後奏は 3 秒）。行の途中なら、直前の文字の終わりから直後の文字の始まりまでです。BS / Del でまとめて消せます" />
-                        <Button Grid.Column="1" Content="編集..." FontSize="12" Padding="8,3" Click="OnPhraseListClick" />
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="Auto" />
+                        </Grid.RowDefinitions>
+                        <TextBlock Text="表示秒数" FontSize="12" VerticalAlignment="Center"
+                                   ToolTipService.ToolTip="アイコン・＿・先行タグ（G）を直後の文字の何秒前から表示するか。新しく挿入する分に適用します（既存のアイコン・＿は 絵文字 > 絵文字タイムタグ再計算 で付け直せます。G の先行タグは再計算では変わりません）。書き出しでは、前のページの同じ段と重なる行だけ短くなることがあります（ふつうはワイプ前の表示時間まで。それより短い表示秒数は、前の行をワイプの最後まで見せるときだけ縮めます。書き出し画面の設定）" />
+                        <Grid Grid.Column="1" ColumnSpacing="4">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="Auto" />
+                            </Grid.ColumnDefinitions>
+                            <NumberBox x:Name="QuickEmojiLeadBox" Minimum="0" Maximum="30" SmallChange="0.5"
+                                       SpinButtonPlacementMode="Compact" ValueChanged="OnQuickEmojiLeadChanged" />
+                            <ToggleButton Grid.Column="1" x:Name="QuickLeadZeroToggle" Content="0秒" Padding="8,5"
+                                          Checked="OnQuickLeadZeroToggled" Unchecked="OnQuickLeadZeroToggled"
+                                          ToolTipService.ToolTip="ワイプしない絵文字用に表示秒数を 0 にする（もう一度押すと元の秒数へ戻す）" />
+                        </Grid>
+                        <TextBlock Grid.Row="1" Text="連続タグ" FontSize="12" VerticalAlignment="Center"
+                                   ToolTipService.ToolTip="連続する絵文字のタグ付け方" />
+                        <ComboBox Grid.Row="1" Grid.Column="1" x:Name="QuickEmojiModeBox" HorizontalAlignment="Stretch"
+                                  SelectionChanged="OnQuickEmojiModeChanged">
+                            <ComboBoxItem Content="各絵文字ごと" />
+                            <ComboBoxItem Content="先頭と末尾のみ" />
+                        </ComboBox>
+                        <TextBlock Grid.Row="2" Text="＿文字" FontSize="12" VerticalAlignment="Center"
+                                   ToolTipService.ToolTip="プレースホルダ文字（挿入ビューの B キーで挿入）" />
+                        <TextBox Grid.Row="2" Grid.Column="1" x:Name="QuickPlaceholderBox" MaxLength="4"
+                                 TextChanged="OnQuickPlaceholderChanged" />
                     </Grid>
-                    <ListView
-                        x:Name="PhraseList"
-                        MaxHeight="160"
-                        ItemsSource="{x:Bind ViewModel.InsertPhraseItems}"
+
+                    <!-- 絵文字の枠: キーボードと同じ 10 個ずつ（1〜0・Q〜P）。列の幅が足りないときは折り返す -->
+                    <GridView
+                        x:Name="EmojiSlotGrid"
+                        Grid.Row="2"
+                        ItemsSource="{x:Bind ViewModel.EmojiSlots}"
                         IsItemClickEnabled="True"
-                        ItemClick="OnPhraseClick"
+                        ItemClick="OnEmojiSlotClick"
+                        CanDragItems="True"
+                        CanReorderItems="True"
+                        AllowDrop="True"
                         SelectionMode="None">
+                        <GridView.ItemsPanel>
+                            <ItemsPanelTemplate>
+                                <ItemsWrapGrid Orientation="Horizontal" MaximumRowsOrColumns="10" />
+                            </ItemsPanelTemplate>
+                        </GridView.ItemsPanel>
+                        <GridView.ItemTemplate>
+                            <DataTemplate x:DataType="vm:EmojiSlotViewModel">
+                                <Grid Width="48" Height="80" ToolTipService.ToolTip="{x:Bind ToolTipText, Mode=OneWay}">
+                                    <Grid.RowDefinitions>
+                                        <RowDefinition Height="Auto" />
+                                        <RowDefinition Height="*" />
+                                        <RowDefinition Height="Auto" />
+                                    </Grid.RowDefinitions>
+                                    <TextBlock Grid.Row="0" Text="{x:Bind KeyLabel}" FontSize="11" FontWeight="Bold" HorizontalAlignment="Center" Foreground="{ThemeResource AccentTextFillColorPrimaryBrush}" />
+                                    <Image Grid.Row="1" Source="{x:Bind Thumbnail, Mode=OneWay}" Stretch="Uniform" MaxHeight="40" />
+                                    <TextBlock Grid.Row="2" Text="{x:Bind ReplaceChar, Mode=OneWay}" HorizontalAlignment="Center" FontSize="11" TextTrimming="CharacterEllipsis" />
+                                </Grid>
+                            </DataTemplate>
+                        </GridView.ItemTemplate>
+                    </GridView>
+
+                    <!-- スロット外の曲内 @Emoji（クリックで挿入） -->
+                    <ListView
+                        Grid.Row="3"
+                        MaxHeight="140"
+                        ItemsSource="{x:Bind ViewModel.UnslottedEmoji}"
+                        IsItemClickEnabled="True"
+                        ItemClick="OnUnslottedEmojiClick"
+                        SelectionMode="None">
+                        <ListView.ItemContainerStyle>
+                            <Style TargetType="ListViewItem" BasedOn="{StaticResource DefaultListViewItemStyle}">
+                                <Setter Property="MinHeight" Value="30" />
+                                <Setter Property="Padding" Value="8,0,8,0" />
+                            </Style>
+                        </ListView.ItemContainerStyle>
                         <ListView.ItemTemplate>
-                            <DataTemplate x:DataType="vm:PhraseItem">
-                                <StackPanel Orientation="Horizontal" Spacing="8" ToolTipService.ToolTip="{x:Bind ToolTip}">
-                                    <TextBlock Text="{x:Bind KeyLabel}" Width="12" FontSize="11" FontWeight="Bold" VerticalAlignment="Center" Foreground="{ThemeResource AccentTextFillColorPrimaryBrush}" />
-                                    <TextBlock Text="{x:Bind Text}" FontSize="12" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
-                                </StackPanel>
+                            <DataTemplate x:DataType="core:EmojiEntry">
+                                <Grid ColumnSpacing="6">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="Auto" />
+                                    </Grid.ColumnDefinitions>
+                                    <TextBlock Text="{x:Bind ReplaceChar}" FontSize="12" VerticalAlignment="Center" ToolTipService.ToolTip="{x:Bind ImageBefore}" />
+                                    <Button Grid.Column="1" Content="キーへ" FontSize="10" Padding="6,2" Click="OnPromoteEmojiClick" Tag="{x:Bind}" ToolTipService.ToolTip="キー付きスロットへ割り当てる" />
+                                </Grid>
                             </DataTemplate>
                         </ListView.ItemTemplate>
                     </ListView>
-                </StackPanel>
-            </Grid>
+
+                    <!-- 定型文（「（後奏）」など。押すか、N のあとに番号で、前後の歌に合わせたタイムタグで入れる） -->
+                    <StackPanel Grid.Row="4" Spacing="4">
+                        <Grid ColumnSpacing="6">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="Auto" />
+                            </Grid.ColumnDefinitions>
+                            <TextBlock
+                                x:Name="PhraseHeaderText"
+                                Text="定型文"
+                                FontSize="12"
+                                FontWeight="SemiBold"
+                                VerticalAlignment="Center"
+                                ToolTipService.ToolTip="「（間奏）」などの決まった文字列を入れます。行頭・行末・空行に入れると、定型文だけのページにして（前後に空行を置きます）、前後のページと表示が重ならない時刻にします（前のページが消えてからワイプ前の秒数のあと 〜 次のページが出るワイプ後の秒数前まで画面に出します。後奏は 3 秒）。行の途中なら、直前の文字の終わりから直後の文字の始まりまでです。BS / Del でまとめて消せます" />
+                            <Button Grid.Column="1" Content="編集..." FontSize="12" Padding="8,3" Click="OnPhraseListClick" />
+                        </Grid>
+                        <ListView
+                            x:Name="PhraseList"
+                            MaxHeight="160"
+                            ItemsSource="{x:Bind ViewModel.InsertPhraseItems}"
+                            IsItemClickEnabled="True"
+                            ItemClick="OnPhraseClick"
+                            SelectionMode="None">
+                            <ListView.ItemContainerStyle>
+                                <Style TargetType="ListViewItem" BasedOn="{StaticResource DefaultListViewItemStyle}">
+                                    <Setter Property="MinHeight" Value="30" />
+                                    <Setter Property="Padding" Value="8,0,8,0" />
+                                </Style>
+                            </ListView.ItemContainerStyle>
+                            <ListView.ItemTemplate>
+                                <DataTemplate x:DataType="vm:PhraseItem">
+                                    <StackPanel Orientation="Horizontal" Spacing="8" ToolTipService.ToolTip="{x:Bind ToolTip}">
+                                        <TextBlock Text="{x:Bind KeyLabel}" Width="12" FontSize="11" FontWeight="Bold" VerticalAlignment="Center" Foreground="{ThemeResource AccentTextFillColorPrimaryBrush}" />
+                                        <TextBlock Text="{x:Bind Text}" FontSize="12" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
+                                    </StackPanel>
+                                </DataTemplate>
+                            </ListView.ItemTemplate>
+                        </ListView>
+                    </StackPanel>
+                </Grid>
+            </ScrollViewer>
         </Grid>
 
         <!-- 検証パネル -->
@@ -917,6 +980,14 @@
              ウィンドウの XAML では x:Load="False" の要素を FindName で作れず、x:Bind の x:Load はビルドできないため） -->
         <Border
             x:Name="FontViewHost"
+            Grid.Row="1"
+            Grid.RowSpan="2"
+            Visibility="Collapsed" />
+
+        <!-- レイアウト設定ビュー（F4。フォント設定ビューと同じ段に重ねる）。中身の LayoutView は初めて開くときにコードで作る
+             （MainWindow.Views.cs の EnsureLayoutView。理由はフォント設定ビューと同じ） -->
+        <Border
+            x:Name="LayoutViewHost"
             Grid.Row="1"
             Grid.RowSpan="2"
             Visibility="Collapsed" />

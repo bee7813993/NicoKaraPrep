@@ -1,0 +1,545 @@
+﻿<UserControl
+    x:Class="NicoKaraPrep.App.Views.LayoutView"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:local="using:NicoKaraPrep.App.Views"
+    xmlns:vm="using:NicoKaraPrep.App.ViewModels"
+    xmlns:fs="using:NicoKaraPrep.App.Views.FontSettings"
+    KeyDown="OnKeyDown"
+    KeyboardAcceleratorPlacementMode="Hidden">
+
+    <!-- レイアウト設定ビューの中の 元に戻す・やり直し（歌詞の 元に戻す とは別。文字の入力欄の中では入力欄が処理する） -->
+    <UserControl.KeyboardAccelerators>
+        <KeyboardAccelerator Modifiers="Control" Key="Z" Invoked="OnUndoInvoked" />
+        <KeyboardAccelerator Modifiers="Control" Key="Y" Invoked="OnRedoInvoked" />
+    </UserControl.KeyboardAccelerators>
+
+    <!-- スタイルはフォント設定ビュー（FontSettingsView.xaml）と同じもの -->
+    <UserControl.Resources>
+        <Style x:Key="SectionTitle" TargetType="TextBlock" BasedOn="{StaticResource SubtitleTextBlockStyle}">
+            <Setter Property="FontSize" Value="16" />
+        </Style>
+        <Style x:Key="PaneTitle" TargetType="TextBlock" BasedOn="{StaticResource BodyStrongTextBlockStyle}" />
+        <Style x:Key="Note" TargetType="TextBlock">
+            <Setter Property="FontSize" Value="12" />
+            <Setter Property="TextWrapping" Value="Wrap" />
+            <Setter Property="Foreground" Value="{ThemeResource TextFillColorSecondaryBrush}" />
+        </Style>
+        <Style x:Key="Card" TargetType="Border">
+            <Setter Property="Padding" Value="14" />
+            <Setter Property="CornerRadius" Value="8" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="BorderBrush" Value="{ThemeResource CardStrokeColorDefaultBrush}" />
+            <Setter Property="Background" Value="{ThemeResource CardBackgroundFillColorDefaultBrush}" />
+        </Style>
+        <Style x:Key="Badge" TargetType="Border">
+            <Setter Property="Padding" Value="4,0" />
+            <Setter Property="CornerRadius" Value="3" />
+            <Setter Property="VerticalAlignment" Value="Center" />
+        </Style>
+        <!-- 編集欄の見出し（左の列） -->
+        <Style x:Key="FieldLabel" TargetType="TextBlock">
+            <Setter Property="VerticalAlignment" Value="Center" />
+            <Setter Property="TextWrapping" Value="Wrap" />
+        </Style>
+    </UserControl.Resources>
+
+    <!-- 3 列: 左 = レイアウト設定の一覧 / 中央 = 編集・使っているページ / 右 = 見本・ページの一覧。一覧と編集のあいだのつまみで一覧の幅を変えられる -->
+    <Grid x:Name="RootGrid" Background="{ThemeResource ApplicationPageBackgroundThemeBrush}" Padding="12,8,12,8">
+        <Grid.ColumnDefinitions>
+            <ColumnDefinition x:Name="ListColumn" Width="300" />
+            <ColumnDefinition Width="12" />
+            <ColumnDefinition Width="*" />
+            <ColumnDefinition Width="12" />
+            <ColumnDefinition Width="300" />
+        </Grid.ColumnDefinitions>
+
+        <!-- ================= 左: 一覧（書き出しの並び） ================= -->
+        <Grid RowSpacing="8">
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="*" />
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="Auto" />
+            </Grid.RowDefinitions>
+            <Grid ColumnSpacing="8">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
+                <TextBlock Text="レイアウト設定" Style="{StaticResource SectionTitle}" VerticalAlignment="Center" />
+                <Button
+                    x:Name="LayoutBackButton"
+                    Grid.Column="1"
+                    Content="行リストへ戻る (Esc)"
+                    FontSize="12"
+                    Padding="8,3"
+                    ToolTipService.ToolTip="レイアウト設定ビューを閉じて、前のビューへ戻ります（編集した値は保存済みです）"
+                    Click="OnBackClick" />
+            </Grid>
+            <ListView
+                x:Name="LayoutList"
+                Grid.Row="1"
+                SelectionMode="Single"
+                AutomationProperties.Name="レイアウト設定の一覧"
+                ItemsSource="{x:Bind ViewModel.Layouts}"
+                SelectedItem="{x:Bind ViewModel.SelectedLayout, Mode=OneWay}"
+                SelectionChanged="OnLayoutListSelectionChanged">
+                <ListView.ItemTemplate>
+                    <DataTemplate x:DataType="vm:LayoutListItem">
+                        <!-- 右の余白は縦のスクロールバーの分（ページ数に重ならないように） -->
+                        <Grid ColumnSpacing="8" Padding="0,4" Margin="0,0,10,0" ToolTipService.ToolTip="{x:Bind ToolTip, Mode=OneWay}">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="Auto" />
+                            </Grid.ColumnDefinitions>
+                            <StackPanel VerticalAlignment="Center">
+                                <StackPanel Orientation="Horizontal" Spacing="4">
+                                    <TextBlock Text="{x:Bind DisplayName, Mode=OneWay}" TextTrimming="CharacterEllipsis" MaxWidth="160" />
+                                    <Border Style="{StaticResource Badge}" BorderThickness="1" BorderBrush="{ThemeResource ControlStrokeColorDefaultBrush}" Visibility="{x:Bind IsBase, Mode=OneWay}">
+                                        <TextBlock Text="ベース" FontSize="11" Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+                                    </Border>
+                                    <Border Style="{StaticResource Badge}" Background="{ThemeResource AccentFillColorDefaultBrush}" Visibility="{x:Bind IsEdited, Mode=OneWay}">
+                                        <TextBlock Text="編集" FontSize="11" Foreground="{ThemeResource TextOnAccentFillColorPrimaryBrush}" />
+                                    </Border>
+                                    <Border Style="{StaticResource Badge}" Background="{ThemeResource SystemFillColorSuccessBackgroundBrush}" BorderThickness="1" BorderBrush="{ThemeResource SystemFillColorSuccessBrush}" Visibility="{x:Bind IsAdded, Mode=OneWay}">
+                                        <TextBlock Text="新規" FontSize="11" />
+                                    </Border>
+                                </StackPanel>
+                                <TextBlock Text="{x:Bind Summary, Mode=OneWay}" FontSize="11" TextTrimming="CharacterEllipsis" Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+                            </StackPanel>
+                            <TextBlock Grid.Column="1" Text="{x:Bind PageText, Mode=OneWay}" FontSize="11" VerticalAlignment="Center" Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+                        </Grid>
+                    </DataTemplate>
+                </ListView.ItemTemplate>
+            </ListView>
+            <!-- 一覧の操作（追加・複製・削除は同じ行。名前の変更は中央の名前の欄で） -->
+            <StackPanel Grid.Row="2" Orientation="Horizontal" Spacing="4">
+                <Button
+                    x:Name="AddLayoutButton"
+                    Padding="8,4"
+                    AutomationProperties.Name="追加"
+                    ToolTipService.ToolTip="選んでいるレイアウトの値を写して、新しいレイアウト設定を足します（Ctrl+Z で戻せます）"
+                    Click="OnAddClick">
+                    <StackPanel Orientation="Horizontal" Spacing="4">
+                        <FontIcon Glyph="&#xE710;" FontSize="12" />
+                        <TextBlock Text="追加" FontSize="12" />
+                    </StackPanel>
+                </Button>
+                <Button
+                    x:Name="DuplicateLayoutButton"
+                    Padding="8,4"
+                    IsEnabled="{x:Bind ViewModel.HasSelection, Mode=OneWay}"
+                    AutomationProperties.Name="複製"
+                    ToolTipService.ToolTip="選んだレイアウト設定を、名前の末尾に 2, 3… を付けて複製します（ベースにある名前を変えたいときも、複製してから変えます。Ctrl+Z で戻せます）"
+                    Click="OnDuplicateClick">
+                    <TextBlock Text="複製" FontSize="12" />
+                </Button>
+                <Button
+                    x:Name="DeleteLayoutButton"
+                    Padding="8,4"
+                    IsEnabled="{x:Bind ViewModel.CanDelete, Mode=OneWay}"
+                    AutomationProperties.Name="{x:Bind ViewModel.DeleteText, Mode=OneWay}"
+                    ToolTipService.ToolTip="{x:Bind ViewModel.DeleteToolTip, Mode=OneWay}"
+                    Click="OnDeleteClick">
+                    <StackPanel Orientation="Horizontal" Spacing="4">
+                        <FontIcon Glyph="&#xE74D;" FontSize="12" />
+                        <TextBlock Text="{x:Bind ViewModel.DeleteText, Mode=OneWay}" FontSize="12" />
+                    </StackPanel>
+                </Button>
+            </StackPanel>
+            <StackPanel Grid.Row="3" Orientation="Horizontal" Spacing="4">
+                <DropDownButton
+                    x:Name="ImportLayoutButton"
+                    Padding="8,4"
+                    AutomationProperties.Name="取り込み"
+                    ToolTipService.ToolTip="レイアウト設定をほかの所から取り込みます">
+                    <TextBlock Text="取り込み" FontSize="12" />
+                    <DropDownButton.Flyout>
+                        <MenuFlyout Placement="Top">
+                            <MenuFlyoutItem
+                                x:Name="ImportLayoutTemplateItem"
+                                Text="ニコカラメーカー3 のテンプレートから..."
+                                ToolTipService.ToolTip="ニコカラメーカー3 で保存したレイアウト設定テンプレート（設定フォルダの TemplateLayout）から選んで足します（テンプレートは変更しません）"
+                                Click="OnImportTemplateClick" />
+                        </MenuFlyout>
+                    </DropDownButton.Flyout>
+                </DropDownButton>
+            </StackPanel>
+            <StackPanel Grid.Row="4" Spacing="2">
+                <TextBlock x:Name="LayoutListSummaryText" Text="{x:Bind ViewModel.ListSummary, Mode=OneWay}" Style="{StaticResource Note}" />
+                <TextBlock
+                    x:Name="LayoutSaveNoteText"
+                    Text="{x:Bind ViewModel.SaveNote, Mode=OneWay}"
+                    Style="{StaticResource Note}"
+                    ToolTipService.ToolTip="{x:Bind ViewModel.SaveNoteToolTip}" />
+            </StackPanel>
+        </Grid>
+
+        <!-- 一覧と編集欄のあいだのつまみ（左右にドラッグ・← → キーで一覧の幅を変える。ダブルクリックで元の幅） -->
+        <fs:ColumnResizeGrip
+            x:Name="LayoutListResizeGrip"
+            Grid.Column="1"
+            AutomationProperties.Name="一覧の幅"
+            ToolTipService.ToolTip="ドラッグで一覧の幅を変えます（選んで ← → キーでも変えられます。ダブルクリックで元の幅に戻します）">
+            <Grid Background="Transparent">
+                <Rectangle
+                    Width="4"
+                    Height="48"
+                    RadiusX="2"
+                    RadiusY="2"
+                    HorizontalAlignment="Center"
+                    VerticalAlignment="Center"
+                    Fill="{ThemeResource ControlStrongFillColorDefaultBrush}" />
+            </Grid>
+        </fs:ColumnResizeGrip>
+
+        <!-- ================= 中央: 編集・使っているページ ================= -->
+        <Grid Grid.Column="2">
+            <TextBlock
+                x:Name="NoLayoutText"
+                Visibility="{x:Bind ViewModel.HasNoSelection, Mode=OneWay}"
+                HorizontalAlignment="Center"
+                VerticalAlignment="Center"
+                TextWrapping="Wrap"
+                Style="{StaticResource Note}"
+                Text="左の一覧でレイアウト設定を選ぶか、「追加」で作ってください" />
+            <ScrollViewer x:Name="LayoutEditorScroll" Visibility="{x:Bind ViewModel.HasSelection, Mode=OneWay}" SizeChanged="OnEditorScrollSizeChanged">
+                <StackPanel Spacing="12" Padding="0,0,16,16">
+                    <InfoBar
+                        x:Name="MergeOffBar"
+                        Title="この曲は、編集したレイアウト設定をベースへ反映しない設定です"
+                        Severity="Warning"
+                        IsClosable="False"
+                        IsOpen="{x:Bind ViewModel.IsMergeOff, Mode=OneWay}"
+                        Message="n3proj の書き出し画面の「NicoKaraPrep で編集したレイアウト設定をベースへ反映する」が外れているため、ここで編集した値・足したレイアウト設定は、この曲の書き出しと行リスト・字幕のプレビューには使われません（見本は編集中の値で描きます）。" />
+
+                    <!-- 選んだレイアウトの編集（広いときは 2 列: 基本 | 行ごとの左右配置 / 文字 | ルビ。狭いときは 1 列） -->
+                    <Grid x:Name="LayoutEditorGrid" ColumnSpacing="12" RowSpacing="12">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="*" />
+                        </Grid.ColumnDefinitions>
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="Auto" />
+                        </Grid.RowDefinitions>
+
+                        <!-- 基本 -->
+                        <Border x:Name="LayoutBasicCard" Style="{StaticResource Card}">
+                            <StackPanel Spacing="8">
+                                <TextBlock Text="基本" Style="{StaticResource SectionTitle}" />
+                                <TextBlock x:Name="LayoutOriginText" Text="{x:Bind ViewModel.StateNote, Mode=OneWay}" Style="{StaticResource Note}" />
+                                <Grid ColumnSpacing="8" RowSpacing="6">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="100" />
+                                        <ColumnDefinition Width="*" />
+                                    </Grid.ColumnDefinitions>
+                                    <Grid.RowDefinitions>
+                                        <RowDefinition Height="Auto" />
+                                        <RowDefinition Height="Auto" />
+                                        <RowDefinition Height="Auto" />
+                                        <RowDefinition Height="Auto" />
+                                        <RowDefinition Height="Auto" />
+                                    </Grid.RowDefinitions>
+                                    <TextBlock Text="名前" Style="{StaticResource FieldLabel}" ToolTipService.ToolTip="{x:Bind ViewModel.NameToolTip, Mode=OneWay}" />
+                                    <TextBox
+                                        x:Name="LayoutEditNameBox"
+                                        Grid.Column="1"
+                                        IsReadOnly="{x:Bind local:LayoutView.Not(ViewModel.CanRename), Mode=OneWay}"
+                                        AutomationProperties.Name="名前"
+                                        ToolTipService.ToolTip="{x:Bind ViewModel.NameToolTip, Mode=OneWay}"
+                                        KeyDown="OnNameKeyDown"
+                                        LostFocus="OnNameLostFocus" />
+                                    <TextBlock Grid.Row="1" Text="上下配置" Style="{StaticResource FieldLabel}" />
+                                    <ComboBox
+                                        x:Name="LayoutVerticalBox"
+                                        Grid.Row="1"
+                                        Grid.Column="1"
+                                        HorizontalAlignment="Stretch"
+                                        AutomationProperties.Name="上下配置"
+                                        ToolTipService.ToolTip="字幕の行をまとめて、画面の上・中央・下のどこに寄せるか"
+                                        SelectionChanged="OnLayoutComboChanged">
+                                        <ComboBoxItem Content="上寄せ" />
+                                        <ComboBoxItem Content="中央" />
+                                        <ComboBoxItem Content="下寄せ" />
+                                    </ComboBox>
+                                    <TextBlock x:Name="LayoutVerticalMarginLabel" Grid.Row="2" Text="下余白 px" Style="{StaticResource FieldLabel}" />
+                                    <NumberBox
+                                        x:Name="LayoutVerticalMarginBox"
+                                        Grid.Row="2"
+                                        Grid.Column="1"
+                                        SpinButtonPlacementMode="Compact"
+                                        SmallChange="5"
+                                        LargeChange="20"
+                                        AutomationProperties.Name="上下余白 px"
+                                        ToolTipService.ToolTip="下寄せなら画面の下端からいちばん下の行まで、上寄せなら上端からいちばん上の行までの余白（書き出すプロジェクトの画面の高さでの px）"
+                                        ValueChanged="OnLayoutNumberChanged" />
+                                    <TextBlock Grid.Row="3" Text="左右余白 px" Style="{StaticResource FieldLabel}" />
+                                    <NumberBox
+                                        x:Name="LayoutHorizontalMarginBox"
+                                        Grid.Row="3"
+                                        Grid.Column="1"
+                                        SpinButtonPlacementMode="Compact"
+                                        SmallChange="5"
+                                        LargeChange="20"
+                                        AutomationProperties.Name="左右余白 px"
+                                        ToolTipService.ToolTip="左寄せ・右寄せの行の、画面の左右の端からの余白（1 行の横幅のチェックにも使います）"
+                                        ValueChanged="OnLayoutNumberChanged" />
+                                    <TextBlock Grid.Row="4" Text="行間 px" Style="{StaticResource FieldLabel}" />
+                                    <NumberBox
+                                        x:Name="LayoutLineSpaceBox"
+                                        Grid.Row="4"
+                                        Grid.Column="1"
+                                        SpinButtonPlacementMode="Compact"
+                                        SmallChange="5"
+                                        LargeChange="20"
+                                        AutomationProperties.Name="行間 px"
+                                        ToolTipService.ToolTip="字幕行と字幕行（親文字と親文字）の間隔。ルビの大きさより大きめに。マイナスも可"
+                                        ValueChanged="OnLayoutNumberChanged" />
+                                </Grid>
+                            </StackPanel>
+                        </Border>
+
+                        <!-- 行ごとの左右配置（上の行から）。行の数がこのレイアウトの行数（ページの行数がこの数のときに、行数から自動で選ばれる） -->
+                        <Border x:Name="LayoutRowsCard" Grid.Column="1" Style="{StaticResource Card}">
+                            <StackPanel Spacing="8">
+                                <TextBlock Text="行ごとの左右配置" Style="{StaticResource SectionTitle}" />
+                                <TextBlock Style="{StaticResource Note}" Text="上の行から並べます。行の数がこのレイアウトの行数で、ページの行数がこの数のときに、行数から自動で選ばれます。" />
+                                <StackPanel x:Name="LayoutAlignmentRows" Spacing="4" />
+                                <Button
+                                    x:Name="LayoutAddAlignmentButton"
+                                    Padding="8,4"
+                                    AutomationProperties.Name="行を増やす"
+                                    ToolTipService.ToolTip="いちばん下の行と同じ配置の行を足します（このレイアウトの行数が 1 つ増え、行数から自動で選ばれるページが変わります）"
+                                    Click="OnAddAlignmentClick">
+                                    <StackPanel Orientation="Horizontal" Spacing="4">
+                                        <FontIcon Glyph="&#xE710;" FontSize="12" />
+                                        <TextBlock Text="行を増やす" FontSize="12" />
+                                    </StackPanel>
+                                </Button>
+                            </StackPanel>
+                        </Border>
+
+                        <!-- 文字 -->
+                        <Border x:Name="LayoutTextCard" Grid.Row="1" Style="{StaticResource Card}">
+                            <StackPanel Spacing="8">
+                                <TextBlock Text="文字" Style="{StaticResource SectionTitle}" />
+                                <Grid ColumnSpacing="8" RowSpacing="6">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="100" />
+                                        <ColumnDefinition Width="*" />
+                                    </Grid.ColumnDefinitions>
+                                    <Grid.RowDefinitions>
+                                        <RowDefinition Height="Auto" />
+                                        <RowDefinition Height="Auto" />
+                                        <RowDefinition Height="Auto" />
+                                    </Grid.RowDefinitions>
+                                    <TextBlock Text="スマート水平配置" Style="{StaticResource FieldLabel}" />
+                                    <ComboBox
+                                        x:Name="LayoutSmartHorizonBox"
+                                        Grid.Column="1"
+                                        HorizontalAlignment="Stretch"
+                                        AutomationProperties.Name="スマート水平配置"
+                                        ToolTipService.ToolTip="左寄せ・右寄せで行が短いときに中央へ寄せるか"
+                                        SelectionChanged="OnLayoutComboChanged">
+                                        <ComboBoxItem Content="調整しない" />
+                                        <ComboBoxItem Content="中心位置揃え" />
+                                        <ComboBoxItem Content="左右余白揃え" />
+                                    </ComboBox>
+                                    <TextBlock Grid.Row="1" Text="歌詞間隔 px" Style="{StaticResource FieldLabel}" />
+                                    <NumberBox
+                                        x:Name="LayoutLyricsIntervalBox"
+                                        Grid.Row="1"
+                                        Grid.Column="1"
+                                        SpinButtonPlacementMode="Compact"
+                                        SmallChange="1"
+                                        LargeChange="5"
+                                        AutomationProperties.Name="歌詞間隔 px"
+                                        ToolTipService.ToolTip="歌詞の文字と文字の間隔（マイナスで重なる）"
+                                        ValueChanged="OnLayoutNumberChanged" />
+                                    <CheckBox
+                                        x:Name="LayoutAllowBitingCheck"
+                                        Grid.Row="2"
+                                        Grid.ColumnSpan="2"
+                                        Content="一部の文字の食い込みを許容する"
+                                        ToolTipService.ToolTip="フォントの字間が詰まっている文字を食い込ませます（字幕のプレビュー・見本の文字の並べ方にも効きます）"
+                                        Click="OnAllowBitingClick" />
+                                </Grid>
+                            </StackPanel>
+                        </Border>
+
+                        <!-- ルビ -->
+                        <Border x:Name="LayoutRubyCard" Grid.Row="1" Grid.Column="1" Style="{StaticResource Card}">
+                            <StackPanel Spacing="8">
+                                <TextBlock Text="ルビ" Style="{StaticResource SectionTitle}" />
+                                <Grid ColumnSpacing="8" RowSpacing="6">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="100" />
+                                        <ColumnDefinition Width="*" />
+                                    </Grid.ColumnDefinitions>
+                                    <Grid.RowDefinitions>
+                                        <RowDefinition Height="Auto" />
+                                        <RowDefinition Height="Auto" />
+                                        <RowDefinition Height="Auto" />
+                                    </Grid.RowDefinitions>
+                                    <TextBlock Text="ルビ間隔 px" Style="{StaticResource FieldLabel}" />
+                                    <NumberBox
+                                        x:Name="LayoutRubyIntervalBox"
+                                        Grid.Column="1"
+                                        SpinButtonPlacementMode="Compact"
+                                        SmallChange="1"
+                                        LargeChange="5"
+                                        AutomationProperties.Name="ルビ間隔 px"
+                                        ToolTipService.ToolTip="ルビの文字と文字の間隔"
+                                        ValueChanged="OnLayoutNumberChanged" />
+                                    <TextBlock Grid.Row="1" Text="ルビ配置" Style="{StaticResource FieldLabel}" />
+                                    <ComboBox
+                                        x:Name="LayoutRubyAlignmentBox"
+                                        Grid.Row="1"
+                                        Grid.Column="1"
+                                        HorizontalAlignment="Stretch"
+                                        AutomationProperties.Name="ルビ配置"
+                                        ToolTipService.ToolTip="自動配置: 親文字が英数字だけなら中央、それ以外は均等割り付け"
+                                        SelectionChanged="OnLayoutComboChanged">
+                                        <ComboBoxItem Content="自動配置" />
+                                        <ComboBoxItem Content="センタリング" />
+                                        <ComboBoxItem Content="均等割り付け" />
+                                    </ComboBox>
+                                    <TextBlock Grid.Row="2" Text="歌詞とルビ px" Style="{StaticResource FieldLabel}" />
+                                    <NumberBox
+                                        x:Name="LayoutLyricsAndRubyIntervalBox"
+                                        Grid.Row="2"
+                                        Grid.Column="1"
+                                        SpinButtonPlacementMode="Compact"
+                                        SmallChange="1"
+                                        LargeChange="5"
+                                        AutomationProperties.Name="歌詞とルビ px"
+                                        ToolTipService.ToolTip="歌詞とルビの間隔"
+                                        ValueChanged="OnLayoutNumberChanged" />
+                                </Grid>
+                            </StackPanel>
+                        </Border>
+                    </Grid>
+                    <TextBlock
+                        Style="{StaticResource Note}"
+                        Text="編集した内容はアプリ共通で保存し、すべての曲の n3proj の書き出しで、ベースの同じ名前のレイアウト設定に上書きします（無い名前は足します）。行リストの表示と字幕のプレビューにもすぐ反映します。このビューの中の Ctrl+Z で戻せます。" />
+
+                    <!-- 使っているページ（押すと右のページの一覧で選ぶ） -->
+                    <Border x:Name="LayoutUsageCard" Style="{StaticResource Card}">
+                        <StackPanel Spacing="8">
+                            <TextBlock Text="使っているページ" Style="{StaticResource SectionTitle}" />
+                            <TextBlock x:Name="LayoutUsageSummaryText" Text="{x:Bind ViewModel.UsageSummary, Mode=OneWay}" Style="{StaticResource Note}" />
+                            <ListView
+                                x:Name="LayoutUsageList"
+                                MaxHeight="220"
+                                SelectionMode="None"
+                                IsItemClickEnabled="True"
+                                AutomationProperties.Name="使っているページ"
+                                Visibility="{x:Bind ViewModel.HasUsage, Mode=OneWay}"
+                                ItemsSource="{x:Bind ViewModel.UsagePages}"
+                                ItemClick="OnUsagePageClick">
+                                <ListView.ItemTemplate>
+                                    <DataTemplate x:DataType="vm:LayoutPageItem">
+                                        <Grid ColumnSpacing="8" Padding="0,2" ToolTipService.ToolTip="{x:Bind ToolTip, Mode=OneWay}">
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="Auto" />
+                                                <ColumnDefinition Width="Auto" />
+                                                <ColumnDefinition Width="*" />
+                                                <ColumnDefinition Width="Auto" />
+                                            </Grid.ColumnDefinitions>
+                                            <TextBlock Text="{x:Bind Title, Mode=OneWay}" FontSize="12" FontWeight="SemiBold" VerticalAlignment="Center" />
+                                            <TextBlock Grid.Column="1" Text="{x:Bind StartText, Mode=OneWay}" FontSize="12" VerticalAlignment="Center" Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+                                            <TextBlock Grid.Column="2" Text="{x:Bind FirstText, Mode=OneWay}" FontSize="12" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
+                                            <TextBlock Grid.Column="3" Text="{x:Bind LayoutText, Mode=OneWay}" FontSize="11" VerticalAlignment="Center" Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+                                        </Grid>
+                                    </DataTemplate>
+                                </ListView.ItemTemplate>
+                            </ListView>
+                        </StackPanel>
+                    </Border>
+
+                </StackPanel>
+            </ScrollViewer>
+        </Grid>
+
+        <!-- ================= 右: 見本・ページの一覧 ================= -->
+        <Grid Grid.Column="4" RowSpacing="8">
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="*" />
+                <RowDefinition Height="Auto" />
+            </Grid.RowDefinitions>
+            <TextBlock Text="見本" Style="{StaticResource PaneTitle}" />
+            <!-- 見本の枠（高さは幅から 16:9。選んだページの歌詞を、選んだレイアウトで並べる） -->
+            <Border
+                x:Name="LayoutPreviewFrame"
+                Grid.Row="1"
+                Height="169"
+                CornerRadius="4"
+                Background="Black"
+                SizeChanged="OnPreviewFrameSizeChanged">
+                <local:SubtitlePreviewView x:Name="LayoutPreview" />
+            </Border>
+            <StackPanel Grid.Row="2" Spacing="2">
+                <TextBlock x:Name="LayoutPreviewNoteText" Style="{StaticResource Note}" />
+            </StackPanel>
+            <StackPanel Grid.Row="3" Spacing="2" Margin="0,8,0,0">
+                <TextBlock Text="ページ" Style="{StaticResource PaneTitle}" />
+                <TextBlock x:Name="LayoutPageSummaryText" Text="{x:Bind ViewModel.PageSummary, Mode=OneWay}" Style="{StaticResource Note}" />
+            </StackPanel>
+            <ListView
+                x:Name="LayoutPageList"
+                Grid.Row="4"
+                SelectionMode="Extended"
+                AutomationProperties.Name="ページの一覧"
+                ItemsSource="{x:Bind ViewModel.Pages}"
+                SelectionChanged="OnPageListSelectionChanged">
+                <ListView.ItemTemplate>
+                    <DataTemplate x:DataType="vm:LayoutPageItem">
+                        <StackPanel Padding="0,4" Spacing="1" Margin="0,0,10,0" ToolTipService.ToolTip="{x:Bind ToolTip, Mode=OneWay}">
+                            <StackPanel Orientation="Horizontal" Spacing="8">
+                                <TextBlock Text="{x:Bind Title, Mode=OneWay}" FontSize="12" FontWeight="SemiBold" />
+                                <TextBlock Text="{x:Bind LineCountText, Mode=OneWay}" FontSize="12" Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+                                <TextBlock Text="{x:Bind StartText, Mode=OneWay}" FontSize="12" Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+                            </StackPanel>
+                            <TextBlock Text="{x:Bind FirstText, Mode=OneWay}" FontSize="12" TextTrimming="CharacterEllipsis" />
+                            <TextBlock Text="{x:Bind LayoutText, Mode=OneWay}" FontSize="11" TextTrimming="CharacterEllipsis" Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+                        </StackPanel>
+                    </DataTemplate>
+                </ListView.ItemTemplate>
+            </ListView>
+            <!-- 選んだページへのレイアウトの指定 -->
+            <StackPanel Grid.Row="5" Spacing="6">
+                <TextBlock x:Name="LayoutPageTargetText" Text="{x:Bind ViewModel.PageTargetText, Mode=OneWay}" Style="{StaticResource Note}" />
+                <TextBlock Text="レイアウト" FontSize="12" FontWeight="SemiBold" />
+                <StackPanel Orientation="Horizontal" Spacing="4">
+                    <Button
+                        x:Name="ApplyPageLayoutButton"
+                        Content="選んだレイアウトをこのページに"
+                        FontSize="12"
+                        Padding="8,4"
+                        IsEnabled="{x:Bind ViewModel.CanApplyLayout, Mode=OneWay}"
+                        ToolTipService.ToolTip="{x:Bind ViewModel.ApplyLayoutToolTip, Mode=OneWay}"
+                        Click="OnApplyPageLayoutClick" />
+                    <Button
+                        x:Name="AutoPageLayoutButton"
+                        Content="自動に戻す"
+                        FontSize="12"
+                        Padding="8,4"
+                        IsEnabled="{x:Bind ViewModel.HasPageSelection, Mode=OneWay}"
+                        AutomationProperties.Name="レイアウトを自動に戻す"
+                        ToolTipService.ToolTip="レイアウトを自動に戻す: 選んだページのレイアウトの手動指定をやめ、タブの固定かページの行数から自動で選ぶようにします（行リストへ戻って Ctrl+Z で戻せます）"
+                        Click="OnAutoPageLayoutClick" />
+                </StackPanel>
+                <TextBlock Style="{StaticResource Note}" Text="ページへの指定は歌詞の変更です。行リストへ戻って Ctrl+Z で戻せます（表示中でないタブのページは、そのタブを表示して Ctrl+Z）。" />
+            </StackPanel>
+        </Grid>
+    </Grid>
+</UserControl>

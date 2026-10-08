@@ -230,7 +230,27 @@ public class LineOperationsTests
         var to = new LyricsLine();
         to.CopyLineSettingsFrom(from);
 
-        foreach (var p in props) Assert.True(Equals(p.GetValue(from), p.GetValue(to)), $"{p.Name} が引き継がれていない");
+        foreach (var p in props) Assert.True(SameValue(p.GetValue(from), p.GetValue(to)), $"{p.Name} が引き継がれていない");
+
+        // 字幕アクションは写し（行エディタで直した行と元の行で設定値のオブジェクトを共有しない）
+        Assert.NotSame(from.SubtitleAction, to.SubtitleAction);
+        Assert.NotSame(from.SubtitleAction!.Settings, to.SubtitleAction!.Settings);
+    }
+
+    [Fact]
+    public void 行の写しも行の設定をすべて持つ()
+    {
+        // 行の写し（Undo・タブ分離・書き出しの絵文字の寄せ）でも、行の設定を足して写し忘れたら、ここで落ちる
+        var props = typeof(LyricsLine).GetProperties().Where(p => p.CanWrite).ToList();
+        var from = new LyricsLine();
+        from.Chars.Add(new CharUnit { Text = "あ", TimeCs = 100 });
+        foreach (var p in props) p.SetValue(from, SampleValue(p.PropertyType));
+
+        var copy = from.Clone();
+
+        foreach (var p in props) Assert.True(SameValue(p.GetValue(from), p.GetValue(copy)), $"{p.Name} が写されていない");
+        Assert.NotSame(from.SubtitleAction, copy.SubtitleAction);
+        Assert.Equal("あ", copy.GetDisplayText());
     }
 
     private static object SampleValue(Type type)
@@ -240,8 +260,13 @@ public class LineOperationsTests
         if (t == typeof(string)) return "x";
         if (t == typeof(bool)) return true;
         if (t.IsEnum) return Enum.GetValues(t).Cast<object>().Last();
+        if (t == typeof(N3SubtitleAction)) return N3SubtitleActionCatalog.CreateDefault(N3SubtitleActionCatalog.LineFadeInId);
         throw new NotSupportedException($"{t.Name} の見本の値をここに足す");
     }
+
+    /// <summary>同じ値か（字幕アクションは中身で比べる）。</summary>
+    private static bool SameValue(object? a, object? b) =>
+        a is N3SubtitleAction x ? N3SubtitleAction.AreSame(x, b as N3SubtitleAction) : Equals(a, b);
 
     [Fact]
     public void 空行の挿入と削除()

@@ -19,7 +19,8 @@ namespace NicoKaraPrep.App;
 /// <summary>
 /// MCP（Claude などからの操作）。道具（<see cref="NkpTools"/>）の処理はすべてここで、UI スレッドで 1 件ずつ行う。
 /// 書き込みは画面の操作と同じ処理を通し（画面にすぐ出る・Ctrl+Z で戻せる）、1 回の呼び出しは Ctrl+Z 1 回で戻る。
-/// 確認画面などのダイアログを開いているあいだは書き込みを断り、歌詞を変える操作はフォント設定ビューを開いていれば元のビューへ戻ってから行う。
+/// 確認画面などのダイアログを開いているあいだは書き込みを断り、歌詞を変える操作は全画面ビュー（フォント設定ビュー・レイアウト設定ビュー）を
+/// 開いていれば元のビューへ戻ってから行う。
 /// 行番号は 1 から、時刻は mm:ss:cc（行リストと同じ）でやり取りする。
 /// あとから起動したインスタンスの引数（開くファイル）の受け取りもここ（単一インスタンス。Program.cs）。
 /// </summary>
@@ -166,7 +167,7 @@ public sealed partial class MainWindow
             {
                 return McpResults.Error("にこぷれっぷで確認画面などのダイアログが開いているため、操作できません。ダイアログを閉じてから、もう一度お願いします");
             }
-            if (access == McpAccess.WriteDocument && ViewModel.ViewMode == MainViewMode.FontSettings) ReturnFromFontSettings();
+            if (access == McpAccess.WriteDocument && FullScreenViewActive) ReturnFromFullScreenView();
         }
 
         string statusBefore = ViewModel.StatusText;
@@ -221,11 +222,11 @@ public sealed partial class MainWindow
 
     /// <summary>
     /// 読む前に、編集のあとで待っているチェックを今すぐ行い、行の表示（当たるフォント・横幅・表示時刻）とプレビューの材料を今の歌詞にする。
-    /// フォント設定ビューではチェックはせず（ステータスバーの案内を消さない）、行の表示だけを作り直す。
+    /// 全画面ビュー（フォント設定・レイアウト設定）ではチェックはせず（ステータスバーの案内を消さない）、行の表示だけを作り直す。
     /// </summary>
     private void McpRefreshForRead()
     {
-        if (ViewModel.ViewMode == MainViewMode.FontSettings)
+        if (FullScreenViewActive)
         {
             TryRun(ViewModel.UpdateLineFonts);
             return;
@@ -239,12 +240,12 @@ public sealed partial class MainWindow
 
     /// <summary>
     /// 今すぐチェックし、今のステータスバーの文（操作の知らせ）の後ろにチェックの結果をつなげて出す（書き込みのあと。結果の件数を返すため）。
-    /// フォント設定ビューではチェックせず、行の表示だけを作り直す。
+    /// 全画面ビュー（フォント設定・レイアウト設定）ではチェックせず、行の表示だけを作り直す。
     /// </summary>
     private void ValidateNowKeepingStatus()
     {
         _validateTimer.Stop();
-        if (ViewModel.ViewMode == MainViewMode.FontSettings)
+        if (FullScreenViewActive)
         {
             TryRun(ViewModel.UpdateLineFonts);
             return;
@@ -353,7 +354,17 @@ public sealed partial class MainWindow
     {
         MainViewMode.EmojiInsert => "emojiInsert",
         MainViewMode.FontSettings => "fontSettings",
+        MainViewMode.Layout => "layout",
         _ => "lines",
+    };
+
+    /// <summary>既定の字幕アクションの出どころ（song: 曲の既定 / base: ベースの n3proj / nicoKaraMaker3: ニコカラメーカー3 の設定 / standard: 文字単位フェード）。</summary>
+    private static string ActionSourceKey(N3SubtitleActionSource source) => source switch
+    {
+        N3SubtitleActionSource.Song => "song",
+        N3SubtitleActionSource.Base => "base",
+        N3SubtitleActionSource.Nkm3 => "nicoKaraMaker3",
+        _ => "standard",
     };
 
     private static string SeverityKey(IssueSeverity s) => s switch
@@ -426,6 +437,15 @@ public sealed partial class MainWindow
         }
         if (layout.Length > 0) o["layout"] = layout;
         if (line.LayoutName is { Length: > 0 } manualLayout) o["layoutManual"] = manualLayout;
+        // 字幕アクション（行ごとの指定の表示名。指定が無ければ「（既定）」= 曲の既定に従う）
+        string actionName = N3SubtitleActionCatalog.DisplayName(line.SubtitleAction?.Id);
+        o["action"] = actionName;
+        if (line.SubtitleAction is { } action)
+        {
+            o["actionId"] = action.Id;
+            string detail = ViewModel.DescribeSubtitleAction(action); // 設定値をニコカラメーカー3 の設定から変えていれば「フェードイン/アウト（500/250ms）」など
+            if (detail != actionName) o["actionDetail"] = detail;
+        }
         if (vm.WidthResult is { } w)
         {
             o["width"] = new JsonObject
@@ -517,6 +537,7 @@ public sealed partial class MainWindow
         }
 
         var (fontNames, defaultFont) = ViewModel.GetExportFontNames();
+        var defaultAction = ViewModel.ResolveCurrentDefaultSubtitleAction(out var actionSource);
         return new JsonObject
         {
             ["app"] = new JsonObject
@@ -539,6 +560,15 @@ public sealed partial class MainWindow
             ["defaultFontSet"] = defaultFont,
             ["layouts"] = new JsonArray(ViewModel.GetEffectiveLayouts()
                 .Select(l => (JsonNode?)new JsonObject { ["name"] = l.Name, ["lines"] = l.LineCount }).ToArray()),
+            // 行ごとの指定が無い歌詞行に書く字幕アクション（書き出しと同じ決め方）と、使える字幕アクション
+            ["defaultAction"] = new JsonObject
+            {
+                ["name"] = ViewModel.DescribeSubtitleAction(defaultAction),
+                ["id"] = defaultAction.Id,
+                ["from"] = ActionSourceKey(actionSource),
+            },
+            ["actions"] = new JsonArray(N3SubtitleActionCatalog.Known
+                .Select(k => (JsonNode?)new JsonObject { ["id"] = k.Id, ["name"] = k.Name }).ToArray()),
             ["n3proj"] = new JsonObject
             {
                 ["basePath"] = ViewModel.SuggestN3ProjBasePath(),
@@ -585,13 +615,13 @@ public sealed partial class MainWindow
 
     internal JsonNode McpRunCheck()
     {
-        bool fontView = ViewModel.ViewMode == MainViewMode.FontSettings;
+        bool fullScreen = FullScreenViewActive;
         string before = ViewModel.StatusText;
         _validateTimer.Stop();
         ViewModel.RunValidation();
-        if (fontView)
+        if (fullScreen)
         {
-            ViewModel.StatusText = before; // フォント設定ビューの案内は消さない
+            ViewModel.StatusText = before; // 全画面ビュー（フォント設定・レイアウト設定）の案内は消さない
         }
         else
         {
@@ -699,7 +729,7 @@ public sealed partial class MainWindow
         if (ext == ".n3proj")
         {
             return McpImportN3Proj(full, openLyrics: true, force, checkFont: true, lineTimes: true, timing: false,
-                lineShowTimes: null, pageLayouts: true, exportBase: null, fontSets: null, icons: null, iconsGlobal: false, media: null);
+                lineShowTimes: null, pageLayouts: true, lineActions: true, exportBase: null, fontSets: null, icons: null, iconsGlobal: false, media: null);
         }
         if (MediaExtensions.Contains(ext))
         {
@@ -723,7 +753,7 @@ public sealed partial class MainWindow
     }
 
     internal JsonNode McpImportN3Proj(string path, bool openLyrics, bool force, bool checkFont, bool lineTimes, bool timing,
-        bool? lineShowTimes, bool pageLayouts, bool? exportBase, string[]? fontSets, bool? icons, bool iconsGlobal, bool? media)
+        bool? lineShowTimes, bool pageLayouts, bool lineActions, bool? exportBase, string[]? fontSets, bool? icons, bool iconsGlobal, bool? media)
     {
         string full = McpExistingFile(path, "ニコカラメーカー3 プロジェクト");
         if (!full.EndsWith(".n3proj", StringComparison.OrdinalIgnoreCase)) throw new McpToolException($"拡張子が .n3proj のファイルを指定してください: {full}");
@@ -775,6 +805,7 @@ public sealed partial class MainWindow
             Timing = timing && preview.Timing is not null,
             LineShowTimes = (lineShowTimes ?? true) && matched > 0,
             PageLayouts = pageLayouts && matched > 0 && ViewModel.CountPageLayoutImports(preview) > 0,
+            LineActions = lineActions && ViewModel.CountLineActionImports(preview).Default is not null,
             ExportBase = exportBase ?? (currentBase is not { Length: > 0 } || sameBase),
             FontSetNames = fontNames,
             IconNames = iconNames,
@@ -798,6 +829,7 @@ public sealed partial class MainWindow
                 ["timing"] = choices.Timing,
                 ["lineShowTimes"] = choices.LineShowTimes,
                 ["pageLayouts"] = choices.PageLayouts,
+                ["lineActions"] = choices.LineActions,
                 ["exportBase"] = choices.ExportBase,
                 ["fontSets"] = new JsonArray(choices.FontSetNames.Select(n => (JsonNode?)n).ToArray()),
                 ["icons"] = new JsonArray(choices.IconNames.Select(n => (JsonNode?)n).ToArray()),
@@ -894,6 +926,8 @@ public sealed partial class MainWindow
             TabLayouts = new Dictionary<string, string>(current.TabLayouts),
             TabTopLong = new Dictionary<string, bool>(current.TabTopLong),
             TabFontSetNames = new Dictionary<string, string>(current.TabFontSetNames),
+            // 引数に無い曲の設定は今の設定を引き継ぐ（作り直した設定で置き換えるため、写さないと消える）
+            SubtitleAction = current.SubtitleAction?.Clone(),
         };
         if (tabLayouts is not null)
         {
@@ -937,6 +971,7 @@ public sealed partial class MainWindow
         _n3FontNamesKey = null;
         RefreshN3LinePanel();
         ValidateNowKeepingStatus();
+        NotifyLayoutViewDocumentChanged(); // ベース・タブの固定レイアウトが替わると、レイアウト設定ビューのレイアウトの並びが変わる
         return new JsonObject
         {
             ["project"] = result.ProjectPath,
@@ -976,11 +1011,11 @@ public sealed partial class MainWindow
         if (layoutAware is bool la) s.N3LayoutAwareRows = la;
         s.Save();
 
-        LineSide.RefreshShowTimePane();
+        _showTimeDialog?.Refresh();
         OnShowTimeSettingsChanged();
         ViewModel.StatusText = "表示時刻のパラメーターを変えました（行に持たせた表示時刻は、自動調整を実行するまで変わりません）";
         ValidateNowKeepingStatus();
-        LineSide.RefreshShowTimeSummary();
+        _showTimeDialog?.RefreshSummary();
         return new JsonObject
         {
             ["settings"] = McpShowTimeSettingsJson(withSummary: true),
@@ -1124,9 +1159,45 @@ public sealed partial class MainWindow
         int n = ViewModel.ClearLineOverrides(indexes);
         foreach (var l in ViewModel.Lines) l.RaiseOverrideMark();
         ViewModel.StatusText = n > 0
-            ? $"{n} 行の表示時刻・フォント・レイアウト・文字の大きさの指定を解除しました"
+            ? $"{n} 行の表示時刻・フォント・レイアウト・文字の大きさ・字幕アクションの指定を解除しました"
             : "指定のある行はありません";
         RefreshN3LinePanel();
+        ValidateNowKeepingStatus();
+        return McpChangedLinesJson(indexes, n);
+    }
+
+    /// <summary>
+    /// 道具の字幕アクションの指定（Id か表示名）。"default"・"既定"・空は null（曲の既定に戻す）。知らないものは断る。
+    /// </summary>
+    private static N3SubtitleActionKind? McpActionKind(string? action)
+    {
+        string text = (action ?? "").Trim();
+        if (text.Length == 0 || string.Equals(text, "default", StringComparison.OrdinalIgnoreCase) || text is "既定" or "（既定）") return null;
+        // Id（"SHINTA." は省いてもよい。大文字・小文字は問わない）か、ニコカラメーカー3 の表示名（「文字単位フェード」など）
+        var kind = N3SubtitleActionCatalog.Known.FirstOrDefault(k =>
+                string.Equals(k.Id, text, StringComparison.OrdinalIgnoreCase)
+                || string.Equals(k.Id, "SHINTA." + text, StringComparison.OrdinalIgnoreCase))
+            ?? N3SubtitleActionCatalog.Known.FirstOrDefault(k => k.Name == text);
+        return kind ?? throw new McpToolException(
+            $"字幕アクション「{text}」はありません。使えるもの: {string.Join("・", N3SubtitleActionCatalog.Known.Select(k => $"{k.Id}（{k.Name}）"))}、" +
+            "曲の既定に戻すなら \"default\"");
+    }
+
+    internal JsonNode McpSetLineAction(string? tab, int[] lines, string? action, bool wholePage)
+    {
+        McpUseTab(tab);
+        var indexes = McpLineIndexes(lines);
+        var kind = McpActionKind(action);
+        // 設定値は曲の既定と同じ種類ならその値、違えばその種類の既定値（右のパネル「字幕アクション」・行設定の欄で選ぶのと同じ）
+        N3SubtitleAction? value = kind is null ? null : ViewModel.CreatePageSubtitleAction(kind.Id);
+        int n = ViewModel.SetLinesSubtitleAction(indexes, value, wholePage);
+        foreach (var l in ViewModel.Lines) l.RaiseOverrideMark();
+        string target = wholePage ? $"選んだ行のページ（{n} 行）" : $"{n} 行";
+        ViewModel.StatusText = n == 0 ? "字幕アクションの指定は変わりませんでした"
+            : value is null ? $"{target}の字幕アクションの指定を外しました（曲の既定に戻します）"
+            : $"{target}に字幕アクション「{kind!.Name}」を指定しました";
+        RefreshN3LinePanel();
+        LineSide.RefreshPagePane();
         ValidateNowKeepingStatus();
         return McpChangedLinesJson(indexes, n);
     }

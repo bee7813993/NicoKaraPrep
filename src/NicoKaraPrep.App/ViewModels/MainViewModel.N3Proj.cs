@@ -77,7 +77,7 @@ public partial class MainViewModel
             : null;
 
     /// <summary>
-    /// 行設定パネルの説明に足す、絵文字の分だけ行の表示を遅らせる規則（右のパネル「表示時刻」の設定）の結果（表示中のタブの行）。
+    /// 行設定パネルの説明に足す、絵文字の分だけ行の表示を遅らせる規則（「表示時刻の自動調整」の設定）の結果（表示中のタブの行）。
     /// 規則で表示を遅らせた行・絵文字を縮めた行だけ「・絵文字の分だけ遅らせた（絵文字 2.0→1.5 秒）」のような文を返す（それ以外は空）。
     /// 絵文字はワイプ前の表示時間（表示秒数がそれより短い絵文字はその秒数）までしか縮めず、それでも重なるときは前の行のワイプ後を削る。
     /// それより短くなる行は理由を書く（手で指定した表示時刻・前の行をワイプの最後まで見せるため など）。
@@ -209,7 +209,7 @@ public partial class MainViewModel
     internal void KeepNoticeBeforeCheck() => _noticeBeforeCheck = StatusText;
 
     /// <summary>
-    /// 表示時刻の自動調整を実行する（右のパネル「表示時刻」。全タブ）。手で指定した表示時刻は残し、ほかの値（読み込んだ値・前回の自動調整の値・未設定）を
+    /// 表示時刻の自動調整を実行する（「表示時刻の自動調整」。全タブ）。手で指定した表示時刻は残し、ほかの値（読み込んだ値・前回の自動調整の値・未設定）を
     /// 今の設定で計算し直して、自動調整の値として行に持たせる（<see cref="N3ShowTimeAdjuster"/>）。変わったタブは元に戻せる。結果をステータスに出す。
     /// </summary>
     public N3ShowTimeAdjustResult RunAutoShowTimes()
@@ -261,7 +261,7 @@ public partial class MainViewModel
         return true;
     }
 
-    /// <summary>表示中のタブの、表示時刻の出どころごとの行数と、いま自動調整を実行し直すと変わる行の数（右のパネル「表示時刻」）。</summary>
+    /// <summary>表示中のタブの、表示時刻の出どころごとの行数と、いま自動調整を実行し直すと変わる行の数（「表示時刻の自動調整」）。</summary>
     public (N3ShowTimeOriginCounts Counts, int Outdated) ShowTimeSummary() =>
         (N3ShowTimeAdjuster.Count(Document), N3ShowTimeAdjuster.CountOutdated(Document, CreateShowTimeSettings(_activeTab.Name)));
 
@@ -338,12 +338,65 @@ public partial class MainViewModel
             line.FontSetName = null;
             line.LayoutName = null;
             line.FontSizeDelta = 0;
+            line.SubtitleAction = null;
             CharFontOperations.Clear(line);
         }
         MarkModified();
         SaveProject();
+        UpdateLineActions();
         return targets.Count;
     }
+
+    /// <summary>書き出しのベースの n3proj の歌詞行でいちばん多い字幕アクションの読み取り結果（パスと更新時刻で覚えておく）。</summary>
+    private (string Path, DateTime Stamp, N3SubtitleAction? Action)? _baseSubtitleActionCache;
+
+    /// <summary>
+    /// 書き出しのベースの n3proj（<see cref="SuggestN3ProjBasePath"/>）の歌詞行でいちばん多い字幕アクション（ベースが無い・読めない・
+    /// アクションの無いプロジェクトなら null）。ファイルが変わらなければ読み直さない。
+    /// </summary>
+    public N3SubtitleAction? ReadBaseMostCommonSubtitleAction()
+    {
+        string? path = SuggestN3ProjBasePath();
+        if (path is null) return null;
+        try
+        {
+            var stamp = File.GetLastWriteTimeUtc(path);
+            if (_baseSubtitleActionCache is { } c && c.Path == path && c.Stamp == stamp) return c.Action?.Clone();
+            var action = N3ProjFormat.MostCommonSubtitleAction(N3ProjFormat.ReadJsonObject(path));
+            _baseSubtitleActionCache = (path, stamp, action);
+            return action?.Clone();
+        }
+        catch (Exception)
+        {
+            return null; // ベースが読めなくても表示は続ける（書き出しはニコカラメーカー3 の設定 → 文字単位フェード）
+        }
+    }
+
+    /// <summary>
+    /// 行ごとの指定が無い歌詞行に書く字幕アクション（今の曲の設定・ベース・ニコカラメーカー3 の設定で、書き出しと同じ決め方。
+    /// <see cref="N3ProjWriter.ResolveDefaultAction(N3SubtitleAction, N3SubtitleAction, string, IReadOnlyDictionary{string, System.Text.Json.Nodes.JsonObject}, out N3SubtitleActionSource)"/>）と、
+    /// その出どころ（右パネル・書き出し画面・MCP の表示用）。
+    /// </summary>
+    public N3SubtitleAction ResolveCurrentDefaultSubtitleAction(out N3SubtitleActionSource source) =>
+        N3ProjWriter.ResolveDefaultAction(
+            N3ProjSettings.SubtitleAction,
+            N3ProjSettings.SubtitleAction is { Id.Length: > 0 } ? null : ReadBaseMostCommonSubtitleAction(),
+            Nkm3Env?.DefaultSubtitleActionId,
+            Nkm3Env?.AddOnSettings,
+            out source);
+
+    /// <summary>既定の字幕アクションの出どころの短い説明（「曲の既定」「自動: ベースのまま」など。括弧の中に出す）。</summary>
+    public static string DefaultSubtitleActionSourceLabel(N3SubtitleActionSource source) => source switch
+    {
+        N3SubtitleActionSource.Song => "曲の既定",
+        N3SubtitleActionSource.Base => "自動: ベースのまま",
+        N3SubtitleActionSource.Nkm3 => "自動: ニコカラメーカー3 の設定",
+        _ => "自動",
+    };
+
+    /// <summary>全タブの、字幕アクションを手で指定した歌詞行の数。</summary>
+    public int CountLinesWithSubtitleAction() =>
+        GetAllTabs().Sum(t => t.Document.Lines.Count(l => !l.IsEmpty && l.SubtitleAction is not null));
 
     /// <summary>行に持たせた表示開始（手で直した値・読み込んだ値・自動調整の値。ページ衝突チェック用）。</summary>
     private Dictionary<int, int>? BuildManualShowBegins()
@@ -479,7 +532,9 @@ public partial class MainViewModel
             DefaultFontSetName = settings.DefaultFontSetName is { Length: > 0 } dn ? dn : null,
             LayoutSelectableBegin = Nkm3Env?.LayoutSelectableBegin,
             LayoutSelectableEnd = Nkm3Env?.LayoutSelectableEnd,
-            CharFadeSettings = Nkm3Env?.CharFadeSettings,
+            AddOnSettings = Nkm3Env?.AddOnSettings,
+            DefaultSubtitleAction = settings.SubtitleAction,
+            DefaultSubtitleActionIdFromNkm3 = Nkm3Env?.DefaultSubtitleActionId,
             AppVersion = Nkm3Env?.AppVersion ?? baseVersion ?? N3ProjWriter.DefaultAppVersion,
             LrcEncoding = LrcEncoding,
         };

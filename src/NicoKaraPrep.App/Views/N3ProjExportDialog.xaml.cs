@@ -4,6 +4,7 @@ using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using NicoKaraPrep.App.ViewModels;
 using NicoKaraPrep.Core.Formats;
+using NicoKaraPrep.Core.Model;
 using NicoKaraPrep.Core.Project;
 using Windows.Storage;
 using Windows.Storage.Pickers;
@@ -100,14 +101,14 @@ public sealed partial class N3ProjExportDialog : ContentDialog
             ? $"背景素材: {m}（メディア再生パネルのファイル）"
             : "背景素材: 未設定（ベースのまま。メディア再生パネルに動画を読み込むと設定されます）";
 
-        // 表示時刻のパラメーターと自動調整は、行リストの右のパネル「表示時刻」で行う（ここでは今の値と、行に持たせた表示時刻の数を案内する）
+        // 表示時刻のパラメーターと自動調整は、「表示時刻の自動調整」（行設定の「自動調整...」）で行う（ここでは今の値と、行に持たせた表示時刻の数を案内する）
         var st = vm.Settings;
         var (counts, _) = vm.ShowTimeSummary();
         string stored = counts.Manual + counts.Loaded + counts.Auto > 0
             ? $"表示中のタブでは、手で直した {counts.Manual} 行・読み込んだ {counts.Loaded} 行・自動調整の {counts.Auto} 行は、その表示時刻のまま書き出します。"
             : "";
         ShowTimeNote.Text =
-            "行の表示時刻は、行リストの右のパネル「表示時刻」で決めます（自動調整のパラメーターと実行）。" + stored +
+            "行の表示時刻は、「表示時刻の自動調整」（行設定の「自動調整...」）で決めます（自動調整のパラメーターと実行）。" + stored +
             $"表示時刻を持たない行は、書き出しのときに今のパラメーター（ワイプ前 {st.DisplayLeadSeconds:0.0#} 秒・ワイプ後 {st.DisplayTailSeconds:0.0#} 秒・表示間隔 {st.N3IntervalSeconds:0.0#} 秒・" +
             $"重ねてよい {st.N3OverlapSeconds:0.0#} 秒・上段を{(st.N3TopLong ? "長め" : "短め")}に・絵文字の分だけ遅らせる {(st.N3EmojiLeadYield ? "オン" : "オフ")}）で計算します。";
 
@@ -125,6 +126,7 @@ public sealed partial class N3ProjExportDialog : ContentDialog
 
         _baseFontNames = new List<string>();
         var layoutNames = new List<string>();
+        N3SubtitleAction? baseAction = null;
         string info;
         if (_basePath is null)
         {
@@ -137,6 +139,7 @@ public sealed partial class N3ProjExportDialog : ContentDialog
                 var s = N3ProjFormat.Read(_basePath);
                 _baseFontNames = s.FontSetNames.Where(n => n.Length > 0).ToList();
                 layoutNames = s.Layouts.Select(l => l.Name).Where(n => n.Length > 0).ToList();
+                baseAction = s.DefaultSubtitleAction;
                 info = $"画面 {s.ScreenWidth}×{s.ScreenHeight} / フォント設定 {s.Fonts.Count} 件 / レイアウト {s.Layouts.Count} 件 / 保存バージョン {s.AppVersion ?? "不明"}";
             }
             catch (Exception ex)
@@ -146,6 +149,7 @@ public sealed partial class N3ProjExportDialog : ContentDialog
             }
         }
         BaseInfoText.Text = info;
+        ShowSubtitleAction(baseAction);
 
         // ベースが無ければ書き出しの既定のレイアウト、どちらにも NicoKaraPrep で足したレイアウトを加える
         if (_basePath is null) layoutNames = N3LayoutReader.Defaults(1080).Select(l => l.Name).ToList();
@@ -171,6 +175,21 @@ public sealed partial class N3ProjExportDialog : ContentDialog
         DefaultFontBox.Text = text;
     }
 
+    /// <summary>
+    /// 書き出す字幕アクションの案内（読むだけ）: 行ごとの指定が無い歌詞行に書く曲の既定（書き出しと同じ決め方。自動ならこの画面で選んでいるベースで決める）と、
+    /// 行ごとの指定のある行の数。
+    /// </summary>
+    private void ShowSubtitleAction(N3SubtitleAction? baseAction)
+    {
+        var song = _vm.N3ProjSettings.SubtitleAction;
+        var action = N3ProjWriter.ResolveDefaultAction(song, song is null ? baseAction : null,
+            _vm.Nkm3Env?.DefaultSubtitleActionId, _vm.Nkm3Env?.AddOnSettings, out var source);
+        int manual = _vm.CountLinesWithSubtitleAction();
+        SubtitleActionText.Text =
+            $"字幕アクション: {_vm.DescribeSubtitleAction(action)}（{MainViewModel.DefaultSubtitleActionSourceLabel(source)}）／行ごとの指定 {manual} 行" +
+            "（行リストの右のパネル「字幕アクション」で変えられます）";
+    }
+
     private async void OnBrowseBaseClick(object sender, RoutedEventArgs e)
     {
         var picker = new FileOpenPicker();
@@ -193,6 +212,8 @@ public sealed partial class N3ProjExportDialog : ContentDialog
             DefaultFontSetName = DefaultFontBox.Text.Trim(),
             MergeFontSets = MergeFontsCheck.IsChecked == true,
             MergeLayouts = MergeLayoutsCheck.IsChecked == true,
+            // この画面に無い曲の設定は今の設定を引き継ぐ（作り直した設定で置き換えるため、写さないと消える）
+            SubtitleAction = _vm.N3ProjSettings.SubtitleAction?.Clone(),
         };
         foreach (var row in Rows)
         {

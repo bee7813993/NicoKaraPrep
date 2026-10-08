@@ -28,7 +28,10 @@ public sealed partial class MainWindow
     /// <summary>上の段のメディア再生を縮めてでも残す、行リスト（絵文字挿入ビューでは編集欄）の高さ px（行リストで 3 行ほど）。</summary>
     private const double MinFlexHeight = 150;
 
-    /// <summary>右の列のメディア再生を縮めてでも残す、右のパネルの中身の高さ px（行リスト: フォント一覧が数行、絵文字挿入ビュー: パレットが 1 段）。</summary>
+    /// <summary>
+    /// 右の列のメディア再生を縮めてでも残す、右のパネルの中身の高さ px（行リスト: フォント一覧が数行）。
+    /// 絵文字挿入ビューのパレットは中身がすべて入る高さを残す（<see cref="PaletteContentHeight"/>。測れる前は <see cref="MinSidePaletteHeight"/>）。
+    /// </summary>
     private const double MinSideContentHeight = 200;
 
     private const double MinSidePaletteHeight = 280;
@@ -79,6 +82,9 @@ public sealed partial class MainWindow
 
     private const double LayoutNameSize = 11;
 
+    /// <summary>字幕アクションの欄の文字の大きさ（テンプレートと同じ）。</summary>
+    private const double ActionNameSize = 11;
+
     /// <summary>行設定を 1 行に並べるときに、右の説明（自動の表示時刻など）に最低限残す幅 px（足りない分は … で切り、全文はツールチップ）。</summary>
     private const double MinN3InfoWidth = 40;
 
@@ -115,6 +121,11 @@ public sealed partial class MainWindow
             FitPlayerHeight();
         };
         InsertEditor.SizeChanged += (_, _) => FitPlayerHeight();
+        // パレットの中身の高さ（曲内の絵文字・定型文の数、列の幅で変わる）に合わせて、右の列の動画の高さを決め直す
+        EmojiPaletteContent.SizeChanged += (_, e) =>
+        {
+            if (_playerOnRight && Math.Abs(e.NewSize.Height - e.PreviousSize.Height) >= 0.5) FitPlayerHeight();
+        };
         PlayerHost.SizeChanged += (_, e) =>
         {
             // 右の列では高さを幅から決めるので、幅が変わったら合わせ直す
@@ -125,6 +136,7 @@ public sealed partial class MainWindow
         N3TimeGroup.SizeChanged += (_, _) => FitN3LinePanel();
         N3FontGroup.SizeChanged += (_, _) => FitN3LinePanel();
         ViewModel.LineFontsUpdated += (_, _) => FitLineListFontColumn();
+        ViewModel.LineActionsUpdated += (_, _) => FitLineListActionColumn();
 
         // 右の列の境のつまみ（右へ動かすと右の列が狭くなる）
         SideResizeGrip.DragStarted += (_, _) => _sideWidthAtDragStart = SideColumn.Width.Value;
@@ -207,7 +219,7 @@ public sealed partial class MainWindow
 
     /// <summary>
     /// メディア再生の高さを合わせる。上の段: 設定の高さ（行リストに <see cref="MinFlexHeight"/> が残らないときは縮める）。
-    /// 右の列: 字幕の画面の縦横比で列の幅いっぱい（右のパネルの中身に <see cref="MinSideContentHeight"/>・<see cref="MinSidePaletteHeight"/> が残らないときは縮める）。
+    /// 右の列: 字幕の画面の縦横比で列の幅いっぱい（右のパネルの中身に <see cref="MinSideContentHeight"/>・パレットの中身の高さが残らないときは縮める）。
     /// どちらも、縮めた分だけほかの欄が伸びるので、何度呼んでも同じ高さになる。
     /// </summary>
     private void FitPlayerHeight()
@@ -275,11 +287,18 @@ public sealed partial class MainWindow
         // 見出し・余白・再生の操作の分を除いた残りから、右のパネルの中身の分を残す
         double chrome = MediaPanel.ActualHeight - PlayerHost.ActualHeight;
         double content = LineSideHost.Visibility == Visibility.Visible ? MinSideContentHeight
-            : EmojiSidePanel.Visibility == Visibility.Visible ? MinSidePaletteHeight
+            : EmojiSidePanel.Visibility == Visibility.Visible ? PaletteContentHeight()
             : 0;
         double room = MainArea.ActualHeight - chrome - content;
         return Math.Clamp(Math.Min(width * aspect, room), MinPlayerHeight, MaxPlayerHeight);
     }
+
+    /// <summary>
+    /// 絵文字挿入ビューのパレットの中身がすべて入る高さ px（パレットはスクロールの中で上寄せにして中身の高さにしてある。端数で 1px はみ出して
+    /// スクロールが出ないよう切り上げる）。まだ並べていないときは <see cref="MinSidePaletteHeight"/>。
+    /// </summary>
+    private double PaletteContentHeight() =>
+        EmojiPaletteContent.ActualHeight > 0 ? Math.Ceiling(EmojiPaletteContent.ActualHeight) : MinSidePaletteHeight;
 
     private void OnPlayerResizeDelta(object sender, ManipulationDeltaRoutedEventArgs e)
     {
@@ -398,6 +417,16 @@ public sealed partial class MainWindow
         FitLineListColumns();
     }
 
+    /// <summary>字幕アクションの欄を、いちばん長い行の中身がちょうど入る幅にする（出すものが無ければ閉じる）。</summary>
+    private void FitLineListActionColumn()
+    {
+        double width = 0;
+        foreach (var line in ViewModel.Lines) width = Math.Max(width, TextWidth(line.ActionText, ActionNameSize));
+        if (Math.Abs(LineListLayout.Current.ActionContentWidth - width) < 0.5) return;
+        LineListLayout.Current.ActionContentWidth = width;
+        FitLineListColumns();
+    }
+
     /// <summary>行のフォント・レイアウトの欄の中身の幅 px（テンプレートの並べ方と同じに測る）。</summary>
     private double FontCellWidth(LineViewModel line)
     {
@@ -405,11 +434,12 @@ public sealed partial class MainWindow
         var font = line.AppliedFont;
         if (font.IsVisible)
         {
-            // [色見本][名前]（途中で切り替わる行は [→][色見本][2 つ目の名前（72px まで）] を足す）
-            width = FontSwatchesWidth + FontCellGap + TextWidth(font.First.Name, FontNameSize);
+            // [色見本][名前][すき間]（テンプレートの Grid は 3 列なので、途中で切り替わらない行でも 3 列目の前のすき間を取る。
+            // 途中で切り替わる行は [→][色見本][2 つ目の名前（72px まで）] を足す）
+            width = FontSwatchesWidth + FontCellGap + TextWidth(font.First.Name, FontNameSize) + FontCellGap;
             if (font.HasLast)
             {
-                width += FontCellGap + TextWidth(font.Arrow, FontNameSize) + FontCellGap + FontSwatchesWidth + FontCellGap
+                width += TextWidth(font.Arrow, FontNameSize) + FontCellGap + FontSwatchesWidth + FontCellGap
                     + Math.Min(FontLastNameMaxWidth, TextWidth(font.Last.Name, FontNameSize));
             }
         }

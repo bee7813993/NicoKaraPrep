@@ -356,6 +356,7 @@ public partial class MainViewModel
             var shown = activePlans?.GetValueOrDefault(i);
             Lines[i].SetShowTimes(shown?.BeginMs, shown?.EndMs);
         }
+        UpdateLineActions(); // 字幕アクションの列（ベース・曲の既定が変わったときも、ここで合わせる）
         LineFontsUpdated?.Invoke(this, EventArgs.Empty);
     }
 

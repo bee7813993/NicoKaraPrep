@@ -42,9 +42,12 @@
             <TextBlock x:Name="MediaText" FontSize="12" Foreground="{ThemeResource TextFillColorSecondaryBrush}" TextWrapping="Wrap" />
             <CheckBox x:Name="MergeFontsCheck" Content="NicoKaraPrep のフォント設定をベースへ反映する（同名は上書き、無い名前は追加）" />
             <CheckBox x:Name="MergeLayoutsCheck" Content="NicoKaraPrep で編集したレイアウト設定をベースへ反映する（同名は上書き、無い名前は追加）" />
+            <!-- 字幕アクション（読むだけ。曲の既定と行・ページへの指定は、行リストの右のパネル「字幕アクション」で変える） -->
+            <TextBlock x:Name="SubtitleActionText" FontSize="12" Foreground="{ThemeResource TextFillColorSecondaryBrush}" TextWrapping="Wrap"
+                       ToolTipService.ToolTip="行ごとの指定が無い歌詞行には曲の既定を書きます。曲の既定が自動のときは、ベースの歌詞行でいちばん多いアクション → ニコカラメーカー3 の「すべて同じ字幕アクションにする」の設定 → 文字単位フェード の順に決めます" />
 
             <TextBlock Text="行の表示時刻" Style="{ThemeResource BodyStrongTextBlockStyle}" Margin="0,6,0,0" />
-            <!-- 表示時刻のパラメーターと自動調整は、行リストの右のパネル「表示時刻」へ移した（ここでは今の値を案内するだけ） -->
+            <!-- 表示時刻のパラメーターと自動調整は、「表示時刻の自動調整」（行設定の「自動調整...」）へ移した（ここでは今の値を案内するだけ） -->
             <TextBlock x:Name="ShowTimeNote" FontSize="12" TextWrapping="Wrap" Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
 
             <TextBlock Text="歌詞設定タブ" Style="{ThemeResource BodyStrongTextBlockStyle}" Margin="0,6,0,0" />

@@ -1,10 +1,11 @@
 ﻿using System.Text.Json;
+using System.Text.Json.Nodes;
 using NicoKaraPrep.Core.Model;
 
 namespace NicoKaraPrep.Core.Project;
 
 /// <summary>
-/// 行ごとのニコカラメーカー3 書き出し設定（表示時刻の手動指定・フォント設定名・文字単位のフォント設定名）。行インデックスと、
+/// 行ごとのニコカラメーカー3 書き出し設定（表示時刻の手動指定・フォント設定名・文字単位のフォント設定名・字幕アクション）。行インデックスと、
 /// 保存したときの行の表示文字列・行の数で保存する。
 /// 読み直すときは、同じ番号の行が同じ文字ならそこへ、違えば同じ文字の行のうち近いものへ当てる（歌詞ファイルを保存しないまま
 /// 行を足し引きしたあとに開き直すと、番号だけでは別の行へ付くため。例: 定型文の行のフォント設定が 2 行下の歌詞の行に付いた）。
@@ -35,6 +36,12 @@ public sealed class LineExportSettings
 
     /// <summary>行のページの文字の大きさの増減 px（0 = そのまま）。</summary>
     public int FontSizeDelta { get; set; }
+
+    /// <summary>行の字幕アクションの Id の手動指定。null・空は曲の既定。</summary>
+    public string? SubtitleActionId { get; set; }
+
+    /// <summary>行の字幕アクションの設定値（n3proj の SubtitleActionSettings と同じ形。<c>$type</c> 付き）。無ければ Id の既定値で読む。</summary>
+    public JsonObject? SubtitleActionSettings { get; set; }
 
     /// <summary>文字単位のフォント設定名の手動指定（表示文字の位置の範囲）。無ければ null。</summary>
     public List<CharFontRange>? CharFonts { get; set; }
@@ -67,6 +74,8 @@ public sealed class LineExportSettings
                 FontSetName = l.FontSetName,
                 LayoutName = l.LayoutName,
                 FontSizeDelta = l.FontSizeDelta,
+                SubtitleActionId = l.SubtitleAction?.Id,
+                SubtitleActionSettings = l.SubtitleAction is { } action ? (JsonObject)action.Settings.DeepClone() : null,
                 CharFonts = ranges.Count > 0 ? ranges : null,
                 CharText = ranges.Count > 0 ? l.GetDisplayText() : null,
                 Text = l.GetDisplayText(),
@@ -105,6 +114,9 @@ public sealed class LineExportSettings
             l.FontSetName = string.IsNullOrEmpty(s.FontSetName) ? null : s.FontSetName;
             l.LayoutName = string.IsNullOrEmpty(s.LayoutName) ? null : s.LayoutName;
             l.FontSizeDelta = s.FontSizeDelta;
+            l.SubtitleAction = s.SubtitleActionId is { Length: > 0 } actionId
+                ? new N3SubtitleAction(actionId, s.SubtitleActionSettings?.DeepClone() as JsonObject ?? N3SubtitleActionCatalog.CreateDefault(actionId).Settings)
+                : null;
             if (s.CharFonts is { Count: > 0 } && s.CharText == l.GetDisplayText()) CharFontOperations.ApplyRanges(l, s.CharFonts);
         }
     }
@@ -173,6 +185,12 @@ public sealed class N3ProjSongSettings
 
     /// <summary>NicoKaraPrep で編集したレイアウト設定を、ベースの同じ名前のレイアウト設定に上書き・無い名前は追加するか。</summary>
     public bool MergeLayouts { get; set; } = true;
+
+    /// <summary>
+    /// 曲の既定の字幕アクション（行ごとの指定が無い歌詞行に書くもの）。null = 自動（ベースの n3proj の歌詞行でいちばん多いアクション、
+    /// 無ければニコカラメーカー3 の「すべて同じ字幕アクションにする」の Id、無ければ文字単位フェード。<c>N3ProjWriter.ResolveDefaultAction</c>）。
+    /// </summary>
+    public N3SubtitleAction? SubtitleAction { get; set; }
 }
 
 /// <summary>分離タブ 1 つ分の保存データ。</summary>

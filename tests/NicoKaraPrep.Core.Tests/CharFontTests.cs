@@ -157,7 +157,7 @@ public class CharFontTests
         var doc = Doc("[00:01:00]あ[00:01:50]い[00:02:00]う[00:03:00]");
         CharFontOperations.DisplayUnits(doc.Lines[0])[1].FontSetName = "（コーラス）";
         var layouts = new N3ProjWriter.LayoutResolver(new List<N3ProjLayoutInfo> { new("下寄せ2行", 0, 2) }, null, null, null, new List<string>(), "t");
-        var action = ("SHINTA.CharFadeInFadeOut", new JsonObject { ["$type"] = "CharFadeInFadeOutSettingsModel" });
+        var action = new N3SubtitleAction("SHINTA.CharFadeInFadeOut", new JsonObject { ["$type"] = "CharFadeInFadeOutSettingsModel" });
         var lines = N3ProjWriter.BuildLineInfos(doc, new N3ShowTimeSettings(), doc.EmojiEntries, new N3FontResolver(Names, null, true), layouts, action, "Ver 13.79", out _);
         var chars = lines[0]!["LyricsCharInfos"]!.AsArray();
         Assert.Equal(new[] { "あ:0", "い:4", "う:0" }, chars.Select(c => $"{c!["Char"]}:{c["FontIndex"]}"));

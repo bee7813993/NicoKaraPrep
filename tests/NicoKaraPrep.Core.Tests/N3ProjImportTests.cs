@@ -483,6 +483,74 @@ public class N3ProjImportTests : IDisposable
     }
 
     [Fact]
+    public void 歌詞設定タブ_行ごとの字幕アクションを読む()
+    {
+        const string oldCharFade =
+            """{"$type":"CharFadeInFadeOutSettingsModel","IntroDelay":350,"IntroDelayTimeTag":"[00:00:35]","WholeFadeOut":false,"DelayInlineGraphicsIsEnabled":true,"TailDelay":250,"DelayInlineGraphics":true,"FadeInTime":250,"FadeOutTime":250}""";
+        // ユーザーが作った見本の n3proj（Ver 13.90）の上下スライドの写し
+        const string slide =
+            """{"$type":"SlideUpDownSettingsModel","SlideAmount":{"Size":-50,"Reference":1080,"Ratio":-0.046296296296296294},"FadeIn":false,"FadeOut":false,"FadeInTime":250,"FadeOutTime":250,"CreateAppVer":"Ver 13.90","ModifyAppVer":""}""";
+        static JsonObject Line(string raw, string id, string? settings)
+        {
+            var o = new JsonObject { ["Kind"] = 1, ["Raw"] = raw, ["ShowBeginTime"] = 0, ["ShowEndTime"] = 5000, ["LayoutIndex"] = 0, ["SubtitleActionId"] = id };
+            if (settings is not null) o["SubtitleActionSettings"] = JsonNode.Parse(settings);
+            return o;
+        }
+        var root = new JsonObject
+        {
+            ["LyricsLayouts"] = new JsonArray(new JsonObject { ["SettingsName"] = "下寄せ2行" }),
+            ["SourceLyricsInfos"] = new JsonArray(new JsonObject
+            {
+                ["SettingsName"] = "メイン",
+                ["LineInfos"] = new JsonArray(
+                    Line("[00:01:00]あ[00:02:00]", "SHINTA.CharFadeInFadeOut", oldCharFade),
+                    new JsonObject { ["Kind"] = 2, ["SubtitleActionId"] = "", ["SubtitleActionSettings"] = new JsonObject { ["$type"] = "AddOnSettingsModel" } },
+                    new JsonObject { ["Kind"] = 0 },
+                    Line("[00:03:00]い[00:04:00]", "SHINTA.LineFadeOut", null),
+                    Line("[00:05:00]う[00:06:00]", "", """{"$type":"AddOnSettingsModel"}"""),
+                    Line("[00:07:00]え[00:08:00]", "SHINTA.SlideUpDown", slide)),
+            }),
+        };
+
+        var tab = Assert.Single(N3ProjImport.ReadSourceTabs(root));
+        // レイアウトの名前と同じ並び（ページ区切りの空行は null、Id が空の行も null）
+        Assert.Equal(tab.LayoutNames.Count, tab.SubtitleActions.Count);
+        Assert.Equal(new string?[] { "SHINTA.CharFadeInFadeOut", null, "SHINTA.LineFadeOut", null, "SHINTA.SlideUpDown" }, tab.SubtitleActions.Select(a => a?.Id));
+        Assert.Equal(oldCharFade, tab.SubtitleActions[0]!.Settings.ToJsonString()); // 読んだまま（書式は書き出しでそろえる）
+        Assert.Equal(250, tab.SubtitleActions[2]!.GetInt("FadeOutTime")); // 設定値が無ければ Id の既定値
+        Assert.Equal(slide, tab.SubtitleActions[4]!.Settings.ToJsonString());
+
+        // 読んだ設定値は n3proj の JSON から切り離した写し
+        tab.SubtitleActions[0]!.Set("IntroDelay", 1);
+        Assert.Equal(350, root["SourceLyricsInfos"]![0]!["LineInfos"]![0]!["SubtitleActionSettings"]!["IntroDelay"]!.GetValue<int>());
+    }
+
+    [Fact]
+    public void 字幕アクション_書き出したプロジェクトから行ごとの指定といちばん多いアクションを読み戻せる()
+    {
+        var doc = Song();
+        var lyricIndexes = Enumerable.Range(0, doc.Lines.Count).Where(i => !doc.Lines[i].IsEmpty).ToList();
+        Assert.Equal(6, lyricIndexes.Count);
+        // 6 行のうち 4 行をフェードイン（残りの 2 行は既定の文字単位フェード）
+        foreach (int i in lyricIndexes.Skip(2)) doc.Lines[i].SubtitleAction = N3SubtitleActionCatalog.CreateDefault("SHINTA.LineFadeIn");
+        string path = ExportAndEdit(doc, new N3ShowTimeSettings());
+
+        var tab = Assert.Single(N3ProjImport.ReadSourceTabs(N3ProjFormat.ReadJsonObject(path)));
+        var map = N3ProjImport.MatchLineIndexes(doc, tab);
+        foreach (int i in lyricIndexes)
+        {
+            Assert.True(map.TryGetValue(i, out int k), $"行 {i} が対応しない");
+            Assert.Equal(doc.Lines[i].SubtitleAction?.Id ?? "SHINTA.CharFadeInFadeOut", tab.SubtitleActions[k]!.Id);
+        }
+
+        var settings = N3ProjFormat.Read(path);
+        Assert.Equal("SHINTA.LineFadeIn", settings.DefaultSubtitleAction!.Id);
+        Assert.Equal("$type", settings.DefaultSubtitleAction.Settings.First().Key);
+        Assert.Equal(250, settings.DefaultSubtitleAction.GetInt("FadeInTime"));
+        Assert.True(settings.DefaultSubtitleAction.SameAs(N3ProjFormat.MostCommonSubtitleAction(N3ProjFormat.ReadJsonObject(path))));
+    }
+
+    [Fact]
     public void 曲プロジェクト_自分の歌詞ファイルを持つタブを保存して読み戻せる()
     {
         string song = Path.Combine(_dir, "song.lrc");
