@@ -45,7 +45,7 @@
       <div class="content-narrow">
         <p class="section-label">PRIVACY POLICY</p>
         <h1>にこぷれっぷ プライバシーポリシー</h1>
-        <p class="document-date">最終更新日: 2026年8月30日</p>
+        <p class="document-date">最終更新日: 2026年10月8日</p>
         <p><a class="back-to-team" href="index.html">← にこぷれっぷ の紹介ページへ</a></p>
       </div>
     </header>
@@ -60,11 +60,23 @@
 
       <section>
         <h2>2. インターネット通信</h2>
-        <p><strong>本アプリはインターネット通信を行いません。</strong>外部のサーバーへ情報を送信することはなく、広告の配信や外部サービスとの連携も行いません。</p>
+        <p><strong>本アプリはインターネット通信を行いません。</strong>外部のサーバーへ情報を送信することはなく、広告の配信も行いません。</p>
       </section>
 
       <section>
-        <h2>3. 利用者が扱うデータの保存場所</h2>
+        <h2>3. AI アシスタントとの連携（MCP）</h2>
+        <p>本アプリには、Claude などの AI アシスタントのアプリ(MCP クライアント)から、起動中の本アプリを操作できるようにする機能があります。</p>
+        <ul>
+          <li>AI アシスタントのアプリが本アプリを操作できるのは、利用者が「ファイル &gt; Claude と連携」などで、そのアプリに本アプリを登録したときだけです</li>
+          <li>本アプリと AI アシスタントのアプリとのやり取りは、同じパソコンの中で、同じ Windows ユーザーのアプリとのあいだだけで行われます(名前付きパイプ)。本アプリ自身がインターネットへ接続することはありません</li>
+          <li>連携しているあいだ、AI アシスタントのアプリは、本アプリで開いている歌詞・設定の内容や字幕のプレビュー画像を読み取り、本アプリを操作できます。AI アシスタントのアプリがそれらの情報をどのように扱うか(提供元のサーバーへ送るかどうかなど)は、そのアプリと提供元のプライバシーポリシーに従います</li>
+          <li>「Claude と連携」で登録するとき、本アプリは利用者のパソコンの中で、Claude Code の設定への登録と、Claude Desktop の拡張機能のファイル(<code>nicokaraprep.mcpb</code>)のダウンロード フォルダへの作成を行います。開発者や第三者へ情報を送ることはありません</li>
+          <li>連携の待ち受けは「ファイル &gt; 設定」の「MCP サーバーを有効にする」で止められます。登録は Claude 側でいつでも解除できます</li>
+        </ul>
+      </section>
+
+      <section>
+        <h2>4. 利用者が扱うデータの保存場所</h2>
         <p>本アプリが読み書きするデータは、すべて利用者のパソコン内でのみ処理されます。</p>
         <ul>
           <li>歌詞ファイル(.rlf / .lrc など)、プロジェクトファイル、画像・音声・動画ファイルは、利用者が指定した場所にのみ保存されます</li>
@@ -74,27 +86,28 @@
       </section>
 
       <section>
-        <h2>4. 第三者への提供</h2>
+        <h2>5. 第三者への提供</h2>
         <p>前述のとおり本アプリは情報を収集しないため、第三者への提供・販売・共有は一切行いません。</p>
       </section>
 
       <section>
-        <h2>5. 権限について</h2>
+        <h2>6. 権限について</h2>
         <p>本アプリは、Microsoft Store で配布されるデスクトップアプリとして <code>runFullTrust</code> 機能を宣言しています。これは Windows のデスクトップアプリを MSIX 形式でパッケージ化する際に必須となる宣言であり、本アプリでは利用者が選択したファイルの読み書き、文字幅の計測、ローカルの音声・動画ファイルの再生といった通常のデスクトップ機能のためにのみ使用します。</p>
+        <p>また、AI アシスタントのアプリに本アプリを登録できるよう、実行エイリアス <code>nicokaraprep.exe</code> を宣言しています。これは本アプリを呼び出すための名前で、通信や情報の収集には使いません。</p>
       </section>
 
       <section>
-        <h2>6. 子どものプライバシー</h2>
+        <h2>7. 子どものプライバシー</h2>
         <p>本アプリは情報を収集しないため、年齢を問わず、利用者から個人情報を取得することはありません。</p>
       </section>
 
       <section>
-        <h2>7. 本ポリシーの変更</h2>
+        <h2>8. 本ポリシーの変更</h2>
         <p>本ポリシーの内容を変更する場合は、本ページを更新し、最終更新日を改めます。</p>
       </section>
 
       <section>
-        <h2>8. お問い合わせ</h2>
+        <h2>9. お問い合わせ</h2>
         <p>本ポリシーまたは本アプリに関するお問い合わせは、下記までご連絡ください。<br>
         連絡先: <a href="mailto:bee7813993@gmail.com">bee7813993@gmail.com</a></p>
       </section>
@@ -107,6 +120,13 @@
         The <code>runFullTrust</code> capability is declared because it is required for packaged Windows
         desktop applications; it is used only for ordinary desktop functionality such as reading and writing
         user-selected files, measuring text width, and playing local media files.
+        The app can optionally be controlled by AI assistant apps such as Claude (MCP clients), but only
+        after the user registers it with them (File &gt; Link with Claude). The connection stays on the same PC
+        and the same Windows user account (a local named pipe); the app itself never connects to the internet.
+        While connected, the AI assistant app can read the open lyrics, settings and subtitle preview images
+        and operate the app; how that app handles the data is governed by its own privacy policy.
+        The app execution alias <code>nicokaraprep.exe</code> is declared only so that the app can be registered
+        with such clients.
         Contact: <a href="mailto:bee7813993@gmail.com">bee7813993@gmail.com</a></p>
       </section>
     </article>

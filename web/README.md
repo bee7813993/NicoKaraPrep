@@ -15,7 +15,7 @@ apps/NicoKaraPrep/images/         画像（アプリアイコン・スクリー�
 index.html                        トップページ（提供アプリ一覧に「にこぷれっぷ」を追加したもの）
 ```
 
-`privacy.html` は公開中のページを**本文はそのままに**、サイト共通のヘッダー・フッター・スタイルへ移植したものです（本文の差分がないことは確認済み）。上書きアップロードすると、他のページと同じ見た目になり、ヘッダーから紹介ページ・使い方へ戻れるようになります。
+`privacy.html` は公開中のページを、サイト共通のヘッダー・フッター・スタイルへ移植したものです。上書きアップロードすると、他のページと同じ見た目になり、ヘッダーから紹介ページ・使い方へ戻れるようになります。0.2.0 に合わせて、2026-10-08 に「3. AI アシスタントとの連携（MCP）」の節と、実行エイリアスの説明（6 章）・英語の要約を足しました（「外部サービスとの連携も行いません」の一文は MCP と食い違うので外しました）。ストア版の審査でプライバシーポリシーの URL を参照されることがあるので、0.2.0 を提出する前にアップロードします。
 
 アプリ名は対外的には「にこぷれっぷ」で統一しています。実行ファイル名・設定フォルダ名・GitHub リポジトリ名・このページの URL は `NicoKaraPrep` のままです。
 
@@ -65,14 +65,19 @@ cd web && python -m http.server 8791
 
 ## スクリーンショット
 
-`Store素材` フォルダの画像を `images/` に配置済みです（両ページとも表示状態）。
+`Store素材\0.2.0` フォルダ（ストア提出用と同じ写真、2026-10-08 撮影）の画像を `images/` に配置済みです。使う場所の章番号は manual.html のものです。
 
-| ファイル名 | 元ファイル | 使う場所 |
+| ファイル名 | 元ファイル（Store素材\0.2.0） | 使う場所 |
 |---|---|---|
-| `shot-main.png` | `shot-main.png` | index.html「画面」／manual.html 3 章 |
-| `shot-insert.png` | `shot-insert.png` | index.html「画面」／manual.html 7 章 |
-| `shot-check-list.png` | `shot-check_lineedit.png` | index.html「画面」／manual.html 9 章 |
-| `shot-check-insert.png` | `shot-check_emojiinseart.png` | index.html「画面」／manual.html 9 章 |
-| `shot-emoji-list.png` | `shot-emoji-list.png`（ダイアログ部分だけを切り出し） | index.html「画面」／manual.html 6 章 |
+| `shot-main.png` | 行リスト＋字幕のプレビュー.png | index.html「画面」／manual.html |
+| `shot-font-settings.png` | フォント設定ビュー.png | index.html「画面」／manual.html |
+| `shot-n3proj-import.png` | n3proj の読み込みの確認画面.png | index.html「画面」／manual.html |
+| `shot-show-time.png` | 表示時刻の自動調整.png | index.html「画面」／manual.html |
+| `shot-insert.png` | 絵文字挿入ビュー（F2）と定型文.png | index.html「画面」／manual.html |
+| `shot-check-list.png` | チェック結果の一覧.png | index.html「画面」／manual.html |
+| `shot-layout.png` | レイアウト設定ビュー.png | index.html「画面」／manual.html |
+| `shot-subtitle-action.png` | 字幕アクション.png | index.html「画面」／manual.html |
+| `shot-emoji-list.png` | 絵文字リスト編集.png | index.html「画面」／manual.html |
+| `shot-player-top.png` | メディア再生を上の列に置いた配置.png | index.html「画面」／manual.html |
 
-差し替えるときは同じファイル名で上書きすれば、HTML の変更は不要です。
+0.1.0 の写真の `shot-check-insert.png` は使わなくなったので消しました（サイトに残っていれば消してかまいません）。差し替えるときは同じファイル名で上書きすれば、HTML の変更は不要です（大きさが変わるときは img の width・height も直します）。
