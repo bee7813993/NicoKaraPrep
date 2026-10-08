@@ -28,7 +28,10 @@ public sealed partial class MainWindow
     /// <summary>上の段のメディア再生を縮めてでも残す、行リスト（絵文字挿入ビューでは編集欄）の高さ px（行リストで 3 行ほど）。</summary>
     private const double MinFlexHeight = 150;
 
-    /// <summary>右の列のメディア再生を縮めてでも残す、右のパネルの中身の高さ px（行リスト: フォント一覧が数行、絵文字挿入ビュー: パレットが 1 段）。</summary>
+    /// <summary>
+    /// 右の列のメディア再生を縮めてでも残す、右のパネルの中身の高さ px（行リスト: フォント一覧が数行）。
+    /// 絵文字挿入ビューのパレットは中身がすべて入る高さを残す（<see cref="PaletteContentHeight"/>。測れる前は <see cref="MinSidePaletteHeight"/>）。
+    /// </summary>
     private const double MinSideContentHeight = 200;
 
     private const double MinSidePaletteHeight = 280;
@@ -118,6 +121,11 @@ public sealed partial class MainWindow
             FitPlayerHeight();
         };
         InsertEditor.SizeChanged += (_, _) => FitPlayerHeight();
+        // パレットの中身の高さ（曲内の絵文字・定型文の数、列の幅で変わる）に合わせて、右の列の動画の高さを決め直す
+        EmojiPaletteContent.SizeChanged += (_, e) =>
+        {
+            if (_playerOnRight && Math.Abs(e.NewSize.Height - e.PreviousSize.Height) >= 0.5) FitPlayerHeight();
+        };
         PlayerHost.SizeChanged += (_, e) =>
         {
             // 右の列では高さを幅から決めるので、幅が変わったら合わせ直す
@@ -211,7 +219,7 @@ public sealed partial class MainWindow
 
     /// <summary>
     /// メディア再生の高さを合わせる。上の段: 設定の高さ（行リストに <see cref="MinFlexHeight"/> が残らないときは縮める）。
-    /// 右の列: 字幕の画面の縦横比で列の幅いっぱい（右のパネルの中身に <see cref="MinSideContentHeight"/>・<see cref="MinSidePaletteHeight"/> が残らないときは縮める）。
+    /// 右の列: 字幕の画面の縦横比で列の幅いっぱい（右のパネルの中身に <see cref="MinSideContentHeight"/>・パレットの中身の高さが残らないときは縮める）。
     /// どちらも、縮めた分だけほかの欄が伸びるので、何度呼んでも同じ高さになる。
     /// </summary>
     private void FitPlayerHeight()
@@ -279,11 +287,18 @@ public sealed partial class MainWindow
         // 見出し・余白・再生の操作の分を除いた残りから、右のパネルの中身の分を残す
         double chrome = MediaPanel.ActualHeight - PlayerHost.ActualHeight;
         double content = LineSideHost.Visibility == Visibility.Visible ? MinSideContentHeight
-            : EmojiSidePanel.Visibility == Visibility.Visible ? MinSidePaletteHeight
+            : EmojiSidePanel.Visibility == Visibility.Visible ? PaletteContentHeight()
             : 0;
         double room = MainArea.ActualHeight - chrome - content;
         return Math.Clamp(Math.Min(width * aspect, room), MinPlayerHeight, MaxPlayerHeight);
     }
+
+    /// <summary>
+    /// 絵文字挿入ビューのパレットの中身がすべて入る高さ px（パレットはスクロールの中で上寄せにして中身の高さにしてある。端数で 1px はみ出して
+    /// スクロールが出ないよう切り上げる）。まだ並べていないときは <see cref="MinSidePaletteHeight"/>。
+    /// </summary>
+    private double PaletteContentHeight() =>
+        EmojiPaletteContent.ActualHeight > 0 ? Math.Ceiling(EmojiPaletteContent.ActualHeight) : MinSidePaletteHeight;
 
     private void OnPlayerResizeDelta(object sender, ManipulationDeltaRoutedEventArgs e)
     {

@@ -763,151 +763,184 @@
                 <views:LineSidePanel x:Name="LineSide" />
             </Border>
 
-            <!-- 右パネル（絵文字挿入ビューのとき）: @Emoji パレット -->
-            <Grid
+            <!-- 右パネル（絵文字挿入ビューのとき）: @Emoji パレット。どの段も中身の高さにする。右の列に動画を置くときは、動画を縮めて
+                 この中身が入る高さを残す（MainWindow.Layout.cs の SidePlayerHeight。動画は最小の高さまで）。それでも入らない低い窓では、パレットごとスクロールする -->
+            <ScrollViewer
                 Grid.Row="1"
                 Grid.Column="2"
                 x:Name="EmojiSidePanel"
                 Visibility="Collapsed"
-                Padding="8"
-                RowSpacing="8">
-                <Grid.RowDefinitions>
-                    <RowDefinition Height="Auto" />
-                    <RowDefinition Height="Auto" />
-                    <RowDefinition Height="Auto" />
-                    <RowDefinition Height="*" />
-                    <RowDefinition Height="Auto" />
-                    <RowDefinition Height="Auto" />
-                </Grid.RowDefinitions>
-
-                <!-- F2 のキーは 表示 メニューにある（右パネルを隠すフォント設定ビューでも効くように） -->
-                <ToggleButton
-                    x:Name="EmojiModeToggle"
-                    Grid.Row="0"
-                    HorizontalAlignment="Stretch"
-                    Content="絵文字挿入ビュー (F2)"
-                    Checked="OnEmojiModeChanged"
-                    Unchecked="OnEmojiModeChanged" />
-                <Button Grid.Row="1" HorizontalAlignment="Stretch" Content="リスト編集..." Click="OnEmojiListClick" />
-
-                <!-- 絵文字挿入設定のクイック調整（設定ダイアログと同じ項目を常時表示） -->
-                <Grid Grid.Row="2" ColumnSpacing="6" RowSpacing="4">
-                    <Grid.ColumnDefinitions>
-                        <ColumnDefinition Width="Auto" />
-                        <ColumnDefinition Width="*" />
-                    </Grid.ColumnDefinitions>
+                HorizontalScrollBarVisibility="Disabled"
+                VerticalScrollBarVisibility="Auto">
+                <!-- 上寄せにして、表示の枠より低いときも中身の高さのままにする（引き伸ばすと SidePlayerHeight が読む高さが枠の高さになり、
+                     一度縮んだ動画が戻らない） -->
+                <Grid
+                    x:Name="EmojiPaletteContent"
+                    VerticalAlignment="Top"
+                    Padding="8"
+                    RowSpacing="8">
                     <Grid.RowDefinitions>
                         <RowDefinition Height="Auto" />
                         <RowDefinition Height="Auto" />
                         <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
                     </Grid.RowDefinitions>
-                    <TextBlock Text="表示秒数" FontSize="12" VerticalAlignment="Center"
-                               ToolTipService.ToolTip="アイコン・＿・先行タグ（G）を直後の文字の何秒前から表示するか。新しく挿入する分に適用します（既存のアイコン・＿は 絵文字 > 絵文字タイムタグ再計算 で付け直せます。G の先行タグは再計算では変わりません）。書き出しでは、前のページの同じ段と重なる行だけ短くなることがあります（ふつうはワイプ前の表示時間まで。それより短い表示秒数は、前の行をワイプの最後まで見せるときだけ縮めます。書き出し画面の設定）" />
-                    <Grid Grid.Column="1" ColumnSpacing="4">
+
+                    <!-- ビューの切り替えと絵文字のリストの編集（1 行に並べて、絵文字の枠に高さを残す）。
+                         F2 のキーは 表示 メニューにある（右パネルを隠すフォント設定ビューでも効くように） -->
+                    <Grid Grid.Row="0" ColumnSpacing="6">
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="*" />
                             <ColumnDefinition Width="Auto" />
                         </Grid.ColumnDefinitions>
-                        <NumberBox x:Name="QuickEmojiLeadBox" Minimum="0" Maximum="30" SmallChange="0.5"
-                                   SpinButtonPlacementMode="Compact" ValueChanged="OnQuickEmojiLeadChanged" />
-                        <ToggleButton Grid.Column="1" x:Name="QuickLeadZeroToggle" Content="0秒" Padding="8,5"
-                                      Checked="OnQuickLeadZeroToggled" Unchecked="OnQuickLeadZeroToggled"
-                                      ToolTipService.ToolTip="ワイプしない絵文字用に表示秒数を 0 にする（もう一度押すと元の秒数へ戻す）" />
+                        <ToggleButton
+                            x:Name="EmojiModeToggle"
+                            HorizontalAlignment="Stretch"
+                            Content="絵文字挿入ビュー (F2)"
+                            Checked="OnEmojiModeChanged"
+                            Unchecked="OnEmojiModeChanged" />
+                        <Button Grid.Column="1" Content="リスト編集..." Click="OnEmojiListClick" />
                     </Grid>
-                    <TextBlock Grid.Row="1" Text="連続タグ" FontSize="12" VerticalAlignment="Center"
-                               ToolTipService.ToolTip="連続する絵文字のタグ付け方" />
-                    <ComboBox Grid.Row="1" Grid.Column="1" x:Name="QuickEmojiModeBox" HorizontalAlignment="Stretch"
-                              SelectionChanged="OnQuickEmojiModeChanged">
-                        <ComboBoxItem Content="各絵文字ごと" />
-                        <ComboBoxItem Content="先頭と末尾のみ" />
-                    </ComboBox>
-                    <TextBlock Grid.Row="2" Text="＿文字" FontSize="12" VerticalAlignment="Center"
-                               ToolTipService.ToolTip="プレースホルダ文字（挿入ビューの B キーで挿入）" />
-                    <TextBox Grid.Row="2" Grid.Column="1" x:Name="QuickPlaceholderBox" MaxLength="4"
-                             TextChanged="OnQuickPlaceholderChanged" />
-                </Grid>
 
-                <GridView
-                    Grid.Row="3"
-                    ItemsSource="{x:Bind ViewModel.EmojiSlots}"
-                    IsItemClickEnabled="True"
-                    ItemClick="OnEmojiSlotClick"
-                    CanDragItems="True"
-                    CanReorderItems="True"
-                    AllowDrop="True"
-                    SelectionMode="None">
-                    <GridView.ItemTemplate>
-                        <DataTemplate x:DataType="vm:EmojiSlotViewModel">
-                            <Grid Width="60" Height="80" ToolTipService.ToolTip="{x:Bind ToolTipText, Mode=OneWay}">
-                                <Grid.RowDefinitions>
-                                    <RowDefinition Height="Auto" />
-                                    <RowDefinition Height="*" />
-                                    <RowDefinition Height="Auto" />
-                                </Grid.RowDefinitions>
-                                <TextBlock Grid.Row="0" Text="{x:Bind KeyLabel}" FontSize="11" FontWeight="Bold" HorizontalAlignment="Center" Foreground="{ThemeResource AccentTextFillColorPrimaryBrush}" />
-                                <Image Grid.Row="1" Source="{x:Bind Thumbnail, Mode=OneWay}" Stretch="Uniform" MaxHeight="40" />
-                                <TextBlock Grid.Row="2" Text="{x:Bind ReplaceChar, Mode=OneWay}" HorizontalAlignment="Center" FontSize="11" TextTrimming="CharacterEllipsis" />
-                            </Grid>
-                        </DataTemplate>
-                    </GridView.ItemTemplate>
-                </GridView>
-
-                <!-- スロット外の曲内 @Emoji（クリックで挿入） -->
-                <ListView
-                    Grid.Row="4"
-                    MaxHeight="140"
-                    ItemsSource="{x:Bind ViewModel.UnslottedEmoji}"
-                    IsItemClickEnabled="True"
-                    ItemClick="OnUnslottedEmojiClick"
-                    SelectionMode="None">
-                    <ListView.ItemTemplate>
-                        <DataTemplate x:DataType="core:EmojiEntry">
-                            <Grid ColumnSpacing="6">
-                                <Grid.ColumnDefinitions>
-                                    <ColumnDefinition Width="*" />
-                                    <ColumnDefinition Width="Auto" />
-                                </Grid.ColumnDefinitions>
-                                <TextBlock Text="{x:Bind ReplaceChar}" FontSize="12" VerticalAlignment="Center" ToolTipService.ToolTip="{x:Bind ImageBefore}" />
-                                <Button Grid.Column="1" Content="キーへ" FontSize="10" Padding="6,2" Click="OnPromoteEmojiClick" Tag="{x:Bind}" ToolTipService.ToolTip="キー付きスロットへ割り当てる" />
-                            </Grid>
-                        </DataTemplate>
-                    </ListView.ItemTemplate>
-                </ListView>
-
-                <!-- 定型文（「（後奏）」など。押すか、N のあとに番号で、前後の歌に合わせたタイムタグで入れる） -->
-                <StackPanel Grid.Row="5" Spacing="4">
-                    <Grid ColumnSpacing="6">
+                    <!-- 絵文字挿入設定のクイック調整（設定ダイアログと同じ項目を常時表示） -->
+                    <Grid Grid.Row="1" ColumnSpacing="6" RowSpacing="4">
                         <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="*" />
                             <ColumnDefinition Width="Auto" />
+                            <ColumnDefinition Width="*" />
                         </Grid.ColumnDefinitions>
-                        <TextBlock
-                            x:Name="PhraseHeaderText"
-                            Text="定型文"
-                            FontSize="12"
-                            FontWeight="SemiBold"
-                            VerticalAlignment="Center"
-                            ToolTipService.ToolTip="「（間奏）」などの決まった文字列を入れます。行頭・行末・空行に入れると、定型文だけのページにして（前後に空行を置きます）、前後のページと表示が重ならない時刻にします（前のページが消えてからワイプ前の秒数のあと 〜 次のページが出るワイプ後の秒数前まで画面に出します。後奏は 3 秒）。行の途中なら、直前の文字の終わりから直後の文字の始まりまでです。BS / Del でまとめて消せます" />
-                        <Button Grid.Column="1" Content="編集..." FontSize="12" Padding="8,3" Click="OnPhraseListClick" />
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="Auto" />
+                        </Grid.RowDefinitions>
+                        <TextBlock Text="表示秒数" FontSize="12" VerticalAlignment="Center"
+                                   ToolTipService.ToolTip="アイコン・＿・先行タグ（G）を直後の文字の何秒前から表示するか。新しく挿入する分に適用します（既存のアイコン・＿は 絵文字 > 絵文字タイムタグ再計算 で付け直せます。G の先行タグは再計算では変わりません）。書き出しでは、前のページの同じ段と重なる行だけ短くなることがあります（ふつうはワイプ前の表示時間まで。それより短い表示秒数は、前の行をワイプの最後まで見せるときだけ縮めます。書き出し画面の設定）" />
+                        <Grid Grid.Column="1" ColumnSpacing="4">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="Auto" />
+                            </Grid.ColumnDefinitions>
+                            <NumberBox x:Name="QuickEmojiLeadBox" Minimum="0" Maximum="30" SmallChange="0.5"
+                                       SpinButtonPlacementMode="Compact" ValueChanged="OnQuickEmojiLeadChanged" />
+                            <ToggleButton Grid.Column="1" x:Name="QuickLeadZeroToggle" Content="0秒" Padding="8,5"
+                                          Checked="OnQuickLeadZeroToggled" Unchecked="OnQuickLeadZeroToggled"
+                                          ToolTipService.ToolTip="ワイプしない絵文字用に表示秒数を 0 にする（もう一度押すと元の秒数へ戻す）" />
+                        </Grid>
+                        <TextBlock Grid.Row="1" Text="連続タグ" FontSize="12" VerticalAlignment="Center"
+                                   ToolTipService.ToolTip="連続する絵文字のタグ付け方" />
+                        <ComboBox Grid.Row="1" Grid.Column="1" x:Name="QuickEmojiModeBox" HorizontalAlignment="Stretch"
+                                  SelectionChanged="OnQuickEmojiModeChanged">
+                            <ComboBoxItem Content="各絵文字ごと" />
+                            <ComboBoxItem Content="先頭と末尾のみ" />
+                        </ComboBox>
+                        <TextBlock Grid.Row="2" Text="＿文字" FontSize="12" VerticalAlignment="Center"
+                                   ToolTipService.ToolTip="プレースホルダ文字（挿入ビューの B キーで挿入）" />
+                        <TextBox Grid.Row="2" Grid.Column="1" x:Name="QuickPlaceholderBox" MaxLength="4"
+                                 TextChanged="OnQuickPlaceholderChanged" />
                     </Grid>
-                    <ListView
-                        x:Name="PhraseList"
-                        MaxHeight="160"
-                        ItemsSource="{x:Bind ViewModel.InsertPhraseItems}"
+
+                    <!-- 絵文字の枠: キーボードと同じ 10 個ずつ（1〜0・Q〜P）。列の幅が足りないときは折り返す -->
+                    <GridView
+                        x:Name="EmojiSlotGrid"
+                        Grid.Row="2"
+                        ItemsSource="{x:Bind ViewModel.EmojiSlots}"
                         IsItemClickEnabled="True"
-                        ItemClick="OnPhraseClick"
+                        ItemClick="OnEmojiSlotClick"
+                        CanDragItems="True"
+                        CanReorderItems="True"
+                        AllowDrop="True"
                         SelectionMode="None">
+                        <GridView.ItemsPanel>
+                            <ItemsPanelTemplate>
+                                <ItemsWrapGrid Orientation="Horizontal" MaximumRowsOrColumns="10" />
+                            </ItemsPanelTemplate>
+                        </GridView.ItemsPanel>
+                        <GridView.ItemTemplate>
+                            <DataTemplate x:DataType="vm:EmojiSlotViewModel">
+                                <Grid Width="48" Height="80" ToolTipService.ToolTip="{x:Bind ToolTipText, Mode=OneWay}">
+                                    <Grid.RowDefinitions>
+                                        <RowDefinition Height="Auto" />
+                                        <RowDefinition Height="*" />
+                                        <RowDefinition Height="Auto" />
+                                    </Grid.RowDefinitions>
+                                    <TextBlock Grid.Row="0" Text="{x:Bind KeyLabel}" FontSize="11" FontWeight="Bold" HorizontalAlignment="Center" Foreground="{ThemeResource AccentTextFillColorPrimaryBrush}" />
+                                    <Image Grid.Row="1" Source="{x:Bind Thumbnail, Mode=OneWay}" Stretch="Uniform" MaxHeight="40" />
+                                    <TextBlock Grid.Row="2" Text="{x:Bind ReplaceChar, Mode=OneWay}" HorizontalAlignment="Center" FontSize="11" TextTrimming="CharacterEllipsis" />
+                                </Grid>
+                            </DataTemplate>
+                        </GridView.ItemTemplate>
+                    </GridView>
+
+                    <!-- スロット外の曲内 @Emoji（クリックで挿入） -->
+                    <ListView
+                        Grid.Row="3"
+                        MaxHeight="140"
+                        ItemsSource="{x:Bind ViewModel.UnslottedEmoji}"
+                        IsItemClickEnabled="True"
+                        ItemClick="OnUnslottedEmojiClick"
+                        SelectionMode="None">
+                        <ListView.ItemContainerStyle>
+                            <Style TargetType="ListViewItem" BasedOn="{StaticResource DefaultListViewItemStyle}">
+                                <Setter Property="MinHeight" Value="30" />
+                                <Setter Property="Padding" Value="8,0,8,0" />
+                            </Style>
+                        </ListView.ItemContainerStyle>
                         <ListView.ItemTemplate>
-                            <DataTemplate x:DataType="vm:PhraseItem">
-                                <StackPanel Orientation="Horizontal" Spacing="8" ToolTipService.ToolTip="{x:Bind ToolTip}">
-                                    <TextBlock Text="{x:Bind KeyLabel}" Width="12" FontSize="11" FontWeight="Bold" VerticalAlignment="Center" Foreground="{ThemeResource AccentTextFillColorPrimaryBrush}" />
-                                    <TextBlock Text="{x:Bind Text}" FontSize="12" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
-                                </StackPanel>
+                            <DataTemplate x:DataType="core:EmojiEntry">
+                                <Grid ColumnSpacing="6">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="Auto" />
+                                    </Grid.ColumnDefinitions>
+                                    <TextBlock Text="{x:Bind ReplaceChar}" FontSize="12" VerticalAlignment="Center" ToolTipService.ToolTip="{x:Bind ImageBefore}" />
+                                    <Button Grid.Column="1" Content="キーへ" FontSize="10" Padding="6,2" Click="OnPromoteEmojiClick" Tag="{x:Bind}" ToolTipService.ToolTip="キー付きスロットへ割り当てる" />
+                                </Grid>
                             </DataTemplate>
                         </ListView.ItemTemplate>
                     </ListView>
-                </StackPanel>
-            </Grid>
+
+                    <!-- 定型文（「（後奏）」など。押すか、N のあとに番号で、前後の歌に合わせたタイムタグで入れる） -->
+                    <StackPanel Grid.Row="4" Spacing="4">
+                        <Grid ColumnSpacing="6">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="Auto" />
+                            </Grid.ColumnDefinitions>
+                            <TextBlock
+                                x:Name="PhraseHeaderText"
+                                Text="定型文"
+                                FontSize="12"
+                                FontWeight="SemiBold"
+                                VerticalAlignment="Center"
+                                ToolTipService.ToolTip="「（間奏）」などの決まった文字列を入れます。行頭・行末・空行に入れると、定型文だけのページにして（前後に空行を置きます）、前後のページと表示が重ならない時刻にします（前のページが消えてからワイプ前の秒数のあと 〜 次のページが出るワイプ後の秒数前まで画面に出します。後奏は 3 秒）。行の途中なら、直前の文字の終わりから直後の文字の始まりまでです。BS / Del でまとめて消せます" />
+                            <Button Grid.Column="1" Content="編集..." FontSize="12" Padding="8,3" Click="OnPhraseListClick" />
+                        </Grid>
+                        <ListView
+                            x:Name="PhraseList"
+                            MaxHeight="160"
+                            ItemsSource="{x:Bind ViewModel.InsertPhraseItems}"
+                            IsItemClickEnabled="True"
+                            ItemClick="OnPhraseClick"
+                            SelectionMode="None">
+                            <ListView.ItemContainerStyle>
+                                <Style TargetType="ListViewItem" BasedOn="{StaticResource DefaultListViewItemStyle}">
+                                    <Setter Property="MinHeight" Value="30" />
+                                    <Setter Property="Padding" Value="8,0,8,0" />
+                                </Style>
+                            </ListView.ItemContainerStyle>
+                            <ListView.ItemTemplate>
+                                <DataTemplate x:DataType="vm:PhraseItem">
+                                    <StackPanel Orientation="Horizontal" Spacing="8" ToolTipService.ToolTip="{x:Bind ToolTip}">
+                                        <TextBlock Text="{x:Bind KeyLabel}" Width="12" FontSize="11" FontWeight="Bold" VerticalAlignment="Center" Foreground="{ThemeResource AccentTextFillColorPrimaryBrush}" />
+                                        <TextBlock Text="{x:Bind Text}" FontSize="12" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
+                                    </StackPanel>
+                                </DataTemplate>
+                            </ListView.ItemTemplate>
+                        </ListView>
+                    </StackPanel>
+                </Grid>
+            </ScrollViewer>
         </Grid>
 
         <!-- 検証パネル -->
