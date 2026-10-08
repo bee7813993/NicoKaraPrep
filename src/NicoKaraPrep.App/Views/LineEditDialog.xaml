@@ -2,6 +2,7 @@
     x:Class="NicoKaraPrep.App.Views.LineEditDialog"
     xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:local="using:NicoKaraPrep.App.Views"
     Title="行の編集"
     PrimaryButtonText="適用"
     CloseButtonText="キャンセル"
@@ -19,8 +20,8 @@
             AutomationProperties.Name="行の歌詞（タイムタグ付き）" />
         <TextBlock x:Name="SungText" FontSize="12" TextWrapping="Wrap" Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
         <StackPanel Orientation="Horizontal" Spacing="12">
-            <TextBox x:Name="BeginBox" Header="表示開始" Width="130" FontFamily="Consolas" AutomationProperties.Name="表示開始" />
-            <TextBox x:Name="EndBox" Header="表示終了" Width="130" FontFamily="Consolas" AutomationProperties.Name="表示終了" />
+            <TextBox x:Name="BeginBox" local:PlaceholderPrefill.IsEnabled="True" Header="表示開始" Width="130" FontFamily="Consolas" AutomationProperties.Name="表示開始" />
+            <TextBox x:Name="EndBox" local:PlaceholderPrefill.IsEnabled="True" Header="表示終了" Width="130" FontFamily="Consolas" AutomationProperties.Name="表示終了" />
             <Button
                 x:Name="ResetButton"
                 VerticalAlignment="Bottom"
@@ -33,7 +34,7 @@
             FontSize="12"
             TextWrapping="Wrap"
             Foreground="{ThemeResource TextFillColorSecondaryBrush}"
-            Text="表示開始・終了は mm:ss:cc（例: 01:14:00）で入れると、手で指定した値になります（行リストの行設定と同じ）。空欄なら自動で、薄字が今の表示時刻です。" />
+            Text="表示開始・終了は mm:ss:cc（例: 01:14:00）で入れると、手で指定した値になります（行リストの行設定と同じ）。空欄なら自動で、薄字が今の表示時刻です（欄に入ると今の表示時刻が入るので、そこから直せます。変えなければ自動のまま）。" />
         <TextBlock x:Name="ErrorText" FontSize="12" TextWrapping="Wrap" Foreground="{ThemeResource SystemFillColorCautionBrush}" Visibility="Collapsed" />
     </StackPanel>
 </ContentDialog>

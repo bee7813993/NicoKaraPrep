@@ -189,7 +189,7 @@ public sealed partial class N3ProjExportDialog : ContentDialog
         {
             BasePath = _basePath,
             OutputPath = _vm.N3ProjSettings.OutputPath,
-            ProjectName = ProjectNameBox.Text.Trim(),
+            ProjectName = PlaceholderPrefill.EffectiveText(ProjectNameBox).Trim(),
             DefaultFontSetName = DefaultFontBox.Text.Trim(),
             MergeFontSets = MergeFontsCheck.IsChecked == true,
             MergeLayouts = MergeLayoutsCheck.IsChecked == true,

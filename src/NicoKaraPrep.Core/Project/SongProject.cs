@@ -4,7 +4,11 @@ using NicoKaraPrep.Core.Model;
 namespace NicoKaraPrep.Core.Project;
 
 /// <summary>
-/// 行ごとのニコカラメーカー3 書き出し設定（表示時刻の手動指定・フォント設定名・文字単位のフォント設定名）。行インデックスで保存する。
+/// 行ごとのニコカラメーカー3 書き出し設定（表示時刻の手動指定・フォント設定名・文字単位のフォント設定名）。行インデックスと、
+/// 保存したときの行の表示文字列・行の数で保存する。
+/// 読み直すときは、同じ番号の行が同じ文字ならそこへ、違えば同じ文字の行のうち近いものへ当てる（歌詞ファイルを保存しないまま
+/// 行を足し引きしたあとに開き直すと、番号だけでは別の行へ付くため。例: 定型文の行のフォント設定が 2 行下の歌詞の行に付いた）。
+/// 同じ文字の行が無ければ、行の数が保存したときと同じ（外で歌詞を直しただけ）ときだけ同じ番号の行へ当て、違えば当てない。
 /// 文字単位の指定は、保存したときの行の表示文字列と今の行が同じときだけ当てる（歌詞を外で直したときに別の文字へ付かないように）。
 /// </summary>
 public sealed class LineExportSettings
@@ -38,6 +42,12 @@ public sealed class LineExportSettings
     /// <summary><see cref="CharFonts"/> を保存したときの行の表示文字列（スペーサーを除く）。</summary>
     public string? CharText { get; set; }
 
+    /// <summary>保存したときの行の表示文字列（以前の版のファイルには無く、そのときは番号だけで当てる）。</summary>
+    public string? Text { get; set; }
+
+    /// <summary>保存したときの文書の行の数（以前の版のファイルには無い）。</summary>
+    public int? LineCount { get; set; }
+
     /// <summary>ドキュメントの行から手動設定を持つ行だけを集める。</summary>
     public static List<LineExportSettings> Collect(LyricsDocument doc)
     {
@@ -59,19 +69,35 @@ public sealed class LineExportSettings
                 FontSizeDelta = l.FontSizeDelta,
                 CharFonts = ranges.Count > 0 ? ranges : null,
                 CharText = ranges.Count > 0 ? l.GetDisplayText() : null,
+                Text = l.GetDisplayText(),
+                LineCount = doc.Lines.Count,
             });
         }
         return result;
     }
 
-    /// <summary>保存した手動設定をドキュメントの行へ適用する（行数が合う範囲で）。</summary>
+    /// <summary>保存した手動設定をドキュメントの行へ適用する（当てる行は <see cref="Locate"/>）。</summary>
     public static void Apply(LyricsDocument doc, IEnumerable<LineExportSettings>? settings)
     {
         if (settings is null) return;
-        foreach (var s in settings)
+        var list = settings.ToList();
+        var used = new HashSet<int>();
+        var target = new int[list.Count];
+        // 番号も文字も合う行を先に決めてから、ずれた行を近い同じ文字の行へ（ずれた設定が、合っている行を取らないように）
+        for (int k = 0; k < list.Count; k++)
         {
-            if (s.Index < 0 || s.Index >= doc.Lines.Count) continue;
-            var l = doc.Lines[s.Index];
+            var s = list[k];
+            target[k] = s.Text is not null && s.Index >= 0 && s.Index < doc.Lines.Count && doc.Lines[s.Index].GetDisplayText() == s.Text && used.Add(s.Index) ? s.Index : -1;
+        }
+        for (int k = 0; k < list.Count; k++)
+        {
+            if (target[k] < 0) target[k] = Locate(doc, list[k], used);
+        }
+        for (int k = 0; k < list.Count; k++)
+        {
+            if (target[k] < 0) continue;
+            var s = list[k];
+            var l = doc.Lines[target[k]];
             l.ShowBeginCs = s.ShowBeginCs;
             l.ShowEndCs = s.ShowEndCs;
             l.ShowBeginOrigin = s.ShowBeginOrigin;
@@ -81,6 +107,37 @@ public sealed class LineExportSettings
             l.FontSizeDelta = s.FontSizeDelta;
             if (s.CharFonts is { Count: > 0 } && s.CharText == l.GetDisplayText()) CharFontOperations.ApplyRanges(l, s.CharFonts);
         }
+    }
+
+    /// <summary>
+    /// 番号か文字が合わなかった設定を当てる行（無ければ -1）。同じ文字のまだ使っていない行のうち番号が近いもの（行の数の増減だけずらして測る）、
+    /// 無ければ行の数が保存したときと同じなら同じ番号の行。以前の版のファイル（文字を持たない）は番号のまま。
+    /// </summary>
+    private static int Locate(LyricsDocument doc, LineExportSettings s, HashSet<int> used)
+    {
+        bool inRange = s.Index >= 0 && s.Index < doc.Lines.Count;
+        if (s.Text is null) return inRange && used.Add(s.Index) ? s.Index : -1;
+
+        // 近さは、行の数の増減だけずらした番号から測る（足し引きした場所より後ろの行は、その分ずれているはず）。同じなら元の番号に近いほう
+        int expected = s.LineCount is int count ? s.Index + (doc.Lines.Count - count) : s.Index;
+        int best = -1;
+        for (int i = 0; i < doc.Lines.Count; i++)
+        {
+            if (used.Contains(i) || doc.Lines[i].GetDisplayText() != s.Text) continue;
+            if (best < 0) best = i;
+            else
+            {
+                int d = Math.Abs(i - expected), bd = Math.Abs(best - expected);
+                if (d < bd || (d == bd && Math.Abs(i - s.Index) < Math.Abs(best - s.Index))) best = i;
+            }
+        }
+        if (best >= 0)
+        {
+            used.Add(best);
+            return best;
+        }
+        // 同じ文字の行が無い: 行の数が同じなら、外で歌詞を直しただけとみて同じ番号の行へ。行の数が違えば（行の足し引き）当てない
+        return inRange && s.LineCount == doc.Lines.Count && used.Add(s.Index) ? s.Index : -1;
     }
 }
 
