@@ -3,14 +3,14 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta name="description" content="RhythmicaLyrics で作ったタイムタグ付き歌詞を、ニコカラメーカー3 向けに仕上げる Windows アプリ『にこぷれっぷ（NicoKaraPrep）』。アイコン挿入・タイムタグの重なりチェック・行幅チェックをまとめて行えます。">
+  <meta name="description" content="RhythmicaLyrics で作ったタイムタグ付き歌詞を、ニコカラメーカー3 向けに仕上げる Windows アプリ『にこぷれっぷ（NicoKaraPrep）』。行幅・重なりのチェック、アイコン挿入、フォント設定・レイアウト・表示時刻を整えてのニコカラメーカー3 プロジェクトの書き出しまで行えます。">
   <meta name="theme-color" content="#ffffff">
   <title>にこぷれっぷ | YFRTeam</title>
   <link rel="icon" href="images/nicokaraprep-icon.png">
   <link rel="stylesheet" href="../../assets/style.css">
   <meta property="og:type" content="website">
   <meta property="og:title" content="にこぷれっぷ（NicoKaraPrep）">
-  <meta property="og:description" content="RhythmicaLyrics の歌詞を、ニコカラメーカー3 向けに仕上げる Windows アプリ。">
+  <meta property="og:description" content="RhythmicaLyrics の歌詞を、ニコカラメーカー3 向けに仕上げてプロジェクトとして書き出す Windows アプリ。">
   <meta property="og:url" content="https://ykr.moe/apps/NicoKaraPrep/">
   <meta property="og:image" content="https://ykr.moe/apps/NicoKaraPrep/images/nicokaraprep-icon.png">
   <style>
@@ -38,9 +38,10 @@
     }
     .dl-sub a { color: var(--sky-dark); font-weight: 700; }
 
-    /* 特徴の 2 行目も 1 行目と同じ色順に */
-    .feature-item:nth-child(5) { border-top-color: var(--sky-dark); }
-    .feature-item:nth-child(6) { border-top-color: var(--coral); }
+    /* 特徴の 2 行目以降も 1 行目と同じ色順に */
+    .feature-item:nth-child(3n+1) { border-top-color: var(--violet); }
+    .feature-item:nth-child(3n+2) { border-top-color: var(--sky-dark); }
+    .feature-item:nth-child(3n) { border-top-color: var(--coral); }
 
     /* 動作環境 */
     .spec-list { margin: 0; border-top: 1px solid rgba(25, 94, 120, .24); }
@@ -162,43 +163,59 @@
         <h2 id="about-app">歌詞ができてからの手作業を、まとめて引き受ける。</h2>
         <p class="lead">タイムタグを打ち終えた歌詞をニコカラにするには、1 行が画面からはみ出していないか確かめて行を分け直し、ページをまたいだ字幕の重なりを潰し、必要ならキャラアイコン（@Emoji）を入れる——という地道な作業が続きます。にこぷれっぷは、その一連の作業をひとつの画面にまとめたツールです。</p>
         <p class="lead">RhythmicaLyrics の編集ファイル（.rlf）をそのまま読み書きできるので、タグの微調整は今まで通り RhythmicaLyrics で。仕上げだけをこのアプリで行う、という使い分けができます。</p>
+        <p class="lead">仕上げた歌詞は、フォント設定・レイアウト・字幕アクション・表示時刻ごと、ニコカラメーカー3 のプロジェクト（.n3proj）として書き出せます。ニコカラメーカー3 で開けば、あとは動画を作るだけです。</p>
       </div>
     </section>
 
     <section class="section feature-band" aria-labelledby="features">
       <div class="content-wide">
         <p class="section-label">FEATURES</p>
-        <h2 id="features">行の整形も、アイコン挿入も、切り出しも。</h2>
+        <h2 id="features">行の整形から、プロジェクトの書き出しまで。</h2>
         <div class="feature-list">
           <article class="feature-item">
             <p class="feature-number" aria-hidden="true">01</p>
             <h3>キーボードだけで進む挿入ビュー</h3>
-            <p>歌詞全体を 1 画面に表示し、カーソルを動かしてキーひとつでアイコンを挿入。20 個のアイコンが <kbd>1</kbd>–<kbd>0</kbd> / <kbd>Q</kbd>–<kbd>P</kbd> に並びます。タイムタグは直後の文字から自動計算されるので、再生に合わせて叩く必要はありません。</p>
+            <p>歌詞全体を 1 画面に表示し、カーソルを動かしてキーひとつでアイコンを挿入。20 個のアイコンが <kbd>1</kbd>–<kbd>0</kbd> / <kbd>Q</kbd>–<kbd>P</kbd> に並びます。「（前奏）」「（間奏 約14秒）」「（後奏）」などの定型文も <kbd>N</kbd> と番号で入れられます。タイムタグは前後の文字から自動計算されるので、再生に合わせて叩く必要はありません。</p>
           </article>
           <article class="feature-item">
             <p class="feature-number" aria-hidden="true">02</p>
-            <h3>チェックを見ながらの行分割・結合</h3>
-            <p>長すぎる行を分け、短い行をつないで、字幕に収まる形へ整えます。分割・結合するたびに横幅と表示時間が再計算されるので、警告が消えるまでその場で確かめながら作業できます。アイコンを使わない曲でも、ここだけのために使えます。</p>
+            <h3>横幅を見ながらの行分割・結合</h3>
+            <p>1 行の横幅を、字幕と同じフォント・並べ方でピクセル単位に測り、画面からのはみ出しと余白不足を判定します。長すぎる行を分け、短い行をつなぐたびに測り直すので、警告が消えるまでその場で確かめながら整えられます。</p>
           </article>
           <article class="feature-item">
             <p class="feature-number" aria-hidden="true">03</p>
             <h3>ページ間の重なりチェック</h3>
-            <p>ニコカラメーカーが空行で区切る「字幕ページ」を再現し、前のページの行が消える前に次のページの行が出てしまう箇所を検出します。表示前後の秒数はニコカラメーカー側の設定に合わせられます。</p>
+            <p>ニコカラメーカーが空行で区切る「字幕ページ」を再現し、前のページの行が消える前に次のページの同じ段の行が出てしまう箇所を見つけます。表示時刻はニコカラメーカー3 と同じ計算で求めます。</p>
           </article>
           <article class="feature-item">
             <p class="feature-number" aria-hidden="true">04</p>
-            <h3>1 行の横幅をピクセルで実測</h3>
-            <p>指定したフォント・サイズで実際に描画幅を測り、画面からのはみ出しと左右マージン不足を判定します。アイコンの表示幅（拡大率・縦横比・余白）も計算に含みます。</p>
+            <h3>ニコカラメーカー3 のプロジェクトを書き出し</h3>
+            <p>歌詞・ルビ・アイコン・フォント設定・レイアウト・字幕アクション・行ごとの表示時刻をまとめて .n3proj に書き出し、ニコカラメーカー3 でそのまま開けます。作成済みのプロジェクトを開けば、取り込む項目を確認画面で選んで読み込めます。</p>
           </article>
           <article class="feature-item">
             <p class="feature-number" aria-hidden="true">05</p>
-            <h3>.rlf をそのまま読み書き</h3>
-            <p>RhythmicaLyrics の編集ファイルをバイナリのまま読み書きします。チェック数・ルビ・口パクタグも保持するので、保存したファイルを RhythmicaLyrics で開き直して作業を続けられます。</p>
+            <h3>表示時刻の自動調整と手直し</h3>
+            <p>ニコカラメーカー3 と同じ規則で各行の表示開始・表示終了を決め、行ごとに手で直せます。アイコンの先行で前のページの行が途中で消えないように遅らせる、同じ段の行を少し重ねてよい、といったニコカラメーカー3 には無い調整もできます。</p>
           </article>
           <article class="feature-item">
             <p class="feature-number" aria-hidden="true">06</p>
-            <h3>パート分けのための切り出し</h3>
-            <p>選んだ行を別タブへ分離し、パートごとに lrc へ書き出せます。出した行には ✓ が付くので「まだ出していない行」だけをまとめて選ぶことができ、出し忘れ・二重出しを防げます。</p>
+            <h3>フォント設定ビュー</h3>
+            <p>ニコカラメーカー3 のフォント設定を全項目、広い画面で編集できます（<kbd>F3</kbd>）。フォルダ分け、配色パターン、2 人以上で歌う所の組み合わせフォント（ミルフィーユ・グラデーション）の自動作成、見づらい配色の警告、スポイトに対応しています。</p>
+          </article>
+          <article class="feature-item">
+            <p class="feature-number" aria-hidden="true">07</p>
+            <h3>レイアウト設定と字幕アクション</h3>
+            <p>ニコカラメーカー3 のレイアウト設定を広い画面で編集し（<kbd>F4</kbd>）、ページごとに指定できます。フェードインや文字単位フェードなど 8 種類の字幕アクションも、曲の既定と行ごとに指定して書き出せます。</p>
+          </article>
+          <article class="feature-item">
+            <p class="feature-number" aria-hidden="true">08</p>
+            <h3>動画の上で字幕をプレビュー</h3>
+            <p>動画の上に、ニコカラメーカー3 の出力に合わせた並べ方で字幕をワイプ表示します。行リストの歌詞も字幕の見た目で描くので、文字を選んでその文字だけのフォント設定も指定できます。</p>
+          </article>
+          <article class="feature-item">
+            <p class="feature-number" aria-hidden="true">09</p>
+            <h3>Claude から操作（MCP）</h3>
+            <p><strong>ファイル &gt; Claude と連携</strong> のボタンひとつで、Claude Desktop・Claude Code から起動中のにこぷれっぷを操作できるようになります。「表示時刻を自動調整して、警告の残る行を教えて」のように頼めます。使うのは登録したときだけで、にこぷれっぷ自体はインターネット通信をしません。</p>
           </article>
         </div>
       </div>
@@ -210,24 +227,44 @@
         <h2 id="screens">画面</h2>
         <div class="shot-list">
           <figure>
-            <img src="images/shot-main.png" width="978" height="1017" alt="にこぷれっぷ のメイン画面" loading="lazy">
-            <figcaption>メイン画面。上にメディア再生、中央に行リストと行エディタ・プレビュー、右に @Emoji パレット。下部にチェック結果が並びます。</figcaption>
+            <img src="images/shot-main.png" width="1483" height="879" alt="にこぷれっぷ のメイン画面（行リストと字幕のプレビュー）" loading="lazy">
+            <figcaption>メイン画面。行リストの歌詞を字幕の見た目で表示し、右の動画の上で字幕をプレビューします。右下のパネルで、選んだ行にフォント設定・レイアウト・字幕アクションを指定できます。</figcaption>
           </figure>
           <figure>
-            <img src="images/shot-insert.png" width="978" height="1017" alt="絵文字挿入ビュー" loading="lazy">
-            <figcaption>絵文字挿入ビュー（F2）。歌詞全体を一枚に表示し、キーボードだけでアイコン挿入と行操作ができます。左側には各行の時刻と横幅が並びます。</figcaption>
+            <img src="images/shot-font-settings.png" width="1483" height="879" alt="フォント設定ビュー" loading="lazy">
+            <figcaption>フォント設定ビュー（F3）。ニコカラメーカー3 のフォント設定を全項目編集できます。配色パターンで、同じ役割の色をまとめて変えられます。</figcaption>
           </figure>
           <figure>
-            <img src="images/shot-check-list.png" width="1183" height="1401" alt="通常ビューのチェック結果" loading="lazy">
+            <img src="images/shot-n3proj-import.png" width="1483" height="976" alt="ニコカラメーカー3 プロジェクトの読み込みの確認画面" loading="lazy">
+            <figcaption>ニコカラメーカー3 プロジェクトの読み込み。フォント・表示時刻・アイコン・動画・字幕アクションなど、取り込む項目を選べます。</figcaption>
+          </figure>
+          <figure>
+            <img src="images/shot-show-time.png" width="1483" height="879" alt="表示時刻の自動調整" loading="lazy">
+            <figcaption>表示時刻の自動調整。パラメーターを変えて何度でも実行でき、手で直した行はそのまま残ります。</figcaption>
+          </figure>
+          <figure>
+            <img src="images/shot-insert.png" width="1483" height="879" alt="絵文字挿入ビュー" loading="lazy">
+            <figcaption>絵文字挿入ビュー（F2）。歌詞全体を一枚に表示し、キーボードだけでアイコン・定型文の挿入と行操作ができます。左側には各行の時刻と横幅が並びます。</figcaption>
+          </figure>
+          <figure>
+            <img src="images/shot-check-list.png" width="1483" height="879" alt="チェック結果" loading="lazy">
             <figcaption>チェック結果は画面下に一覧表示され、行リストの時刻・幅にも色が付きます（赤 = エラー / オレンジ = 警告）。</figcaption>
           </figure>
           <figure>
-            <img src="images/shot-check-insert.png" width="1183" height="1401" alt="挿入ビューでのチェック結果" loading="lazy">
-            <figcaption>同じチェック結果は挿入ビューでも確認できます。作業中のビューを離れずに、はみ出しや重なりを直せます。</figcaption>
+            <img src="images/shot-layout.png" width="1483" height="962" alt="レイアウト設定ビュー" loading="lazy">
+            <figcaption>レイアウト設定ビュー（F4）。レイアウト設定を編集しながら、見本とページごとの当たり方を確かめられます。</figcaption>
           </figure>
-          <figure class="shot-wide">
-            <img src="images/shot-emoji-list.png" width="1165" height="497" alt="絵文字リスト編集画面" loading="lazy">
-            <figcaption>絵文字リスト編集。拡大率や余白をスライダーで調整すると、@Emoji のオプション文字列が自動生成され、実機に近い比率のプレビューで仕上がりを確認できます。</figcaption>
+          <figure>
+            <img src="images/shot-subtitle-action.png" width="1483" height="962" alt="字幕アクションの指定" loading="lazy">
+            <figcaption>字幕アクション。行を選んで右のパネルの項目を押すだけで指定でき、行リストの列で各行のアクションを確かめられます。</figcaption>
+          </figure>
+          <figure>
+            <img src="images/shot-emoji-list.png" width="1483" height="976" alt="@Emoji タグリスト編集" loading="lazy">
+            <figcaption>アイコン（@Emoji）のリスト編集。拡大率や余白をスライダーで調整すると、@Emoji のオプション文字列が自動で作られ、実際に近い比率のプレビューで仕上がりを確認できます。</figcaption>
+          </figure>
+          <figure>
+            <img src="images/shot-player-top.png" width="1483" height="1247" alt="メディア再生を上の段に置いた配置" loading="lazy">
+            <figcaption>メディア再生は、上の段と右の列から置き場所を選べます（表示メニュー）。フル HD などの低い画面では、自動で右の列に置きます。</figcaption>
           </figure>
         </div>
       </div>
@@ -244,24 +281,29 @@
           </li>
           <li>
             <h3>ニコカラメーカーの設定を取り込む</h3>
-            <p>この曲用にフォント・画面サイズを決めた <code>.n3proj</code> を読み込みます。同じスタイルで作った別の曲のプロジェクトでも構いません。</p>
+            <p>この曲用にフォント・画面サイズを決めた <code>.n3proj</code> を読み込みます。確認画面で、フォント設定・表示時刻・アイコン・動画など、取り込む項目を選べます。同じスタイルで作った別の曲のプロジェクトでも構いません。</p>
+            <p>ニコカラメーカー3 で作ったプロジェクトを開くと、その歌詞ファイルも一緒に開きます。</p>
           </li>
           <li>
             <h3>メディアを読み込む（任意）</h3>
-            <p>動画・音源をパネルへドロップすると、再生位置の行が自動でハイライトされ、行をダブルクリックしてその時刻へ飛べます。</p>
+            <p>動画・音源をパネルへドロップすると、動画の上に字幕のプレビューが重なり、再生位置の行が自動でハイライトされます。行をダブルクリックすると、その時刻へ飛べます。</p>
           </li>
           <li>
             <h3>チェック結果を見ながら行を整える</h3>
             <p>はみ出しやページ間の重なりが一覧に出ます。クリックで該当行へ飛び、<strong>行の分割・結合</strong>で警告が消えるまで整えます。</p>
           </li>
           <li>
-            <h3>必要ならアイコンを入れる</h3>
-            <p>パート分けなどでアイコンを使う曲だけ、<kbd>F2</kbd> の挿入ビューでキーを押して入れていきます。このビューでも行の分割・結合ができるので、4 の作業をここで続けても構いません。</p>
+            <h3>必要ならアイコン・定型文を入れる</h3>
+            <p>パート分けなどでアイコンを使う曲だけ、<kbd>F2</kbd> の挿入ビューでキーを押して入れていきます。「（間奏 約14秒）」などの定型文も同じビューで入れられます。このビューでも行の分割・結合ができるので、4 の作業をここで続けても構いません。</p>
             <p>アイコンの定義はアプリ側に持たせられるので、歌詞ファイルを汚さずに済み、前の曲で使ったアイコンをそのまま使い回せます。</p>
           </li>
           <li>
-            <h3>保存して、必要な行を書き出す</h3>
-            <p><kbd>Ctrl+S</kbd> で rlf のまま保存。パートごとに行を選び、<kbd>Ctrl+E</kbd> でニコカラメーカー用の lrc を書き出します。</p>
+            <h3>フォント・レイアウト・表示時刻を整える</h3>
+            <p>行リストの右のパネルで、選んだ行にフォント設定・レイアウト・字幕アクションを指定します。フォント設定は <kbd>F3</kbd>、レイアウト設定は <kbd>F4</kbd> の画面で作れます。表示時刻は <strong>自動調整</strong> で決めてから、気になる行だけ手で直します。</p>
+          </li>
+          <li>
+            <h3>保存して、ニコカラメーカー3 へ渡す</h3>
+            <p><kbd>Ctrl+S</kbd> で rlf のまま保存。<strong>ファイル &gt; ニコカラメーカー3 プロジェクトを書き出し</strong> で .n3proj に書き出し、ニコカラメーカー3 で開きます。パートごとに行を選び、<kbd>Ctrl+E</kbd> で lrc を書き出すこともできます。</p>
           </li>
         </ol>
       </div>
@@ -284,11 +326,11 @@
           </div>
           <div>
             <dt>一緒に使うもの</dt>
-            <dd>RhythmicaLyrics（タイムタグ付け）、ニコカラメーカー3（動画化）</dd>
+            <dd>RhythmicaLyrics（タイムタグ付け）、ニコカラメーカー3（動画化）。Claude Desktop・Claude Code から操作することもできます（任意）</dd>
           </div>
           <div>
             <dt>対応ファイル</dt>
-            <dd>.rlf / .lrc（ルビ拡張 @RubyX・@Emoji 対応）/ .txt / .n3proj（設定の取り込み）</dd>
+            <dd>.rlf / .lrc（ルビ拡張 @RubyX・@Emoji 対応）/ .txt / .n3proj（ニコカラメーカー3 のプロジェクト。読み込み・書き出し）</dd>
           </div>
           <div>
             <dt>価格</dt>
