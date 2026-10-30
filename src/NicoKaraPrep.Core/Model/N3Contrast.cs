@@ -96,7 +96,8 @@ public static class N3Contrast
     /// <summary>
     /// 見づらい組を集める（ワイプ後・ワイプ前の文字と縁）。縁の幅が 0（縁なし）のフォント設定と、不透明度が 50% 未満の色・画像の箇所・
     /// 未指定の色は見ない。多色（グラデーション・ミルフィーユ）の箇所はマーカーの色ごとに比べ、いちばん比の小さい色で知らせる
-    /// （ミルフィーユの最後のマーカーは塗りに使われないので除く）。
+    /// （ミルフィーユの最後のマーカーは塗りに使われないので除く）。文字と縁が同じ帯に分かれた多色（<see cref="SameBands"/>）なら、
+    /// 同じ帯の色どうしだけを比べる。
     /// </summary>
     public static List<N3ContrastIssue> Check(N3FontSet font, double warnRatio = WarnRatio)
     {
@@ -107,11 +108,13 @@ public static class N3Contrast
         {
             var textColors = Colors(d.Brushes[text]);
             var edgeColors = Colors(d.Brushes[edge]);
+            bool banded = SameBands(d.Brushes[text], d.Brushes[edge]);
             N3ContrastIssue? worst = null;
             foreach (var (t, ts) in textColors)
             {
                 foreach (var (e, es) in edgeColors)
                 {
+                    if (banded && ts != es) continue;
                     double ratio = Ratio(t, e);
                     if (double.IsNaN(ratio) || ratio >= warnRatio) continue;
                     if (worst is null || ratio < worst.Ratio)
@@ -150,6 +153,16 @@ public static class N3Contrast
         }
         return result;
     }
+
+    /// <summary>
+    /// 2 つの箇所が、同じ種類の多色で、マーカーの数と位置がそろっているか（組み合わせのフォント設定でベース色も帯に分けたときなど）。
+    /// そうなら同じ番号のマーカーの色どうしが同じ帯に重なり、ほかの帯の色とは重ならない。
+    /// </summary>
+    private static bool SameBands(N3Brush a, N3Brush b) =>
+        a.Type is N3Brush.TypeGradient or N3Brush.TypeMilleFeuille
+        && a.Type == b.Type
+        && a.Stops.Count == b.Stops.Count
+        && a.Stops.Zip(b.Stops).All(p => Math.Abs(p.First.Position - p.Second.Position) <= 1e-4);
 
     // ------------------------------------------------------------ 色の候補
 
@@ -210,11 +223,14 @@ public static class N3Contrast
             result.Add(new N3ContrastSuggestion(slot, color, MinRatio(color, others), kind) { Stop = stop, OriginalColor = original });
         }
 
-        // 多色の側: 見づらいマーカーの色を、相手のどの色とも比が足りる明るさへ
-        void FixStops(int slot, List<(string Color, int Stop)> colors, List<string> others)
+        // 多色の側: 見づらいマーカーの色を、相手のどの色とも（同じ帯に分かれていれば同じ帯の色と）比が足りる明るさへ
+        bool banded = SameBands(textBrush, edgeBrush);
+        void FixStops(int slot, List<(string Color, int Stop)> colors, List<(string Color, int Stop)> partners)
         {
-            foreach (var (c, stop) in colors.Where(x => MinRatio(x.Color, others) < WarnRatio))
+            foreach (var (c, stop) in colors)
             {
+                var others = partners.Where(p => !banded || p.Stop == stop).Select(p => p.Color).ToList();
+                if (others.Count == 0 || MinRatio(c, others) >= WarnRatio) continue;
                 string worst = others.MinBy(o => Ratio(c, o))!;
                 bool darker = Luminance(worst) >= Luminance(c);
                 Add(slot, AdjustLightness(c, others, darker, targetRatio), N3ContrastSuggestionKind.StopLightness, others, stop, c);
@@ -231,7 +247,7 @@ public static class N3Contrast
         }
         else
         {
-            FixStops(issue.TextSlot, text, edgeColors);
+            FixStops(issue.TextSlot, text, edge);
         }
 
         // 縁の側
@@ -246,7 +262,7 @@ public static class N3Contrast
         }
         else
         {
-            FixStops(issue.EdgeSlot, edge, textColors);
+            FixStops(issue.EdgeSlot, edge, text);
         }
         return result;
     }

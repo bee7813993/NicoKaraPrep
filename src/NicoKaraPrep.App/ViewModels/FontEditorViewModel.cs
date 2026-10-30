@@ -298,11 +298,17 @@ public sealed partial class FontEditorViewModel : ObservableObject
         CompositionWiden = c.EndWidenPercent;
         CompositionLinked = c.Linked;
         bool missing = c.SourceIds.Any(id => _owner.FindFont(id) is null);
-        string role = _owner.PatternOf(f)?.Pattern.RoleName(N3FontComposer.MultiColorRole) is { Length: > 0 } r ? r : "メイン色";
+        var pattern = _owner.PatternOf(f)?.Pattern;
+        string role = pattern?.RoleName(N3FontComposer.MultiColorRole) is { Length: > 0 } r ? r : "メイン色";
+        var otherNames = pattern?.Roles.Skip(1).Where(n => n.Length > 0).ToList() ?? new List<string>();
+        string others = otherNames.Count > 0 ? string.Join("・", otherNames) : "ほかの役割";
         CompositionNote = missing
             ? "元のフォント設定が見つからないものがあるため、作り直せません（今の色のままです）"
             : c.Linked
-                ? $"元のフォント設定の{role}を変えると、この組み合わせの色も自動で作り直します。{role}以外の箇所は、最初の元のフォント設定と同じです"
+                ? c.SplitOtherRoles
+                    ? $"元のフォント設定の色を変えると、この組み合わせの色も自動で作り直します。{role}は元のフォント設定ごとの帯に分け、{others}も元のフォント設定で色が違えば同じ帯で分けます。そのほかの箇所は、最初の元のフォント設定と同じです"
+                    : $"元のフォント設定の{role}を変えると、この組み合わせの色も自動で作り直します。{role}以外の箇所は、最初の元のフォント設定と同じです" +
+                      $"（前の版の作り方です。作り直すと（元のフォント設定の{role}を変えたとき・連動の ✓ を付け直したときなど）、{others}も色が違えば同じ帯で分けます）"
                 : "元のフォント設定とは連動していません（色は今のまま変わりません）";
     }
 
@@ -481,8 +487,7 @@ public sealed partial class FontEditorViewModel : ObservableObject
         // 元のフォント設定と連動している組み合わせの多色の箇所は、ここで直すと連動が外れるので、元のフォント設定を開いて直してもらう
         if (!first.BothSolid && font.Composition is { Linked: true } composition)
         {
-            string role = _match?.Pattern.RoleName(N3FontComposer.MultiColorRole) is { Length: > 0 } r ? r : "メイン色";
-            lines.Add($"多色の箇所の色は、元のフォント設定の{role}から作っています。下のボタンで元のフォント設定を開いて色を直すと、この組み合わせも作り直します（ここで色を変えると、元のフォント設定との連動が外れます）");
+            lines.Add("多色の箇所の色は、元のフォント設定の色から作っています。下のボタンで元のフォント設定を開いて色を直すと、この組み合わせも作り直します（ここで色を変えると、元のフォント設定との連動が外れます）");
             foreach (var (id, name) in ContrastSourceFonts(font, composition, first)) ContrastSources.Add(new ContrastSourceItem($"「{name}」を開く", id));
             ContrastText = string.Join("\n", lines);
             return;
@@ -509,21 +514,25 @@ public sealed partial class FontEditorViewModel : ObservableObject
     }
 
     /// <summary>
-    /// 組み合わせのフォント設定の見づらい多色の箇所を直しに行く、元のフォント設定（Id と名前）。見づらいマーカーの色を
-    /// 多色の役割の色に持っているものを選ぶ（見つからなければ、元のフォント設定すべて）。
+    /// 組み合わせのフォント設定の見づらい多色の箇所を直しに行く、元のフォント設定（Id と名前）。見づらいマーカーの帯を作った
+    /// 元のフォント設定を選ぶ（帯は元のフォント設定ごとに、多色にする役割の色数ずつ並ぶ。ベース色を分けたときも同じ帯。
+    /// 見つからなければ、元のフォント設定すべて）。
     /// </summary>
     private List<(string Id, string Name)> ContrastSourceFonts(N3FontSet font, N3FontComposition composition, N3ContrastIssue issue)
     {
         var sources = composition.SourceIds.Select(id => _owner.FindFont(id)).OfType<N3FontSet>().ToList();
-        var bad = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-        if (issue.TextStop >= 0) bad.Add(issue.TextColor);
-        if (issue.EdgeStop >= 0) bad.Add(issue.EdgeColor);
-        var hits = sources.Where(src =>
+        var stops = new[] { issue.TextStop, issue.EdgeStop }.Where(s => s >= 0).ToList();
+        var hits = new List<N3FontSet>();
+        if (_match?.Pattern is { } pattern && sources.Count == composition.SourceIds.Count)
         {
-            var pattern = _owner.PatternOf(src)?.Pattern ?? _match?.Pattern;
-            return pattern is not null
-                && N3FontComposer.RoleColors(src.Detail, pattern, N3FontComposer.MultiColorRole).Any(c => bad.Contains(N3FontSet.NormalizeWeb16(c.Color)));
-        }).ToList();
+            int top = 0;
+            foreach (var src in sources)
+            {
+                int bands = N3FontComposer.RoleColors(src.Detail, pattern, N3FontComposer.MultiColorRole).Count;
+                if (stops.Any(s => s >= top && s < top + bands)) hits.Add(src);
+                top += bands;
+            }
+        }
         return (hits.Count > 0 ? hits : sources).Select(f => (f.Id, f.Name)).ToList();
     }
 

@@ -152,8 +152,15 @@ public sealed partial class ComposeDialog : ContentDialog
         var brush = N3FontComposer.MultiColorBrush(colors, SelectedBrushType, SelectedWiden);
         PreviewStrip.Background = N3BrushPreview.CreateGradient(N3BrushPreview.EffectiveStops(brush), sharp: brush.Type == N3Brush.TypeMilleFeuille);
         var widths = N3FontComposer.BandWidths(colors.Count, SelectedWiden);
+        var details = fonts.Select(f => f.Detail).ToList();
+        var split = Enumerable.Range(0, pattern.Roles.Count)
+            .Where(r => r != N3FontComposer.MultiColorRole && N3FontComposer.SplitsRole(details, pattern, r))
+            .Select(pattern.RoleName)
+            .ToList();
         BandsText.Text = $"{pattern.RoleName(N3FontComposer.MultiColorRole)}の帯の幅（上から）: {string.Join(" / ", widths.Select(w => $"{w * 100:0.#}%"))}\n" +
-                         "ほかの箇所（ベース色など）と、色以外の項目は、いちばん上のフォント設定と同じにします";
+                         (split.Count > 0
+                             ? $"{string.Join("・", split)}も元のフォント設定で色が違うので、同じ帯で分けます。ほかの箇所と、色以外の項目は、いちばん上のフォント設定と同じにします"
+                             : "ほかの箇所（ベース色など）と、色以外の項目は、いちばん上のフォント設定と同じにします（ベース色なども、元のフォント設定で色が違えば同じ帯で分けます）");
     }
 
     private void Commit()
