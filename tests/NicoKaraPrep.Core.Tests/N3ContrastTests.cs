@@ -106,6 +106,36 @@ public class N3ContrastTests
     }
 
     [Fact]
+    public void 判定_文字と縁が同じ帯に分かれた多色なら同じ帯の色どうしだけを比べる()
+    {
+        // 組み合わせでベース色も分けたもの: 上の帯は白の文字に青の縁、下の帯は黒に近い文字に黄の縁（白と黄は重ならない）
+        var f = Chara("000000");
+        f.Detail.Brushes[0] = Mille("FFFFFF", "1A1A1A", "808080");
+        f.Detail.Brushes[1] = Mille("5383C3", "FAD764", "808080");
+        Assert.True(N3Contrast.Ratio("FFFFFF", "FAD764") < N3Contrast.WarnRatio);
+        Assert.Empty(N3Contrast.Check(f));
+
+        // 帯の位置がずれていれば、これまでどおりすべての色と比べる
+        f.Detail.Brushes[1].Stops[1].Position = 0.4;
+        Assert.Contains(N3Contrast.Check(f), i => i.TextSlot == 0);
+    }
+
+    [Fact]
+    public void 候補_同じ帯に分かれた多色なら同じ帯の色に足りる明るさにする()
+    {
+        var f = Chara("000000");
+        f.Detail.Brushes[0] = Mille("1A1A1A", "FFFFFF", "808080");
+        f.Detail.Brushes[1] = Mille("5383C3", "FAD764", "808080");
+        var issue = Assert.Single(N3Contrast.Check(f));
+        Assert.Equal((0, 1, 1, 1), (issue.TextSlot, issue.EdgeSlot, issue.TextStop, issue.EdgeStop));
+
+        // 下の帯の黄の縁を、下の帯の白の文字に足りる暗さへ（上の帯の黒に近い文字とは比べない）
+        var stop = Assert.Single(N3Contrast.Suggest(issue, f.Detail), x => x.Kind == N3ContrastSuggestionKind.StopLightness && x.Slot == 1);
+        Assert.Equal((1, "FAD764"), (stop.Stop, stop.OriginalColor));
+        Assert.True(N3Contrast.Ratio(stop.Color, "FFFFFF") >= N3Contrast.TargetRatio, stop.Color);
+    }
+
+    [Fact]
     public void 候補_文字を暗く_縁を文字の濃い色に_縁を黒に()
     {
         var issue = N3Contrast.Check(Chara("FFFF00")).Single(i => i.TextSlot == 4);

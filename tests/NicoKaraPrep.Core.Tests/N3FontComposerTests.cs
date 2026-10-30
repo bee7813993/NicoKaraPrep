@@ -105,17 +105,18 @@ public class N3FontComposerTests
     // ------------------------------------------------------------ 作る
 
     [Fact]
-    public void 作る_メイン色だけ多色_ベース色と色以外は最初の元フォント()
+    public void 作る_メイン色は多色_そろったベース色と色以外は最初の元フォント()
     {
         var kozue = Chara1("（梢）", "68BE8D");
         var ginko = Chara1("（吟子）", "A2D7DD");
-        ginko.Detail.Brushes[0] = Solid("F0F0F0"); // 2 人目のベース色は使わない
+        ginko.Detail.Brushes[0] = Solid("F0F0F0"); // 1 箇所だけ違っても、ベース色（いちばん多い白）はそろっているので分けない
         var f = N3FontComposer.Create(new[] { kozue, ginko }, Chara, N3Brush.TypeMilleFeuille, 10);
 
         Assert.Equal("（梢）（吟子）", f.Name);
         Assert.NotEqual(kozue.Id, f.Id);
         Assert.Equal(new[] { kozue.Id, ginko.Id }, f.Composition!.SourceIds);
         Assert.True(f.Composition.Linked);
+        Assert.True(f.Composition.SplitOtherRoles);
         Assert.Equal(N3ColorPatterns.CharaInverseId, f.ColorPatternId);
         foreach (int s in new[] { 1, 4, 7 })
         {
@@ -140,6 +141,73 @@ public class N3FontComposerTests
         Assert.Equal("0:111111 0.3333:222222 0.6667:333333 1:808080", Stops(abc.Detail.Brushes[4]));
     }
 
+    /// <summary>ベース色（[0][3][5]）を変える。</summary>
+    private static N3FontSet WithBase(N3FontSet f, string color)
+    {
+        foreach (int s in new[] { 0, 3, 5 }) f.Detail.Brushes[s] = Solid(color);
+        return f;
+    }
+
+    [Fact]
+    public void 作る_ベース色が違えばメイン色と同じ帯で分ける_縁2は最初の元フォント()
+    {
+        var kozue = Chara1("（梢）", "68BE8D");
+        var ginko = WithBase(Chara1("（吟子）", "A2D7DD"), "1A1A1A");
+        ginko.Detail.Brushes[2] = Solid("333333");
+        var f = N3FontComposer.Create(new[] { kozue, ginko }, Chara, N3Brush.TypeMilleFeuille, 10);
+
+        foreach (int s in new[] { 1, 4, 7 }) Assert.Equal("0:68BE8D 0.5:A2D7DD 1:808080", Stops(f.Detail.Brushes[s]));
+        foreach (int s in new[] { 0, 3, 5 })
+        {
+            Assert.Equal(N3Brush.TypeMilleFeuille, f.Detail.Brushes[s].Type);
+            Assert.Equal("0:FFFFFF 0.5:1A1A1A 1:808080", Stops(f.Detail.Brushes[s]));
+        }
+        Assert.NotSame(f.Detail.Brushes[0], f.Detail.Brushes[3]);
+        Assert.Equal("000000", f.Detail.Brushes[2].Color); // 縁 2（個別）は最初の元フォント
+        Assert.True(N3ColorPatterns.Evaluate(f.Detail, Chara).IsExact);
+
+        // 3 人で 1 人だけ違う: 帯はメイン色と同じ位置（端を広く）。グラデーションも同じ
+        var megu = Chara1("（慈）", "C8C2C6");
+        var three = N3FontComposer.Create(new[] { kozue, megu, ginko }, Chara, N3Brush.TypeMilleFeuille, 10);
+        Assert.Equal("0:68BE8D 0.3438:C8C2C6 0.6563:A2D7DD 1:808080", Stops(three.Detail.Brushes[4]));
+        Assert.Equal("0:FFFFFF 0.3438:FFFFFF 0.6563:1A1A1A 1:808080", Stops(three.Detail.Brushes[5]));
+        var grad = N3FontComposer.Create(new[] { kozue, megu, ginko }, Chara, N3Brush.TypeGradient, 10);
+        Assert.Equal("0:FFFFFF 0.5:FFFFFF 1:1A1A1A", Stops(grad.Detail.Brushes[0]));
+    }
+
+    [Fact]
+    public void 作る_元が組み合わせフォントならベース色をその帯の数に合わせる()
+    {
+        var a = Chara1("（A）", "111111");
+        var b = WithBase(Chara1("（B）", "222222"), "EEEEEE");
+        var c = WithBase(Chara1("（C）", "333333"), "DDDDDD");
+        var ab = N3FontComposer.Create(new[] { a, b }, Chara, N3Brush.TypeMilleFeuille, 0);
+        Assert.Equal("0:FFFFFF 0.5:EEEEEE 1:808080", Stops(ab.Detail.Brushes[0]));
+        var abc = N3FontComposer.Create(new[] { ab, c }, Chara, N3Brush.TypeMilleFeuille, 0);
+        Assert.Equal("0:FFFFFF 0.3333:EEEEEE 0.6667:DDDDDD 1:808080", Stops(abc.Detail.Brushes[0]));
+
+        // 組み合わせのベース色が 1 色なら、その帯すべてに同じ色
+        var aa = N3FontComposer.Create(new[] { a, Chara1("（A2）", "444444") }, Chara, N3Brush.TypeMilleFeuille, 0);
+        Assert.Equal(N3Brush.TypeSolid, aa.Detail.Brushes[0].Type);
+        var aac = N3FontComposer.Create(new[] { aa, c }, Chara, N3Brush.TypeMilleFeuille, 0);
+        Assert.Equal("0:FFFFFF 0.3333:FFFFFF 0.6667:DDDDDD 1:808080", Stops(aac.Detail.Brushes[3]));
+    }
+
+    [Fact]
+    public void 作る_ベース色が画像か未指定の元があれば分けない()
+    {
+        var kozue = Chara1("（梢）", "68BE8D");
+        var ginko = Chara1("（吟子）", "A2D7DD");
+        foreach (int s in new[] { 0, 3, 5 }) ginko.Detail.Brushes[s] = new N3Brush { Type = N3Brush.TypeBitmap, BitmapPath = "tex.png" };
+        var f = N3FontComposer.Create(new[] { kozue, ginko }, Chara, N3Brush.TypeMilleFeuille, 10);
+        Assert.Equal(N3Brush.TypeSolid, f.Detail.Brushes[0].Type);
+        Assert.Equal("FFFFFF", f.Detail.Brushes[0].Color);
+
+        var unset = WithBase(Chara1("（慈）", "C8C2C6"), "");
+        var g = N3FontComposer.Create(new[] { kozue, unset }, Chara, N3Brush.TypeMilleFeuille, 10);
+        Assert.Equal("FFFFFF", g.Detail.Brushes[5].Color);
+    }
+
     [Fact]
     public void 作り直す_元のメイン色を直すと作り直せる_手で変えたかも分かる()
     {
@@ -157,6 +225,54 @@ public class N3FontComposerTests
 
         // 元が見つからなければ作り直さない
         Assert.False(N3FontComposer.Recompose(f, new List<N3FontSet> { kozue, f }, patterns));
+    }
+
+    [Fact]
+    public void 作り直す_2人目のベース色を変えると分ける_そろえ直すと1色に戻る()
+    {
+        var kozue = Chara1("（梢）", "68BE8D");
+        var ginko = Chara1("（吟子）", "A2D7DD");
+        var f = N3FontComposer.Create(new[] { kozue, ginko }, Chara, N3Brush.TypeMilleFeuille, 10);
+        var all = new List<N3FontSet> { kozue, ginko, f };
+        var patterns = N3ColorPatterns.All(null);
+
+        WithBase(ginko, "1A1A1A");
+        Assert.False(N3FontComposer.MatchesSources(f, all, patterns));
+        Assert.True(N3FontComposer.Recompose(f, all, patterns));
+        Assert.Equal("0:FFFFFF 0.5:1A1A1A 1:808080", Stops(f.Detail.Brushes[0]));
+
+        WithBase(ginko, "FFFFFF");
+        Assert.False(N3FontComposer.MatchesSources(f, all, patterns));
+        Assert.True(N3FontComposer.Recompose(f, all, patterns));
+        Assert.Equal(N3Brush.TypeSolid, f.Detail.Brushes[0].Type);
+        Assert.Equal("FFFFFF", f.Detail.Brushes[0].Color);
+    }
+
+    [Fact]
+    public void 作り直す_前の版の作り方のものは手で変えたとみなさない_作り直すとベース色も分ける()
+    {
+        var kozue = Chara1("（梢）", "68BE8D");
+        var ginko = WithBase(Chara1("（吟子）", "A2D7DD"), "1A1A1A");
+        var all = new List<N3FontSet> { kozue, ginko };
+        var patterns = N3ColorPatterns.All(null);
+
+        // 前の版で作ったもの: メイン色だけ多色、ベース色は最初の元フォントの白（保存に SplitOtherRoles が無い）
+        var f = N3FontComposer.Create(new[] { kozue, ginko }, Chara, N3Brush.TypeMilleFeuille, 10);
+        foreach (int s in new[] { 0, 3, 5 }) f.Detail.Brushes[s] = Solid("FFFFFF");
+        f.Composition!.SplitOtherRoles = false;
+        all.Add(f);
+        Assert.True(N3FontComposer.MatchesSources(f, all, patterns));
+
+        // ベース色を手で変えたら、前の版のものでも違うと分かる
+        var edited = f.Clone();
+        edited.Detail.Brushes[0] = Solid("EEEEEE");
+        Assert.False(N3FontComposer.MatchesSources(edited, all, patterns));
+
+        // 作り直すと今の作り方になる
+        Assert.True(N3FontComposer.Recompose(f, all, patterns));
+        Assert.True(f.Composition.SplitOtherRoles);
+        Assert.Equal("0:FFFFFF 0.5:1A1A1A 1:808080", Stops(f.Detail.Brushes[5]));
+        Assert.True(N3FontComposer.MatchesSources(f, all, patterns));
     }
 
     // ------------------------------------------------------------ 歌詞から見つける
@@ -242,5 +358,15 @@ public class N3FontComposerTests
         Assert.True(f.Composition.Linked);
         Assert.Equal(N3Brush.TypeGradient, c.Composition.BrushType);
         Assert.Equal(20, c.Composition.EndWidenPercent);
+        Assert.True(c.Composition.SplitOtherRoles);
+    }
+
+    [Fact]
+    public void 保存_分け方の版は保存に無ければ前の版()
+    {
+        var old = System.Text.Json.JsonSerializer.Deserialize<N3FontComposition>("""{"SourceIds":["a","b"],"BrushType":2,"EndWidenPercent":10,"Linked":true}""")!;
+        Assert.False(old.SplitOtherRoles);
+        var json = System.Text.Json.JsonSerializer.Serialize(new N3FontComposition { SplitOtherRoles = true });
+        Assert.True(System.Text.Json.JsonSerializer.Deserialize<N3FontComposition>(json)!.SplitOtherRoles);
     }
 }

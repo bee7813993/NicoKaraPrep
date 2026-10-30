@@ -18,18 +18,26 @@ public sealed class N3FontComposition
     /// <summary>元のフォント設定の色が変わったら作り直すか。</summary>
     public bool Linked { get; set; } = true;
 
+    /// <summary>
+    /// ほかの役割（ベース色など）も、元のフォント設定で色が違えば帯に分ける作り方か。これより前に作ったもの（保存に無いもの）は false で、
+    /// メイン色だけを分け、ほかは最初の元フォント設定の写し。作り直すときに true にする。
+    /// </summary>
+    public bool SplitOtherRoles { get; set; }
+
     public N3FontComposition Clone() => new()
     {
         SourceIds = SourceIds.ToList(),
         BrushType = BrushType,
         EndWidenPercent = EndWidenPercent,
         Linked = Linked,
+        SplitOtherRoles = SplitOtherRoles,
     };
 }
 
 /// <summary>
 /// 組み合わせフォントを作る・作り直す。配色パターンの最初の役割（メイン色の反転ならメイン色）を多色（ミルフィーユかグラデーション）にし、
-/// それ以外の箇所（ベース色・縁 2）と色以外の項目は最初の元フォント設定から写す。
+/// ほかの役割（ベース色など）も、元のフォント設定で色が違えば同じ帯で多色にする。色がそろっている役割・役割に入らない箇所（縁 2）と
+/// 色以外の項目は最初の元フォント設定から写す。
 /// </summary>
 public static class N3FontComposer
 {
@@ -146,18 +154,51 @@ public static class N3FontComposer
     // ------------------------------------------------------------ 作る
 
     /// <summary>
-    /// 組み合わせの配色を target に書く: パターンの多色にする役割の箇所には元のフォント設定の役割の色を並べた多色の塗りを、
+    /// 多色にする役割のほかの役割（ベース色など）を、元のフォント設定ごとの帯に分けるか: 元のフォント設定の役割の色
+    /// （役割の箇所でいちばん多く使われている塗り）がどれかで違うとき。役割に箇所が無い・画像・未指定の色の元があれば分けない
+    /// （帯に並べられないため、最初の元フォント設定の写しのままにする）。
+    /// </summary>
+    public static bool SplitsRole(IReadOnlyList<N3FontDetail> sources, N3ColorPattern pattern, int role)
+    {
+        var brushes = new List<N3Brush>();
+        foreach (var s in sources)
+        {
+            int slot = N3ColorPatterns.RepresentativeSlot(s, pattern, role);
+            if (slot < 0 || !IsColorBrush(s.Brushes[slot])) return false;
+            brushes.Add(s.Brushes[slot]);
+        }
+        return brushes.Skip(1).Any(b => !N3ColorPatterns.SameLook(brushes[0], b));
+    }
+
+    /// <summary>帯に並べられる色の塗りか（単色は色を指定したもの、多色はマーカーのあるもの。画像は除く）。</summary>
+    private static bool IsColorBrush(N3Brush b) => b.Type switch
+    {
+        N3Brush.TypeSolid => N3FontSet.IsValidWeb16(b.Color),
+        N3Brush.TypeGradient or N3Brush.TypeMilleFeuille => b.Stops.Count > 0,
+        _ => false,
+    };
+
+    /// <summary>色の並びを帯 n 本に割り当てる（帯 j に色 j × 色数 / n。色数と帯の数が同じならそのまま、1 色ならすべての帯に同じ色）。</summary>
+    private static IEnumerable<(string Color, int Alpha)> Spread(IReadOnlyList<(string Color, int Alpha)> colors, int bands) =>
+        Enumerable.Range(0, bands).Select(j => colors[j * colors.Count / bands]);
+
+    /// <summary>
+    /// 組み合わせの配色を target に書く: パターンの多色にする役割の箇所には元のフォント設定の役割の色を並べた多色の塗りを入れる。
+    /// splitOtherRoles なら、ほかの役割も元のフォント設定で色が違えば（<see cref="SplitsRole"/>）同じ帯で分けた多色にする
+    /// （帯は元のフォント設定ごとの多色にする役割の色数。元が組み合わせフォントなら、その帯の数に色を割り当てる）。
     /// それ以外の箇所には最初の元フォント設定の塗りの写しを入れる。
     /// </summary>
-    public static void ComposeColors(N3FontDetail target, IReadOnlyList<N3FontDetail> sources, N3ColorPattern pattern, int brushType, double endWidenPercent)
+    public static void ComposeColors(N3FontDetail target, IReadOnlyList<N3FontDetail> sources, N3ColorPattern pattern, int brushType, double endWidenPercent, bool splitOtherRoles = true)
     {
         if (sources.Count == 0) return;
-        var colors = sources.SelectMany(s => RoleColors(s, pattern, MultiColorRole)).ToList();
-        var multi = MultiColorBrush(colors, brushType, endWidenPercent);
-        var roleSlots = pattern.SlotsOf(MultiColorRole);
-        for (int i = 0; i < N3FontDetail.BrushCount; i++)
+        for (int i = 0; i < N3FontDetail.BrushCount; i++) target.Brushes[i] = sources[0].Brushes[i].Clone();
+        var bands = sources.Select(s => RoleColors(s, pattern, MultiColorRole).Count).ToList();
+        for (int role = 0; role < pattern.Roles.Count; role++)
         {
-            target.Brushes[i] = roleSlots.Contains(i) ? multi.Clone() : sources[0].Brushes[i].Clone();
+            if (role != MultiColorRole && !(splitOtherRoles && SplitsRole(sources, pattern, role))) continue;
+            var colors = sources.SelectMany((s, k) => Spread(RoleColors(s, pattern, role), bands[k])).ToList();
+            var multi = MultiColorBrush(colors, brushType, endWidenPercent);
+            foreach (int slot in pattern.SlotsOf(role)) target.Brushes[slot] = multi.Clone();
         }
     }
 
@@ -184,6 +225,7 @@ public static class N3FontComposer
             BrushType = brushType,
             EndWidenPercent = endWidenPercent,
             Linked = linked,
+            SplitOtherRoles = true,
         };
         ComposeColors(font.Detail, sources.Select(s => s.Detail).ToList(), pattern, brushType, endWidenPercent);
         return font;
@@ -198,9 +240,13 @@ public static class N3FontComposer
     }
 
     /// <summary>
-    /// 組み合わせフォントの配色を、元のフォント設定の今の色で作り直す。元のフォント設定が 1 つでも見つからなければ何もしない（false）。
+    /// 組み合わせフォントの配色を、元のフォント設定の今の色で作り直す（前の版の作り方のものは、今の作り方にする）。
+    /// 元のフォント設定が 1 つでも見つからなければ何もしない（false）。
     /// </summary>
-    public static bool Recompose(N3FontSet composed, IReadOnlyList<N3FontSet> all, IReadOnlyList<N3ColorPattern> patterns)
+    public static bool Recompose(N3FontSet composed, IReadOnlyList<N3FontSet> all, IReadOnlyList<N3ColorPattern> patterns) =>
+        Recompose(composed, all, patterns, upgrade: true);
+
+    private static bool Recompose(N3FontSet composed, IReadOnlyList<N3FontSet> all, IReadOnlyList<N3ColorPattern> patterns, bool upgrade)
     {
         if (composed.Composition is not { } c || c.SourceIds.Count == 0) return false;
         var sources = new List<N3FontSet>();
@@ -209,16 +255,20 @@ public static class N3FontComposer
             if (N3FontLibrary.Find(all, id) is not { } s || ReferenceEquals(s, composed)) return false;
             sources.Add(s);
         }
+        if (upgrade) c.SplitOtherRoles = true;
         var pattern = PatternFor(composed, sources, patterns);
-        ComposeColors(composed.Detail, sources.Select(s => s.Detail).ToList(), pattern, c.BrushType, c.EndWidenPercent);
+        ComposeColors(composed.Detail, sources.Select(s => s.Detail).ToList(), pattern, c.BrushType, c.EndWidenPercent, c.SplitOtherRoles);
         return true;
     }
 
-    /// <summary>作り直したときの配色と今の配色が同じか（組み合わせフォントの色を手で変えたかどうかの判定に使う）。</summary>
+    /// <summary>
+    /// 作り直したときの配色と今の配色が同じか（組み合わせフォントの色を手で変えたかどうかの判定に使う）。
+    /// 前の版の作り方のもの（<see cref="N3FontComposition.SplitOtherRoles"/> が false）は、その作り方で比べる。
+    /// </summary>
     public static bool MatchesSources(N3FontSet composed, IReadOnlyList<N3FontSet> all, IReadOnlyList<N3ColorPattern> patterns)
     {
         var trial = composed.Clone();
-        if (!Recompose(trial, all, patterns)) return true;
+        if (!Recompose(trial, all, patterns, upgrade: false)) return true;
         for (int i = 0; i < N3FontDetail.BrushCount; i++)
         {
             if (!N3ColorPatterns.SameLook(trial.Detail.Brushes[i], composed.Detail.Brushes[i])) return false;
