@@ -60,11 +60,7 @@ public static class N3ShowTimeAdjuster
     /// <summary>自動調整で計算し直す表示時刻（手で指定した値以外）を外す（値を持たない = 自動で計算する状態に戻す）。</summary>
     public static void ClearRecomputable(LyricsDocument doc)
     {
-        foreach (var line in doc.Lines)
-        {
-            if (line.ShowBeginCs is not null && line.ShowBeginOrigin != ShowTimeOrigin.Manual) line.ShowBeginCs = null;
-            if (line.ShowEndCs is not null && line.ShowEndOrigin != ShowTimeOrigin.Manual) line.ShowEndCs = null;
-        }
+        foreach (var line in doc.Lines) line.ClearRecomputableShowTimes();
     }
 
     /// <summary>

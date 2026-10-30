@@ -283,7 +283,7 @@ public partial class MainViewModel
         // 3) ページ衝突チェック用の実表示区間
         if (choices.LineTimes)
         {
-            _n3projLineTimes = preview.Settings.LineTimes.Count > 0 ? preview.Settings.LineTimes : null;
+            _n3projLineTimes = preview.Tabs.Any(t => t.TimedLineCount > 0) ? preview.Tabs : null;
             done.Add($"実際の表示区間 {preview.Settings.LineTimes.Count} 行分");
         }
 
@@ -567,7 +567,8 @@ public partial class MainViewModel
             var s = N3ProjFormat.Read(n3proj);
             ApplyN3ProjCheckFont(s);
             Settings.Save();
-            _n3projLineTimes = s.LineTimes.Count > 0 ? s.LineTimes : null;
+            var tabs = N3ProjImport.ReadSourceTabs(N3ProjFormat.ReadJsonObject(n3proj));
+            _n3projLineTimes = tabs.Any(t => t.TimedLineCount > 0) ? tabs : null;
             string font = s.MainFont is { } f ? $"{f.FontName} {Settings.FontSizePx:0.#}px・" : "";
             StatusText += $"　同じフォルダの {Path.GetFileName(n3proj)} から {font}画面 {s.ScreenWidth}px・実際の表示区間 {s.LineTimes.Count} 行分を読み込みました";
         }

@@ -112,6 +112,106 @@ public class N3ShowTimeAdjusterTests
     }
 
     [Fact]
+    public void 行の頭を書き足して分けても_分ける前の行の自動調整の値を前半の行に残さない()
+    {
+        // 自動調整したあと、1 行目の頭に前奏の行を書き足して（行エディタの「適用」と同じ手順）、その後ろで分けてページを区切った。
+        // 分ける前の行の値（8500〜12800）を前奏の行が持ったままだと、前奏の行が歌い出しの後から出て、次のページの行と重なる
+        var doc = TwoPages();
+        N3ShowTimeAdjuster.Run(doc, Show());
+        var edited = TextEditModeFormat.ParseLyricLine("[00:01:00]前[00:05:00]" + TextEditModeFormat.WriteLyricLine(doc.Lines[0]));
+        edited.CopyLineSettingsFrom(doc.Lines[0]);
+        doc.Lines[0] = edited;
+        int split = doc.Lines[0].Chars.FindIndex(c => c.Text == "あ");
+        LineOperations.SplitLine(doc, 0, split);
+        LineOperations.InsertEmptyLine(doc, 1);
+
+        Assert.Equal("前", doc.Lines[0].GetDisplayText());
+        Assert.Equal("あ", doc.Lines[2].GetDisplayText());
+        Assert.Null(doc.Lines[0].ShowBeginCs);
+        Assert.Null(doc.Lines[0].ShowEndCs);
+        Assert.Null(doc.Lines[2].ShowBeginCs);
+        Assert.Null(doc.Lines[2].ShowEndCs);
+        var plans = N3ShowTimePlanner.Plan(doc, Show());
+        Assert.Equal((0, 5800), (plans[0].BeginMs, plans[0].EndMs)); // 前奏の行は自分のタイミング（歌い出し 1000 − 1500 → 0、歌い終わり 5000 ＋ 800）
+        Assert.Equal((8500, 12800), (plans[2].BeginMs, plans[2].EndMs));
+    }
+
+    [Fact]
+    public void 行を分けると_手で直した表示開始は前半の行に_表示終了は後半の行に付ける()
+    {
+        var doc = Lyrics("[00:10:00]あ[00:11:00]い[00:12:00]", "", "[00:16:00]う[00:18:00]");
+        doc.Lines[0].ShowBeginCs = 900;
+        doc.Lines[0].ShowBeginOrigin = ShowTimeOrigin.Manual;
+        doc.Lines[0].ShowEndCs = 1300;
+        doc.Lines[0].ShowEndOrigin = ShowTimeOrigin.Manual;
+
+        LineOperations.SplitLine(doc, 0, 1);
+
+        Assert.Equal(900, doc.Lines[0].ShowBeginCs);
+        Assert.True(doc.Lines[0].HasManualShowBegin);
+        Assert.Null(doc.Lines[0].ShowEndCs);
+        Assert.Null(doc.Lines[1].ShowBeginCs);
+        Assert.Equal(1300, doc.Lines[1].ShowEndCs);
+        Assert.True(doc.Lines[1].HasManualShowEnd);
+    }
+
+    [Fact]
+    public void 行を結ぶと_自動調整の値は外し_表示終了は後ろの行の手で直した値を使う()
+    {
+        var doc = TwoPages();
+        N3ShowTimeAdjuster.Run(doc, Show());
+        doc.Lines[0].ShowBeginOrigin = ShowTimeOrigin.Manual; // 850 を手で直した値に
+        doc.Lines[1].ShowEndCs = 1500;
+        doc.Lines[1].ShowEndOrigin = ShowTimeOrigin.Manual;
+
+        LineOperations.JoinWithNextLine(doc, 0);
+
+        Assert.Equal("あい", doc.Lines[0].GetDisplayText());
+        Assert.Equal((850, 1500), (doc.Lines[0].ShowBeginCs, doc.Lines[0].ShowEndCs));
+        Assert.True(doc.Lines[0].HasManualShowBegin);
+        Assert.True(doc.Lines[0].HasManualShowEnd);
+
+        // 自動調整の値だけなら、どちらも外す（前の行の表示終了 12800 は、結んだ行の途中の時刻）
+        var auto = TwoPages();
+        N3ShowTimeAdjuster.Run(auto, Show());
+        LineOperations.JoinWithNextLine(auto, 0);
+        Assert.Null(auto.Lines[0].ShowBeginCs);
+        Assert.Null(auto.Lines[0].ShowEndCs);
+
+        // 空行と結ぶ（ページ区切りを消す）ときは、前の行の手で直した値のまま
+        var page = TwoPages();
+        page.Lines[1].ShowEndCs = 1500;
+        page.Lines[1].ShowEndOrigin = ShowTimeOrigin.Manual;
+        LineOperations.JoinWithNextLine(page, 1);
+        Assert.Equal(1500, page.Lines[1].ShowEndCs);
+        Assert.True(page.Lines[1].HasManualShowEnd);
+    }
+
+    [Fact]
+    public void 行を直してタイムタグが変わると_読み込んだ値と自動調整の値は写さず_手で直した値は写す()
+    {
+        var doc = TwoPages();
+        N3ShowTimeAdjuster.Run(doc, Show());
+        doc.Lines[0].ShowBeginOrigin = ShowTimeOrigin.Manual;
+        doc.Lines[1].ShowEndOrigin = ShowTimeOrigin.Loaded;
+
+        var first = TextEditModeFormat.ParseLyricLine("[00:10:50]あ[00:12:00]");
+        first.CopyLineSettingsFrom(doc.Lines[0]);
+        Assert.Equal(850, first.ShowBeginCs);
+        Assert.Null(first.ShowEndCs);
+
+        var second = TextEditModeFormat.ParseLyricLine("[00:12:50]い[00:14:50]");
+        second.CopyLineSettingsFrom(doc.Lines[1]);
+        Assert.Null(second.ShowBeginCs);
+        Assert.Null(second.ShowEndCs);
+
+        // タイムタグが同じ（文字だけ直した）なら、自動調整の値もそのまま
+        var same = TextEditModeFormat.ParseLyricLine("[00:12:50]いえ[00:14:00]");
+        same.CopyLineSettingsFrom(doc.Lines[1]);
+        Assert.Equal((850, 1480), (same.ShowBeginCs, same.ShowEndCs));
+    }
+
+    [Fact]
     public void 写しと保存_出どころも写し_以前の版のファイルは手動指定として読む()
     {
         var doc = TwoPages();

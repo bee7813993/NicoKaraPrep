@@ -7,6 +7,9 @@ public static class LineOperations
     /// 行 lineIndex を charIndex（CharUnit 単位）で 2 行に分割する。
     /// 前半行の行末タグが無い場合は、後半行の先頭タグを行末タグとして補う
     /// （分割前のワイプ終了時刻を保つため）。
+    /// 表示時刻は、分割前の行のタイミングで決めた値（読み込んだ値・自動調整の値）を外す（どちらの行にも当てはまらない。
+    /// 前半の行に残すと、前半の行が後半の歌い終わりまで出ている扱いになり、次のページの行と重なる）。
+    /// 手で指定した表示開始は前半の行（行の出始め）に、表示終了は後半の行（行の消え際）に付ける。
     /// </summary>
     public static void SplitLine(LyricsDocument doc, int lineIndex, int charIndex)
     {
@@ -40,6 +43,14 @@ public static class LineOperations
         line.Chars.RemoveRange(charIndex, line.Chars.Count - charIndex);
         line.EndTimeCs = null;
 
+        line.ClearRecomputableShowTimes();
+        if (line.ShowEndCs is not null)
+        {
+            newLine.ShowEndCs = line.ShowEndCs;
+            newLine.ShowEndOrigin = line.ShowEndOrigin;
+            line.ShowEndCs = null;
+        }
+
         // 分割位置をまたぐルビ連結は切り離す
         if (line.Chars.Count > 0)
         {
@@ -62,6 +73,8 @@ public static class LineOperations
     /// <summary>
     /// 行 lineIndex に次の行を結合する。
     /// 前半行の行末タグは、次行の先頭タグと同時刻なら捨て、異なるならスペーサー（2連タグ）として残す。
+    /// 表示時刻は、結合前のタイミングで決めた値（読み込んだ値・自動調整の値）を外す。表示終了は次行の手で指定した値を使う
+    /// （前半行の表示終了は結合した行の途中の時刻なので外す。空行との結合（ページ区切りを消す）は前半行の値のまま）。
     /// </summary>
     /// <param name="insertSpace">true なら結合位置（改行のあった場所）に半角スペースを挟む。</param>
     public static void JoinWithNextLine(LyricsDocument doc, int lineIndex, bool insertSpace = false)
@@ -69,6 +82,13 @@ public static class LineOperations
         if (lineIndex + 1 >= doc.Lines.Count) return;
         var line = doc.Lines[lineIndex];
         var next = doc.Lines[lineIndex + 1];
+
+        if (!next.IsEmpty)
+        {
+            line.ShowEndCs = next.ShowEndCs;
+            line.ShowEndOrigin = next.ShowEndOrigin;
+        }
+        line.ClearRecomputableShowTimes();
 
         if (line.EndTimeCs is int endCs)
         {
