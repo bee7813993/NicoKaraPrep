@@ -1730,33 +1730,25 @@ public partial class MainViewModel : ObservableObject
 
     // -------------------------------------------------- ニコカラメーカー連携
 
-    /// <summary>n3proj から取り込んだ行ごとの実表示区間（ページ衝突チェックで推定値の代わりに使う）。</summary>
-    private List<N3ProjLineTime>? _n3projLineTimes;
+    /// <summary>
+    /// 実表示区間を取り込んだ n3proj の歌詞設定タブ（ページ衝突チェックで推定値の代わりに使う。行と表示時刻は <see cref="N3ProjSourceTab"/>）。
+    /// </summary>
+    private List<N3ProjSourceTab>? _n3projLineTimes;
 
     /// <summary>
     /// n3proj の実表示区間と、行に持たせた表示時刻（表示終了）をドキュメントの行に対応付ける。
-    /// 実表示区間は、行の最初の実文字のタグ時刻（絵文字の先行タグ除く）が ±50ms で一致した行だけに適用する。
+    /// 実表示区間は、歌詞（文字とタイムタグ。絵文字の開始タグは除く）が n3proj の行と同じ行だけに適用する
+    /// （<see cref="N3ProjImport.FindSource"/>。読み込みの照合と同じ）。書き出したあとに歌詞を直した行・分けた行には当てない
+    /// （同じフォルダの n3proj は前に書き出したものが多く、歌い出しの時刻だけで当てると、分ける前の行の表示終了が前半の行に付く）。
     /// ニコカラメーカーの時刻はタイムタグと同じ基準の ms（@Offset は適用前）。
     /// </summary>
     private Dictionary<int, (int StartCs, int EndCs)>? BuildLineDisplayOverrides(Func<CharUnit, bool>? exclude)
     {
         var result = new Dictionary<int, (int, int)>();
-        if (_n3projLineTimes is { Count: > 0 } lineTimes)
+        if (_n3projLineTimes is { Count: > 0 } sources)
         {
-            for (int i = 0; i < Document.Lines.Count; i++)
-            {
-                if (Document.Lines[i].GetFirstTimeCs(exclude) is not int firstCs) continue;
-
-                foreach (var lt in lineTimes)
-                {
-                    int firstCharCs = lt.FirstCharBeginMs / 10;
-                    if (Math.Abs(firstCharCs - firstCs) <= 5) // ±50ms
-                    {
-                        result[i] = (lt.ShowBeginMs / 10, lt.ShowEndMs / 10);
-                        break;
-                    }
-                }
-            }
+            var (_, matched) = N3ProjImport.FindSource(Document, _activeTab.Name, sources, CreateEmojiMatcher());
+            foreach (var (i, (beginMs, endMs)) in matched) result[i] = (beginMs / 10, endMs / 10);
         }
 
         // 行に持たせた表示時刻（手で直した値・読み込んだ値・自動調整の値）は実表示区間より優先する

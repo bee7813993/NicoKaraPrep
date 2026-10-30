@@ -43,6 +43,8 @@ public sealed partial class MainWindow : Window
         RefreshSaveMenuTexts();
 
         StyledLyricsMenuItem.IsChecked = ViewModel.Settings.LineListStyledLyrics;
+        ViewModel.Lines.CollectionChanged += (_, _) => UpdateSelectAllLinesCheck(); // 行の数が変わると「すべて選択中」かどうかが変わる
+        UpdateSelectAllLinesCheck();
         ViewModel.RefreshInsertPhrases();
         // 絵文字挿入ビューの行のダブルクリックで行の編集（TextBox が単語の選択で処理済みにするので、処理済みのものも受け取る）
         InsertEditor.AddHandler(UIElement.DoubleTappedEvent, new DoubleTappedEventHandler((_, _) => OpenInsertLineEditDialog(-1)), handledEventsToo: true);
@@ -628,6 +630,7 @@ public sealed partial class MainWindow : Window
         {
             line.IsSelected = selected.Contains(line);
         }
+        UpdateSelectAllLinesCheck();
 
         // 挿入ビュー表示中は行情報欄の選択ハイライトも追従させる
         QueueGutterRefresh();
@@ -645,6 +648,33 @@ public sealed partial class MainWindow : Window
         {
             LineList.SelectedItems.Add(vm);
         }
+    }
+
+    /// <summary>
+    /// 行リストの上の全行選択: すべての行を選ぶ。すべて選んでいるときは選択を解除する
+    /// （ふだんは今の行を 1 行選んでいるので、一部を選んでいるときも 1 回押せばすべて選べるように）。
+    /// </summary>
+    private void OnSelectAllLinesClick(object sender, RoutedEventArgs e)
+    {
+        if (LineList.SelectedItems.Count < ViewModel.Lines.Count)
+        {
+            LineList.SelectAll();
+        }
+        else
+        {
+            LineList.SelectedItems.Clear();
+        }
+        UpdateSelectAllLinesCheck(); // 選択が変わらなかったとき（行が無いなど）も、押して変わったチェックの印を戻す
+    }
+
+    /// <summary>全行選択のチェックの印（すべて選択中 = ✓・一部 = ―・なし = 空）と、選んでいる行の数を出し直す。</summary>
+    private void UpdateSelectAllLinesCheck()
+    {
+        int total = ViewModel.Lines.Count;
+        int selected = LineList.SelectedItems.Count;
+        SelectAllLinesCheck.IsChecked = selected == 0 ? false : selected >= total ? true : null;
+        SelectAllLinesCheck.IsEnabled = total > 0;
+        SelectAllLinesText.Text = selected == 0 ? "すべて選択" : $"{selected} / {total} 行を選択中";
     }
 
     private void OnApplyLineClick(object sender, RoutedEventArgs e)

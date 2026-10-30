@@ -129,6 +129,8 @@ public sealed class LyricsLine
     /// <summary>
     /// 歌詞を書き換えて作り直した行（テキスト編集モードの書き方から読み直した行など）へ、元の行 <paramref name="from"/> の
     /// 歌詞に依らない行の設定（タブ分離の元の行位置キー・表示時刻・行のフォント・レイアウト・ページの文字の大きさ・字幕アクション）を写す。
+    /// ただしタイムタグが変わった行には、読み込んだ値・自動調整の値の表示時刻は写さない（元の行のタイミングで決めた値なので。
+    /// 写すと、歌い出しより後に出る・前のページの行と重なるといった、もう当てはまらない表示時刻が残る）。手で指定した値は写す。
     /// 文字ごとのフォントは <see cref="CharFontOperations.CopyCharFonts"/>、エクスポート済みの印は呼び出し側で扱う。
     /// 行の設定を足したら、ここと <see cref="Clone"/> にも足す（足し忘れると行エディタで直したときに消える）。
     /// </summary>
@@ -143,7 +145,24 @@ public sealed class LyricsLine
         LayoutName = from.LayoutName;
         FontSizeDelta = from.FontSizeDelta;
         SubtitleAction = from.SubtitleAction?.Clone();
+        if (!HasSameTimeTags(from)) ClearRecomputableShowTimes();
     }
+
+    /// <summary>
+    /// 表示時刻のうち、自動調整で計算し直す値（読み込んだ値・自動調整の値）を外す（値を持たない = 自動で計算する状態に戻す）。
+    /// 手で指定した値は残す。
+    /// </summary>
+    public void ClearRecomputableShowTimes()
+    {
+        if (ShowBeginCs is not null && ShowBeginOrigin != ShowTimeOrigin.Manual) ShowBeginCs = null;
+        if (ShowEndCs is not null && ShowEndOrigin != ShowTimeOrigin.Manual) ShowEndCs = null;
+    }
+
+    /// <summary>タイムタグ（文字のタグの並びと行末タグ）が <paramref name="other"/> と同じか。</summary>
+    public bool HasSameTimeTags(LyricsLine other) =>
+        EndTimeCs == other.EndTimeCs && TimeTags().SequenceEqual(other.TimeTags());
+
+    private IEnumerable<int> TimeTags() => Chars.Where(c => c.TimeCs is not null).Select(c => c.TimeCs!.Value);
 
     public LyricsLine Clone()
     {
