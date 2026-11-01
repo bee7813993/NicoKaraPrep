@@ -75,7 +75,7 @@
                     </MenuFlyoutItem>
                     <MenuFlyoutSeparator />
                     <MenuFlyoutItem Text="設定..." Click="OnSettingsClick" />
-                    <MenuFlyoutItem Text="キー割り当て（挿入ビュー）..." Click="OnKeyBindingsClick" />
+                    <MenuFlyoutItem Text="キー割り当て..." Click="OnKeyBindingsClick" ToolTipService.ToolTip="絵文字挿入ビューのキー（再生の操作のキーは行リストでも効きます）の一覧と割り当て" />
                     <MenuFlyoutItem Text="AI エージェントと連携..." Click="OnAgentLinkClick" ToolTipService.ToolTip="Claude（Claude Desktop・Claude Code）や Codex などの AI エージェントから、このアプリを操作できるように登録します" />
                 </MenuBarItem>
                 <MenuBarItem Title="編集(E)" AccessKey="E">
@@ -90,28 +90,29 @@
                         </MenuFlyoutItem.KeyboardAccelerators>
                     </MenuFlyoutItem>
                     <MenuFlyoutSeparator />
-                    <MenuFlyoutItem Text="カーソル位置で行分割" Click="OnSplitLineClick">
+                    <!-- 絵文字挿入ビューでは、ショートカットの表示に割り当てキー（既定は / と ＼）を足す（MainWindow.xaml.cs の UpdateMenuShortcutTexts） -->
+                    <MenuFlyoutItem x:Name="SplitLineMenuItem" Text="カーソル位置で行分割" Click="OnSplitLineClick">
                         <MenuFlyoutItem.KeyboardAccelerators>
                             <KeyboardAccelerator Modifiers="Control" Key="Enter" />
                         </MenuFlyoutItem.KeyboardAccelerators>
                     </MenuFlyoutItem>
-                    <MenuFlyoutItem Text="次の行と結合" Click="OnJoinLineClick">
+                    <MenuFlyoutItem x:Name="JoinLineMenuItem" Text="次の行と結合" Click="OnJoinLineClick">
                         <MenuFlyoutItem.KeyboardAccelerators>
                             <KeyboardAccelerator Modifiers="Control" Key="J" />
                         </MenuFlyoutItem.KeyboardAccelerators>
                     </MenuFlyoutItem>
-                    <MenuFlyoutItem Text="次の行と結合（スペースを挟む）" Click="OnJoinLineWithSpaceClick">
+                    <MenuFlyoutItem x:Name="JoinLineWithSpaceMenuItem" Text="次の行と結合（スペースを挟む）" Click="OnJoinLineWithSpaceClick">
                         <MenuFlyoutItem.KeyboardAccelerators>
                             <KeyboardAccelerator Modifiers="Control,Shift" Key="J" />
                         </MenuFlyoutItem.KeyboardAccelerators>
                     </MenuFlyoutItem>
                     <MenuFlyoutSeparator />
-                    <MenuFlyoutItem Text="空行（ページ区切り）を下に挿入" Click="OnInsertEmptyLineClick">
+                    <MenuFlyoutItem x:Name="InsertEmptyLineMenuItem" Text="空行（ページ区切り）を下に挿入" Click="OnInsertEmptyLineClick">
                         <MenuFlyoutItem.KeyboardAccelerators>
                             <KeyboardAccelerator Modifiers="Control" Key="K" />
                         </MenuFlyoutItem.KeyboardAccelerators>
                     </MenuFlyoutItem>
-                    <MenuFlyoutItem Text="選択行を削除" Click="OnDeleteLinesClick">
+                    <MenuFlyoutItem x:Name="DeleteLinesMenuItem" Text="選択行を削除" Click="OnDeleteLinesClick">
                         <MenuFlyoutItem.KeyboardAccelerators>
                             <KeyboardAccelerator Modifiers="Control" Key="Delete" />
                         </MenuFlyoutItem.KeyboardAccelerators>
@@ -215,17 +216,20 @@
                 </MenuBarItem>
                 <MenuBarItem Title="再生(P)" AccessKey="P">
                     <MenuFlyoutItem Text="メディアを開く..." Click="OnOpenMediaClick" />
-                    <MenuFlyoutItem Text="再生 / 一時停止" Click="OnPlayPauseClick">
+                    <!-- 行リストと絵文字挿入ビューでは、割り当てキー（既定は Space・Z・X・D・F）も効く。ショートカットの表示と秒数は
+                         MainWindow.xaml.cs の UpdateMenuShortcutTexts で入れる -->
+                    <MenuFlyoutItem x:Name="PlayPauseMenuItem" Text="再生 / 一時停止" Click="OnPlayPauseClick">
                         <MenuFlyoutItem.KeyboardAccelerators>
                             <KeyboardAccelerator Modifiers="Control" Key="Space" />
                         </MenuFlyoutItem.KeyboardAccelerators>
                     </MenuFlyoutItem>
-                    <MenuFlyoutItem Text="5秒戻る" Click="OnSeekBackClick">
+                    <MenuFlyoutItem x:Name="PlayFromCursorMenuItem" Text="選んだ行から再生" Click="OnPlayFromCursorClick" />
+                    <MenuFlyoutItem x:Name="SeekBackMenuItem" Text="数秒戻る" Click="OnSeekBackClick">
                         <MenuFlyoutItem.KeyboardAccelerators>
                             <KeyboardAccelerator Modifiers="Control" Key="Left" />
                         </MenuFlyoutItem.KeyboardAccelerators>
                     </MenuFlyoutItem>
-                    <MenuFlyoutItem Text="5秒進む" Click="OnSeekForwardClick">
+                    <MenuFlyoutItem x:Name="SeekForwardMenuItem" Text="数秒進む" Click="OnSeekForwardClick">
                         <MenuFlyoutItem.KeyboardAccelerators>
                             <KeyboardAccelerator Modifiers="Control" Key="Right" />
                         </MenuFlyoutItem.KeyboardAccelerators>

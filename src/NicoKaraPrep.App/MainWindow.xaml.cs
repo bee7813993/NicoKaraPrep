@@ -764,7 +764,7 @@ public sealed partial class MainWindow : Window
             ViewModel.Settings.InsertViewKeys = InsertViewKeyMap.ToStored(dialog.Result);
             ViewModel.Settings.Save();
             RebuildInsertKeyBindings();
-            ViewModel.StatusText = "キー割り当てを保存しました（挿入ビュー上部の凡例に反映）";
+            ViewModel.StatusText = "キー割り当てを保存しました（挿入ビュー上部の凡例と、編集・再生メニューの表示に反映）";
         }
     }
 
@@ -777,6 +777,7 @@ public sealed partial class MainWindow : Window
         {
             LoadQuickEmojiSettings();
             ApplyMcpEnabled();
+            UpdateMenuShortcutTexts(); // 再生メニューの「n 秒戻る・進む」
             TryRun(ViewModel.RunValidation);
             RefreshLineFontPlaceholder();
             NotifyLayoutViewDocumentChanged(); // ページの区切り方・画面の大きさが変わると、レイアウト設定ビューのページの一覧・px の欄が変わる
@@ -1132,7 +1133,14 @@ public sealed partial class MainWindow : Window
 
     private void OnSplitLineClick(object sender, RoutedEventArgs e)
     {
-        if (LineEditorOperationBlocked()) return; // 挿入ビューでは Ctrl+Enter を PreviewKeyDown で処理
+        if (IsAcceleratorEcho(sender)) return;
+        if (InsertViewActive)
+        {
+            // 挿入ビューのエディタで押したキー（/・Ctrl+Enter）は PreviewKeyDown で処理するので、ここへ来るのはメニューから押したときなど
+            if (!InsertLineEditorFocused()) SplitLineInView();
+            return;
+        }
+        if (LineEditorOperationBlocked()) return;
         if (ViewModel.SelectedLine is null) return;
         TryRun(() =>
         {
@@ -1142,13 +1150,20 @@ public sealed partial class MainWindow : Window
         ScheduleValidation();
     }
 
-    private void OnJoinLineClick(object sender, RoutedEventArgs e) => JoinLineFromMenu(insertSpace: false);
+    private void OnJoinLineClick(object sender, RoutedEventArgs e) => JoinLineFromMenu(sender, insertSpace: false);
 
-    private void OnJoinLineWithSpaceClick(object sender, RoutedEventArgs e) => JoinLineFromMenu(insertSpace: true);
+    private void OnJoinLineWithSpaceClick(object sender, RoutedEventArgs e) => JoinLineFromMenu(sender, insertSpace: true);
 
-    private void JoinLineFromMenu(bool insertSpace)
+    private void JoinLineFromMenu(object sender, bool insertSpace)
     {
-        if (LineEditorOperationBlocked()) return; // 挿入ビューでは Ctrl+J / Ctrl+Shift+J を PreviewKeyDown で処理
+        if (IsAcceleratorEcho(sender)) return;
+        if (InsertViewActive)
+        {
+            // 挿入ビューのエディタで押したキー（＼・Ctrl+J）は PreviewKeyDown で処理するので、ここへ来るのはメニューから押したときなど
+            if (!InsertLineEditorFocused()) JoinLineInView(insertSpace);
+            return;
+        }
+        if (LineEditorOperationBlocked()) return;
         if (ViewModel.SelectedLine is null) return;
         int index = ViewModel.SelectedLine.Index;
         TryRun(() =>
@@ -1160,6 +1175,13 @@ public sealed partial class MainWindow : Window
 
     private void OnInsertEmptyLineClick(object sender, RoutedEventArgs e)
     {
+        if (IsAcceleratorEcho(sender)) return;
+        if (InsertViewActive)
+        {
+            // 挿入ビューではカーソルのある行の下へ（エディタで押した Ctrl+K は PreviewKeyDown で処理する）
+            if (!InsertLineEditorFocused()) InsertEmptyLineInView();
+            return;
+        }
         if (LineOperationBlocked()) return;
         TryRun(ViewModel.InsertEmptyLineBelowSelection);
         ScheduleValidation();
@@ -1167,6 +1189,13 @@ public sealed partial class MainWindow : Window
 
     private void OnDeleteLinesClick(object sender, RoutedEventArgs e)
     {
+        if (IsAcceleratorEcho(sender)) return;
+        if (InsertViewActive)
+        {
+            // 挿入ビューでは左の行情報で選んだ行（エディタで押した Ctrl+Delete は PreviewKeyDown で処理する）
+            if (!InsertLineEditorFocused()) DeleteSelectedLinesInView();
+            return;
+        }
         if (LineOperationBlocked()) return;
         var indexes = SelectedIndexes;
         if (indexes.Count == 0) return;
@@ -1275,7 +1304,8 @@ public sealed partial class MainWindow : Window
             ViewModel.SaveProject();
             if (!FullScreenViewActive) MediaPanel.Visibility = Visibility.Visible; // 全画面ビュー（フォント設定・レイアウト設定）では隠したまま
             MediaPanel.IsExpanded = true;
-            ViewModel.StatusText = $"メディアを開きました: {Path.GetFileName(path)}（Ctrl+Space で再生/一時停止）";
+            string playKey = _insertKeys.TryGetValue(InsertViewAction.PlayPause, out string? k) ? $"{InsertViewKeyMap.KeyLabel(k)}・" : "";
+            ViewModel.StatusText = $"メディアを開きました: {Path.GetFileName(path)}（{playKey}Ctrl+Space で再生/一時停止）";
 
             if (_mediaTimer is null)
             {
@@ -1352,7 +1382,50 @@ public sealed partial class MainWindow : Window
         }
     }
 
-    private void OnPlayPauseClick(object sender, RoutedEventArgs e) => TogglePlayPause();
+    private void OnPlayPauseClick(object sender, RoutedEventArgs e)
+    {
+        if (IsAcceleratorEcho(sender)) return;
+        TogglePlayPause();
+    }
+
+    /// <summary>再生 > カーソル位置から再生（行リストなどでは 選んだ行から再生）。</summary>
+    private void OnPlayFromCursorClick(object sender, RoutedEventArgs e)
+    {
+        if (InsertViewActive) PlayFromInsertCursor();
+        else PlayFromSelectedLine();
+    }
+
+    /// <summary>選んだ行の最初のタイムタグ（タグの無い行なら、そのあとで最初のタイムタグ）からメディアを再生する。</summary>
+    private void PlayFromSelectedLine()
+    {
+        TryRun(() =>
+        {
+            if (ViewModel.SelectedLine is not { } selected)
+            {
+                ViewModel.StatusText = "再生を始める行を選んでください";
+                return;
+            }
+            int? found = null;
+            for (int i = selected.Index; i < ViewModel.Lines.Count && found is null; i++)
+            {
+                found = ViewModel.Lines[i].Model.GetFirstTimeCs();
+            }
+            if (found is not int cs)
+            {
+                ViewModel.StatusText = "選んだ行以降にタイムタグがありません";
+                return;
+            }
+            var session = PlayerWithSource?.PlaybackSession;
+            if (session is null)
+            {
+                ViewModel.StatusText = "メディアが開かれていません（再生 > メディアを開く）";
+                return;
+            }
+            session.Position = TimeSpan.FromSeconds(ViewModel.TagCsToMediaSeconds(cs));
+            PlayerWithSource?.Play();
+            ViewModel.StatusText = $"選んだ行の {TimeTag.Format(cs)} から再生します";
+        });
+    }
 
     // プレイヤーの高さ変更（つまみ）は MainWindow.Layout.cs
 
@@ -1366,9 +1439,17 @@ public sealed partial class MainWindow : Window
         UpdatePlayerTime();
     }
 
-    private void OnSeekBackClick(object sender, RoutedEventArgs e) => SeekBy(-ViewModel.Settings.SeekSeconds);
+    private void OnSeekBackClick(object sender, RoutedEventArgs e)
+    {
+        if (IsAcceleratorEcho(sender)) return;
+        SeekBy(-ViewModel.Settings.SeekSeconds);
+    }
 
-    private void OnSeekForwardClick(object sender, RoutedEventArgs e) => SeekBy(+ViewModel.Settings.SeekSeconds);
+    private void OnSeekForwardClick(object sender, RoutedEventArgs e)
+    {
+        if (IsAcceleratorEcho(sender)) return;
+        SeekBy(+ViewModel.Settings.SeekSeconds);
+    }
 
     private void OnLineDoubleTapped(object sender, Microsoft.UI.Xaml.Input.DoubleTappedRoutedEventArgs e)
     {
@@ -1471,8 +1552,55 @@ public sealed partial class MainWindow : Window
         }
         UpdateInsertLegend();
         UpdateFollowIndicator();
+        UpdateMenuShortcutTexts();
         PhraseHeaderText.Text = $"定型文（{InsertViewKeyMap.KeyLabel(_insertKeys[InsertViewAction.PhraseInsert])} のあとに番号）";
     }
+
+    /// <summary>
+    /// 編集・再生メニューのショートカットの表示と、数秒戻る・進むの秒数を、今のビュー・キーの割り当て・設定に合わせる。
+    /// 再生の操作の割り当てキー（既定は Space・D・Z・X・F）は行リストと絵文字挿入ビューで効くので、Ctrl のキーと並べて出す。
+    /// 行分割・結合の割り当てキー（既定は / と ＼。Shift+結合キーでスペースを挟む）は絵文字挿入ビューだけ。
+    /// KeyboardAcceleratorTextOverride は ClearValue で消しても KeyboardAccelerators から作った表示には戻らず空になるので、Ctrl のキーも書く。
+    /// </summary>
+    private void UpdateMenuShortcutTexts()
+    {
+        if (_insertKeys.Count == 0) return; // キーの割り当てを読む前
+        string K(InsertViewAction a) => InsertViewKeyMap.KeyLabel(_insertKeys[a]);
+        bool insert = InsertViewActive;
+        bool lines = ViewModel.ViewMode == MainViewMode.Lines;
+        string WithKey(InsertViewAction a, string ctrl) => insert || lines ? $"{K(a)}・{ctrl}" : ctrl;
+
+        SplitLineMenuItem.KeyboardAcceleratorTextOverride = insert ? $"{K(InsertViewAction.SplitLine)}・Ctrl+Enter" : "Ctrl+Enter";
+        JoinLineMenuItem.KeyboardAcceleratorTextOverride = insert ? $"{K(InsertViewAction.JoinLine)}・Ctrl+J" : "Ctrl+J";
+        JoinLineWithSpaceMenuItem.KeyboardAcceleratorTextOverride = insert ? $"Shift+{K(InsertViewAction.JoinLine)}・Ctrl+Shift+J" : "Ctrl+Shift+J";
+
+        PlayPauseMenuItem.KeyboardAcceleratorTextOverride = WithKey(InsertViewAction.PlayPause, "Ctrl+Space");
+        SeekBackMenuItem.KeyboardAcceleratorTextOverride = WithKey(InsertViewAction.SeekBack, "Ctrl+←");
+        SeekForwardMenuItem.KeyboardAcceleratorTextOverride = WithKey(InsertViewAction.SeekForward, "Ctrl+→");
+        PlayFromCursorMenuItem.Text = insert ? "カーソル位置から再生" : "選んだ行から再生";
+        PlayFromCursorMenuItem.KeyboardAcceleratorTextOverride = insert || lines ? K(InsertViewAction.PlayFromCursor) : "";
+        // 挿入ビューの再生追従キーは、ハイライトの追従ではなく再生追従カーソルの入／切
+        FollowToggle.KeyboardAcceleratorTextOverride = lines ? K(InsertViewAction.FollowToggle) : "";
+
+        string seconds = ViewModel.Settings.SeekSeconds.ToString("0.##", System.Globalization.CultureInfo.InvariantCulture);
+        SeekBackMenuItem.Text = $"{seconds} 秒戻る";
+        SeekForwardMenuItem.Text = $"{seconds} 秒進む";
+    }
+
+    /// <summary>PreviewKeyDown で処理した Ctrl のキーのメニュー項目と時刻（同じキーがメニューのアクセラレータにも届いたとき、2 回動かさない）。</summary>
+    private object? _keyHandledMenuItem;
+    private DateTime _keyHandledAt = DateTime.MinValue;
+
+    /// <summary>PreviewKeyDown で、メニューのアクセラレータと同じキーを処理したことを覚える。</summary>
+    private void MarkKeyHandled(MenuFlyoutItem item)
+    {
+        _keyHandledMenuItem = item;
+        _keyHandledAt = DateTime.UtcNow;
+    }
+
+    /// <summary>メニュー項目の呼び出しが、PreviewKeyDown で処理したばかりのキーのアクセラレータか（それなら何もしない）。</summary>
+    private bool IsAcceleratorEcho(object sender) =>
+        ReferenceEquals(sender, _keyHandledMenuItem) && (DateTime.UtcNow - _keyHandledAt).TotalMilliseconds < 100;
 
     /// <summary>現在のキー割り当てから挿入ビューの凡例テキストを組み立てる。</summary>
     private void UpdateInsertLegend()
@@ -1485,7 +1613,8 @@ public sealed partial class MainWindow : Window
             $"{K(InsertViewAction.Play)}: 再生　{K(InsertViewAction.Pause)}: 一時停止　" +
             $"{K(InsertViewAction.SeekBack)} / {K(InsertViewAction.SeekForward)}: 数秒戻る / 進む　{K(InsertViewAction.FollowToggle)}: 再生追従　" +
             $"{K(InsertViewAction.SplitLine)}: 行分割　{K(InsertViewAction.JoinLine)}: 行結合（Shift+{K(InsertViewAction.JoinLine)}: スペースを挟む）　" +
-            "Ctrl+Z / Y: 元に戻す / やり直し　Esc: 終了（キーは ファイル > キー割り当て で変更可）　" +
+            "Ctrl+Space: 再生/一時停止　Ctrl+← / →: 数秒戻る / 進む　Ctrl+Enter: 行分割　Ctrl+J: 行結合　Ctrl+K: 空行を下に挿入　Ctrl+Delete: 選択行を削除　" +
+            "Ctrl+Z / Y: 元に戻す / やり直し（Ctrl のキーは行リストと同じ）　Esc: 終了（キーは ファイル > キー割り当て で変更可）　" +
             "左の行情報クリック: 行選択（Shift+クリック: 範囲、右クリック: 分離・エクスポート等）";
     }
 
@@ -1553,6 +1682,80 @@ public sealed partial class MainWindow : Window
         }
     }
 
+    /// <summary>
+    /// 行リスト（根の PreviewKeyDown から）: 挿入ビューと同じ割り当てキーで再生の操作をする（既定は Space・D・A・S・Z・X・F）。
+    /// 文字の入力欄などにフォーカスがあるとき（LineListKeyAllowed）と、修飾キーを押しているときは何もしない。
+    /// 挿入・行分割・結合のキー（既定は B・N・G・K・/・＼）は挿入ビューだけ（行リストの行の操作は Ctrl のキーで）。
+    /// 行リストにフォーカスがあるときの Ctrl+Space もここで受ける。
+    /// </summary>
+    private void HandleLineListKey(KeyRoutedEventArgs e)
+    {
+        // Ctrl+Space（再生 / 一時停止）: 行リスト（ListView）にフォーカスがあると、ListView が行の選択の切り替えに使って
+        // メニューのアクセラレータに届かないので、ここで受ける
+        if (e.Key == Windows.System.VirtualKey.Space && IsKeyDown(Windows.System.VirtualKey.Control)
+            && !IsKeyDown(Windows.System.VirtualKey.Shift) && !IsKeyDown(Windows.System.VirtualKey.Menu))
+        {
+            if (!LineListKeyAllowed(e.Key)) return;
+            e.Handled = true;
+            MarkKeyHandled(PlayPauseMenuItem);
+            TogglePlayPause();
+            return;
+        }
+
+        if (!_insertKeyLookup.TryGetValue(e.Key, out var action)) return;
+        if (action is not (InsertViewAction.PlayPause or InsertViewAction.PlayFromCursor or InsertViewAction.Play or InsertViewAction.Pause
+            or InsertViewAction.SeekBack or InsertViewAction.SeekForward or InsertViewAction.FollowToggle))
+        {
+            return;
+        }
+        if (IsKeyDown(Windows.System.VirtualKey.Control) || IsKeyDown(Windows.System.VirtualKey.Menu) || IsKeyDown(Windows.System.VirtualKey.Shift)
+            || IsKeyDown(Windows.System.VirtualKey.LeftWindows) || IsKeyDown(Windows.System.VirtualKey.RightWindows))
+        {
+            return;
+        }
+        if (!LineListKeyAllowed(e.Key)) return;
+
+        e.Handled = true;
+        switch (action)
+        {
+            case InsertViewAction.PlayFromCursor:
+                PlayFromSelectedLine();
+                break;
+            case InsertViewAction.FollowToggle:
+                // 行リストでは、再生メニューの「再生位置に追従してハイライト」（再生中の行へのスクロール）の入／切
+                FollowToggle.IsChecked = !FollowToggle.IsChecked;
+                ViewModel.StatusText = FollowToggle.IsChecked
+                    ? "再生位置への追従 ON: 再生中は歌っている行まで行リストをスクロールします"
+                    : "再生位置への追従 OFF（行リストをスクロールしません）";
+                break;
+            default:
+                ExecuteInsertViewAction(action, shift: false); // 再生・一時停止・数秒戻る / 進む は挿入ビューと同じ
+                break;
+        }
+    }
+
+    /// <summary>
+    /// 行リストの 1 文字のキーを、フォーカスのある部品に渡さずに使ってよいか。文字の入力欄・コンボボックス（頭文字で項目を選ぶ）・
+    /// メニューバーでは使わない。Space は、ボタン・チェックボックス（押す）と、行リスト以外の一覧（タブ・パレット・ビューの切り替えなど。選ぶ）でも使わない。
+    /// </summary>
+    private bool LineListKeyAllowed(Windows.System.VirtualKey key)
+    {
+        if (FocusManager.GetFocusedElement(Content.XamlRoot) is not DependencyObject focused) return true;
+        bool space = key == Windows.System.VirtualKey.Space;
+        for (DependencyObject? d = focused; d is not null; d = Microsoft.UI.Xaml.Media.VisualTreeHelper.GetParent(d))
+        {
+            if (ReferenceEquals(d, LineList) || ReferenceEquals(d, RootGrid)) return true;
+            switch (d)
+            {
+                case TextBox or PasswordBox or RichEditBox or AutoSuggestBox or NumberBox or ComboBox or MenuBar:
+                    return false;
+                case Microsoft.UI.Xaml.Controls.Primitives.ButtonBase or SplitButton or ToggleSwitch or ListViewBase or SelectorBar when space:
+                    return false;
+            }
+        }
+        return false; // 根の下に無い（ポップアップの中など）
+    }
+
     private void OnInsertEditorPreviewKeyDown(object sender, KeyRoutedEventArgs e)
     {
         bool ctrl = (Microsoft.UI.Input.InputKeyboardSource.GetKeyStateForCurrentThread(Windows.System.VirtualKey.Control)
@@ -1573,6 +1776,9 @@ public sealed partial class MainWindow : Window
 
         if (ctrl)
         {
+            // Ctrl のキーは行リストと同じ意味（編集・再生メニューのアクセラレータ）。エディタ（TextBox）の単語移動・単語削除より先にここで受け、
+            // 同じキーがメニューのアクセラレータにも届いたときは、メニューの側で IsAcceleratorEcho で捨てる
+            MenuFlyoutItem item;
             switch (e.Key)
             {
                 case Windows.System.VirtualKey.Z:
@@ -1585,14 +1791,38 @@ public sealed partial class MainWindow : Window
                     return;
                 case Windows.System.VirtualKey.Enter:
                     SplitLineInView();
-                    e.Handled = true;
-                    return;
+                    item = SplitLineMenuItem;
+                    break;
                 case Windows.System.VirtualKey.J:
                     JoinLineInView(insertSpace: shift);
-                    e.Handled = true;
-                    return;
+                    item = shift ? JoinLineWithSpaceMenuItem : JoinLineMenuItem;
+                    break;
+                case Windows.System.VirtualKey.K:
+                    InsertEmptyLineInView();
+                    item = InsertEmptyLineMenuItem;
+                    break;
+                case Windows.System.VirtualKey.Delete:
+                    DeleteSelectedLinesInView();
+                    item = DeleteLinesMenuItem;
+                    break;
+                case Windows.System.VirtualKey.Space:
+                    TogglePlayPause();
+                    item = PlayPauseMenuItem;
+                    break;
+                case Windows.System.VirtualKey.Left when !shift: // Ctrl+Shift+←/→（単語単位の選択）はエディタへ
+                    SeekBy(-ViewModel.Settings.SeekSeconds);
+                    item = SeekBackMenuItem;
+                    break;
+                case Windows.System.VirtualKey.Right when !shift:
+                    SeekBy(+ViewModel.Settings.SeekSeconds);
+                    item = SeekForwardMenuItem;
+                    break;
+                default:
+                    return; // その他の Ctrl 組み合わせは既定処理へ
             }
-            return; // その他の Ctrl 組み合わせは既定処理へ
+            MarkKeyHandled(item);
+            e.Handled = true;
+            return;
         }
 
         switch (e.Key)
@@ -1641,12 +1871,57 @@ public sealed partial class MainWindow : Window
         ScheduleValidation();
     }
 
+    /// <summary>
+    /// 挿入ビューの簡易行エディタに入力中か（そこで押した Ctrl+J などが編集メニューのショートカットとして届いても、
+    /// 挿入ビューの行を分割・結合しないように）。
+    /// </summary>
+    private bool InsertLineEditorFocused() =>
+        ReferenceEquals(FocusManager.GetFocusedElement(Content.XamlRoot), InsertLineEditor);
+
     private void JoinLineInView(bool insertSpace)
     {
         TryRun(() =>
         {
             int? caret = ViewModel.JoinLineAtViewOffset(InsertEditor.SelectionStart, insertSpace);
             if (caret is int c) RefreshInsertView(c);
+        });
+        ScheduleValidation();
+    }
+
+    /// <summary>挿入ビュー: カーソルのある行の下に空行（ページ区切り）を入れる（Ctrl+K・編集メニュー。カーソルは動かさない）。</summary>
+    private void InsertEmptyLineInView()
+    {
+        int caret = InsertEditor.SelectionStart;
+        int li = ViewModel.MapInsertViewOffset(caret) is var (l, _) ? l : ViewModel.Document.Lines.Count - 1;
+        TryRun(() =>
+        {
+            ViewModel.InsertEmptyLineAt(li + 1);
+            RefreshInsertView(caret);
+        });
+        ScheduleValidation();
+    }
+
+    /// <summary>
+    /// 挿入ビュー: 左の行情報で選んだ行を消す（Ctrl+Delete・編集メニュー）。カーソルは同じ行の同じ位置に残す
+    /// （カーソルの行を消したときは、そこへ詰まった行の頭）。
+    /// </summary>
+    private void DeleteSelectedLinesInView()
+    {
+        var indexes = SelectedIndexes;
+        if (indexes.Count == 0)
+        {
+            ViewModel.StatusText = "消す行を、左の行情報をクリックして選んでください（Ctrl+Delete で選んだ行を消します）";
+            return;
+        }
+        int caret = InsertEditor.SelectionStart;
+        int caretLine = ViewModel.MapInsertViewOffset(caret) is var (l, _) ? l : 0;
+        int column = caret - ViewModel.GetInsertViewLineStart(caretLine);
+        TryRun(() =>
+        {
+            ViewModel.DeleteLines(indexes);
+            int line = Math.Clamp(caretLine - indexes.Count(i => i < caretLine), 0, Math.Max(0, ViewModel.Document.Lines.Count - 1));
+            int start = ViewModel.GetInsertViewLineStart(line);
+            RefreshInsertView(indexes.Contains(caretLine) ? start : start + column);
         });
         ScheduleValidation();
     }

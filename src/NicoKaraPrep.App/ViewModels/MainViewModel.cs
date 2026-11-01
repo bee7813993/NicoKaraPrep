@@ -960,16 +960,26 @@ public partial class MainViewModel : ObservableObject
     /// <summary>構造変更後に行 VM を作り直す（済マークはモデル側に保持されている）。</summary>
     public void RebuildLinesPreservingMarks() => RebuildLines();
 
-    /// <summary>選択行を生テキストのカーソル位置で分割する。成功時は新しい行のインデックスを返す。</summary>
+    /// <summary>
+    /// 選択行を生テキストのカーソル位置で分割する。成功時は新しい行のインデックスを返す。
+    /// 歌詞のある行の先頭では分けない（行を選び直すと行エディタのカーソルが先頭に戻るので、
+    /// 編集メニューから押すと上に空行が入るだけになる）。
+    /// </summary>
     public int? SplitSelectedLine(string rawText, int cursor)
     {
         if (SelectedLine is null) return null;
         int index = SelectedLine.Index;
-        PushUndo();
 
         var line = TextEditModeFormat.ParseLyricLine(rawText);
         cursor = SnapCursorOutsideToken(rawText, Math.Clamp(cursor, 0, rawText.Length));
         int charIndex = TextEditModeFormat.ParseLyricLine(rawText[..cursor]).Chars.Count;
+        if (charIndex == 0 && line.Chars.Any(c => !c.IsSpacer))
+        {
+            StatusText = "行エディタ（行リストの下の欄）で、分けたい位置をクリックしてから行分割してください（行の先頭では分けません）";
+            _noticeBeforeCheck = StatusText; // 押したあとのチェックの結果で消えないように
+            return null;
+        }
+        PushUndo();
 
         // 行の設定（表示時刻・フォント・ページの文字の大きさ・タブ分離の元の位置）は分割前の行から引き継ぐ（文字ごとのフォントは同じ文字へ。
         // 元の位置のキーは SplitLine で後半の行にも付く）
@@ -999,9 +1009,12 @@ public partial class MainViewModel : ObservableObject
     }
 
     /// <summary>選択行の下に空行（ページ区切り）を挿入する。</summary>
-    public void InsertEmptyLineBelowSelection()
+    public void InsertEmptyLineBelowSelection() => InsertEmptyLineAt(SelectedLine?.Index + 1 ?? Document.Lines.Count);
+
+    /// <summary>空行（ページ区切り）を index 行目に挿入する（絵文字挿入ビューでは、カーソルのある行の下）。</summary>
+    public void InsertEmptyLineAt(int index)
     {
-        int index = SelectedLine?.Index + 1 ?? Document.Lines.Count;
+        index = Math.Clamp(index, 0, Document.Lines.Count);
         PushUndo();
         LineOperations.InsertEmptyLine(Document, index);
         RebuildLinesPreservingMarks();
