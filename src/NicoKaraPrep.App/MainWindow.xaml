@@ -76,7 +76,7 @@
                     <MenuFlyoutSeparator />
                     <MenuFlyoutItem Text="設定..." Click="OnSettingsClick" />
                     <MenuFlyoutItem Text="キー割り当て..." Click="OnKeyBindingsClick" ToolTipService.ToolTip="絵文字挿入ビューのキー（再生の操作のキーは行リストでも効きます）の一覧と割り当て" />
-                    <MenuFlyoutItem Text="Claude と連携..." Click="OnClaudeLinkClick" ToolTipService.ToolTip="Claude（Claude Desktop・Claude Code）から、このアプリを操作できるように登録します" />
+                    <MenuFlyoutItem Text="AI エージェントと連携..." Click="OnAgentLinkClick" ToolTipService.ToolTip="Claude（Claude Desktop・Claude Code）や Codex などの AI エージェントから、このアプリを操作できるように登録します" />
                 </MenuBarItem>
                 <MenuBarItem Title="編集(E)" AccessKey="E">
                     <MenuFlyoutItem Text="元に戻す" Click="OnUndoClick">
@@ -1026,7 +1026,7 @@
                         <ColumnDefinition Width="Auto" />
                     </Grid.ColumnDefinitions>
                     <TextBlock x:Name="StatusBarText" Text="{x:Bind ViewModel.StatusText, Mode=OneWay}" FontSize="12" />
-                    <!-- MCP（Claude などからの操作）の待ち受け・接続の印（MainWindow.Mcp.cs） -->
+                    <!-- MCP（AI エージェントからの操作）の待ち受け・接続の印（MainWindow.Mcp.cs） -->
                     <TextBlock
                         x:Name="McpStatusText"
                         Grid.Column="1"

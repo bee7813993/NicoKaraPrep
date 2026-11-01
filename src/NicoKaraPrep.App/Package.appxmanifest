@@ -44,7 +44,7 @@
         <uap:SplashScreen Image="Assets\SplashScreen.png" />
       </uap:VisualElements>
       <Extensions>
-        <!-- 実行エイリアス: Claude などの MCP クライアントに、nicokaraprep.exe を MCP の橋渡しとして登録できるようにする
+        <!-- 実行エイリアス: Claude・Codex などの MCP クライアントに、nicokaraprep.exe を MCP の橋渡しとして登録できるようにする
              （%LOCALAPPDATA%\Microsoft\WindowsApps に置かれ、ストア版を更新しても同じ名前で呼べる。引数は README・マニュアル 18 章） -->
         <uap3:Extension Category="windows.appExecutionAlias" Executable="NicoKaraPrep.exe" EntryPoint="Windows.FullTrustApplication">
           <uap3:AppExecutionAlias>

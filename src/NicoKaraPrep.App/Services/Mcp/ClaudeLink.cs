@@ -5,13 +5,11 @@ using System.Text;
 using System.Text.Encodings.Web;
 using System.Text.Json;
 using System.Text.Json.Nodes;
-using System.Text.RegularExpressions;
-using Microsoft.Win32;
 
 namespace NicoKaraPrep.App.Services.Mcp;
 
 /// <summary>
-/// Claude への登録をボタン 1 つで行う処理（ファイル > Claude と連携 の画面と、検証用の <c>--claude-link</c>）。
+/// Claude への登録をボタン 1 つで行う処理（ファイル > AI エージェントと連携 の画面と、検証用の <c>--agent-link</c>。Codex は <see cref="CodexLink"/>）。
 /// どちらも、つなぐ先は MCP の橋渡し（<see cref="McpInfo.RegistrationExePath"/> に <c>--mcp</c> を付けたもの）。
 /// <list type="bullet">
 /// <item>Claude Code: claude.exe を探して（PATH・%USERPROFILE%\.local\bin・npm・Claude Desktop に入っているもの）、
@@ -26,7 +24,7 @@ namespace NicoKaraPrep.App.Services.Mcp;
 internal static class ClaudeLink
 {
     /// <summary>Claude に登録する MCP サーバーの名前（Claude Code の名前・拡張機能の name）。</summary>
-    public const string ServerKey = "nicokaraprep";
+    public const string ServerKey = McpInfo.ServerKey;
 
     /// <summary>拡張機能のファイルの名前。</summary>
     public const string McpbFileName = "nicokaraprep.mcpb";
@@ -34,34 +32,13 @@ internal static class ClaudeLink
     /// <summary>Claude Desktop のダウンロードのページ。</summary>
     public const string ClaudeDesktopDownloadUrl = "https://claude.ai/download";
 
-    /// <summary>claude の 1 回の実行を待つ長さ。</summary>
-    private static readonly TimeSpan ClaudeTimeout = TimeSpan.FromSeconds(60);
-
     private const string IconResourceName = "NicoKaraPrep.McpbIcon.png";
 
-    private static string UserProfile => Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
+    private static string UserProfile => AgentCli.UserProfile;
 
-    private static string RoamingAppData => Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData);
+    private static string RoamingAppData => AgentCli.RoamingAppData;
 
-    private static string LocalAppData => Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
-
-    /// <summary>登録されている起動のしかたが、このにこぷれっぷ（の橋渡し）か。</summary>
-    public static bool IsThisApp(string? command, IReadOnlyList<string> args) =>
-        command is { Length: > 0 }
-        && SamePath(command, McpInfo.RegistrationExePath)
-        && args.Any(a => a.Equals("--mcp", StringComparison.OrdinalIgnoreCase));
-
-    private static bool SamePath(string a, string b)
-    {
-        try
-        {
-            return string.Equals(Path.GetFullPath(a.Trim().Trim('"')), Path.GetFullPath(b), StringComparison.OrdinalIgnoreCase);
-        }
-        catch (Exception)
-        {
-            return false;
-        }
-    }
+    private static string LocalAppData => AgentCli.LocalAppData;
 
     // ============================================================ Claude Code
 
@@ -100,7 +77,7 @@ internal static class ClaudeLink
                 });
             }
             if (root?["mcpServers"]?[ServerKey] is not JsonObject entry) return new ClaudeCodeStatus(path, true, false, null, [], null);
-            return new ClaudeCodeStatus(path, true, true, ReadString(entry["command"]), ReadStrings(entry["args"]), null);
+            return new ClaudeCodeStatus(path, true, true, AgentCli.ReadString(entry["command"]), AgentCli.ReadStrings(entry["args"]), null);
         }
         catch (Exception ex)
         {
@@ -123,65 +100,16 @@ internal static class ClaudeLink
     /// ネイティブのインストーラーの既定の場所、npm で入れたもの、Claude Desktop に入っているもの（新しい版から）。
     /// どれも設定ファイル（~/.claude.json）は同じなので、どれで登録しても同じ。
     /// </summary>
-    public static IReadOnlyList<ClaudeCodeExe> FindClaudeCode()
+    public static IReadOnlyList<AgentCliExe> FindClaudeCode()
     {
-        var found = new List<ClaudeCodeExe>();
-        var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-
-        void Add(string path, string source)
-        {
-            try
-            {
-                path = Path.GetFullPath(path);
-                if (File.Exists(path) && seen.Add(path)) found.Add(new ClaudeCodeExe(path, source));
-            }
-            catch (Exception)
-            {
-                // 読めない場所は飛ばす
-            }
-        }
-
-        var pathDirectories = PathDirectories().ToList();
-        foreach (string dir in pathDirectories) Add(Path.Combine(dir, "claude.exe"), "PATH");
-        Add(Path.Combine(UserProfile, ".local", "bin", "claude.exe"), "Claude Code（%USERPROFILE%\\.local\\bin）");
-        foreach (string dir in pathDirectories) Add(Path.Combine(dir, "claude.cmd"), "PATH（npm）");
-        Add(Path.Combine(RoamingAppData, "npm", "claude.cmd"), "npm");
-        foreach (string exe in ClaudeDesktopBundledCli()) Add(exe, "Claude Desktop");
-        return found;
-    }
-
-    private static IEnumerable<string> PathDirectories()
-    {
-        string?[] values =
-        [
-            Environment.GetEnvironmentVariable("PATH"),
-            ReadRegistryPath(Registry.CurrentUser, "Environment"),
-            ReadRegistryPath(Registry.LocalMachine, @"SYSTEM\CurrentControlSet\Control\Session Manager\Environment"),
-        ];
-        var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-        foreach (string? value in values)
-        {
-            if (string.IsNullOrEmpty(value)) continue;
-            foreach (string raw in value.Split(';', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
-            {
-                string dir = Environment.ExpandEnvironmentVariables(raw.Trim('"'));
-                if (dir.Length == 0 || !Path.IsPathFullyQualified(dir)) continue;
-                if (seen.Add(dir)) yield return dir;
-            }
-        }
-    }
-
-    private static string? ReadRegistryPath(RegistryKey root, string subKey)
-    {
-        try
-        {
-            using var key = root.OpenSubKey(subKey);
-            return key?.GetValue("Path", null, RegistryValueOptions.DoNotExpandEnvironmentNames) as string;
-        }
-        catch (Exception)
-        {
-            return null;
-        }
+        var finder = new AgentCli.Finder();
+        var pathDirectories = AgentCli.PathDirectories().ToList();
+        foreach (string dir in pathDirectories) finder.Add(Path.Combine(dir, "claude.exe"), "PATH");
+        finder.Add(Path.Combine(UserProfile, ".local", "bin", "claude.exe"), "Claude Code（%USERPROFILE%\\.local\\bin）");
+        foreach (string dir in pathDirectories) finder.Add(Path.Combine(dir, "claude.cmd"), "PATH（npm）");
+        finder.Add(Path.Combine(RoamingAppData, "npm", "claude.cmd"), "npm");
+        foreach (string exe in ClaudeDesktopBundledCli()) finder.Add(exe, "Claude Desktop");
+        return finder.Found;
     }
 
     /// <summary>Claude Desktop に入っている Claude Code（Code タブが使うもの）。新しい版から。</summary>
@@ -226,16 +154,16 @@ internal static class ClaudeLink
     /// Claude Code に登録する（ボタンの処理）。別の exe が登録されていれば消してから足し、設定ファイルを読み直して確かめる。
     /// 見つかった claude で順に試し、どれかで登録できれば成功。
     /// </summary>
-    public static async Task<ClaudeLinkResult> RegisterClaudeCodeAsync(CancellationToken ct = default)
+    public static async Task<AgentLinkResult> RegisterClaudeCodeAsync(CancellationToken ct = default)
     {
         const string usable = "Claude Code で新しく始めた会話から、にこぷれっぷを操作できます（登録の前から開いていた会話には出てきません）。";
         var before = ReadClaudeCodeStatus();
-        if (before.PointsToThisApp) return new ClaudeLinkResult(true, "Claude Code には登録済みです", usable);
+        if (before.PointsToThisApp) return new AgentLinkResult(true, "Claude Code には登録済みです", usable);
 
         var candidates = FindClaudeCode();
         if (candidates.Count == 0)
         {
-            return new ClaudeLinkResult(false, "Claude Code が見つかりません",
+            return new AgentLinkResult(false, "Claude Code が見つかりません",
                 "Claude Code を入れてから、もう一度押してください。Claude Desktop のチャットで使うときは「Claude Desktop に追加」を押します。");
         }
 
@@ -243,8 +171,7 @@ internal static class ClaudeLink
         var log = new StringBuilder();
         foreach (var claude in candidates)
         {
-            bool viaCmd = claude.Path.EndsWith(".cmd", StringComparison.OrdinalIgnoreCase);
-            if (viaCmd && (exe.Contains('%') || exe.Contains('"')))
+            if (AgentCli.IsCmd(claude) && AgentCli.CannotPassViaCmd(exe))
             {
                 log.AppendLine($"{claude.Path}: この場所の exe はコマンドプロンプト経由では渡せないため飛ばしました");
                 continue;
@@ -253,16 +180,16 @@ internal static class ClaudeLink
             {
                 if (ReadClaudeCodeStatus().Registered)
                 {
-                    var removed = await RunClaudeAsync(claude, ["mcp", "remove", ServerKey, "--scope", "user"], ct);
-                    AppendRun(log, claude, "mcp remove", removed);
+                    var removed = await AgentCli.RunAsync(claude, ["mcp", "remove", ServerKey, "--scope", "user"], ct);
+                    AgentCli.AppendRun(log, claude, "mcp remove", removed);
                 }
-                var added = await RunClaudeAsync(claude, ["mcp", "add", "--scope", "user", ServerKey, "--", exe, "--mcp"], ct);
-                AppendRun(log, claude, "mcp add", added);
+                var added = await AgentCli.RunAsync(claude, ["mcp", "add", "--scope", "user", ServerKey, "--", exe, "--mcp"], ct);
+                AgentCli.AppendRun(log, claude, "mcp add", added);
                 var after = ReadClaudeCodeStatus();
                 if (after.PointsToThisApp)
                 {
                     string message = usable + (claude.Source == "Claude Desktop" ? "（Claude Desktop に入っている Claude Code で登録しました）" : "");
-                    return new ClaudeLinkResult(true, "Claude Code に登録しました", message, log.ToString().Trim());
+                    return new AgentLinkResult(true, "Claude Code に登録しました", message, log.ToString().Trim());
                 }
             }
             catch (Exception ex) when (ex is not OperationCanceledException || !ct.IsCancellationRequested)
@@ -270,70 +197,8 @@ internal static class ClaudeLink
                 log.AppendLine($"{claude.Path}: {ex.Message}");
             }
         }
-        return new ClaudeLinkResult(false, "Claude Code に登録できませんでした",
+        return new AgentLinkResult(false, "Claude Code に登録できませんでした",
             "「うまくいかないとき」のコマンドを PowerShell に貼り付けて実行しても登録できます。", log.ToString().Trim());
-    }
-
-    private static void AppendRun(StringBuilder log, ClaudeCodeExe claude, string what, (int ExitCode, string Output) run)
-    {
-        log.AppendLine($"{claude.Path} {what}（終了コード {run.ExitCode}）");
-        if (run.Output.Length > 0) log.AppendLine(run.Output);
-    }
-
-    private static readonly Regex AnsiEscape = new(@"\x1B\[[0-9;?]*[ -/]*[@-~]|\x1B\][^\x07]*\x07", RegexOptions.Compiled);
-
-    /// <summary>claude を画面を出さずに動かし、終了コードと出力（標準出力と標準エラー）を返す。</summary>
-    private static async Task<(int ExitCode, string Output)> RunClaudeAsync(ClaudeCodeExe claude, IReadOnlyList<string> args, CancellationToken ct)
-    {
-        var psi = new ProcessStartInfo
-        {
-            UseShellExecute = false,
-            CreateNoWindow = true,
-            RedirectStandardInput = true,
-            RedirectStandardOutput = true,
-            RedirectStandardError = true,
-            StandardOutputEncoding = new UTF8Encoding(false),
-            StandardErrorEncoding = new UTF8Encoding(false),
-            WorkingDirectory = UserProfile,
-        };
-        if (claude.Path.EndsWith(".cmd", StringComparison.OrdinalIgnoreCase))
-        {
-            // npm の claude.cmd はコマンドプロンプト経由で動かす（/s で外側の引用符だけを外す）
-            psi.FileName = Path.Combine(Environment.SystemDirectory, "cmd.exe");
-            psi.Arguments = "/d /s /c \"" + string.Join(" ", new[] { claude.Path }.Concat(args).Select(a => "\"" + a + "\"")) + "\"";
-        }
-        else
-        {
-            psi.FileName = claude.Path;
-            foreach (string a in args) psi.ArgumentList.Add(a);
-        }
-        psi.Environment["NO_COLOR"] = "1"; // 色の制御文字を出さない
-
-        using var process = Process.Start(psi) ?? throw new InvalidOperationException("claude を起動できません");
-        process.StandardInput.Close();
-        Task<string> stdout = process.StandardOutput.ReadToEndAsync(CancellationToken.None);
-        Task<string> stderr = process.StandardError.ReadToEndAsync(CancellationToken.None);
-        using var timeout = CancellationTokenSource.CreateLinkedTokenSource(ct);
-        timeout.CancelAfter(ClaudeTimeout);
-        try
-        {
-            await process.WaitForExitAsync(timeout.Token);
-        }
-        catch (OperationCanceledException)
-        {
-            try
-            {
-                process.Kill(entireProcessTree: true);
-            }
-            catch (Exception)
-            {
-                // もう終わっている
-            }
-            ct.ThrowIfCancellationRequested();
-            throw new TimeoutException($"claude が {ClaudeTimeout.TotalSeconds:0} 秒たっても終わりませんでした");
-        }
-        string output = ((await stdout).Trim() + "\n" + (await stderr).Trim()).Trim();
-        return (process.ExitCode, AnsiEscape.Replace(output, ""));
     }
 
     // ============================================================ Claude Desktop
@@ -407,9 +272,9 @@ internal static class ClaudeLink
                 {
                     string manifestPath = Path.Combine(dir, "manifest.json");
                     var manifest = JsonNode.Parse(File.ReadAllText(manifestPath));
-                    if (ReadString(manifest?["name"]) != ServerKey) continue;
+                    if (AgentCli.ReadString(manifest?["name"]) != ServerKey) continue;
                     var config = manifest?["server"]?["mcp_config"];
-                    return new ClaudeDesktopStatus(true, true, ReadString(config?["command"]), ReadStrings(config?["args"]),
+                    return new ClaudeDesktopStatus(true, true, AgentCli.ReadString(config?["command"]), AgentCli.ReadStrings(config?["args"]),
                         File.GetLastWriteTimeUtc(manifestPath));
                 }
                 catch (Exception)
@@ -520,7 +385,7 @@ internal static class ClaudeLink
             ["long_description"] =
                 "にこぷれっぷ（RhythmicaLyrics のタイムタグ付き歌詞をニコカラメーカー3 向けに加工する Windows アプリ）を、Claude から操作できるようにします。" +
                 "起動中のにこぷれっぷにつながり、行の確認・チェック・表示時刻やフォントの設定・n3proj の書き出しなどを行います（書き込みはにこぷれっぷの Ctrl+Z で戻せます）。" +
-                "この拡張機能はにこぷれっぷ（ファイル > Claude と連携）が作ったもので、このパソコンのにこぷれっぷを起動するだけです。",
+                "この拡張機能はにこぷれっぷ（ファイル > AI エージェントと連携）が作ったもので、このパソコンのにこぷれっぷを起動するだけです。",
             ["author"] = new JsonObject { ["name"] = "YFRTeam" },
             ["server"] = new JsonObject
             {
@@ -599,140 +464,18 @@ internal static class ClaudeLink
     {
         using var process = Process.Start(new ProcessStartInfo(url) { UseShellExecute = true });
     }
-
-    // ============================================================ 共通
-
-    private static string? ReadString(JsonNode? node)
-    {
-        try
-        {
-            return node is JsonValue value && value.TryGetValue(out string? text) ? text : null;
-        }
-        catch (Exception)
-        {
-            return null;
-        }
-    }
-
-    private static IReadOnlyList<string> ReadStrings(JsonNode? node) =>
-        node is JsonArray array ? array.Select(ReadString).OfType<string>().ToList() : [];
-
-    // ============================================================ 検証用のコマンド（--claude-link）
-
-    /// <summary>
-    /// 検証用のコマンドか（<c>NicoKaraPrep.exe --claude-link 〈status | code | mcpb フォルダ | desktop〉</c>）。
-    /// 画面を出さずに「Claude と連携」の画面と同じ処理をして、結果を標準出力に JSON で書く（出力をリダイレクトして使う）。
-    /// </summary>
-    public static bool IsCliInvocation(string[] args) =>
-        args.Length > 0 && args[0].Equals("--claude-link", StringComparison.OrdinalIgnoreCase);
-
-    public static int RunCli(string[] args)
-    {
-        using var stdout = new StreamWriter(Console.OpenStandardOutput(), new UTF8Encoding(false)) { AutoFlush = true, NewLine = "\n" };
-        var json = new JsonSerializerOptions { WriteIndented = true, Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping };
-        string command = args.Length > 1 ? args[1].ToLowerInvariant() : "status";
-        try
-        {
-            switch (command)
-            {
-                case "status":
-                    stdout.WriteLine(StatusJson().ToJsonString(json));
-                    return 0;
-                case "code":
-                {
-                    var result = RegisterClaudeCodeAsync().GetAwaiter().GetResult();
-                    stdout.WriteLine(ResultJson(result, null).ToJsonString(json));
-                    return result.Success ? 0 : 1;
-                }
-                case "mcpb":
-                {
-                    string path = CreateMcpb(args.Length > 2 ? args[2] : DownloadsFolder);
-                    stdout.WriteLine(new JsonObject { ["success"] = true, ["path"] = path }.ToJsonString(json));
-                    return 0;
-                }
-                case "desktop":
-                {
-                    string? launcher = FindClaudeDesktop();
-                    if (launcher is null)
-                    {
-                        stdout.WriteLine(new JsonObject { ["success"] = false, ["title"] = "Claude Desktop が見つかりません" }.ToJsonString(json));
-                        return 1;
-                    }
-                    string path = CreateMcpb(args.Length > 2 ? args[2] : DownloadsFolder);
-                    OpenInClaudeDesktop(launcher, path);
-                    stdout.WriteLine(new JsonObject { ["success"] = true, ["path"] = path, ["launcher"] = launcher }.ToJsonString(json));
-                    return 0;
-                }
-                default:
-                    stdout.WriteLine("使い方: NicoKaraPrep.exe --claude-link status | code | mcpb [フォルダ] | desktop [フォルダ]");
-                    return 2;
-            }
-        }
-        catch (Exception ex)
-        {
-            stdout.WriteLine(new JsonObject { ["success"] = false, ["error"] = ex.Message }.ToJsonString(json));
-            return 1;
-        }
-    }
-
-    private static JsonObject StatusJson()
-    {
-        var code = ReadClaudeCodeStatus();
-        var candidates = FindClaudeCode();
-        var desktop = ReadClaudeDesktopStatus();
-        return new JsonObject
-        {
-            ["registrationExe"] = McpInfo.RegistrationExePath,
-            ["store"] = McpInfo.IsPackaged,
-            ["claudeCode"] = new JsonObject
-            {
-                ["configPath"] = code.ConfigPath,
-                ["configExists"] = code.ConfigExists,
-                ["registered"] = code.Registered,
-                ["command"] = code.Command,
-                ["args"] = new JsonArray(code.Args.Select(a => (JsonNode?)JsonValue.Create(a)).ToArray()),
-                ["pointsToThisApp"] = code.PointsToThisApp,
-                ["readError"] = code.ReadError,
-                ["candidates"] = new JsonArray(candidates.Select(c => (JsonNode?)new JsonObject { ["path"] = c.Path, ["source"] = c.Source }).ToArray()),
-                ["text"] = DescribeClaudeCode(code, candidates.Count > 0),
-            },
-            ["claudeDesktop"] = new JsonObject
-            {
-                ["launcher"] = FindClaudeDesktop(),
-                ["installed"] = desktop.Installed,
-                ["command"] = desktop.Command,
-                ["pointsToThisApp"] = desktop.PointsToThisApp,
-                ["text"] = DescribeClaudeDesktop(desktop),
-            },
-        };
-    }
-
-    private static JsonObject ResultJson(ClaudeLinkResult result, string? path) => new()
-    {
-        ["success"] = result.Success,
-        ["title"] = result.Title,
-        ["message"] = result.Message,
-        ["detail"] = result.Detail,
-        ["path"] = path,
-    };
 }
 
 /// <summary>Claude Code への登録の状態（設定ファイルを読んだ結果）。</summary>
 internal sealed record ClaudeCodeStatus(string ConfigPath, bool ConfigExists, bool Registered, string? Command, IReadOnlyList<string> Args, string? ReadError)
 {
     /// <summary>このにこぷれっぷ（の橋渡し）が登録されているか。</summary>
-    public bool PointsToThisApp => Registered && ClaudeLink.IsThisApp(Command, Args);
+    public bool PointsToThisApp => Registered && AgentCli.IsThisApp(Command, Args);
 }
-
-/// <summary>見つかった claude（Claude Code）。</summary>
-internal sealed record ClaudeCodeExe(string Path, string Source);
 
 /// <summary>Claude Desktop への追加の状態（ManifestTime は入っている拡張機能の manifest.json の更新日時。入れ直されたかの見分けに使う）。</summary>
 internal sealed record ClaudeDesktopStatus(bool Found, bool Installed, string? Command, IReadOnlyList<string> Args, DateTime? ManifestTime = null)
 {
     /// <summary>このにこぷれっぷ（の橋渡し）を起動する拡張機能が入っているか。</summary>
-    public bool PointsToThisApp => Installed && ClaudeLink.IsThisApp(Command, Args);
+    public bool PointsToThisApp => Installed && AgentCli.IsThisApp(Command, Args);
 }
-
-/// <summary>登録のボタンの結果（画面の InfoBar に出す）。</summary>
-internal sealed record ClaudeLinkResult(bool Success, string Title, string Message, string? Detail = null);

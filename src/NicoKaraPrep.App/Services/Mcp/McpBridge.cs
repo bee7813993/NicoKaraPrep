@@ -8,7 +8,7 @@ using ModelContextProtocol.Protocol;
 namespace NicoKaraPrep.App.Services.Mcp;
 
 /// <summary>
-/// MCP の橋渡し（<c>NicoKaraPrep.exe --mcp</c>）。MCP クライアント（Claude Code など）とは標準入出力（stdio）で話し、
+/// MCP の橋渡し（<c>NicoKaraPrep.exe --mcp</c>）。MCP クライアント（Claude Code・Codex など）とは標準入出力（stdio）で話し、
 /// 受け取った JSON-RPC のメッセージを、起動中の本体の名前付きパイプ（<see cref="McpHost"/>）へそのまま流す。
 /// 本体が起動していないあいだも応答する: initialize と道具の一覧は自分で返し（一覧は本体と同じ定義から作る）、
 /// 道具の呼び出しには「起動してください」と答える。本体があとから起動すれば、次の呼び出しからつながる。
