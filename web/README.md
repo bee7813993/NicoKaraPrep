@@ -15,6 +15,7 @@ ykr.moe のにこぷれっぷのページ（`https://ykr.moe/apps/NicoKaraPrep/`
 
 | 説明 | 内容 | 反映する時期 | 状態 |
 |---|---|---|---|
+| [site-updates/pr17-manual.md](site-updates/pr17-manual.md) | マニュアル: 行リストと絵文字挿入ビューのショートカットキーをそろえる（Ctrl のキーはどちらでも同じ、再生の 1 文字のキーは行リストでも。PR #17） | 0.2.0 の次の版をストアで配信してから | 未反映 |
 | [site-updates/ai-agent-link.md](site-updates/ai-agent-link.md) | マニュアル・プライバシーポリシー・紹介ページ: 「AI エージェントと連携」（Codex への登録・ほかの AI エージェント向けの設定）。プライバシーポリシーは最終更新日も直す | 0.2.0 の次の版をストアで配信してから | 未反映 |
 | [site-updates/pr15-manual.md](site-updates/pr15-manual.md) | マニュアル: 全行選択のチェック、分けた・結んだ行の表示時刻、実際の表示区間を当てる行（PR #15） | 0.2.0 の次の版をストアで配信してから | 未反映 |
 | [site-updates/pr14-manual.md](site-updates/pr14-manual.md) | マニュアル: 組み合わせのフォント設定で、ベース色なども色が違えば帯で分ける（PR #14） | 0.2.0 の次の版をストアで配信してから | 未反映 |
