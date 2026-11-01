@@ -18,7 +18,12 @@
             FontSize="12"
             TextWrapping="Wrap"
             Foreground="{ThemeResource TextFillColorSecondaryBrush}"
-            Text="そのほかの固定キー: Ctrl+Z / Ctrl+Y = 元に戻す / やり直し　Ctrl+Enter = 行分割　Ctrl+J = 行結合（Ctrl+Shift+J: スペースを挟む）　Shift+空白キー = 全角スペース　Shift+結合キー = スペースを挟んで結合" />
+            Text="再生の操作のキー（再/停・ここから・再生・停止・←戻る・進む→・追従）は、行リストでも、文字の入力欄の外なら効きます（「ここから」は選んだ行から再生、「追従」は再生中の行へのスクロールの入／切）。" />
+        <TextBlock
+            FontSize="12"
+            TextWrapping="Wrap"
+            Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+            Text="そのほかの固定キー（Ctrl のキーは行リストと同じ）: Ctrl+Space = 再生 / 一時停止　Ctrl+← / Ctrl+→ = 数秒戻る / 進む　Ctrl+Enter = 行分割　Ctrl+J = 行結合（Ctrl+Shift+J: スペースを挟む）　Ctrl+K = 空行（ページ区切り）を下に挿入　Ctrl+Delete = 選択行を削除　Ctrl+Z / Ctrl+Y = 元に戻す / やり直し　Shift+空白キー = 全角スペース　Shift+結合キー = スペースを挟んで結合" />
         <Button Content="デフォルトに戻す" Click="OnResetClick" />
     </StackPanel>
 </ContentDialog>

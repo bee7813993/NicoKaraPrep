@@ -429,7 +429,7 @@ public sealed partial class MainWindow
             BackViewMenuItem.IsEnabled = mode != MainViewMode.Lines;
 
             EmojiModeToggle.IsChecked = mode == MainViewMode.EmojiInsert;
-            UpdateLineEditMenuShortcuts();
+            UpdateMenuShortcutTexts();
         }
         finally
         {
@@ -500,16 +500,24 @@ public sealed partial class MainWindow
     /// ComboBox は F4 でドロップダウンを開くので、右パネル・行設定・レイアウト設定ビューのコンボを選んだ直後（フォーカスがコンボに残る）に
     /// F4 を押すと、メニューのアクセラレータに届かずにドロップダウンが開いていた。開いているドロップダウン・ダイアログ・メニューの中のキーは
     /// 別のポップアップなのでここを通らない（ドロップダウンを閉じる F4 はそのまま効く）。
+    /// 行リストでは、挿入ビューと同じ再生の操作のキー（既定は Space・Z・X など）もここで受ける（HandleLineListKey）。
     /// </summary>
     private void OnRootPreviewKeyDown(object sender, KeyRoutedEventArgs e)
     {
-        if (e.Handled || e.Key != Windows.System.VirtualKey.F4) return;
-        static bool Down(Windows.System.VirtualKey key) =>
-            (Microsoft.UI.Input.InputKeyboardSource.GetKeyStateForCurrentThread(key) & Windows.UI.Core.CoreVirtualKeyStates.Down) != 0;
-        if (Down(Windows.System.VirtualKey.Menu) || Down(Windows.System.VirtualKey.Control) || Down(Windows.System.VirtualKey.Shift)) return; // Alt+F4 などはそのまま
+        if (e.Handled) return;
+        if (e.Key != Windows.System.VirtualKey.F4)
+        {
+            if (ViewModel.ViewMode == MainViewMode.Lines) HandleLineListKey(e);
+            return;
+        }
+        if (IsKeyDown(Windows.System.VirtualKey.Menu) || IsKeyDown(Windows.System.VirtualKey.Control) || IsKeyDown(Windows.System.VirtualKey.Shift)) return; // Alt+F4 などはそのまま
         e.Handled = true;
         ToggleLayoutViewByKey();
     }
+
+    /// <summary>今そのキーが押されているか。</summary>
+    private static bool IsKeyDown(Windows.System.VirtualKey key) =>
+        (Microsoft.UI.Input.InputKeyboardSource.GetKeyStateForCurrentThread(key) & Windows.UI.Core.CoreVirtualKeyStates.Down) != 0;
 
     /// <summary>右パネルの「絵文字挿入ビュー (F2)」トグル。</summary>
     private void OnEmojiModeChanged(object sender, RoutedEventArgs e)

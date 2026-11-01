@@ -1009,9 +1009,12 @@ public partial class MainViewModel : ObservableObject
     }
 
     /// <summary>選択行の下に空行（ページ区切り）を挿入する。</summary>
-    public void InsertEmptyLineBelowSelection()
+    public void InsertEmptyLineBelowSelection() => InsertEmptyLineAt(SelectedLine?.Index + 1 ?? Document.Lines.Count);
+
+    /// <summary>空行（ページ区切り）を index 行目に挿入する（絵文字挿入ビューでは、カーソルのある行の下）。</summary>
+    public void InsertEmptyLineAt(int index)
     {
-        int index = SelectedLine?.Index + 1 ?? Document.Lines.Count;
+        index = Math.Clamp(index, 0, Document.Lines.Count);
         PushUndo();
         LineOperations.InsertEmptyLine(Document, index);
         RebuildLinesPreservingMarks();
