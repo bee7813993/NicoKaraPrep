@@ -1304,7 +1304,8 @@ public sealed partial class MainWindow : Window
             ViewModel.SaveProject();
             if (!FullScreenViewActive) MediaPanel.Visibility = Visibility.Visible; // 全画面ビュー（フォント設定・レイアウト設定）では隠したまま
             MediaPanel.IsExpanded = true;
-            ViewModel.StatusText = $"メディアを開きました: {Path.GetFileName(path)}（Ctrl+Space で再生/一時停止）";
+            string playKey = _insertKeys.TryGetValue(InsertViewAction.PlayPause, out string? k) ? $"{InsertViewKeyMap.KeyLabel(k)}・" : "";
+            ViewModel.StatusText = $"メディアを開きました: {Path.GetFileName(path)}（{playKey}Ctrl+Space で再生/一時停止）";
 
             if (_mediaTimer is null)
             {
@@ -1685,9 +1686,22 @@ public sealed partial class MainWindow : Window
     /// 行リスト（根の PreviewKeyDown から）: 挿入ビューと同じ割り当てキーで再生の操作をする（既定は Space・D・A・S・Z・X・F）。
     /// 文字の入力欄などにフォーカスがあるとき（LineListKeyAllowed）と、修飾キーを押しているときは何もしない。
     /// 挿入・行分割・結合のキー（既定は B・N・G・K・/・＼）は挿入ビューだけ（行リストの行の操作は Ctrl のキーで）。
+    /// 行リストにフォーカスがあるときの Ctrl+Space もここで受ける。
     /// </summary>
     private void HandleLineListKey(KeyRoutedEventArgs e)
     {
+        // Ctrl+Space（再生 / 一時停止）: 行リスト（ListView）にフォーカスがあると、ListView が行の選択の切り替えに使って
+        // メニューのアクセラレータに届かないので、ここで受ける
+        if (e.Key == Windows.System.VirtualKey.Space && IsKeyDown(Windows.System.VirtualKey.Control)
+            && !IsKeyDown(Windows.System.VirtualKey.Shift) && !IsKeyDown(Windows.System.VirtualKey.Menu))
+        {
+            if (!LineListKeyAllowed(e.Key)) return;
+            e.Handled = true;
+            MarkKeyHandled(PlayPauseMenuItem);
+            TogglePlayPause();
+            return;
+        }
+
         if (!_insertKeyLookup.TryGetValue(e.Key, out var action)) return;
         if (action is not (InsertViewAction.PlayPause or InsertViewAction.PlayFromCursor or InsertViewAction.Play or InsertViewAction.Pause
             or InsertViewAction.SeekBack or InsertViewAction.SeekForward or InsertViewAction.FollowToggle))
