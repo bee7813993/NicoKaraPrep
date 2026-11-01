@@ -1,0 +1,158 @@
+diff --git a/html/apps/NicoKaraPrep/index.html b/html/apps/NicoKaraPrep/index.html
+index 0e70ef1..7e539e7 100644
+--- a/html/apps/NicoKaraPrep/index.html
++++ b/html/apps/NicoKaraPrep/index.html
+@@ -236,8 +236,8 @@
+           </article>
+           <article class="feature-item">
+             <p class="feature-number" aria-hidden="true">09</p>
+-            <h3>Claude から操作（MCP）</h3>
+-            <p><strong>ファイル &gt; Claude と連携</strong> のボタンひとつで、Claude Desktop・Claude Code から起動中のにこぷれっぷを操作できるようになります。「表示時刻を自動調整して、警告の残る行を教えて」のように頼めます。使うのは登録したときだけで、にこぷれっぷ自体はインターネット通信をしません。</p>
++            <h3>AI エージェントから操作（MCP）</h3>
++            <p><strong>ファイル &gt; AI エージェントと連携</strong> のボタンひとつで、Claude Desktop・Claude Code・Codex から起動中のにこぷれっぷを操作できるようになります。「表示時刻を自動調整して、警告の残る行を教えて」のように頼めます。使うのは登録したときだけで、にこぷれっぷ自体はインターネット通信をしません。</p>
+           </article>
+         </div>
+       </div>
+@@ -348,7 +348,7 @@
+           </div>
+           <div>
+             <dt>一緒に使うもの</dt>
+-            <dd>RhythmicaLyrics（タイムタグ付け）、ニコカラメーカー3（動画化）。Claude Desktop・Claude Code から操作することもできます（任意）</dd>
++            <dd>RhythmicaLyrics（タイムタグ付け）、ニコカラメーカー3（動画化）。Claude Desktop・Claude Code・Codex などの AI エージェントから操作することもできます（任意）</dd>
+           </div>
+           <div>
+             <dt>対応ファイル</dt>
+diff --git a/html/apps/NicoKaraPrep/manual.html b/html/apps/NicoKaraPrep/manual.html
+index b39d390..1a115e4 100644
+--- a/html/apps/NicoKaraPrep/manual.html
++++ b/html/apps/NicoKaraPrep/manual.html
+@@ -3,7 +3,7 @@
+ <head>
+   <meta charset="utf-8">
+   <meta name="viewport" content="width=device-width, initial-scale=1">
+-  <meta name="description" content="にこぷれっぷ（NicoKaraPrep）の使い方マニュアル。歌詞ファイルとニコカラメーカー3 プロジェクト（n3proj）の読み込み、@Emoji アイコンと定型文の挿入、重なり・横幅・表示時刻のチェック、タブ分離、フォント設定ビュー・レイアウト設定ビュー・字幕アクション・表示時刻の自動調整を使った n3proj の書き出し、Claude からの操作（MCP）を説明します。">
++  <meta name="description" content="にこぷれっぷ（NicoKaraPrep）の使い方マニュアル。歌詞ファイルとニコカラメーカー3 プロジェクト（n3proj）の読み込み、@Emoji アイコンと定型文の挿入、重なり・横幅・表示時刻のチェック、タブ分離、フォント設定ビュー・レイアウト設定ビュー・字幕アクション・表示時刻の自動調整を使った n3proj の書き出し、Claude・Codex などの AI エージェントからの操作（MCP）を説明します。">
+   <meta name="theme-color" content="#ffffff">
+   <title>使い方マニュアル | にこぷれっぷ</title>
+   <link rel="icon" href="images/nicokaraprep-icon.png">
+@@ -208,7 +208,7 @@
+           <li><a href="#ch15">15. ファイルの場所まとめ</a></li>
+           <li><a href="#ch16">16. 困ったとき</a></li>
+           <li><a href="#ch17">17. ショートカット一覧</a></li>
+-          <li><a href="#ch18">18. MCP（Claude などからの操作）</a></li>
++          <li><a href="#ch18">18. MCP（AI エージェントからの操作）</a></li>
+         </ul>
+       </nav>
+ 
+@@ -235,7 +235,7 @@
+           <li>設定は <code>%APPDATA%\NicoKaraPrep\settings.json</code> に保存されます（アプリフォルダは汚しません）</li>
+           <li>前回終了時のウィンドウ位置・サイズで起動します</li>
+           <li>にこぷれっぷは 1 つだけ起動します（zip 版は同じフォルダの <code>NicoKaraPrep.exe</code> ごとに 1 つ）。起動中にもう一度起動したり、アイコンへファイルをドロップしたりすると、起動中のウィンドウが前に出て、そのファイルを開きます（保存していない変更があれば、破棄してよいか尋ねます。n3proj は読み込み確認画面、動画・音声はメディア再生で開きます）</li>
+-          <li>Claude などの AI から MCP で操作することもできます（<a href="#ch18">18 章</a>）</li>
++          <li>Claude・Codex などの AI エージェントから MCP で操作することもできます（<a href="#ch18">18 章</a>）</li>
+         </ul>
+       </section>
+ 
+@@ -943,7 +943,7 @@
+               <tr><td>連続する絵文字のタグ付け</td><td>各絵文字ごと / 先頭と末尾のみ</td><td>各絵文字ごと</td></tr>
+               <tr><td>プレースホルダ文字</td><td>挿入ビューの <kbd>B</kbd> キーで挿入する文字</td><td>＿</td></tr>
+               <tr><td>シーク秒数</td><td><kbd>Z</kbd> / <kbd>X</kbd>・<kbd>Ctrl+←</kbd> / <kbd>Ctrl+→</kbd> で動く秒数</td><td>3 秒</td></tr>
+-              <tr><td>MCP サーバーを有効にする</td><td>Claude などから、起動中のこのアプリを操作できるようにする。下の「Claude と連携...」で登録の画面を開けます（<a href="#ch18">18 章</a>）</td><td>オン</td></tr>
++              <tr><td>MCP サーバーを有効にする</td><td>Claude・Codex などの AI エージェントから、起動中のこのアプリを操作できるようにする。下の「AI エージェントと連携...」で登録の画面を開けます（<a href="#ch18">18 章</a>）</td><td>オン</td></tr>
+             </tbody>
+           </table>
+         </div>
+@@ -975,10 +975,11 @@
+           <li><strong>タブが復元されない</strong> → 元の歌詞ファイルが外部で変更されると、安全のためタブ構成を破棄します（メインに全行が読み込まれます）</li>
+           <li><strong>lrc を更新したのにニコカラメーカーでルビが出ない・古い読みが出る</strong> → ニコカラメーカー3 は歌詞ファイルの「（更新）」再読み込み時にルビの適用結果を使い回すことがあります。歌詞設定で歌詞ファイルを一度消して選び直す（またはニコカラメーカーを再起動する）と正しく反映されます</li>
+           <li><strong>起動時に「設定ファイルを読み込めなかったため、設定は保存されません」と出る</strong> → <code>%APPDATA%\NicoKaraPrep\settings.json</code> が壊れています。絵文字リストなどが既定値で上書きされて消えないよう、この状態では設定を保存しません。壊れたファイルの写しを同じフォルダに <code>settings.json.broken-日時</code> として残してあるので、settings.json を直すか別の名前に変えてから起動し直してください</li>
+-          <li><strong>Claude から操作できない（「にこぷれっぷが起動していません」と答える）</strong> → にこぷれっぷを起動しているか、ファイル &gt; 設定 の「MCP サーバーを有効にする」がオンかを確かめてください（ステータスバーの右に「MCP: 待ち受け中」と出ていれば待ち受けています）。zip 版を別のフォルダに展開し直したときは、ファイル &gt; Claude と連携... の状態に「別の場所のにこぷれっぷが登録されています」と出るので、ボタンを押して登録し直してください（<a href="#ch18">18 章</a>）</li>
++          <li><strong>AI エージェントから操作できない（「にこぷれっぷが起動していません」と答える）</strong> → にこぷれっぷを起動しているか、ファイル &gt; 設定 の「MCP サーバーを有効にする」がオンかを確かめてください（ステータスバーの右に「MCP: 待ち受け中」と出ていれば待ち受けています）。zip 版を別のフォルダに展開し直したときは、ファイル &gt; AI エージェントと連携... の状態に「別の場所のにこぷれっぷが登録されています」と出るので、ボタンを押して登録し直してください（<a href="#ch18">18 章</a>）</li>
+           <li><strong>「Claude Desktop に追加」を押しても「インストールしますか？」が出ない</strong> → Claude Desktop を最新にしてから、もう一度押してください。それでも出ないときは、「うまくいかないとき」の「拡張機能のファイルを作って場所を開く」を押し、<code>nicokaraprep.mcpb</code> を Claude Desktop の 設定 → 拡張機能 の画面へドラッグします</li>
+           <li><strong>「Claude Code に登録」が「Claude Code が見つかりません」と答える</strong> → Claude Desktop のチャットで使うときは「Claude Desktop に追加」を押します。Claude Code を使うときは、「うまくいかないとき」のコマンドを使います</li>
+-          <li><strong>Claude からの書き込みが「ダイアログが開いている」と断られる</strong> → 確認画面・設定・保存の画面などを閉じてから、もう一度頼んでください</li>
++          <li><strong>「Codex に登録」が「Codex が見つかりません」と答える</strong> → Codex アプリだけを使っているときは、「うまくいかないとき」に出ている 3 行を Codex の設定ファイル（<code>%USERPROFILE%\.codex\config.toml</code>）の終わりに書き足して、Codex を起動し直します。Codex CLI を使っているときは、「うまくいかないとき」のコマンドを使います</li>
++          <li><strong>AI エージェントからの書き込みが「ダイアログが開いている」と断られる</strong> → 確認画面・設定・保存の画面などを閉じてから、もう一度頼んでください</li>
+           <li><strong>アプリが落ちた</strong> → <code>%APPDATA%\NicoKaraPrep\crash.log</code> を添えて<a href="../../contact.html">お問い合わせ</a>ください</li>
+         </ul>
+       </section>
+@@ -1063,29 +1064,31 @@
+       </section>
+ 
+       <section>
+-        <h2 id="ch18">18. MCP（Claude などからの操作）</h2>
+-        <p>Claude などの AI から、MCP（Model Context Protocol）で起動中のにこぷれっぷを操作できます。「n3proj を読み込んで、ワイプ前 1.5 秒・重ねてよい 0.3 秒で表示時刻を自動調整して、警告の残る行を教えて」「書き出す前に、各ページの字幕の見え方を画像で確かめて」のように頼めます。操作の結果はそのまま画面に出て、元に戻すこともできます。</p>
++        <h2 id="ch18">18. MCP（AI エージェントからの操作）</h2>
++        <p>Claude・Codex などの AI エージェントから、MCP（Model Context Protocol）で起動中のにこぷれっぷを操作できます。「n3proj を読み込んで、ワイプ前 1.5 秒・重ねてよい 0.3 秒で表示時刻を自動調整して、警告の残る行を教えて」「書き出す前に、各ページの字幕の見え方を画像で確かめて」のように頼めます。操作の結果はそのまま画面に出て、元に戻すこともできます。</p>
+ 
+         <h3 id="ch18-1">18.1 つなぎ方（ボタンを押して登録）</h3>
+         <ol>
+           <li>にこぷれっぷを起動しておきます（ステータスバーの右に「MCP: 待ち受け中」と出ます）</li>
+-          <li><strong>ファイル &gt; Claude と連携...</strong> を開き、使っている Claude のボタンを押します。登録は 1 回だけです（ボタンの下に、今の登録の状態が出ます）
++          <li><strong>ファイル &gt; AI エージェントと連携...</strong> を開き、使っているアプリの行のボタンを押します。登録は 1 回だけです（ボタンの左に、今の登録の状態が出ます）
+             <ul>
+               <li><strong>Claude Desktop のチャットで使う</strong> → 「Claude Desktop に追加」を押します。Claude Desktop に「拡張機能をインストールしますか？」が出るので、「インストール」を押します（「Anthropic によって確認されていません」とも出ますが、にこぷれっぷが作った拡張機能です）</li>
+               <li><strong>Claude Code で使う（Claude Desktop の Code タブも）</strong> → 「Claude Code に登録」を押します。このパソコンの Claude Code を探して登録します</li>
++              <li><strong>Codex で使う（Codex アプリ・Codex CLI・IDE の拡張機能）</strong> → 「Codex に登録」を押します。このパソコンの Codex を探して登録します。Codex アプリ・Codex CLI・IDE の拡張機能は設定を共有しているので、1 回の登録でどれからも使えます</li>
+             </ul>
+           </li>
+-          <li>Claude の会話から、にこぷれっぷを操作できます。Claude Code は、登録したあとに始めた会話から使えます。Claude がつながると、ステータスバーの印が「MCP: 接続中」になります</li>
++          <li>AI エージェントの会話から、にこぷれっぷを操作できます。Claude Code・Codex は、登録したあとに始めた会話から使えます（Codex で出てこないときは、Codex を起動し直します）。つながると、ステータスバーの印が「MCP: 接続中」になります</li>
+         </ol>
+         <ul>
+-          <li><strong>ファイル &gt; 設定...</strong> の「MCP」の欄の「Claude と連携...」からも開けます</li>
++          <li><strong>ファイル &gt; 設定...</strong> の「MCP」の欄の「AI エージェントと連携...」からも開けます</li>
+           <li>拡張機能のファイル（<code>nicokaraprep.mcpb</code>）は、ダウンロード フォルダに作ります。Claude Desktop に入れたあとは消してかまいません</li>
+           <li><strong>ストア版</strong>は、更新しても登録し直す必要はありません。<strong>zip 版</strong>は、その <code>NicoKaraPrep.exe</code> の場所で登録します。新しい版を同じフォルダに上書きすればそのまま使え、別のフォルダに展開したときは登録し直します</li>
++          <li><strong>ほかの AI エージェント</strong>（Cursor・Gemini CLI・VS Code（GitHub Copilot）など、MCP に対応したもの）は、「AI エージェントと連携」の画面の <strong>ほかの AI エージェントで使う</strong> を開き、表示されたコマンドを引数 <code>--mcp</code> の MCP サーバー（stdio）として、その AI エージェントの設定に登録します。設定ファイルに書く形（<code>mcpServers</code>）も出るので、<strong>コピー</strong> して貼り付けます（VS Code の <code>mcp.json</code> では <code>servers</code> の中に書きます）</li>
+           <li>止めるときは、ファイル &gt; 設定 の「MCP サーバーを有効にする」を外します</li>
+         </ul>
+         <div class="note">
+           <p><strong>うまくいかないとき</strong></p>
+-          <p>「Claude と連携」の画面の <strong>うまくいかないとき（手作業で登録する）</strong> を開きます。Claude Desktop は、<strong>拡張機能のファイルを作って場所を開く</strong> で出てきた <code>nicokaraprep.mcpb</code> を、Claude Desktop の 設定 → 拡張機能 の画面へドラッグします。Claude Code は、表示されたコマンドを <strong>コピー</strong> して PowerShell かコマンドプロンプトに貼り付けて実行します（ストア版は <code>nicokaraprep.exe</code> という呼び出し名で登録します）。</p>
++          <p>「AI エージェントと連携」の画面の <strong>うまくいかないとき（手作業で登録する）</strong> を開きます。Claude Desktop は、<strong>拡張機能のファイルを作って場所を開く</strong> で出てきた <code>nicokaraprep.mcpb</code> を、Claude Desktop の 設定 → 拡張機能 の画面へドラッグします。Claude Code・Codex は、表示されたコマンドを <strong>コピー</strong> して PowerShell かコマンドプロンプトに貼り付けて実行します（ストア版は <code>nicokaraprep.exe</code> という呼び出し名で登録します）。Codex アプリだけを使っているときは、表示された 3 行を Codex の設定ファイル（<code>%USERPROFILE%\.codex\config.toml</code>）の終わりに書き足して、Codex を起動し直します。</p>
+         </div>
+ 
+         <h3 id="ch18-2">18.2 使える操作（概要）</h3>
+@@ -1106,7 +1109,7 @@
+         <h3 id="ch18-3">18.3 決まりごと</h3>
+         <ul>
+           <li>つながるのは<strong>同じ PC の同じ Windows ユーザーのプログラムだけ</strong>です（ネットワークには出ません）</li>
+-          <li>操作できるのは、<strong>にこぷれっぷを起動しているあいだだけ</strong>です。起動していないときに頼むと「起動していません」と答え、起動したあとの操作からつながります（Claude を起動し直す必要はありません）</li>
++          <li>操作できるのは、<strong>にこぷれっぷを起動しているあいだだけ</strong>です。起動していないときに頼むと「起動していません」と答え、起動したあとの操作からつながります（AI エージェントを起動し直す必要はありません）</li>
+           <li>書き込みは画面の操作と同じ処理を通り、画面にすぐ出ます。<strong>1 回の操作は <kbd>Ctrl+Z</kbd> 1 回で元に戻せます</strong>。ステータスバーには「MCP:」を付けて出します</li>
+           <li>行番号は行リストと同じく 1 から数えます（空行も数えます）。タブを指定すると、画面もそのタブに切り替わります</li>
+           <li>時刻は行リストと同じ <code>mm:ss:cc</code> で受け渡しします</li>
+diff --git a/html/apps/NicoKaraPrep/privacy.html b/html/apps/NicoKaraPrep/privacy.html
+index 6ec4e66..bd9d401 100644
+--- a/html/apps/NicoKaraPrep/privacy.html
++++ b/html/apps/NicoKaraPrep/privacy.html
+@@ -65,13 +65,13 @@
+ 
+       <section>
+         <h2>3. AI アシスタントとの連携（MCP）</h2>
+-        <p>本アプリには、Claude などの AI アシスタントのアプリ(MCP クライアント)から、起動中の本アプリを操作できるようにする機能があります。</p>
++        <p>本アプリには、Claude・Codex などの AI アシスタントのアプリ(MCP クライアント)から、起動中の本アプリを操作できるようにする機能があります。</p>
+         <ul>
+-          <li>AI アシスタントのアプリが本アプリを操作できるのは、利用者が「ファイル &gt; Claude と連携」などで、そのアプリに本アプリを登録したときだけです</li>
++          <li>AI アシスタントのアプリが本アプリを操作できるのは、利用者が「ファイル &gt; AI エージェントと連携」などで、そのアプリに本アプリを登録したときだけです</li>
+           <li>本アプリと AI アシスタントのアプリとのやり取りは、同じパソコンの中で、同じ Windows ユーザーのアプリとのあいだだけで行われます(名前付きパイプ)。本アプリ自身がインターネットへ接続することはありません</li>
+           <li>連携しているあいだ、AI アシスタントのアプリは、本アプリで開いている歌詞・設定の内容や字幕のプレビュー画像を読み取り、本アプリを操作できます。AI アシスタントのアプリがそれらの情報をどのように扱うか(提供元のサーバーへ送るかどうかなど)は、そのアプリと提供元のプライバシーポリシーに従います</li>
+-          <li>「Claude と連携」で登録するとき、本アプリは利用者のパソコンの中で、Claude Code の設定への登録と、Claude Desktop の拡張機能のファイル(<code>nicokaraprep.mcpb</code>)のダウンロード フォルダへの作成を行います。開発者や第三者へ情報を送ることはありません</li>
+-          <li>連携の待ち受けは「ファイル &gt; 設定」の「MCP サーバーを有効にする」で止められます。登録は Claude 側でいつでも解除できます</li>
++          <li>「AI エージェントと連携」で登録するとき、本アプリは利用者のパソコンの中で、Claude Code・Codex の設定への登録と、Claude Desktop の拡張機能のファイル(<code>nicokaraprep.mcpb</code>)のダウンロード フォルダへの作成を行います。開発者や第三者へ情報を送ることはありません</li>
++          <li>連携の待ち受けは「ファイル &gt; 設定」の「MCP サーバーを有効にする」で止められます。登録は AI アシスタントのアプリ側でいつでも解除できます</li>
+         </ul>
+       </section>
+ 
+@@ -120,8 +120,8 @@
+         The <code>runFullTrust</code> capability is declared because it is required for packaged Windows
+         desktop applications; it is used only for ordinary desktop functionality such as reading and writing
+         user-selected files, measuring text width, and playing local media files.
+-        The app can optionally be controlled by AI assistant apps such as Claude (MCP clients), but only
+-        after the user registers it with them (File &gt; Link with Claude). The connection stays on the same PC
++        The app can optionally be controlled by AI assistant apps such as Claude and Codex (MCP clients), but only
++        after the user registers it with them (File &gt; Link with AI agents). The connection stays on the same PC
+         and the same Windows user account (a local named pipe); the app itself never connects to the internet.
+         While connected, the AI assistant app can read the open lyrics, settings and subtitle preview images
+         and operate the app; how that app handles the data is governed by its own privacy policy.
