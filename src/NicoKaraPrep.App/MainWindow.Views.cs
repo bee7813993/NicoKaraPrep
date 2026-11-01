@@ -429,6 +429,7 @@ public sealed partial class MainWindow
             BackViewMenuItem.IsEnabled = mode != MainViewMode.Lines;
 
             EmojiModeToggle.IsChecked = mode == MainViewMode.EmojiInsert;
+            UpdateLineEditMenuShortcuts();
         }
         finally
         {

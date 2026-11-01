@@ -1471,7 +1471,31 @@ public sealed partial class MainWindow : Window
         }
         UpdateInsertLegend();
         UpdateFollowIndicator();
+        UpdateLineEditMenuShortcuts();
         PhraseHeaderText.Text = $"定型文（{InsertViewKeyMap.KeyLabel(_insertKeys[InsertViewAction.PhraseInsert])} のあとに番号）";
+    }
+
+    /// <summary>
+    /// 編集メニューの行分割・行結合のショートカット表示を今のビューに合わせる。
+    /// 絵文字挿入ビューでは割り当てキー（既定は / と ＼。Shift+結合キーでスペースを挟む）、ほかのビューでは Ctrl+Enter・Ctrl+J。
+    /// </summary>
+    private void UpdateLineEditMenuShortcuts()
+    {
+        if (InsertViewActive
+            && _insertKeys.TryGetValue(InsertViewAction.SplitLine, out string? split)
+            && _insertKeys.TryGetValue(InsertViewAction.JoinLine, out string? join))
+        {
+            SplitLineMenuItem.KeyboardAcceleratorTextOverride = InsertViewKeyMap.KeyLabel(split);
+            JoinLineMenuItem.KeyboardAcceleratorTextOverride = InsertViewKeyMap.KeyLabel(join);
+            JoinLineWithSpaceMenuItem.KeyboardAcceleratorTextOverride = $"Shift+{InsertViewKeyMap.KeyLabel(join)}";
+        }
+        else
+        {
+            // 上書きを消すと、KeyboardAccelerators から作った表示（Ctrl+Enter など）に戻る
+            SplitLineMenuItem.ClearValue(MenuFlyoutItem.KeyboardAcceleratorTextOverrideProperty);
+            JoinLineMenuItem.ClearValue(MenuFlyoutItem.KeyboardAcceleratorTextOverrideProperty);
+            JoinLineWithSpaceMenuItem.ClearValue(MenuFlyoutItem.KeyboardAcceleratorTextOverrideProperty);
+        }
     }
 
     /// <summary>現在のキー割り当てから挿入ビューの凡例テキストを組み立てる。</summary>
