@@ -1,0 +1,179 @@
+﻿<ContentDialog
+    x:Class="NicoKaraPrep.App.Views.AgentLinkDialog"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    Title="AI エージェントと連携"
+    CloseButtonText="閉じる">
+
+    <ScrollViewer MaxHeight="600">
+        <StackPanel Spacing="12" MinWidth="480">
+            <TextBlock
+                TextWrapping="Wrap"
+                Text="Claude や Codex などの AI エージェントから、起動中のにこぷれっぷを操作できるようにします（MCP）。使っているアプリのボタンを押してください。登録は 1 回だけで、あとはにこぷれっぷを起動しておけば AI エージェントから使えます。" />
+
+            <!-- MCP サーバーを止めているときだけ出す -->
+            <InfoBar
+                x:Name="McpOffBar"
+                Severity="Warning"
+                IsClosable="False"
+                Title="MCP サーバーが止まっています"
+                Message="このままでは AI エージェントからつながりません。">
+                <InfoBar.ActionButton>
+                    <Button x:Name="EnableMcpButton" Content="有効にする" Click="OnEnableMcpClick" />
+                </InfoBar.ActionButton>
+            </InfoBar>
+
+            <!-- 登録のボタン（同じ重さの操作なので、ボタンを右の 1 列にそろえる。左に使う場面と今の状態） -->
+            <Grid ColumnSpacing="16" RowSpacing="14">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="Auto" />
+                </Grid.RowDefinitions>
+
+                <StackPanel Spacing="2" VerticalAlignment="Center">
+                    <TextBlock TextWrapping="Wrap" Style="{ThemeResource BodyStrongTextBlockStyle}" Text="Claude Desktop のチャットで使う" />
+                    <TextBlock
+                        x:Name="DesktopStatusText"
+                        TextWrapping="Wrap"
+                        Style="{ThemeResource CaptionTextBlockStyle}"
+                        Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                        Text="状態を調べています…" />
+                </StackPanel>
+                <Button
+                    x:Name="DesktopButton"
+                    Grid.Column="1"
+                    MinWidth="200"
+                    VerticalAlignment="Center"
+                    Style="{ThemeResource AccentButtonStyle}"
+                    Content="Claude Desktop に追加"
+                    Click="OnDesktopClick" />
+
+                <StackPanel Grid.Row="1" Spacing="2" VerticalAlignment="Center">
+                    <TextBlock TextWrapping="Wrap" Style="{ThemeResource BodyStrongTextBlockStyle}" Text="Claude Code で使う（Claude Desktop の Code タブも）" />
+                    <TextBlock
+                        x:Name="CodeStatusText"
+                        TextWrapping="Wrap"
+                        Style="{ThemeResource CaptionTextBlockStyle}"
+                        Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                        Text="状態を調べています…" />
+                </StackPanel>
+                <Button
+                    x:Name="CodeButton"
+                    Grid.Row="1"
+                    Grid.Column="1"
+                    MinWidth="200"
+                    VerticalAlignment="Center"
+                    Style="{ThemeResource AccentButtonStyle}"
+                    Content="Claude Code に登録"
+                    Click="OnCodeClick" />
+
+                <StackPanel Grid.Row="2" Spacing="2" VerticalAlignment="Center">
+                    <TextBlock TextWrapping="Wrap" Style="{ThemeResource BodyStrongTextBlockStyle}" Text="Codex で使う（Codex アプリ・Codex CLI・IDE の拡張機能）" />
+                    <TextBlock
+                        x:Name="CodexStatusText"
+                        TextWrapping="Wrap"
+                        Style="{ThemeResource CaptionTextBlockStyle}"
+                        Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                        Text="状態を調べています…" />
+                </StackPanel>
+                <Button
+                    x:Name="CodexButton"
+                    Grid.Row="2"
+                    Grid.Column="1"
+                    MinWidth="200"
+                    VerticalAlignment="Center"
+                    Style="{ThemeResource AccentButtonStyle}"
+                    Content="Codex に登録"
+                    Click="OnCodexClick" />
+            </Grid>
+
+            <!-- ボタンの結果（失敗したときは、claude・codex の出力を中に出す） -->
+            <InfoBar x:Name="ResultBar" IsClosable="True" />
+
+            <!-- ボタンの無い AI エージェント（設定に書く内容を写す） -->
+            <Expander
+                x:Name="OtherExpander"
+                Header="ほかの AI エージェントで使う（Cursor・Gemini CLI・VS Code など）"
+                HorizontalAlignment="Stretch"
+                HorizontalContentAlignment="Stretch">
+                <StackPanel Spacing="8">
+                    <TextBlock TextWrapping="Wrap" Text="MCP に対応したほかの AI エージェントでは、その設定で次のコマンドを MCP サーバー（stdio）として登録します。引数は --mcp です。" />
+                    <Grid ColumnSpacing="8">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
+                        <TextBox x:Name="ExePathBox" IsReadOnly="True" TextWrapping="Wrap" FontFamily="Consolas" FontSize="12" />
+                        <Button x:Name="ExePathCopyButton" Grid.Column="1" Content="コピー" MinWidth="128" VerticalAlignment="Top" Click="OnCopyExePathClick" />
+                    </Grid>
+
+                    <TextBlock TextWrapping="Wrap" Margin="0,8,0,0" Text="設定ファイルに書くときは次の形です（Cursor の mcp.json、Gemini CLI の settings.json、Claude Desktop の claude_desktop_config.json など）。すでに mcpServers があるときは、その中に nicokaraprep の部分を書き足します。VS Code（GitHub Copilot）の mcp.json では、mcpServers の代わりに servers の中に書きます。" />
+                    <Grid ColumnSpacing="8">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
+                        <TextBox x:Name="McpJsonBox" IsReadOnly="True" TextWrapping="Wrap" AcceptsReturn="True" FontFamily="Consolas" FontSize="12" />
+                        <Button x:Name="McpJsonCopyButton" Grid.Column="1" Content="コピー" MinWidth="128" VerticalAlignment="Top" Click="OnCopyMcpJsonClick" />
+                    </Grid>
+                </StackPanel>
+            </Expander>
+
+            <!-- 手作業の登録（ボタンでうまくいかないとき） -->
+            <Expander
+                x:Name="ManualExpander"
+                Header="うまくいかないとき（手作業で登録する）"
+                HorizontalAlignment="Stretch"
+                HorizontalContentAlignment="Stretch">
+                <StackPanel Spacing="8">
+                    <TextBlock TextWrapping="Wrap" Text="Claude Desktop: 拡張機能のファイル（nicokaraprep.mcpb）を作って、Claude Desktop の 設定 → 拡張機能 の画面へドラッグして入れます。" />
+                    <Button x:Name="McpbFolderButton" Content="拡張機能のファイルを作って場所を開く" Click="OnMcpbFolderClick" />
+
+                    <TextBlock TextWrapping="Wrap" Margin="0,8,0,0" Text="Claude Code: 次のコマンドを PowerShell かコマンドプロンプトに貼り付けて、1 回だけ実行します。" />
+                    <Grid ColumnSpacing="8">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
+                        <TextBox x:Name="McpCommandBox" IsReadOnly="True" TextWrapping="Wrap" FontFamily="Consolas" FontSize="12" />
+                        <Button x:Name="McpCommandCopyButton" Grid.Column="1" Content="コピー" MinWidth="128" VerticalAlignment="Top" Click="OnCopyMcpCommandClick" />
+                    </Grid>
+                    <TextBlock
+                        TextWrapping="Wrap"
+                        Style="{ThemeResource CaptionTextBlockStyle}"
+                        Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                        Text="「claude」が見つからないと言われたときは、claude.exe をフルパスで書きます（例: %USERPROFILE%\.local\bin\claude.exe。PowerShell では先頭に &amp; を付けて &amp; &quot;フルパス&quot; mcp add ...）。" />
+
+                    <TextBlock TextWrapping="Wrap" Margin="0,8,0,0" Text="Codex: 次のコマンドを PowerShell かコマンドプロンプトに貼り付けて、1 回だけ実行します。" />
+                    <Grid ColumnSpacing="8">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
+                        <TextBox x:Name="CodexCommandBox" IsReadOnly="True" TextWrapping="Wrap" FontFamily="Consolas" FontSize="12" />
+                        <Button x:Name="CodexCommandCopyButton" Grid.Column="1" Content="コピー" MinWidth="128" VerticalAlignment="Top" Click="OnCopyCodexCommandClick" />
+                    </Grid>
+                    <TextBlock
+                        x:Name="CodexTomlText"
+                        TextWrapping="Wrap"
+                        Style="{ThemeResource CaptionTextBlockStyle}"
+                        Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                        Text="「codex」が見つからないと言われたとき（Codex アプリだけを使っているときなど）は、Codex の設定ファイルの終わりに次を書き足して、Codex を起動し直します。" />
+                    <Grid ColumnSpacing="8">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
+                        <TextBox x:Name="CodexTomlBox" IsReadOnly="True" TextWrapping="Wrap" AcceptsReturn="True" FontFamily="Consolas" FontSize="12" />
+                        <Button x:Name="CodexTomlCopyButton" Grid.Column="1" Content="コピー" MinWidth="128" VerticalAlignment="Top" Click="OnCopyCodexTomlClick" />
+                    </Grid>
+                </StackPanel>
+            </Expander>
+        </StackPanel>
+    </ScrollViewer>
+</ContentDialog>

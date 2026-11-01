@@ -25,7 +25,7 @@ internal static class McpSerializer
 }
 
 /// <summary>
-/// MCP で公開する道具（Claude などから呼ぶ操作）。引数の説明は属性に書き、処理はすべて <see cref="MainWindow"/>（McpInvokeAsync）で
+/// MCP で公開する道具（Claude・Codex などの AI エージェントから呼ぶ操作）。引数の説明は属性に書き、処理はすべて <see cref="MainWindow"/>（McpInvokeAsync）で
 /// UI スレッドで 1 件ずつ行う。window が無いとき（橋渡しの一覧作り）は呼ばれない。
 /// </summary>
 [McpServerToolType]

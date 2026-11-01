@@ -13,6 +13,9 @@ internal static class McpInfo
     /// <summary>MCP のサーバーの名前（クライアントに見せる）。</summary>
     public const string ServerName = "NicoKaraPrep";
 
+    /// <summary>MCP クライアントに登録するときの名前（Claude Code・Codex の登録名、Claude Desktop の拡張機能の name、設定ファイルのキー）。</summary>
+    public const string ServerKey = "nicokaraprep";
+
     /// <summary>クライアントに渡す使い方の説明（道具の一覧と一緒に読まれる）。</summary>
     public const string Instructions =
         "NicoKaraPrep（にこぷれっぷ）は、RhythmicaLyrics のタイムタグ付き歌詞をニコカラメーカー3 向けに加工する Windows アプリです。" +
@@ -135,30 +138,42 @@ internal static class McpInfo
 
     /// <summary>Claude Code に登録するコマンド（PowerShell・コマンドプロンプトで 1 回だけ実行する）。</summary>
     public static string ClaudeCodeCommand =>
-        $"claude mcp add --scope user nicokaraprep -- \"{RegistrationExePath}\" --mcp";
+        $"claude mcp add --scope user {ServerKey} -- \"{RegistrationExePath}\" --mcp";
 
-    /// <summary>Claude Desktop の構成ファイル（claude_desktop_config.json）の mcpServers に書く内容。</summary>
-    public static string ClaudeDesktopEntry
+    /// <summary>Codex に登録するコマンド（PowerShell・コマンドプロンプトで 1 回だけ実行する）。</summary>
+    public static string CodexCommand =>
+        $"codex mcp add {ServerKey} -- \"{RegistrationExePath}\" --mcp";
+
+    /// <summary>Codex の設定ファイル（~/.codex/config.toml）に書く内容。</summary>
+    public static string CodexConfigEntry =>
+        $"[mcp_servers.{ServerKey}]\n" +
+        $"command = {NicoKaraPrep.Core.Formats.TomlLite.Quote(RegistrationExePath)}\n" +
+        "args = [\"--mcp\"]";
+
+    /// <summary>
+    /// ほかの MCP クライアントの設定ファイルに書く内容（mcpServers の形。Claude Desktop の claude_desktop_config.json・Cursor の mcp.json・
+    /// Gemini CLI の settings.json など、多くのクライアントが同じ形）。
+    /// </summary>
+    public static string McpServersJson
     {
         get
         {
-            var entry = new System.Text.Json.Nodes.JsonObject
+            var root = new System.Text.Json.Nodes.JsonObject
             {
-                ["nicokaraprep"] = new System.Text.Json.Nodes.JsonObject
+                ["mcpServers"] = new System.Text.Json.Nodes.JsonObject
                 {
-                    ["command"] = RegistrationExePath,
-                    ["args"] = new System.Text.Json.Nodes.JsonArray("--mcp"),
+                    [ServerKey] = new System.Text.Json.Nodes.JsonObject
+                    {
+                        ["command"] = RegistrationExePath,
+                        ["args"] = new System.Text.Json.Nodes.JsonArray("--mcp"),
+                    },
                 },
             };
-            string json = entry.ToJsonString(new System.Text.Json.JsonSerializerOptions
+            return root.ToJsonString(new System.Text.Json.JsonSerializerOptions
             {
                 WriteIndented = true,
                 Encoder = System.Text.Encodings.Web.JavaScriptEncoder.UnsafeRelaxedJsonEscaping,
             });
-            // 外側の { } を外して、mcpServers の中に貼る形にする
-            string inner = json.Trim();
-            inner = inner[1..^1].Trim('\r', '\n');
-            return string.Join("\n", inner.Split('\n').Select(l => l.StartsWith("  ", StringComparison.Ordinal) ? l[2..] : l));
         }
     }
 }

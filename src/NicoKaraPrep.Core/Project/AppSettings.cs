@@ -133,7 +133,7 @@ public sealed class AppSettings
     /// </summary>
     public bool N3AutoImportNearby { get; set; } = true;
 
-    // ---- MCP（Claude などからの操作） ----
+    // ---- MCP（Claude・Codex などの AI エージェントからの操作） ----
     /// <summary>
     /// MCP サーバーを動かすか（起動中の本体を、名前付きパイプ経由で「NicoKaraPrep.exe --mcp」の橋渡しから操作できるようにする）。
     /// 同じ Windows ユーザーのプログラムだけがつながる。
