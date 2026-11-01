@@ -39,13 +39,13 @@ public sealed partial class SettingsDialog : ContentDialog
         PrimaryButtonClick += (_, _) => ApplyToSettings();
     }
 
-    /// <summary>「Claude と連携...」で閉じたか（設定は保存済み。閉じたあとに MainWindow が登録の画面を開く）。</summary>
-    public bool OpenClaudeLinkRequested { get; private set; }
+    /// <summary>「AI エージェントと連携...」で閉じたか（設定は保存済み。閉じたあとに MainWindow が登録の画面を開く）。</summary>
+    public bool OpenAgentLinkRequested { get; private set; }
 
-    private void OnClaudeLinkClick(object sender, Microsoft.UI.Xaml.RoutedEventArgs e)
+    private void OnAgentLinkClick(object sender, Microsoft.UI.Xaml.RoutedEventArgs e)
     {
         ApplyToSettings();
-        OpenClaudeLinkRequested = true;
+        OpenAgentLinkRequested = true;
         Hide();
     }
 

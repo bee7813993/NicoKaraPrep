@@ -772,8 +772,8 @@ public sealed partial class MainWindow : Window
     {
         var dialog = new SettingsDialog(ViewModel.Settings) { XamlRoot = Content.XamlRoot };
         var result = await dialog.ShowAsync();
-        // 「Claude と連携...」で閉じたときも設定は保存済み
-        if (result == ContentDialogResult.Primary || dialog.OpenClaudeLinkRequested)
+        // 「AI エージェントと連携...」で閉じたときも設定は保存済み
+        if (result == ContentDialogResult.Primary || dialog.OpenAgentLinkRequested)
         {
             LoadQuickEmojiSettings();
             ApplyMcpEnabled();
@@ -781,7 +781,7 @@ public sealed partial class MainWindow : Window
             RefreshLineFontPlaceholder();
             NotifyLayoutViewDocumentChanged(); // ページの区切り方・画面の大きさが変わると、レイアウト設定ビューのページの一覧・px の欄が変わる
         }
-        if (dialog.OpenClaudeLinkRequested) await ShowClaudeLinkDialogAsync();
+        if (dialog.OpenAgentLinkRequested) await ShowAgentLinkDialogAsync();
     }
 
     // ------------------------------------------ パレットの絵文字挿入クイック設定

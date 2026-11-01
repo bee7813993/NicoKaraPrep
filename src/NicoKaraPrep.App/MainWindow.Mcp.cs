@@ -17,7 +17,7 @@ using NicoKaraPrep.Core.Validation;
 namespace NicoKaraPrep.App;
 
 /// <summary>
-/// MCP（Claude などからの操作）。道具（<see cref="NkpTools"/>）の処理はすべてここで、UI スレッドで 1 件ずつ行う。
+/// MCP（Claude・Codex などの AI エージェントからの操作）。道具（<see cref="NkpTools"/>）の処理はすべてここで、UI スレッドで 1 件ずつ行う。
 /// 書き込みは画面の操作と同じ処理を通し（画面にすぐ出る・Ctrl+Z で戻せる）、1 回の呼び出しは Ctrl+Z 1 回で戻る。
 /// 確認画面などのダイアログを開いているあいだは書き込みを断り、歌詞を変える操作は全画面ビュー（フォント設定ビュー・レイアウト設定ビュー）を
 /// 開いていれば元のビューへ戻ってから行う。
@@ -88,21 +88,21 @@ public sealed partial class MainWindow
             return;
         }
         string tip = _mcpClients > 0
-            ? $"Claude などの MCP クライアントがつながっています（{_mcpClients} 件）。MCP からの操作はステータスバーに「MCP:」を付けて出し、Ctrl+Z で戻せます"
-            : "Claude などの MCP クライアントからの接続を待っています（Claude への登録は ファイル > Claude と連携... から。ファイル > 設定 で止められます）";
+            ? $"AI エージェント（MCP クライアント）がつながっています（{_mcpClients} 件）。MCP からの操作はステータスバーに「MCP:」を付けて出し、Ctrl+Z で戻せます"
+            : "Claude・Codex などの AI エージェント（MCP クライアント）からの接続を待っています（登録は ファイル > AI エージェントと連携... から。ファイル > 設定 で止められます）";
         if (_mcpLastTool is not null) tip += $"\n最後の操作: {_mcpLastTool}（{_mcpLastTime:HH:mm:ss}）";
         ToolTipService.SetToolTip(McpStatusText, tip);
     }
 
-    // ------------------------------------------------------------ Claude と連携（登録の画面）
+    // ------------------------------------------------------------ AI エージェントと連携（登録の画面）
 
-    private async void OnClaudeLinkClick(object sender, Microsoft.UI.Xaml.RoutedEventArgs e) => await ShowClaudeLinkDialogAsync();
+    private async void OnAgentLinkClick(object sender, Microsoft.UI.Xaml.RoutedEventArgs e) => await ShowAgentLinkDialogAsync();
 
-    /// <summary>「Claude と連携」の画面（Claude Desktop・Claude Code への登録をボタン 1 つで行う）を開く。</summary>
-    private async Task ShowClaudeLinkDialogAsync()
+    /// <summary>「AI エージェントと連携」の画面（Claude Desktop・Claude Code・Codex への登録をボタン 1 つで行う）を開く。</summary>
+    private async Task ShowAgentLinkDialogAsync()
     {
         if (IsModalDialogOpen()) return;
-        var dialog = new ClaudeLinkDialog(
+        var dialog = new AgentLinkDialog(
             () => ViewModel.Settings.McpEnabled,
             () =>
             {
@@ -119,7 +119,7 @@ public sealed partial class MainWindow
         }
         catch (Exception ex)
         {
-            ViewModel.StatusText = $"Claude と連携の画面を開けません: {ErrorText.Describe(ex)}";
+            ViewModel.StatusText = $"AI エージェントと連携の画面を開けません: {ErrorText.Describe(ex)}";
         }
     }
 
