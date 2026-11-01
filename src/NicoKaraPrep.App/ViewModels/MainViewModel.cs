@@ -960,16 +960,25 @@ public partial class MainViewModel : ObservableObject
     /// <summary>構造変更後に行 VM を作り直す（済マークはモデル側に保持されている）。</summary>
     public void RebuildLinesPreservingMarks() => RebuildLines();
 
-    /// <summary>選択行を生テキストのカーソル位置で分割する。成功時は新しい行のインデックスを返す。</summary>
+    /// <summary>
+    /// 選択行を生テキストのカーソル位置で分割する。成功時は新しい行のインデックスを返す。
+    /// 歌詞のある行の先頭では分けない（行を選び直すと行エディタのカーソルが先頭に戻るので、
+    /// 編集メニューから押すと上に空行が入るだけになる）。
+    /// </summary>
     public int? SplitSelectedLine(string rawText, int cursor)
     {
         if (SelectedLine is null) return null;
         int index = SelectedLine.Index;
-        PushUndo();
 
         var line = TextEditModeFormat.ParseLyricLine(rawText);
         cursor = SnapCursorOutsideToken(rawText, Math.Clamp(cursor, 0, rawText.Length));
         int charIndex = TextEditModeFormat.ParseLyricLine(rawText[..cursor]).Chars.Count;
+        if (charIndex == 0 && line.Chars.Any(c => !c.IsSpacer))
+        {
+            StatusText = "行エディタ（行リストの下の欄）で、分けたい位置をクリックしてから行分割してください（行の先頭では分けません）";
+            return null;
+        }
+        PushUndo();
 
         // 行の設定（表示時刻・フォント・ページの文字の大きさ・タブ分離の元の位置）は分割前の行から引き継ぐ（文字ごとのフォントは同じ文字へ。
         // 元の位置のキーは SplitLine で後半の行にも付く）

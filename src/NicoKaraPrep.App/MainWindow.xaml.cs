@@ -1132,7 +1132,13 @@ public sealed partial class MainWindow : Window
 
     private void OnSplitLineClick(object sender, RoutedEventArgs e)
     {
-        if (LineEditorOperationBlocked()) return; // 挿入ビューでは Ctrl+Enter を PreviewKeyDown で処理
+        if (InsertViewActive)
+        {
+            // 挿入ビューのエディタで押したキー（/・Ctrl+Enter）は PreviewKeyDown で処理するので、ここへ来るのはメニューから押したときなど
+            if (!InsertLineEditorFocused()) SplitLineInView();
+            return;
+        }
+        if (LineEditorOperationBlocked()) return;
         if (ViewModel.SelectedLine is null) return;
         TryRun(() =>
         {
@@ -1148,7 +1154,13 @@ public sealed partial class MainWindow : Window
 
     private void JoinLineFromMenu(bool insertSpace)
     {
-        if (LineEditorOperationBlocked()) return; // 挿入ビューでは Ctrl+J / Ctrl+Shift+J を PreviewKeyDown で処理
+        if (InsertViewActive)
+        {
+            // 挿入ビューのエディタで押したキー（＼・Ctrl+J）は PreviewKeyDown で処理するので、ここへ来るのはメニューから押したときなど
+            if (!InsertLineEditorFocused()) JoinLineInView(insertSpace);
+            return;
+        }
+        if (LineEditorOperationBlocked()) return;
         if (ViewModel.SelectedLine is null) return;
         int index = ViewModel.SelectedLine.Index;
         TryRun(() =>
@@ -1664,6 +1676,13 @@ public sealed partial class MainWindow : Window
         });
         ScheduleValidation();
     }
+
+    /// <summary>
+    /// 挿入ビューの簡易行エディタに入力中か（そこで押した Ctrl+J などが編集メニューのショートカットとして届いても、
+    /// 挿入ビューの行を分割・結合しないように）。
+    /// </summary>
+    private bool InsertLineEditorFocused() =>
+        ReferenceEquals(FocusManager.GetFocusedElement(Content.XamlRoot), InsertLineEditor);
 
     private void JoinLineInView(bool insertSpace)
     {
