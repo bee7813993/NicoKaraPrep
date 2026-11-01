@@ -976,6 +976,7 @@ public partial class MainViewModel : ObservableObject
         if (charIndex == 0 && line.Chars.Any(c => !c.IsSpacer))
         {
             StatusText = "行エディタ（行リストの下の欄）で、分けたい位置をクリックしてから行分割してください（行の先頭では分けません）";
+            _noticeBeforeCheck = StatusText; // 押したあとのチェックの結果で消えないように
             return null;
         }
         PushUndo();

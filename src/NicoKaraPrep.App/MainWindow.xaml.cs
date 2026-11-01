@@ -1503,10 +1503,10 @@ public sealed partial class MainWindow : Window
         }
         else
         {
-            // 上書きを消すと、KeyboardAccelerators から作った表示（Ctrl+Enter など）に戻る
-            SplitLineMenuItem.ClearValue(MenuFlyoutItem.KeyboardAcceleratorTextOverrideProperty);
-            JoinLineMenuItem.ClearValue(MenuFlyoutItem.KeyboardAcceleratorTextOverrideProperty);
-            JoinLineWithSpaceMenuItem.ClearValue(MenuFlyoutItem.KeyboardAcceleratorTextOverrideProperty);
+            // 上書きを ClearValue で消しても KeyboardAccelerators から作った表示には戻らず空になるので、同じ文字を入れる
+            SplitLineMenuItem.KeyboardAcceleratorTextOverride = "Ctrl+Enter";
+            JoinLineMenuItem.KeyboardAcceleratorTextOverride = "Ctrl+J";
+            JoinLineWithSpaceMenuItem.KeyboardAcceleratorTextOverride = "Ctrl+Shift+J";
         }
     }
 
