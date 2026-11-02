@@ -1,0 +1,127 @@
+diff --git a/html/apps/NicoKaraPrep/manual.html b/html/apps/NicoKaraPrep/manual.html
+index b39d390..b70179e 100644
+--- a/html/apps/NicoKaraPrep/manual.html
++++ b/html/apps/NicoKaraPrep/manual.html
+@@ -504,7 +504,8 @@
+       <section>
+         <h2 id="ch7">7. 絵文字挿入ビュー（F2）</h2>
+         <p>歌詞全体を 1 画面に表示し、<strong>キーボードだけで</strong>アイコン挿入・行操作・再生操作ができる専用ビューです。文字の直接入力はできません（誤編集防止）。</p>
+-        <p>下表のキーは<strong>デフォルト</strong>です。<strong>ファイル &gt; キー割り当て（挿入ビュー）...</strong>（または挿入ビュー上部の<strong>「キー一覧...」ボタン</strong>）で、キーボード配列の画面からキー操作の一覧を確認でき、クリックで自由に変更もできます（選んだ機能が別のキーにあった場合は入れ替え。スロットキー 1–0 / Q–P、BS/Del/Esc、方向キー＝カーソル移動、Ctrl 系は固定）。現在の割り当ては挿入ビュー上部の凡例に常に表示されます。</p>
++        <p>下表のキーは<strong>デフォルト</strong>です。<strong>ファイル &gt; キー割り当て...</strong>（または挿入ビュー上部の<strong>「キー一覧...」ボタン</strong>）で、キーボード配列の画面からキー操作の一覧を確認でき、クリックで自由に変更もできます（選んだ機能が別のキーにあった場合は入れ替え。スロットキー 1–0 / Q–P、BS/Del/Esc、方向キー＝カーソル移動、Ctrl 系は固定）。現在の割り当ては挿入ビュー上部の凡例に常に表示されます。</p>
++        <p><strong>行リストと同じキー</strong>: Ctrl の付くキー（<kbd>Ctrl+Space</kbd>・<kbd>Ctrl+←</kbd> / <kbd>Ctrl+→</kbd>・<kbd>Ctrl+Enter</kbd>・<kbd>Ctrl+J</kbd>・<kbd>Ctrl+K</kbd>・<kbd>Ctrl+Delete</kbd>・<kbd>Ctrl+Z</kbd> / <kbd>Ctrl+Y</kbd>）は、行リストでも絵文字挿入ビューでも同じ意味です。再生の操作の 1 文字のキー（<kbd>Space</kbd>・<kbd>D</kbd>・<kbd>A</kbd>・<kbd>S</kbd>・<kbd>Z</kbd>・<kbd>X</kbd>・<kbd>F</kbd>。割り当てを変えたときはそのキー）は、行リストでも、文字の入力欄の外なら効きます（<a href="#ch10">10 章</a>）。挿入・行分割・結合の 1 文字のキー（<kbd>B</kbd>・<kbd>N</kbd>・<kbd>G</kbd>・<kbd>K</kbd>・<kbd>/</kbd>・<kbd>\</kbd>）は絵文字挿入ビューだけです。<kbd>K</kbd>（空白を挿入）と <kbd>Ctrl+K</kbd>（空行を挿入）は別の操作です。</p>
+         <ul>
+           <li>左側に各行の<strong>開始→終了時刻と横幅</strong>が表示されます（本文とスクロール同期。エクスポート済みの行は ✓ 付き）
+             <ul>
+@@ -529,15 +530,19 @@
+               <tr><td><kbd>B</kbd></td><td>プレースホルダ文字（＿）を挿入（アイコン同等のタイムタグ付き。文字は設定で変更可）</td></tr>
+               <tr><td><kbd>N</kbd> → <kbd>1</kbd>–<kbd>0</kbd></td><td><strong>定型文を挿入</strong>（「（前奏）」「（間奏 約14秒）」「（後奏）」など。行頭・行末・空行なら定型文だけのページにして、前後のページと表示が重ならない時刻に。<a href="#ch6-3">6.3</a>）</td></tr>
+               <tr><td><kbd>G</kbd></td><td><strong>先行タグを挿入</strong> — 文字を増やさず、「直後のタグの表示秒数前」のタイムタグだけを置く。行を早めに表示させたいときに（コーラス行など）</td></tr>
+-              <tr><td><kbd>K</kbd></td><td>空白を挿入（<kbd>Shift+K</kbd> で全角スペース）。行分割・結合後の文字位置調整に。行末の空白は <code>␣</code>（半角）/ <code>□</code>（全角）で見えるようにします</td></tr>
++              <tr><td><kbd>K</kbd></td><td>空白を挿入（<kbd>Shift+K</kbd> で全角スペース）。行分割・結合後の文字位置調整に。行末の空白は <code>␣</code>（半角）/ <code>□</code>（全角）で見えるようにします（空行（ページ区切り）の挿入は <kbd>Ctrl+K</kbd>）</td></tr>
+               <tr><td><kbd>BS</kbd> / <kbd>Del</kbd></td><td>カーソル位置のアイコン・＿・定型文・空白を削除（歌詞の文字は消えません。タグ付き空白は時刻を残して文字だけ消えます）</td></tr>
+               <tr><td><kbd>Space</kbd></td><td>再生 / 一時停止</td></tr>
+               <tr><td><kbd>D</kbd></td><td>カーソル位置のタイムタグから再生</td></tr>
+               <tr><td><kbd>A</kbd> / <kbd>S</kbd></td><td>再生 / 一時停止（個別）</td></tr>
+               <tr><td><kbd>Z</kbd> / <kbd>X</kbd></td><td>数秒戻る / 進む（秒数は設定で変更可）</td></tr>
+               <tr><td><kbd>F</kbd></td><td><strong>再生追従カーソル</strong> ON/OFF — 再生中、次に歌われる文字の位置へカーソルが自動移動します</td></tr>
+-              <tr><td><kbd>/</kbd></td><td>カーソル位置で行分割</td></tr>
+-              <tr><td><kbd>\</kbd></td><td>次の行と結合（<kbd>Shift+\</kbd> でスペースを挟んで結合）</td></tr>
++              <tr><td><kbd>/</kbd></td><td>カーソル位置で行分割（編集メニューの「カーソル位置で行分割」も同じ）</td></tr>
++              <tr><td><kbd>\</kbd></td><td>次の行と結合（<kbd>Shift+\</kbd> でスペースを挟んで結合。編集メニューの「次の行と結合」も同じ）</td></tr>
++              <tr><td><kbd>Ctrl+Space</kbd> / <kbd>Ctrl+←</kbd> / <kbd>Ctrl+→</kbd></td><td>再生 / 一時停止、数秒戻る / 進む（<kbd>Space</kbd>・<kbd>Z</kbd>・<kbd>X</kbd> と同じ。挿入ビューでは <kbd>Ctrl+←</kbd> / <kbd>Ctrl+→</kbd> でカーソルを単語ごとに動かしません）</td></tr>
++              <tr><td><kbd>Ctrl+Enter</kbd> / <kbd>Ctrl+J</kbd></td><td>行分割 / 次の行と結合（<kbd>Ctrl+Shift+J</kbd> でスペースを挟んで結合。<kbd>/</kbd>・<kbd>\</kbd> と同じ）</td></tr>
++              <tr><td><kbd>Ctrl+K</kbd></td><td>カーソルのある行の下に空行（ページ区切り）を挿入（カーソルは動きません）</td></tr>
++              <tr><td><kbd>Ctrl+Delete</kbd></td><td>左の行情報で選んだ行を削除（選んでいなければ何もしません）</td></tr>
+               <tr><td><kbd>Ctrl+Z</kbd> / <kbd>Ctrl+Y</kbd></td><td>元に戻す / やり直し</td></tr>
+               <tr><td><kbd>Esc</kbd></td><td>挿入ビューを終了</td></tr>
+             </tbody>
+@@ -593,15 +598,17 @@
+           <table>
+             <thead><tr><th>操作</th><th>通常ビュー</th><th>挿入ビュー</th></tr></thead>
+             <tbody>
+-              <tr><td>カーソル位置で行を分ける</td><td><kbd>Ctrl+Enter</kbd></td><td><kbd>/</kbd></td></tr>
+-              <tr><td>次の行と結合する</td><td><kbd>Ctrl+J</kbd></td><td><kbd>\</kbd></td></tr>
+-              <tr><td>スペースを挟んで結合する</td><td><kbd>Ctrl+Shift+J</kbd></td><td><kbd>Shift+\</kbd></td></tr>
+-              <tr><td>空行（ページ区切り）を下に挿入する</td><td><kbd>Ctrl+K</kbd></td><td>—</td></tr>
+-              <tr><td>選択行を削除する</td><td><kbd>Ctrl+Delete</kbd></td><td>—</td></tr>
++              <tr><td>カーソル位置で行を分ける</td><td><kbd>Ctrl+Enter</kbd></td><td><kbd>/</kbd> か <kbd>Ctrl+Enter</kbd></td></tr>
++              <tr><td>次の行と結合する</td><td><kbd>Ctrl+J</kbd></td><td><kbd>\</kbd> か <kbd>Ctrl+J</kbd></td></tr>
++              <tr><td>スペースを挟んで結合する</td><td><kbd>Ctrl+Shift+J</kbd></td><td><kbd>Shift+\</kbd> か <kbd>Ctrl+Shift+J</kbd></td></tr>
++              <tr><td>空行（ページ区切り）を下に挿入する</td><td><kbd>Ctrl+K</kbd>（選んだ行の下）</td><td><kbd>Ctrl+K</kbd>（カーソルのある行の下）</td></tr>
++              <tr><td>選択行を削除する</td><td><kbd>Ctrl+Delete</kbd></td><td><kbd>Ctrl+Delete</kbd>（左の行情報で選んだ行）</td></tr>
+             </tbody>
+           </table>
+         </div>
+         <ul>
++          <li>Ctrl の付くキーは、どちらのビューでも同じ意味です。挿入ビューでは、編集メニューのショートカットの表示にも <kbd>/</kbd>・<kbd>＼</kbd>・<kbd>Shift+＼</kbd> が並びます</li>
++          <li>通常ビューの行分割は、行エディタのカーソル位置で分けます。行を選び直すと行エディタのカーソルは先頭に戻るので、メニューから分けるときは、先に行エディタで分けたい位置をクリックしてください（歌詞のある行の先頭では分けず、ステータスバーで知らせます）。挿入ビューでは、編集メニューからでも挿入ビューのカーソル位置で分けます</li>
+           <li>タイムタグはそのまま引き継がれます</li>
+           <li>操作するたびに自動で再チェックされるので、<strong>横幅の使用率と警告が消えるかをその場で確認</strong>できます</li>
+           <li>やり直したいときは <kbd>Ctrl+Z</kbd> / <kbd>Ctrl+Y</kbd> で元に戻す・やり直しができます</li>
+@@ -645,9 +652,10 @@
+         <h2 id="ch10">10. メディア再生と字幕プレビュー</h2>
+         <ul>
+           <li>メディア再生パネルへ動画 / 音声ファイルをドロップ（または <strong>再生 &gt; メディアを開く...</strong>）</li>
+-          <li><kbd>Ctrl+Space</kbd> 再生 / 一時停止、<kbd>Ctrl+←</kbd> / <kbd>Ctrl+→</kbd> シーク（通常ビュー時。秒数は ファイル &gt; 設定 のシーク秒数）</li>
++          <li><kbd>Space</kbd>・<kbd>Ctrl+Space</kbd> で再生 / 一時停止、<kbd>Z</kbd> / <kbd>X</kbd>・<kbd>Ctrl+←</kbd> / <kbd>Ctrl+→</kbd> で数秒戻る / 進む（秒数は ファイル &gt; 設定 のシーク秒数。再生メニューの項目名にも出ます）、<kbd>D</kbd> で選んだ行（絵文字挿入ビューではカーソル位置）から再生、<kbd>A</kbd> / <kbd>S</kbd> で再生 / 一時停止。行リストでも絵文字挿入ビューでも同じキーです（1 文字のキーは ファイル &gt; キー割り当て... で変えられます）</li>
++          <li>行リストの 1 文字のキーは、文字の入力欄の外で効きます。行エディタ・表示時刻・フォントの欄などの文字の入力欄と、コンボボックスにフォーカスがあるときは、その欄の入力になります。ボタン・チェックボックスにフォーカスがあるときの <kbd>Space</kbd> は、そのボタンを押します</li>
+           <li><strong>再生の操作</strong>は動画の下にあります（再生・一時停止、再生位置、位置のスライダー、長さ、音量、<strong>字幕プレビュー</strong>）。動画の上には重ならないので、字幕のプレビューの邪魔になりません</li>
+-          <li>再生位置の行が自動でハイライトされます（<strong>再生 &gt; 再生位置に追従してハイライト</strong> で OFF 可）</li>
++          <li>再生位置の行が自動でハイライトされ、行リストがその行までスクロールします（スクロールは <strong>再生 &gt; 再生位置に追従してハイライト</strong> か、行リストで <kbd>F</kbd> を押すと切れます）</li>
+           <li>パネル下端のバーをドラッグすると高さを変えられます。使わないときは折りたたみ可。<strong>表示 &gt; メディア再生の置き場所</strong> で、右のパネルの上にも置けます（<a href="#ch3-1">3.1</a>）</li>
+           <li>メディアのパスは <code>.tttproj</code> に保存され、次回自動で開きます</li>
+         </ul>
+@@ -998,9 +1006,9 @@
+               <tr><td><kbd>Ctrl+E</kbd></td><td>選択行をファイルへエクスポート</td></tr>
+               <tr><td><kbd>Ctrl+T</kbd></td><td>選択行を新しいタブへ分離</td></tr>
+               <tr><td><kbd>Ctrl+Z</kbd> / <kbd>Ctrl+Y</kbd></td><td>元に戻す / やり直し</td></tr>
+-              <tr><td><kbd>Ctrl+Enter</kbd> / <kbd>Ctrl+J</kbd> / <kbd>Ctrl+Shift+J</kbd></td><td>行分割 / 行結合 / スペースを挟んで結合</td></tr>
+-              <tr><td><kbd>Ctrl+K</kbd> / <kbd>Ctrl+Delete</kbd></td><td>空行挿入 / 選択行削除</td></tr>
+-              <tr><td><kbd>Ctrl+Space</kbd>、<kbd>Ctrl+←</kbd> / <kbd>Ctrl+→</kbd></td><td>再生・一時停止、シーク</td></tr>
++              <tr><td><kbd>Ctrl+Enter</kbd> / <kbd>Ctrl+J</kbd> / <kbd>Ctrl+Shift+J</kbd></td><td>行分割 / 行結合 / スペースを挟んで結合（絵文字挿入ビューではカーソル位置で）</td></tr>
++              <tr><td><kbd>Ctrl+K</kbd> / <kbd>Ctrl+Delete</kbd></td><td>空行挿入 / 選択行削除（絵文字挿入ビューでは、カーソルのある行の下に空行 / 左の行情報で選んだ行を削除）</td></tr>
++              <tr><td><kbd>Ctrl+Space</kbd>、<kbd>Ctrl+←</kbd> / <kbd>Ctrl+→</kbd></td><td>再生・一時停止、数秒戻る / 進む</td></tr>
+               <tr><td><kbd>F2</kbd> / <kbd>F3</kbd> / <kbd>F4</kbd></td><td>絵文字挿入ビュー / フォント設定ビュー / レイアウト設定ビュー の切り替え</td></tr>
+               <tr><td><kbd>F5</kbd></td><td>今すぐチェック</td></tr>
+               <tr><td><kbd>Esc</kbd>（行リスト）</td><td>歌詞の文字の選択を外す</td></tr>
+@@ -1008,22 +1016,36 @@
+           </table>
+         </div>
+ 
++        <h3>行リストと絵文字挿入ビュー（文字の入力欄の外）</h3>
++        <p>ファイル &gt; キー割り当て... で変えたときは、そのキーになります。</p>
++        <div class="table-scroll">
++          <table>
++            <thead><tr><th>キー</th><th>動作</th></tr></thead>
++            <tbody>
++              <tr><td><kbd>Space</kbd></td><td>再生 / 一時停止</td></tr>
++              <tr><td><kbd>D</kbd></td><td>選んだ行から再生（絵文字挿入ビューではカーソル位置から）</td></tr>
++              <tr><td><kbd>A</kbd> / <kbd>S</kbd></td><td>再生 / 一時停止</td></tr>
++              <tr><td><kbd>Z</kbd> / <kbd>X</kbd></td><td>数秒戻る / 進む</td></tr>
++              <tr><td><kbd>F</kbd></td><td>再生位置への追従の入／切（行リストは再生中の行へのスクロール、絵文字挿入ビューは再生追従カーソル）</td></tr>
++            </tbody>
++          </table>
++        </div>
++
+         <h3>絵文字挿入ビュー（F2 中）</h3>
+         <div class="table-scroll">
+           <table>
+             <thead><tr><th>キー</th><th>動作</th></tr></thead>
+             <tbody>
+               <tr><td><kbd>1</kbd>–<kbd>0</kbd> / <kbd>Q</kbd>–<kbd>P</kbd></td><td>アイコン挿入</td></tr>
+-              <tr><td><kbd>B</kbd> / <kbd>G</kbd> / <kbd>K</kbd></td><td>＿挿入 / 先行タグ挿入 / 空白挿入（<kbd>Shift+K</kbd>: 全角）</td></tr>
++              <tr><td><kbd>B</kbd> / <kbd>G</kbd> / <kbd>K</kbd></td><td>＿挿入 / 先行タグ挿入 / 空白挿入（<kbd>Shift+K</kbd>: 全角。空行は <kbd>Ctrl+K</kbd>）</td></tr>
+               <tr><td><kbd>N</kbd> → <kbd>1</kbd>–<kbd>0</kbd></td><td>定型文の挿入</td></tr>
+               <tr><td><kbd>BS</kbd> / <kbd>Del</kbd></td><td>アイコン・＿・定型文・空白の削除</td></tr>
+-              <tr><td><kbd>Space</kbd> / <kbd>D</kbd> / <kbd>A</kbd> / <kbd>S</kbd> / <kbd>Z</kbd> / <kbd>X</kbd></td><td>再生一時停止 / カーソル位置から再生 / 再生 / 一時停止 / 戻る / 進む</td></tr>
+-              <tr><td><kbd>F</kbd></td><td>再生追従カーソル</td></tr>
+-              <tr><td><kbd>/</kbd> と <kbd>\</kbd>（<kbd>Shift+\</kbd>）</td><td>行分割 / 行結合（スペースを挟む）</td></tr>
++              <tr><td><kbd>/</kbd> と <kbd>\</kbd>（<kbd>Shift+\</kbd>）</td><td>行分割 / 行結合（スペースを挟む。<kbd>Ctrl+Enter</kbd> / <kbd>Ctrl+J</kbd> と同じ）</td></tr>
+               <tr><td><kbd>Esc</kbd></td><td>終了</td></tr>
+             </tbody>
+           </table>
+         </div>
++        <p>再生の操作のキー（<kbd>Space</kbd>・<kbd>D</kbd>・<kbd>A</kbd>・<kbd>S</kbd>・<kbd>Z</kbd>・<kbd>X</kbd>・<kbd>F</kbd>）は上の「行リストと絵文字挿入ビュー」、Ctrl のキーは「どこでも」の表のとおりです。</p>
+ 
+         <h3>フォント設定ビュー（F3 中）</h3>
+         <div class="table-scroll">
