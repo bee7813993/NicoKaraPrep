@@ -173,7 +173,7 @@ public sealed class SubtitlePreviewView : Grid
     /// （同じ段の行を重ねてよい設定や手動指定で重ねたとき、2 行が同じ位置に重なって読めなくならないように。
     /// 　ニコカラメーカー3 の字幕アクション「文字単位フェード」の見え方の近似で、文字ごとのフェードまでは再現しない）。
     /// </summary>
-    /// <param name="samePlace">2 つの行が画面の同じ場所に出るか（行の四角が重なるか。レイアウトで位置が違う行は薄めない）。null なら同じ段か。</param>
+    /// <param name="samePlace">2 つの行が画面の同じ場所に出るか（表示時刻の計算・チェックと同じ組の判定。<see cref="N3RowPlacement.Paired"/>）。null なら同じ段か。</param>
     internal static float CrossFadeAlpha(PreviewLine line, IReadOnlyList<PreviewLine> visible, double t, Func<PreviewLine, PreviewLine, bool>? samePlace = null)
     {
         float alpha = 1f;
