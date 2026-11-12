@@ -55,14 +55,24 @@ public sealed class LineExportSettings
     /// <summary>保存したときの文書の行の数（以前の版のファイルには無い）。</summary>
     public int? LineCount { get; set; }
 
-    /// <summary>ドキュメントの行から手動設定を持つ行だけを集める。</summary>
+    /// <summary>
+    /// 0 秒より前のタイムタグ（行のタグの番号と本当の値。<see cref="NegativeTimes"/>）。歌詞ファイルには 0 秒で書くので、
+    /// 開き直したときにここからマイナスへ戻す。無ければ null。
+    /// </summary>
+    public List<NegativeTimeTag>? NegativeTags { get; set; }
+
+    /// <summary><see cref="NegativeTags"/> を保存したときの行のタイムタグの数（同じタグの並びの行かを確かめる）。</summary>
+    public int? TagCount { get; set; }
+
+    /// <summary>ドキュメントの行から手動設定（または 0 秒より前のタイムタグ）を持つ行だけを集める。</summary>
     public static List<LineExportSettings> Collect(LyricsDocument doc)
     {
         var result = new List<LineExportSettings>();
         for (int i = 0; i < doc.Lines.Count; i++)
         {
             var l = doc.Lines[i];
-            if (!l.HasN3Overrides) continue;
+            var negatives = NegativeTimes.Collect(l);
+            if (!l.HasN3Overrides && negatives.Count == 0) continue;
             var ranges = CharFontOperations.Ranges(l);
             result.Add(new LineExportSettings
             {
@@ -80,6 +90,8 @@ public sealed class LineExportSettings
                 CharText = ranges.Count > 0 ? l.GetDisplayText() : null,
                 Text = l.GetDisplayText(),
                 LineCount = doc.Lines.Count,
+                NegativeTags = negatives.Count > 0 ? negatives : null,
+                TagCount = negatives.Count > 0 ? NegativeTimes.TagValues(l).Count : null,
             });
         }
         return result;
@@ -118,6 +130,7 @@ public sealed class LineExportSettings
                 ? new N3SubtitleAction(actionId, s.SubtitleActionSettings?.DeepClone() as JsonObject ?? N3SubtitleActionCatalog.CreateDefault(actionId).Settings)
                 : null;
             if (s.CharFonts is { Count: > 0 } && s.CharText == l.GetDisplayText()) CharFontOperations.ApplyRanges(l, s.CharFonts);
+            if (s.NegativeTags is { Count: > 0 } negatives && s.Text == l.GetDisplayText()) NegativeTimes.Restore(l, negatives, s.TagCount);
         }
     }
 

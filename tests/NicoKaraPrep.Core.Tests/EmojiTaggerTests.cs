@@ -95,11 +95,12 @@ public class EmojiTaggerTests
     }
 
     [Fact]
-    public void 先行時間が曲頭より前なら0にクランプ()
+    public void 先行時間が曲頭より前ならマイナスのまま持ち_lrcには0で書く()
     {
         var line = LrcFormat.ParseLyricLine("[00:01:00]歌詞[00:12:00]");
         EmojiTagger.InsertEmoji(line, 0, "★", Emoji, PerEmoji);
-        Assert.Equal(0, line.Chars[0].TimeCs);
+        Assert.Equal(-100, line.Chars[0].TimeCs); // 字幕全体の時刻を遅らせたとき、この値から計算する（NegativeTimes）
+        Assert.Equal("[00:00:00]★[00:01:00]歌詞[00:12:00]", LrcFormat.WriteLyricLine(line));
     }
 }
 

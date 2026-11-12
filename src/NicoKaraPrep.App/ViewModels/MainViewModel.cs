@@ -232,18 +232,36 @@ public partial class MainViewModel : ObservableObject
         return TextEditModeFormat.Parse(text);
     }
 
-    /// <summary>歌詞ファイルを書く（rlf / lrc）。</summary>
-    private void WriteLyricsFile(string path, LyricsDocument doc, DocumentFormat format)
+    /// <summary>
+    /// 歌詞ファイルを書く（rlf / lrc）。0 秒より前の時刻は 0 秒にして書き（文書はマイナスのまま。本当の値は .tttproj に残す）、
+    /// 0 秒にしたタイムタグの数を返す（<see cref="NegativeTimes.ForOutput"/>）。
+    /// </summary>
+    private int WriteLyricsFile(string path, LyricsDocument doc, DocumentFormat format)
     {
+        var output = NegativeTimes.ForOutput(doc, out int clamped);
         if (format == DocumentFormat.Rlf)
         {
-            RlfFormat.WriteFile(path, doc);
+            RlfFormat.WriteFile(path, output);
         }
         else
         {
-            File.WriteAllText(path, LrcFormat.Write(doc, LrcOptionsWithEffectiveEmoji(path)), LrcEncoding);
+            File.WriteAllText(path, LrcFormat.Write(output, LrcOptionsWithEffectiveEmoji(path)), LrcEncoding);
         }
+        return clamped;
     }
+
+    /// <summary>保存・書き出しの知らせに添える、0 秒にして書いた時刻の数（無ければ空）。</summary>
+    public static string ClampedNote(int clamped) =>
+        clamped > 0 ? $"（0 秒より前の時刻 {clamped} 個は 0 秒で書きました。アプリの中ではマイナスのまま持っています）" : "";
+
+    /// <summary>行（表示中のタブ。null は全行）の 0 秒より前のタイムタグの数（行のエクスポートの前の確認用）。</summary>
+    public int CountNegativeTimes(IReadOnlyList<int>? lineIndexes = null) =>
+        (lineIndexes ?? Enumerable.Range(0, Document.Lines.Count).ToList())
+            .Where(i => i >= 0 && i < Document.Lines.Count)
+            .Sum(i => NegativeTimes.TagValues(Document.Lines[i]).Count(v => v < 0));
+
+    /// <summary>n3proj に書き出すタブの 0 秒より前のタイムタグの数（書き出しの前の確認用）。</summary>
+    public int CountNegativeTimesForN3Proj() => GetN3ProjExportTabs().Sum(t => NegativeTimes.Count(t.Document));
 
     /// <summary>タブの行をメインへ挿入して戻す（元の行位置キー優先、無ければ時刻順）。</summary>
     private static void MergeLinesByTime(LyricsDocument main, LyricsDocument part) =>
@@ -546,15 +564,7 @@ public partial class MainViewModel : ObservableObject
     public void SaveTo(string path, DocumentFormat? format = null)
     {
         var f = format ?? FormatFromExtension(path);
-        switch (f)
-        {
-            case DocumentFormat.Rlf:
-                RlfFormat.WriteFile(path, Document);
-                break;
-            default:
-                File.WriteAllText(path, LrcFormat.Write(Document, LrcOptionsWithEffectiveEmoji(path)), LrcEncoding);
-                break;
-        }
+        int clamped = WriteLyricsFile(path, Document, f);
         CurrentFilePath = path;
         CurrentFormat = f;
         IsModified = false;
@@ -563,7 +573,7 @@ public partial class MainViewModel : ObservableObject
         RememberSaveFolder(path);
         Settings.AddRecentFile(path);
         Settings.Save();
-        StatusText = $"保存しました: {Path.GetFileName(path)}";
+        StatusText = $"保存しました: {Path.GetFileName(path)}{ClampedNote(clamped)}";
     }
 
     /// <summary>メインタブのファイルパス（上書き保存の対象）。</summary>
@@ -599,13 +609,13 @@ public partial class MainViewModel : ObservableObject
     {
         var f = format ?? FormatFromExtension(path);
         var merged = BuildMergedDocument();
-        WriteLyricsFile(path, merged, f);
+        int clamped = WriteLyricsFile(path, merged, f);
 
         // 自分のファイルを持つタブ（ニコカラメーカー3 のプロジェクトのコーラスなど）は、それぞれのファイルへ
         var ownSaved = new List<string>();
         foreach (var tab in Tabs.Where(t => t.OwnFile && t.IsModified && t.CopyFilePath is not null))
         {
-            WriteLyricsFile(tab.CopyFilePath!, tab.Document, FormatFromExtension(tab.CopyFilePath!));
+            clamped += WriteLyricsFile(tab.CopyFilePath!, tab.Document, FormatFromExtension(tab.CopyFilePath!));
             ownSaved.Add(Path.GetFileName(tab.CopyFilePath!));
         }
 
@@ -626,9 +636,9 @@ public partial class MainViewModel : ObservableObject
         Settings.Save();
 
         string own = ownSaved.Count > 0 ? $"　＋ 別ファイルのタブ: {string.Join("・", ownSaved)}" : "";
-        StatusText = HasSplitTabs
+        StatusText = (HasSplitTabs
             ? $"タブ含む全 {merged.Lines.Count} 行を保存しました: {Path.GetFileName(path)}（タブ分離は維持）{own}"
-            : $"保存しました: {Path.GetFileName(path)}{own}";
+            : $"保存しました: {Path.GetFileName(path)}{own}") + ClampedNote(clamped);
     }
 
     /// <summary>
@@ -664,7 +674,7 @@ public partial class MainViewModel : ObservableObject
     /// </summary>
     public void SaveActiveTabCopyTo(string path, DocumentFormat? format = null)
     {
-        WriteLyricsFile(path, Document, format ?? FormatFromExtension(path));
+        int clamped = WriteLyricsFile(path, Document, format ?? FormatFromExtension(path));
         RememberSaveFolder(path);
         _activeTab.CopyFilePath = path; // 次回から「表示中のタブを上書き保存」の対象になる
         if (_activeTab.OwnFile)
@@ -675,7 +685,7 @@ public partial class MainViewModel : ObservableObject
             UpdateTitle();
         }
         SaveProject();
-        StatusText = $"表示中のタブ「{_activeTab.Name}」を保存しました: {Path.GetFileName(path)}（{Document.Lines.Count} 行）";
+        StatusText = $"表示中のタブ「{_activeTab.Name}」を保存しました: {Path.GetFileName(path)}（{Document.Lines.Count} 行）{ClampedNote(clamped)}";
     }
 
     /// <summary>表示中のタブの上書き保存先（別ファイルへ保存した先。未保存なら null）。</summary>
@@ -788,8 +798,11 @@ public partial class MainViewModel : ObservableObject
         BaseFolder = Path.GetDirectoryName(path),
     };
 
-    /// <summary>テキスト編集モード形式の全文（クリップボード用）。</summary>
+    /// <summary>テキスト編集モード形式の全文（アプリの中の値のまま。0 秒より前は [-mm:ss:cc]。MCP 用）。</summary>
     public string GetTextEditModeText() => TextEditModeFormat.Write(Document);
+
+    /// <summary>テキスト編集モード形式の全文（クリップボードへ出す用。0 秒より前の時刻は 0 秒にする）。</summary>
+    public string GetTextEditModeTextForOutput(out int clamped) => TextEditModeFormat.Write(NegativeTimes.ForOutput(Document, out clamped));
 
     // ------------------------------------------------------------ 行編集
 
@@ -928,6 +941,8 @@ public partial class MainViewModel : ObservableObject
         // 行の設定（表示時刻・フォント・レイアウト・字幕アクションなど）は .tttproj にすぐ保存しているので、戻したあとの状態も保存する
         // （保存しないと、歌詞を保存せずに閉じて開き直したとき、戻す前の指定がよみがえる）
         SaveProject();
+        // 字幕全体の時刻をずらす欄を開いていれば、ずらした量を数え直す（戻るのは表示中のタブだけなので）
+        RestartTimeShiftSession();
         StatusText = message;
     }
 
@@ -1037,28 +1052,21 @@ public partial class MainViewModel : ObservableObject
 
     // ------------------------------------------------------------ エクスポート
 
-    /// <summary>選択行をテキスト編集モード形式のテキストにする。</summary>
-    public string ExportLinesAsText(IReadOnlyList<int> indexes)
+    /// <summary>選択行をテキスト編集モード形式のテキストにする（0 秒より前の時刻は 0 秒にする。<paramref name="clamped"/> はその数）。</summary>
+    public string ExportLinesAsText(IReadOnlyList<int> indexes, out int clamped)
     {
         var doc = LineOperations.ExtractLines(Document, indexes, GetEffectiveEmojiList());
-        return TextEditModeFormat.Write(doc);
+        return TextEditModeFormat.Write(NegativeTimes.ForOutput(doc, out clamped));
     }
 
-    /// <summary>選択行をファイル（lrc / rlf / txt）へエクスポートする。</summary>
+    /// <summary>選択行をファイル（lrc / rlf / txt）へエクスポートする（0 秒より前の時刻は 0 秒にする）。</summary>
     public void ExportLinesToFile(string path, IReadOnlyList<int> indexes)
     {
         var doc = LineOperations.ExtractLines(Document, indexes, GetEffectiveEmojiList());
-        if (FormatFromExtension(path) == DocumentFormat.Rlf)
-        {
-            RlfFormat.WriteFile(path, doc);
-        }
-        else
-        {
-            File.WriteAllText(path, LrcFormat.Write(doc, LrcOptionsWithEffectiveEmoji(path)), LrcEncoding);
-        }
+        int clamped = WriteLyricsFile(path, doc, FormatFromExtension(path));
         MarkExported(indexes, true);
         RememberSaveFolder(path);
-        StatusText = $"{indexes.Count} 行をエクスポートしました: {Path.GetFileName(path)}";
+        StatusText = $"{indexes.Count} 行をエクスポートしました: {Path.GetFileName(path)}{ClampedNote(clamped)}";
     }
 
     /// <summary>済マークを付け外しする。</summary>
@@ -1434,7 +1442,7 @@ public partial class MainViewModel : ObservableObject
         string? detail = EmojiTagger.HasUntaggableEmoji(line, matcher)
             ? "直後にタイムタグ付きの文字が無いため時刻は未設定です"
             : closedEndCs is int cs
-                ? $"直前の文字の終わりが巻き戻らないよう、終わりのタイムタグ {TimeTag.Format(cs)} を足しました"
+                ? $"直前の文字の終わりが巻き戻らないよう、終わりのタイムタグ {TimeTag.FormatSigned(cs)} を足しました"
                 : null;
         StatusText = detail is null ? $"絵文字 {emojiChar} を挿入しました" : $"絵文字 {emojiChar} を挿入しました（{detail}）";
         _noticeBeforeCheck = detail is null ? null : StatusText;
@@ -1702,12 +1710,14 @@ public partial class MainViewModel : ObservableObject
             return null;
         }
 
-        int leadCs = Math.Max(1, b - Settings.EmojiLeadCs);
+        // 0 秒より前になってもマイナスのまま持つ（保存・書き出しでは 0 秒。NegativeTimes）
+        int leadCs = b - Settings.EmojiLeadCs;
         PushUndo();
         line.Chars.Insert(unitIndex, new CharUnit { Text = CharUnit.Spacer, TimeCs = leadCs });
         if (lineIndex < Lines.Count) Lines[lineIndex].RaiseAllChanged();
         MarkModified();
-        StatusText = $"先行タグ [{TimeTag.Format(leadCs)}] を挿入しました（直後のタグ {TimeTag.Format(b)} の {Settings.EmojiLeadSeconds:0.#} 秒前。削除は Ctrl+Z か行エディタで）";
+        string negative = leadCs < 0 ? "。0 秒より前なので、保存・書き出しでは 0 秒になります" : "";
+        StatusText = $"先行タグ {TimeTag.FormatSigned(leadCs)} を挿入しました（直後のタグ {TimeTag.FormatSigned(b)} の {Settings.EmojiLeadSeconds:0.#} 秒前{negative}。削除は Ctrl+Z か行エディタで）";
         return offset;
     }
 
@@ -1937,13 +1947,33 @@ public partial class MainViewModel : ObservableObject
             Lines[i].SetOverlapInfo(overlapped.Contains(i));
         }
 
+        // 4) 0 秒より前（マイナス）の時刻（アプリの中ではマイナスのまま持ち、保存・書き出しでは 0 秒になる）
+        foreach (var issue in NegativeTimeValidator.Validate(Document)) AddPairIssue(issue);
+        string? negativeNotice = NegativeTimeNotice();
+
         int errors = Issues.Count(i => i.Severity == IssueSeverity.Error);
         int warnings = Issues.Count(i => i.Severity == IssueSeverity.Warning);
         string result = Issues.Count == 0
             ? "チェック OK（問題なし）"
             : $"チェック結果: エラー {errors} 件 / 警告 {warnings} 件";
-        StatusText = _noticeBeforeCheck is { } notice ? $"{notice}　／　{result}" : result;
+        StatusText = string.Join("　／　", new[] { _noticeBeforeCheck, negativeNotice, result }.Where(s => !string.IsNullOrEmpty(s)));
         _noticeBeforeCheck = null;
+    }
+
+    /// <summary>前のチェックのときの、表示中の文書の 0 秒より前のタイムタグの数（増えたときだけ知らせる）。</summary>
+    private int _negativeTimesAtLastCheck;
+
+    /// <summary>
+    /// 0 秒より前のタイムタグが前のチェックより増えていれば、その知らせ（アイコン・先行タグ・定型文を曲の頭近くに入れたとき・早めたときなど）。
+    /// 増えていなければ null。
+    /// </summary>
+    private string? NegativeTimeNotice()
+    {
+        int count = NegativeTimes.Count(Document);
+        bool increased = count > _negativeTimesAtLastCheck;
+        _negativeTimesAtLastCheck = count;
+        if (!increased || NegativeTimes.Earliest(Document) is not int earliest) return null;
+        return $"⚠ 0 秒より前の時刻があります（{count} 個、いちばん早いのは {NegativeTimes.FormatSeconds(earliest)}）。アプリの中ではこのまま持ち、保存・書き出しでは 0 秒になります";
     }
 
     /// <summary>

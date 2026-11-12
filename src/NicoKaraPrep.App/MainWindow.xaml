@@ -235,6 +235,9 @@
                         </MenuFlyoutItem.KeyboardAccelerators>
                     </MenuFlyoutItem>
                     <ToggleMenuFlyoutItem x:Name="FollowToggle" Text="再生位置に追従してハイライト" IsChecked="True" />
+                    <MenuFlyoutSeparator />
+                    <MenuFlyoutItem x:Name="TimeShiftMenuItem" Text="字幕全体の時刻をずらす..." Click="OnTimeShiftMenuClick"
+                                    ToolTipService.ToolTip="動画の下に、全タブのタイムタグと表示時刻を同じだけ早める・遅らせる欄を出します。再生しながら字幕プレビューで確かめて微調整できます" />
                 </MenuBarItem>
                 <MenuBarItem Title="絵文字(G)" AccessKey="G">
                     <MenuFlyoutItem Text="絵文字リスト編集..." Click="OnEmojiListClick" />
@@ -299,14 +302,15 @@
                         <RowDefinition Height="Auto" />
                         <RowDefinition Height="Auto" />
                         <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
                     </Grid.RowDefinitions>
                     <!-- 動画と字幕のプレビュー（再生の操作は下の行に出して、字幕に重ならないようにする） -->
                     <Grid x:Name="PlayerHost" Height="260" Background="Black">
                         <MediaPlayerElement x:Name="Player" AreTransportControlsEnabled="False" />
                         <views:SubtitlePreviewView x:Name="SubtitlePreview" />
                     </Grid>
-                    <!-- 再生の操作: 再生・一時停止と位置（左）、音量と字幕プレビューの切り替え（右）。
-                         右の列に置くときは、位置のスライダーを 1 段目の横いっぱいに、ほかを 2 段目にする -->
+                    <!-- 再生の操作: 再生・一時停止と位置（左）、音量・時刻ずらし・字幕プレビューの切り替え（右）。
+                         右の列に置くときは、位置のスライダーを 1 段目に（右端に時刻ずらし）、ほかを 2 段目にする -->
                     <Grid Grid.Row="1" x:Name="PlayerBar" Padding="0,6,0,0" ColumnSpacing="10">
                         <Grid.RowDefinitions>
                             <RowDefinition Height="Auto" />
@@ -316,6 +320,7 @@
                             <ColumnDefinition Width="Auto" />
                             <ColumnDefinition Width="Auto" />
                             <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="Auto" />
                             <ColumnDefinition Width="Auto" />
                             <ColumnDefinition Width="Auto" />
                             <ColumnDefinition Width="Auto" />
@@ -333,12 +338,96 @@
                             <FontIcon Glyph="&#xE767;" FontSize="14" VerticalAlignment="Center" />
                             <Slider x:Name="PlayerVolumeSlider" Width="96" Minimum="0" Maximum="100" Value="100" VerticalAlignment="Center" ValueChanged="OnPlayerVolumeChanged" />
                         </StackPanel>
-                        <ToggleButton Grid.Column="5" x:Name="SubtitlePreviewToggle" Content="字幕プレビュー" Padding="10,5" Click="OnSubtitlePreviewToggleClick"
+                        <ToggleButton Grid.Column="5" x:Name="TimeShiftToggle" Padding="10,5" HorizontalAlignment="Right"
+                                      Checked="OnTimeShiftToggleChecked" Unchecked="OnTimeShiftToggleUnchecked"
+                                      AutomationProperties.Name="時刻ずらし"
+                                      ToolTipService.ToolTip="字幕全体の時刻をずらす欄を出し入れします（全タブのタイムタグと表示時刻を、再生しながら同じだけ早める・遅らせる）">
+                            <StackPanel Orientation="Horizontal" Spacing="6">
+                                <FontIcon Glyph="&#xE916;" FontSize="14" />
+                                <TextBlock Text="時刻ずらし" />
+                            </StackPanel>
+                        </ToggleButton>
+                        <ToggleButton Grid.Column="6" x:Name="SubtitlePreviewToggle" Content="字幕プレビュー" Padding="10,5" Click="OnSubtitlePreviewToggleClick"
                                       ToolTipService.ToolTip="動画の上に、ニコカラメーカー3 での字幕の見え方（近似。フェードなどの字幕アクションは無し）を重ねます" />
                     </Grid>
-                    <!-- 高さ変更ハンドル（右に置くときは隠す。高さは幅から決める） -->
+                    <!-- 字幕全体の時刻をずらす欄（再生 > 字幕全体の時刻をずらす・再生の操作の「時刻ずらし」で出し入れ。MainWindow.TimeShift.cs）。
+                         押すたびに全タブの時刻を書き換えるので、再生を続けたまま字幕プレビューで確かめられる。
+                         上の段に置くときは 2 段（見出し・ずらした量・閉じる / 早める・遅らせる・説明）、右の列では縦に並べる（ApplyTimeShiftPlacement） -->
                     <Border
                         Grid.Row="2"
+                        x:Name="TimeShiftBar"
+                        Visibility="Collapsed"
+                        Margin="0,6,0,0"
+                        Padding="10,6"
+                        CornerRadius="{StaticResource ControlCornerRadius}"
+                        BorderThickness="1"
+                        Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
+                        BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}">
+                        <Grid x:Name="TimeShiftGrid" ColumnSpacing="16" RowSpacing="6">
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="Auto" />
+                                <RowDefinition Height="Auto" />
+                                <RowDefinition Height="Auto" />
+                                <RowDefinition Height="Auto" />
+                                <RowDefinition Height="Auto" />
+                            </Grid.RowDefinitions>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="Auto" />
+                                <ColumnDefinition Width="Auto" />
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="Auto" />
+                            </Grid.ColumnDefinitions>
+                            <TextBlock x:Name="TimeShiftTitle" Text="字幕全体の時刻をずらす" FontWeight="SemiBold" VerticalAlignment="Center" />
+                            <!-- ずらした量（欄を開いてからの合計。直接入れても、▲▼・↑↓キーで 0.01 秒ずつでもずらせる）と 0 秒に戻す -->
+                            <StackPanel Grid.Column="1" Grid.ColumnSpan="2" x:Name="TimeShiftAmountGroup" Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
+                                <TextBlock Text="ずらした量" FontSize="12" VerticalAlignment="Center" />
+                                <NumberBox
+                                    x:Name="TimeShiftBox"
+                                    Width="150"
+                                    SmallChange="0.01"
+                                    LargeChange="0.1"
+                                    SpinButtonPlacementMode="Inline"
+                                    ValidationMode="InvalidInputOverwritten"
+                                    ValueChanged="OnTimeShiftBoxValueChanged"
+                                    AutomationProperties.Name="ずらした量（秒）"
+                                    ToolTipService.ToolTip="欄を開いてからずらした量（秒。正は遅らせた、負は早めた）。数字を入れて Enter でその量に、▲▼・↑↓キーで 0.01 秒ずつ、PageUp・PageDown で 0.1 秒ずつずらします" />
+                                <TextBlock Text="秒" FontSize="12" VerticalAlignment="Center" />
+                                <Button x:Name="TimeShiftResetButton" Content="0 秒に戻す" Padding="10,4" FontSize="12" Click="OnTimeShiftResetClick"
+                                        ToolTipService.ToolTip="この欄でずらした分を全タブまとめて戻します" />
+                            </StackPanel>
+                            <Button Grid.Column="3" x:Name="TimeShiftCloseButton" Padding="8,4" VerticalAlignment="Center" Click="OnTimeShiftCloseClick"
+                                    AutomationProperties.Name="時刻をずらす欄を閉じる"
+                                    ToolTipService.ToolTip="欄を閉じます（ずらした時刻はそのまま）">
+                                <FontIcon Glyph="&#xE711;" FontSize="12" />
+                            </Button>
+                            <!-- 早める（字幕が早く出る）・遅らせる（字幕が遅く出る）。同じ働きのボタンを 1 行にまとめる -->
+                            <StackPanel Grid.Row="1" x:Name="TimeShiftEarlierGroup" Orientation="Horizontal" Spacing="4" VerticalAlignment="Center">
+                                <TextBlock Text="早める" FontSize="12" Width="48" VerticalAlignment="Center" Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+                                <Button Content="−1秒" Tag="-100" Padding="8,4" FontSize="12" Click="OnTimeShiftStepClick" AutomationProperties.Name="1 秒早める" ToolTipService.ToolTip="全部の時刻を 1 秒早めます（字幕が早く出ます）" />
+                                <Button Content="−0.1秒" Tag="-10" Padding="8,4" FontSize="12" Click="OnTimeShiftStepClick" AutomationProperties.Name="0.1 秒早める" ToolTipService.ToolTip="全部の時刻を 0.1 秒早めます" />
+                                <Button Content="−0.01秒" Tag="-1" Padding="8,4" FontSize="12" Click="OnTimeShiftStepClick" AutomationProperties.Name="0.01 秒早める" ToolTipService.ToolTip="全部の時刻を 0.01 秒早めます" />
+                            </StackPanel>
+                            <StackPanel Grid.Row="1" Grid.Column="1" x:Name="TimeShiftLaterGroup" Orientation="Horizontal" Spacing="4" VerticalAlignment="Center">
+                                <TextBlock Text="遅らせる" FontSize="12" Width="48" VerticalAlignment="Center" Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+                                <Button Content="+0.01秒" Tag="1" Padding="8,4" FontSize="12" Click="OnTimeShiftStepClick" AutomationProperties.Name="0.01 秒遅らせる" ToolTipService.ToolTip="全部の時刻を 0.01 秒遅らせます" />
+                                <Button Content="+0.1秒" Tag="10" Padding="8,4" FontSize="12" Click="OnTimeShiftStepClick" AutomationProperties.Name="0.1 秒遅らせる" ToolTipService.ToolTip="全部の時刻を 0.1 秒遅らせます" />
+                                <Button Content="+1秒" Tag="100" Padding="8,4" FontSize="12" Click="OnTimeShiftStepClick" AutomationProperties.Name="1 秒遅らせる" ToolTipService.ToolTip="全部の時刻を 1 秒遅らせます（字幕が遅く出ます）" />
+                            </StackPanel>
+                            <TextBlock
+                                Grid.Row="1"
+                                Grid.Column="2"
+                                Grid.ColumnSpan="2"
+                                x:Name="TimeShiftHint"
+                                FontSize="12"
+                                TextWrapping="Wrap"
+                                VerticalAlignment="Center"
+                                Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                                Text="押すたびに全タブのタイムタグと行の表示時刻を書き換えます。再生しながら字幕プレビューで確かめられます（Ctrl+Z はタブごとに、欄を開く前へ戻ります）" />
+                        </Grid>
+                    </Border>
+                    <!-- 高さ変更ハンドル（右に置くときは隠す。高さは幅から決める） -->
+                    <Border
+                        Grid.Row="3"
                         x:Name="PlayerResizeHandle"
                         Height="10"
                         Background="Transparent"
@@ -483,9 +572,11 @@
                                             <RowDefinition Height="Auto" />
                                             <RowDefinition Height="Auto" />
                                         </Grid.RowDefinitions>
-                                        <TextBlock Text="{x:Bind TimeText, Mode=OneWay}" FontFamily="Consolas" Foreground="{x:Bind StartTimeBrush, Mode=OneWay}" DoubleTapped="OnLineStartTimeDoubleTapped"
+                                        <TextBlock Text="{x:Bind TimeText, Mode=OneWay}" FontFamily="Consolas" FontSize="{x:Bind TimeFontSize, Mode=OneWay}" VerticalAlignment="Bottom"
+                                                   Foreground="{x:Bind StartTimeBrush, Mode=OneWay}" DoubleTapped="OnLineStartTimeDoubleTapped"
                                                    ToolTipService.ToolTip="歌い出し（行の最初のタイムタグ）。下の段は表示開始。チェックで表示開始に問題があれば色が付きます。ダブルクリックで、下の行設定の表示開始を直せます" />
-                                        <TextBlock Grid.Column="1" Text="{x:Bind EndTimeText, Mode=OneWay}" FontFamily="Consolas" Foreground="{x:Bind EndTimeBrush, Mode=OneWay}" DoubleTapped="OnLineEndTimeDoubleTapped"
+                                        <TextBlock Grid.Column="1" Text="{x:Bind EndTimeText, Mode=OneWay}" FontFamily="Consolas" FontSize="{x:Bind EndTimeFontSize, Mode=OneWay}" VerticalAlignment="Bottom"
+                                                   Foreground="{x:Bind EndTimeBrush, Mode=OneWay}" DoubleTapped="OnLineEndTimeDoubleTapped"
                                                    ToolTipService.ToolTip="歌い終わり（行の最後のタイムタグ）。下の段は表示終了。チェックで表示終了に問題があれば色が付きます。ダブルクリックで、下の行設定の表示終了を直せます" />
                                         <TextBlock Grid.Row="1" Text="{x:Bind ShowBeginText, Mode=OneWay}" FontFamily="Consolas" FontSize="12" Foreground="{x:Bind ShowBeginBrush, Mode=OneWay}"
                                                    DoubleTapped="OnLineStartTimeDoubleTapped" ToolTipService.ToolTip="{x:Bind ShowBeginToolTip, Mode=OneWay}" />

@@ -533,7 +533,7 @@ public static class RlfFormat
     private static int TimeToRaw(int? cs) => cs switch
     {
         null => 0,
-        0 => 1,   // RhythmicaLyrics は時刻 0 を 1 に丸める（0 は「タグなし」の意味のため）
+        <= 0 => 1, // RhythmicaLyrics は時刻 0 を 1 に丸める（0 は「タグなし」の意味のため）。0 秒より前（NegativeTimes）も同じ
         int v => v,
     };
 }

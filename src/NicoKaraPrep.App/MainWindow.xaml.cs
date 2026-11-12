@@ -50,6 +50,7 @@ public sealed partial class MainWindow : Window
         InsertEditor.AddHandler(UIElement.DoubleTappedEvent, new DoubleTappedEventHandler((_, _) => OpenInsertLineEditDialog(-1)), handledEventsToo: true);
         InitializeAdaptiveLayout();
         InitializePlayerBar();
+        InitializeTimeShiftBar();
         InitializeLineSide();
         InitializeShowTimeEditing();
 
@@ -296,6 +297,7 @@ public sealed partial class MainWindow : Window
     /// <summary>ドキュメント読込直後の共通処理（タブ同期・チェック実行・関連メディアのロード）。</summary>
     private void AfterDocumentLoaded()
     {
+        ViewModel.RestartTimeShiftSession(); // 字幕全体の時刻をずらす欄を開いたままなら、別の曲のずらした量を 0 から数え直す
         SyncTabSelection();
         ScheduleValidation();
         RefreshRecentFilesMenu();
@@ -528,9 +530,9 @@ public sealed partial class MainWindow : Window
     private void OnCopyClick(object sender, RoutedEventArgs e)
     {
         var package = new DataPackage();
-        package.SetText(ViewModel.GetTextEditModeText());
+        package.SetText(ViewModel.GetTextEditModeTextForOutput(out int clamped));
         Clipboard.SetContent(package);
-        ViewModel.StatusText = "テキスト編集モード形式でコピーしました";
+        ViewModel.StatusText = $"テキスト編集モード形式でコピーしました{MainViewModel.ClampedNote(clamped)}";
     }
 
     // -------------------------------------------------------- ドラッグ&ドロップ
@@ -1212,13 +1214,18 @@ public sealed partial class MainWindow : Window
         ("テキスト (*.txt)", "*.txt"),
     ];
 
-    private void OnExportFileClick(object sender, RoutedEventArgs e)
+    private async void OnExportFileClick(object sender, RoutedEventArgs e)
     {
         if (LineOperationBlocked()) return;
         var indexes = SelectedIndexes;
         if (indexes.Count == 0)
         {
             ViewModel.StatusText = "エクスポートする行を選択してください";
+            return;
+        }
+        if (!await ConfirmNegativeTimesAsync(ViewModel.CountNegativeTimes(indexes), "エクスポートする行"))
+        {
+            ViewModel.StatusText = "エクスポートしませんでした（0 秒より前の時刻があるため、やめました）";
             return;
         }
 
@@ -1230,7 +1237,7 @@ public sealed partial class MainWindow : Window
         QueueGutterRefresh(); // 済マーク表示を更新
     }
 
-    private void OnExportClipboardClick(object sender, RoutedEventArgs e)
+    private async void OnExportClipboardClick(object sender, RoutedEventArgs e)
     {
         if (LineOperationBlocked()) return;
         var indexes = SelectedIndexes;
@@ -1239,13 +1246,18 @@ public sealed partial class MainWindow : Window
             ViewModel.StatusText = "エクスポートする行を選択してください";
             return;
         }
+        if (!await ConfirmNegativeTimesAsync(ViewModel.CountNegativeTimes(indexes), "エクスポートする行"))
+        {
+            ViewModel.StatusText = "エクスポートしませんでした（0 秒より前の時刻があるため、やめました）";
+            return;
+        }
         TryRun(() =>
         {
             var package = new DataPackage();
-            package.SetText(ViewModel.ExportLinesAsText(indexes));
+            package.SetText(ViewModel.ExportLinesAsText(indexes, out int clamped));
             Clipboard.SetContent(package);
             ViewModel.MarkExported(indexes, true);
-            ViewModel.StatusText = $"{indexes.Count} 行をクリップボードへエクスポートしました";
+            ViewModel.StatusText = $"{indexes.Count} 行をクリップボードへエクスポートしました{MainViewModel.ClampedNote(clamped)}";
         });
         QueueGutterRefresh(); // 済マーク表示を更新
     }
@@ -1423,7 +1435,7 @@ public sealed partial class MainWindow : Window
             }
             session.Position = TimeSpan.FromSeconds(ViewModel.TagCsToMediaSeconds(cs));
             PlayerWithSource?.Play();
-            ViewModel.StatusText = $"選んだ行の {TimeTag.Format(cs)} から再生します";
+            ViewModel.StatusText = $"選んだ行の {TimeTag.FormatSigned(cs)} から再生します";
         });
     }
 
@@ -1458,7 +1470,7 @@ public sealed partial class MainWindow : Window
         if (session is null || Player.MediaPlayer?.Source is null) return;
         session.Position = TimeSpan.FromSeconds(ViewModel.TagCsToMediaSeconds(cs));
         UpdatePlayerTime();
-        ViewModel.StatusText = $"再生位置を {TimeTag.Format(cs)} へ移動しました";
+        ViewModel.StatusText = $"再生位置を {TimeTag.FormatSigned(cs)} へ移動しました";
     }
 
     // ------------------------------------------------ 絵文字挿入ビュー
@@ -1944,7 +1956,7 @@ public sealed partial class MainWindow : Window
             }
             session.Position = TimeSpan.FromSeconds(ViewModel.TagCsToMediaSeconds(cs));
             PlayerWithSource?.Play();
-            ViewModel.StatusText = $"カーソル位置 {TimeTag.Format(cs)} から再生します";
+            ViewModel.StatusText = $"カーソル位置 {TimeTag.FormatSigned(cs)} から再生します";
         });
     }
 
@@ -2546,7 +2558,7 @@ public sealed partial class MainWindow : Window
         UpdateInsertLineEditor(force: false);
         int offset = InsertEditor.SelectionStart;
         var (prev, next) = ViewModel.GetTagTimesAroundViewOffset(offset);
-        static string F(int? cs) => cs is int c ? TimeTag.Format(c).Trim('[', ']') : "なし";
+        static string F(int? cs) => cs is int c ? TimeTag.FormatSigned(c).Trim('[', ']') : "なし";
         InsertCursorInfo.Text = ViewModel.MapInsertViewOffset(offset) is var (li, _)
             ? $"行 {li + 1}　カーソル位置のタグ ─ 直前: {F(prev)}　直後: {F(next)}"
             : "";

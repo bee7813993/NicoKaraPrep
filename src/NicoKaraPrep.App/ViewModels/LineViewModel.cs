@@ -31,7 +31,7 @@ public partial class LineViewModel : ObservableObject
         get
         {
             int? t = Model.GetFirstTimeCs();
-            return t is int cs ? TimeTag.Format(cs).Trim('[', ']') : "";
+            return t is int cs ? TimeTag.FormatSigned(cs).Trim('[', ']') : "";
         }
     }
 
@@ -41,9 +41,15 @@ public partial class LineViewModel : ObservableObject
         get
         {
             int? t = Model.GetLastTimeCs();
-            return t is int cs ? TimeTag.Format(cs).Trim('[', ']') : "";
+            return t is int cs ? TimeTag.FormatSigned(cs).Trim('[', ']') : "";
         }
     }
+
+    /// <summary>歌い出しの文字の大きさ（0 秒より前の「-00:01:00」は 1 文字長いので、欄の幅に収まるよう小さくする）。</summary>
+    public double TimeFontSize => Model.GetFirstTimeCs() < 0 ? 12 : 14;
+
+    /// <summary>歌い終わりの文字の大きさ（<see cref="TimeFontSize"/> と同じ）。</summary>
+    public double EndTimeFontSize => Model.GetLastTimeCs() < 0 ? 12 : 14;
 
     // ------------------------------------------------ 表示時刻（行リストの時刻の下の段）
 
@@ -93,7 +99,7 @@ public partial class LineViewModel : ObservableObject
           "手で指定した値は ✎ と同じ色、チェックで問題があれば警告・エラーの色になります。ダブルクリックで、下の行設定の表示終了を直せます"
         : null;
 
-    private static string FormatShowTime(int ms) => TimeTag.Format(N3ShowTimeAdjuster.ToCs(ms)).Trim('[', ']');
+    private static string FormatShowTime(int ms) => TimeTag.FormatSigned(N3ShowTimeAdjuster.ToCs(ms)).Trim('[', ']');
 
     private static Microsoft.UI.Xaml.Media.Brush? ShowTimeBrush(IssueSeverity? severity, bool manual) => severity switch
     {
@@ -424,6 +430,8 @@ public partial class LineViewModel : ObservableObject
     {
         OnPropertyChanged(nameof(TimeText));
         OnPropertyChanged(nameof(EndTimeText));
+        OnPropertyChanged(nameof(TimeFontSize));
+        OnPropertyChanged(nameof(EndTimeFontSize));
         OnPropertyChanged(nameof(DisplayText));
         OnPropertyChanged(nameof(RawText));
         OnPropertyChanged(nameof(Exported));

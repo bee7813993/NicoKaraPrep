@@ -46,6 +46,10 @@ public sealed partial class MainWindow
             TryRun(() => ViewModel.ApplyN3ProjSongSettings(settings));
             ViewModel.StatusText = "書き出しの設定を適用しました（n3proj は書き出していません）";
         }
+        else if (!await ConfirmNegativeTimesAsync(ViewModel.CountNegativeTimesForN3Proj(), "書き出す歌詞"))
+        {
+            ViewModel.StatusText = "n3proj は書き出しませんでした（0 秒より前の時刻があるため、やめました）";
+        }
         else
         {
             // 保存先を選ばずにやめたときは何も保存しない（書き出し画面の設定を残すときは「適用」）
@@ -694,7 +698,7 @@ public sealed partial class MainWindow
         }
     }
 
-    private static string FmtCs(int cs) => TimeTag.Format(cs).Trim('[', ']');
+    private static string FmtCs(int cs) => TimeTag.FormatSigned(cs).Trim('[', ']');
 
     /// <summary>ms の時刻を 10ms 単位で表示する（自動調整で行に持たせる値・チェックの文と同じく四捨五入）。</summary>
     private static string FmtMs(int ms) => FmtCs(N3ShowTimeAdjuster.ToCs(ms));
