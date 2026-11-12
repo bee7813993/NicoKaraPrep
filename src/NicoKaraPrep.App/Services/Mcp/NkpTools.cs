@@ -98,7 +98,7 @@ internal sealed class NkpTools
     }
 
     [McpServerTool(Name = "get_show_time_settings", Title = "表示時刻のパラメーター", ReadOnly = true, Idempotent = true, OpenWorld = false, Destructive = false)]
-    [Description("「表示時刻の自動調整」のパラメーター（ワイプ前・ワイプ後・表示間隔・最短表示後・重ねてよい・上段を長めに・絵文字の分だけ遅らせる・レイアウトで位置が違う行）と、表示時刻の出どころごとの行数を返す。")]
+    [Description("「表示時刻の自動調整」のパラメーター（ワイプ前・ワイプ後・表示間隔・最短表示後・重ねてよい・上段を長めに・絵文字の分だけ遅らせる・前後のページの行を画面で重なるかで組にする）と、表示時刻の出どころごとの行数を返す。")]
     public Task<CallToolResult> GetShowTimeSettings(CancellationToken ct) => Invoke(MainWindow.McpAccess.Read, w => w.McpShowTimeSettingsJson(withSummary: true), ct);
 
     // ------------------------------------------------------------ ファイル
