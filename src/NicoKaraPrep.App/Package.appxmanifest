@@ -14,7 +14,7 @@
   <Identity
     Name="YFRTeam.8571E940AEEA"
     Publisher="CN=7F20441E-C8F2-4A45-B847-6FECA63733DB"
-    Version="0.2.0.0" />
+    Version="0.3.0.0" />
 
   <!-- DisplayName は Partner Center で予約したアプリ名「にこぷれっぷ」と一致させること -->
   <Properties>

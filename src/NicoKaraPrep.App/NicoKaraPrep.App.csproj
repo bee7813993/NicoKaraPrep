@@ -27,7 +27,7 @@
     <PublishProfile>Properties\PublishProfiles\win-$(Platform).pubxml</PublishProfile>
     <!-- Store 提出パッケージは審査通過後に Microsoft が署名するため自前署名は無効 -->
     <AppxPackageSigningEnabled>false</AppxPackageSigningEnabled>
-    <Version>0.2.0</Version>
+    <Version>0.3.0</Version>
   </PropertyGroup>
 
   <ItemGroup>
