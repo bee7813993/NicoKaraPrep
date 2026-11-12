@@ -59,14 +59,14 @@
                 <TextBlock TextWrapping="Wrap" Text="上段の行をページの最後まで表示する（上段歌詞を長めに表示）" />
             </CheckBox>
             <CheckBox x:Name="StEmojiYieldCheck" Click="OnShowTimeCheckClick" MinWidth="0"
-                      AutomationProperties.Name="前のページの同じ段と重なるときは、絵文字の分だけ行の表示を遅らせる"
+                      AutomationProperties.Name="前のページの行と重なるときは、絵文字の分だけ行の表示を遅らせる"
                       ToolTipService.ToolTip="絵文字の表示秒数は、ワイプ前の表示時間まで縮めます（表示秒数がそれより短い絵文字は縮めません）。それでも重なるときは、前の行のワイプ後を削ります。前の行のワイプ終了から歌い出しまでがそれより短いときだけ、前の行をワイプの最後まで見せるため、さらに縮めます">
-                <TextBlock TextWrapping="Wrap" Text="前のページの同じ段と重なるときは、絵文字の分だけ行の表示を遅らせる（ニコカラメーカー3 には無い機能）" />
+                <TextBlock TextWrapping="Wrap" Text="前のページの行と重なるときは、絵文字の分だけ行の表示を遅らせる（ニコカラメーカー3 には無い機能）" />
             </CheckBox>
             <CheckBox x:Name="StLayoutAwareCheck" Click="OnShowTimeCheckClick" MinWidth="0"
-                      AutomationProperties.Name="レイアウトで画面の位置が違う行は、前後のページの同じ段でも重ならないものとして扱う"
-                      ToolTipService.ToolTip="字幕のプレビューで重ならない行（上寄せ 5 行のページの次の下寄せ 2 行のページ、左寄せ 5 行と右寄せ 5 行のページなど）は、表示時刻を詰めず、チェックのページ衝突・表示時刻でも知らせません。ニコカラメーカー3 は段（下から何行目）だけで組にするので、外すと同じ計算になります">
-                <TextBlock TextWrapping="Wrap" Text="レイアウトで画面の位置が違う行は、前後のページの同じ段でも重ならないものとして扱う（ニコカラメーカー3 には無い機能）" />
+                      AutomationProperties.Name="前後のページの行は、画面で重なるかで組にする"
+                      ToolTipService.ToolTip="同じ段の行は、字幕のプレビューで描く範囲（ルビ・縁・飾り・アイコンを含む）が少しでも重なれば組にし、重ならなければ組にしません（左寄せ 5 行と右寄せ 5 行のページなど）。段が違う行は、レイアウトが同じページどうしなら組にせず（隣り合う段のルビ・縁が触れるのはレイアウトどおり）、レイアウトが違うときだけ、文字の枠（ルビ・縁を除く）が重なれば組にします（上寄せ 5 行のページの次の下寄せ 2 行のページなど）。組にした行は表示時刻を詰め、チェックのページ衝突・表示時刻で知らせます（重ねてよい秒数までの重なりは知らせません）。1 行だけのページは、上の段に上げるか下の段のままかを、表示時刻の計算で決めます。ニコカラメーカー3 は段だけで組にするので、外すと同じ計算になります">
+                <TextBlock TextWrapping="Wrap" Text="前後のページの行は、画面で重なるかで組にする（ニコカラメーカー3 には無い機能）" />
             </CheckBox>
             <!-- 値を添えると長くなるので、パネルの幅で折り返す（切れないように） -->
             <Button x:Name="StImportNkm3Button" FontSize="12" Padding="8,3" HorizontalAlignment="Stretch" HorizontalContentAlignment="Left" Click="OnStImportNkm3Click" Visibility="Collapsed">

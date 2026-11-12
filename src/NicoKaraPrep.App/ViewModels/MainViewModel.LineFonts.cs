@@ -30,14 +30,22 @@ public partial class MainViewModel
     private readonly Dictionary<string, SubtitleContext> _subtitleContexts = new(StringComparer.Ordinal);
 
     /// <summary>
-    /// タブの名前 → 行の画面上の四角（字幕の画面の px。行の添字 → 四角）。<see cref="UpdateLineFonts"/> で字幕のプレビューと同じ並べ方から作り直す。
-    /// 表示時刻の計算とチェックで、前後のページの同じ段の行でもレイアウトで別の場所に出る組を詰めない・知らせないのに使う
-    /// （<see cref="N3ShowTimeSettings.LineBounds"/>。設定 <see cref="AppSettings.N3LayoutAwareRows"/>）。
+    /// タブの名前 → 行の画面上の場所（行の添字 → 描画範囲・文字の枠・ページのレイアウト。字幕の画面の px）。
+    /// <see cref="UpdateLineFonts"/> で字幕のプレビューと同じ並べ方から作り直す（1 行だけのページの行は、決めた段に出たときの場所）。
+    /// 表示時刻の計算とチェックで、前後のページの行を場所で組にするのに使う
+    /// （<see cref="N3ShowTimeSettings.LineAreas"/>・<see cref="N3RowPlacement.Paired"/>。設定 <see cref="AppSettings.N3LayoutAwareRows"/>）。
     /// </summary>
-    private readonly Dictionary<string, Dictionary<int, N3LineBounds>> _lineBounds = new(StringComparer.Ordinal);
+    private readonly Dictionary<string, Dictionary<int, N3LineArea>> _lineAreas = new(StringComparer.Ordinal);
 
     /// <summary>
-    /// タブの名前 → 1 行だけのページの行の段（下から 1 か 2。字幕のプレビューと同じ決め方。<see cref="UpdateLineFonts"/> で作り直す）。
+    /// タブの名前 → 1 行だけのページの行の、下の段と上の段の場所（<see cref="N3ShowTimeSettings.SingleLineAreas"/>）。
+    /// 表示時刻の計算で、どちらの段に出すかを決めるのに使う（決めた段は表示時刻の計算の結果の段）。
+    /// </summary>
+    private readonly Dictionary<string, Dictionary<int, N3SingleLineAreas>> _singleLineAreas = new(StringComparer.Ordinal);
+
+    /// <summary>
+    /// タブの名前 → 1 行だけのページの行の段（下から 1 か 2。字幕のプレビューと同じ。<see cref="UpdateLineFonts"/> で作り直す）。
+    /// 描画範囲を使うときは表示時刻の計算で決めた段、使わないときはニコカラメーカー3 の出力の実測の決め方。
     /// ページ衝突のチェックで、その行を比べる段に使う。
     /// </summary>
     private readonly Dictionary<string, Dictionary<int, int>> _singleLineRows = new(StringComparer.Ordinal);
@@ -46,8 +54,8 @@ public partial class MainViewModel
     private IReadOnlyDictionary<int, int>? CurrentSingleLineRows() => _singleLineRows.GetValueOrDefault(_activeTab.Name);
 
     /// <summary>表示中のタブの行の画面上の四角（設定で切っていれば null）。</summary>
-    private IReadOnlyDictionary<int, N3LineBounds>? CurrentLineBounds() =>
-        Settings.N3LayoutAwareRows ? _lineBounds.GetValueOrDefault(_activeTab.Name) : null;
+    private IReadOnlyDictionary<int, N3LineArea>? CurrentLineAreas() =>
+        Settings.N3LayoutAwareRows ? _lineAreas.GetValueOrDefault(_activeTab.Name) : null;
 
     /// <summary>字幕のプレビューの材料（チェックのたびに作り直す。プレビューを切っていれば null）。</summary>
     public SubtitlePreviewModel? PreviewModel { get; private set; }
@@ -216,7 +224,8 @@ public partial class MainViewModel
         static SubtitleSpacing SpacingOf(N3LayoutSettings layout) =>
             new((float)layout.LyricsIntervalPx, (float)layout.RubyIntervalPx, (float)layout.LyricsAndRubyIntervalPx, layout.RubyAlignment, layout.AllowBiting);
         Dictionary<int, N3LinePlan>? activePlans = null; // 表示中のタブの表示時刻（行リストの時刻の下の段に出す）
-        _lineBounds.Clear();
+        _lineAreas.Clear();
+        _singleLineAreas.Clear();
         _singleLineRows.Clear();
         for (int t = 0; t < tabs.Count; t++)
         {
@@ -239,31 +248,8 @@ public partial class MainViewModel
                 int index = manual is not null ? resolver.FindIndex(manual)!.Value : resolver.Resolve(g.Count());
                 return (Count: g.Count(), Rows: g.Max(p => p.Value.Row), Layout: Math.Clamp(index, 0, layouts.Count - 1), Manual: manual is not null);
             });
-            // 1 行だけのページの段（ニコカラメーカー3 の出力の実測: 前のページの下の段の行がまだ出ているあいだに出るときだけ、
-            // 2 行分の上の段に上げる。「個別位置」「コーラス1行」のような 1 行のレイアウトでも上げる。次のページまでの余裕では決まらない）
-            var singleRows = new Dictionary<int, int>();
-            int? lowerOfPrev = null; // 前のページの下の段の行
-            int prevPageIndex = int.MinValue;
-            foreach (var g in structure.GroupBy(p => p.Value.PageIndex).OrderBy(g => g.Key))
-            {
-                if (g.Key != prevPageIndex + 1) lowerOfPrev = null;
-                prevPageIndex = g.Key;
-                var entries = g.OrderBy(e => e.Value.Row).ToList();
-                if (entries.Count == 1)
-                {
-                    var (single, singlePlan) = (entries[0].Key, entries[0].Value);
-                    bool up = lowerOfPrev is int lower && singlePlan.BeginMs < structure[lower].EndMs;
-                    singleRows[single] = up ? 2 : 1;
-                    lowerOfPrev = up ? null : single;
-                }
-                else
-                {
-                    lowerOfPrev = entries[0].Key; // 下から 1 行目
-                }
-            }
-            _singleLineRows[tabName] = singleRows;
-
             var items = new List<(int Index, PreviewLine Line)>();
+            var raisedItems = new Dictionary<int, PreviewLine>(); // 1 行だけのページの行を 2 行分の上の段に上げたもの
             foreach (var (index, plan) in structure.OrderBy(p => p.Key))
             {
                 var line = doc.Lines[index];
@@ -285,35 +271,87 @@ public partial class MainViewModel
                 var fonts = resolved[t][index];
                 if (fonts.Runs.Count == 0) continue;
                 var source = Source(line, fonts, SpacingOf(layout), delta, tabContext);
-                // 1 行だけのページは上で決めた段（2 行分の上の段に上げるときは、レイアウトが 1 行でも上げる）。
+                // 1 行だけのページは、下の段（下から 1 行目）と 2 行分の上の段（レイアウトが 1 行でも上げる）の両方を作り、段は後で決める。
                 // 行が多いページはレイアウトの行数を超えても積み上げる
                 int maxRow = Math.Max(layout.LineCount, page.Count);
-                bool isSingle = singleRows.TryGetValue(index, out int singleRow);
+                bool isSingle = page.Count == 1;
                 var preview = new PreviewLine(
                     source, plan.BeginMs, plan.EndMs, t, plan.PageIndex,
-                    isSingle ? singleRow : Math.Min(plan.Row, maxRow),
-                    isSingle ? singleRow : Math.Min(Math.Max(page.Rows, page.Count), maxRow),
+                    isSingle ? 1 : Math.Min(plan.Row, maxRow),
+                    isSingle ? 1 : Math.Min(Math.Max(page.Rows, page.Count), maxRow),
                     page.Count, layout, Array.Empty<N3WipeTimeline.Group>());
                 items.Add((index, preview));
+                if (isSingle) raisedItems[index] = preview with { Row = 2, RowsInPage = 2 };
                 if (t == active)
                 {
                     widths[index] = LineWidthValidator.Evaluate(index, source.GetLayout().Width, screenWidth, layout.HorizontalMarginPx);
                 }
             }
-            // 行の画面上の四角（左右はスマート水平配置で、ページの行を見て決める。字幕のプレビューと同じ並べ方）
-            var bounds = new Dictionary<int, N3LineBounds>();
+            // 行の画面上の場所（描画範囲・文字の枠・ページのレイアウト。左右はスマート水平配置で、ページの行を見て決める。字幕のプレビューと同じ並べ方）
+            N3LineArea AreaOf(PreviewLine preview, IReadOnlyList<PreviewLine> linesOfPage) =>
+                SubtitlePreviewView.AreaOf(preview, preview.Source.GetLayout(), screenWidth, screenHeight, linesOfPage, pages[preview.Page].Layout);
+            var areas = new Dictionary<int, N3LineArea>();
+            var singleAreas = new Dictionary<int, N3SingleLineAreas>();
             var pageLines = items.GroupBy(x => x.Line.Page).ToDictionary(g => g.Key, g => g.Select(x => x.Line).ToList());
             foreach (var (index, preview) in items)
             {
-                var (left, top, right, bottom) = SubtitlePreviewView.Bounds(preview, preview.Source.GetLayout(), screenWidth, screenHeight, pageLines[preview.Page]);
-                bounds[index] = new N3LineBounds((int)Math.Floor(left), (int)Math.Floor(top), (int)Math.Ceiling(right), (int)Math.Ceiling(bottom));
+                areas[index] = AreaOf(preview, pageLines[preview.Page]);
+                if (raisedItems.TryGetValue(index, out var raised))
+                {
+                    singleAreas[index] = new N3SingleLineAreas(areas[index], AreaOf(raised, new[] { raised }));
+                }
             }
-            _lineBounds[tabName] = bounds;
+            _lineAreas[tabName] = areas;
+            _singleLineAreas[tabName] = singleAreas;
 
-            // 表示時刻は、行の画面上の四角を当てて計算する（レイアウトで別の場所に出る前後のページの行は詰めない。設定で切れる）
+            // 表示時刻は、行の場所を当てて計算する（前後のページの行を場所で組にし、1 行だけのページの段も決める。設定で切れる）
             var show = CreateShowTimeSettings(tabName);
-            var plans = show.LineBounds is null ? structure : N3ShowTimePlanner.Plan(doc, show);
+            var plans = show.LineAreas is null ? structure : N3ShowTimePlanner.Plan(doc, show);
             if (t == active) activePlans = plans;
+
+            // 1 行だけのページの段: 描画範囲を使うときは表示時刻の計算で決めた段。使わないときはニコカラメーカー3 の出力の実測
+            // （前のページの下の段の行がまだ出ているあいだに出るときだけ、2 行分の上の段に上げる。「個別位置」「コーラス1行」のような
+            // 1 行のレイアウトでも上げる。次のページまでの余裕では決まらない）
+            var singleRows = new Dictionary<int, int>();
+            if (show.LineAreas is not null && !show.AlignFromTop)
+            {
+                foreach (int index in raisedItems.Keys)
+                {
+                    if (plans.TryGetValue(index, out var p)) singleRows[index] = p.Row >= 2 ? 2 : 1;
+                }
+            }
+            else
+            {
+                int? lowerOfPrev = null; // 前のページの下の段の行
+                int prevPageIndex = int.MinValue;
+                foreach (var g in plans.GroupBy(p => p.Value.PageIndex).OrderBy(g => g.Key))
+                {
+                    if (g.Key != prevPageIndex + 1) lowerOfPrev = null;
+                    prevPageIndex = g.Key;
+                    var entries = g.OrderBy(e => e.Value.Row).ToList();
+                    if (entries.Count == 1)
+                    {
+                        var (single, singlePlan) = (entries[0].Key, entries[0].Value);
+                        bool up = lowerOfPrev is int lower && singlePlan.BeginMs < plans[lower].EndMs;
+                        singleRows[single] = up ? 2 : 1;
+                        lowerOfPrev = up ? null : single;
+                    }
+                    else
+                    {
+                        lowerOfPrev = entries[0].Key; // 下から 1 行目
+                    }
+                }
+            }
+            _singleLineRows[tabName] = singleRows;
+            // 上の段に上げた行は、プレビューとチェックの場所も上の段のものにする
+            for (int k = 0; k < items.Count; k++)
+            {
+                var (index, _) = items[k];
+                if (singleRows.GetValueOrDefault(index) != 2 || !raisedItems.TryGetValue(index, out var raised)) continue;
+                items[k] = (index, raised);
+                if (singleAreas.TryGetValue(index, out var sa)) areas[index] = sa.Raised;
+            }
+
             foreach (var (index, preview) in items)
             {
                 if (!plans.TryGetValue(index, out var plan)) continue;
