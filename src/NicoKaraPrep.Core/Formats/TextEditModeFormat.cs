@@ -141,11 +141,12 @@ public static class TextEditModeFormat
         }
         if (digits == 0 || i >= s.Length || s[i] != '|') return false;
         i++;
-        // "mm:ss:cc]" 部分
-        string rest = "[" + s[i..Math.Min(s.Length, i + 9)];
-        if (!TimeTag.TryParseAt(rest, 0, out cs, out int tagLen) || tagLen != 10) return false;
+        // "mm:ss:cc]" 部分（0 秒より前は "-mm:ss:cc]"）
+        int body = i < s.Length && s[i] == '-' ? 10 : 9;
+        string rest = "[" + s[i..Math.Min(s.Length, i + body)];
+        if (!TimeTag.TryParseAt(rest, 0, out cs, out int tagLen) || tagLen != body + 1) return false;
         check = n;
-        length = i + 9 - pos;
+        length = i + body - pos;
         return true;
     }
 
@@ -338,7 +339,7 @@ public static class TextEditModeFormat
                     var g = group[k];
                     sb.Append(TagPrefix(g, options));
                     sb.Append(EscapeRuby(g.Ruby ?? ""));
-                    foreach (int aux in g.AuxTimeTagsCs) sb.Append(TimeTag.Format(aux));
+                    foreach (int aux in g.AuxTimeTagsCs) sb.Append(TimeTag.FormatSigned(aux));
                 }
                 sb.Append('}');
                 i = j;
@@ -365,21 +366,24 @@ public static class TextEditModeFormat
             i++;
         }
 
-        if (line.EndTimeCs is int end) sb.Append(TimeTag.Format(end));
+        if (line.EndTimeCs is int end) sb.Append(TimeTag.FormatSigned(end));
         return sb.ToString();
     }
 
-    /// <summary>文字の直前に付くタグ表現（[n|mm:ss:cc] / [mm:ss:cc] / [n]）。</summary>
+    /// <summary>
+    /// 文字の直前に付くタグ表現（[n|mm:ss:cc] / [mm:ss:cc] / [n]）。0 秒より前の時刻は [-mm:ss:cc] のまま書く
+    /// （行の編集欄・作業状態でマイナスを保つため。ファイルへ出すときは <see cref="NegativeTimes.ForOutput"/> で 0 にした写しを書く）。
+    /// </summary>
     private static string TagPrefix(CharUnit c, TextEditWriteOptions options)
     {
         if (c.TimeCs is int t)
         {
             if (options.IncludeChecks && c.CheckCount > 0)
             {
-                string tag = TimeTag.Format(t);
+                string tag = TimeTag.FormatSigned(t);
                 return $"[{c.CheckCount}|{tag[1..]}";
             }
-            return TimeTag.Format(t);
+            return TimeTag.FormatSigned(t);
         }
         if (options.IncludeChecks && c.CheckCount > 0)
         {

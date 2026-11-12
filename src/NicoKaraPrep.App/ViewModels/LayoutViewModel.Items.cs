@@ -54,7 +54,7 @@ public static class LayoutTexts
     };
 
     /// <summary>時刻 ms の表示（行リストと同じ mm:ss:cc）。</summary>
-    public static string Time(int ms) => TimeTag.Format(N3ShowTimeAdjuster.ToCs(ms)).Trim('[', ']');
+    public static string Time(int ms) => TimeTag.FormatSigned(N3ShowTimeAdjuster.ToCs(ms)).Trim('[', ']');
 
     /// <summary>短くした歌詞（一覧用）。</summary>
     public static string Excerpt(string text, int max = 24)

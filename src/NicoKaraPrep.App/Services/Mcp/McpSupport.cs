@@ -51,7 +51,7 @@ internal static class McpResults
 internal static partial class McpTime
 {
     /// <summary>10ms 単位の時刻 → "mm:ss:cc"。</summary>
-    public static string Format(int cs) => TimeTag.Format(cs).Trim('[', ']');
+    public static string Format(int cs) => TimeTag.FormatSigned(cs).Trim('[', ']');
 
     /// <summary>ms の時刻 → "mm:ss:cc"（10ms 単位に四捨五入。行リスト・行設定と同じ）。</summary>
     public static string FormatMs(int ms) => Format(N3ShowTimeAdjuster.ToCs(ms));

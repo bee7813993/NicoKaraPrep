@@ -203,14 +203,19 @@ public sealed partial class MainWindow
         MediaPanel.Header = right ? MediaPanelHeaderNarrow : MediaPanelHeaderWide;
         PlayerResizeHandle.Visibility = right ? Visibility.Collapsed : Visibility.Visible;
 
-        // 再生の操作: 右の列は狭いので、位置のスライダーを 1 段目に、ボタンなどを 2 段目に
+        // 再生の操作: 右の列は狭いので、位置のスライダーを 1 段目に、ボタンなどを 2 段目に。
+        // 時刻ずらしのボタンは 1 段目の右端（2 段目に入れると、いちばん狭い列の幅に収まらない）
         foreach (var child in PlayerBar.Children)
         {
             if (child is FrameworkElement element && !ReferenceEquals(element, PlayerSeekSlider)) Grid.SetRow(element, right ? 1 : 0);
         }
+        int lastColumn = PlayerBar.ColumnDefinitions.Count - 1;
+        Grid.SetRow(TimeShiftToggle, 0);
+        Grid.SetColumn(TimeShiftToggle, right ? lastColumn : 5);
         Grid.SetColumn(PlayerSeekSlider, right ? 0 : 2);
-        Grid.SetColumnSpan(PlayerSeekSlider, right ? PlayerBar.ColumnDefinitions.Count : 1);
+        Grid.SetColumnSpan(PlayerSeekSlider, right ? lastColumn : 1);
         PlayerVolumeSlider.Width = right ? VolumeSliderWidthNarrow : VolumeSliderWidth;
+        ApplyTimeShiftPlacement(right);
 
         if (!right) PlayerHost.Height = Math.Clamp(ViewModel.Settings.PlayerHeightPx, MinPlayerHeight, MaxPlayerHeight);
         ApplySidePanelVisibility(ViewModel.ViewMode);

@@ -481,6 +481,7 @@ public partial class MainViewModel
         var exportTabs = GetN3ProjExportTabs();
         var startFonts = GetTabStartFontNames(exportTabs);
         var tabs = new List<N3ProjExportTab>();
+        int clamped = 0; // 0 秒にして書いた 0 秒より前のタイムタグの数
         for (int k = 0; k < exportTabs.Count; k++)
         {
             var tab = exportTabs[k];
@@ -490,10 +491,12 @@ public partial class MainViewModel
             {
                 lrcPath = Path.Combine(dir, Path.GetFileNameWithoutExtension(lrcName) + "_ニコカラ.lrc");
             }
+            var document = NegativeTimes.ForOutput(tab.Document, out int tabClamped); // 0 秒より前の時刻は 0 秒にして書く
+            clamped += tabClamped;
             tabs.Add(new N3ProjExportTab
             {
                 Name = tab.Name,
-                Document = tab.Document,
+                Document = document,
                 LyricsPath = lrcPath,
                 LayoutName = settings.TabLayouts.GetValueOrDefault(tab.Name) is { Length: > 0 } layout ? layout : null,
                 TopLong = settings.TabTopLong.TryGetValue(tab.Name, out bool topLong) ? topLong : null,
@@ -557,7 +560,7 @@ public partial class MainViewModel
             ? $"。ページの文字の大きさのために作ったフォント設定 {names.Count} 件（{string.Join("・", names.Take(3))}{(names.Count > 3 ? " など" : "")}）"
             : "";
         StatusText = $"ニコカラメーカー3 プロジェクトを書き出しました: {Path.GetFileName(projectPath)}" +
-                     $"（歌詞 {result.LyricsLineCount} 行・歌詞ファイル {result.LyricsPaths.Count} 件・フォント設定 {result.FontSetCount} 件{sized}）{warn}";
+                     $"（歌詞 {result.LyricsLineCount} 行・歌詞ファイル {result.LyricsPaths.Count} 件・フォント設定 {result.FontSetCount} 件{sized}）{ClampedNote(clamped)}{warn}";
         return result;
     }
 

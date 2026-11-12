@@ -79,8 +79,8 @@ public partial class MainViewModel
         string where = r.OwnLine ? "定型文だけの行として" : "";
         string time = r.StartCs is int s && r.EndCs is int e
             ? r.OwnLine && !r.Squeezed
-                ? $"タグ {TimeTag.Format(s)} 〜 {TimeTag.Format(e)}、画面に出るのは {Plain(s - timing.LeadCs)} 〜 {Plain(e + timing.TailCs)}"
-                : $"タグ {TimeTag.Format(s)} 〜 {TimeTag.Format(e)}"
+                ? $"タグ {TimeTag.FormatSigned(s)} 〜 {TimeTag.FormatSigned(e)}、画面に出るのは {Plain(s - timing.LeadCs)} 〜 {Plain(e + timing.TailCs)}"
+                : $"タグ {TimeTag.FormatSigned(s)} 〜 {TimeTag.FormatSigned(e)}"
             : "前後にタイムタグのある歌が無いため、時刻は付けていません";
         string squeezed = r.Squeezed ? "。前後の間が短いので、前後の歌に合わせました" : "";
         string songEnd = r.AfterLast && MediaDurationCs is null ? "。メディアを開いていないので 3 秒にしました（開いていれば曲の終わりまで）" : "";

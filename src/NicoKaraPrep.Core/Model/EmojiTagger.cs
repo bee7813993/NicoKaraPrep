@@ -199,7 +199,8 @@ public static class EmojiTagger
 
             if (blockTimes[b] is not int baseT) continue; // 基準にできるタグがない → タグは付けない
 
-            int lead = Math.Max(0, baseT - settings.LeadCs);
+            // 0 秒より前になってもマイナスのまま持つ（保存・書き出しでは 0 秒。字幕全体の時刻を遅らせたとき、この値から計算する。NegativeTimes）
+            int lead = baseT - settings.LeadCs;
 
             if (settings.PerEmoji)
             {

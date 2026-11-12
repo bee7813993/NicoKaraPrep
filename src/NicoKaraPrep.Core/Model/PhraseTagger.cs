@@ -108,7 +108,7 @@ public static class PhraseTagger
         {
             // 間が短くて入らない: 前後の歌に合わせる
             squeezed = true;
-            start = prevEnd ?? (nextStart is int n0 ? Math.Max(0, n0 - timing.AloneCs) : null);
+            start = prevEnd ?? (nextStart is int n0 ? n0 - timing.AloneCs : null); // 0 秒より前はマイナスのまま（NegativeTimes）
             end = nextStart ?? (start is int s2 ? s2 + timing.AloneCs : null);
             if (start is int s3 && end is int e3 && e3 < s3) end = s3;
         }
