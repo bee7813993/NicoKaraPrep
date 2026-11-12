@@ -39,11 +39,28 @@ public sealed class N3ShowTimeSettings
     public bool AlignFromTop { get; set; }
 
     /// <summary>
-    /// 行の画面上の四角（字幕の画面の px。行の添字 → 四角）。前後のページの同じ段の行でも、四角が重ならない組は
-    /// 別の場所に出るものとして詰めない（レイアウトで位置が違う行。ニコカラメーカー3 には無い NicoKaraPrep の機能）。
-    /// null = ニコカラメーカー3 と同じく段だけで組にする。四角の無い行も段だけで決める（<see cref="N3RowPlacement.SamePlace"/>）。
+    /// 行の画面上の場所（行の添字 → 描画範囲・文字の枠・ページのレイアウト。字幕のプレビューと同じ並べ方）。
+    /// 前後のページの行は、場所で組にして詰める（<see cref="N3RowPlacement.Paired"/>: 同じ段は描画範囲が少しでも重なれば組、
+    /// 段が違えばレイアウトが違うページの間で文字の枠が重なるときだけ組。ニコカラメーカー3 には無い NicoKaraPrep の機能）。
+    /// null = ニコカラメーカー3 と同じく段だけで組にする。場所の無い行も段だけで決める（<see cref="N3RowPlacement.Pairs"/>）。
+    /// 1 行だけのページの行は、<see cref="SingleLineAreas"/> があればそちらを使う。
     /// </summary>
-    public IReadOnlyDictionary<int, N3LineBounds>? LineBounds { get; set; }
+    public IReadOnlyDictionary<int, N3LineArea>? LineAreas { get; set; }
+
+    /// <summary>
+    /// 1 行だけのページの行の、下の段と上の段の場所（<see cref="LineAreas"/> を使うときだけ使う。上から対応付けでは使わない）。
+    /// ある行は、上の段に上げる・下の段のままの両方で表示時刻を計算し、ニコカラメーカー3 の段の決め方（前のページの下の段の行が
+    /// まだ出ているあいだに出るときだけ上げる）と合うほうを選ぶ（両方合えば表示開始の早いほう）。
+    /// </summary>
+    public IReadOnlyDictionary<int, N3SingleLineAreas>? SingleLineAreas { get; set; }
+
+    /// <summary>行が段 <paramref name="row"/> に出るときの場所（分からなければ null。<see cref="LineAreas"/> が null なら null）。</summary>
+    public N3LineArea? PlacedArea(int line, int row)
+    {
+        if (LineAreas is null) return null;
+        if (!AlignFromTop && SingleLineAreas?.TryGetValue(line, out var single) == true) return row >= 2 ? single.Raised : single.Lower;
+        return LineAreas.TryGetValue(line, out var a) ? a : null;
+    }
 
     /// <summary>1 行だけのページが上段へ昇格するのに必要な余裕（ms）。</summary>
     public int SingleLinePromoteGapMs { get; set; }
@@ -100,16 +117,15 @@ public static class N3ShowTimePlanner
     public static Dictionary<int, N3LinePlan> Plan(LyricsDocument doc, N3ShowTimeSettings s)
     {
         var pages = doc.GetPages(s.PageMode, s.FixedLineCount);
-        var begins = new Dictionary<int, int>();
-        var ends = new Dictionary<int, int>();
+        var state = new PairState();
+        var begins = state.Begins;
+        var ends = state.Ends;
         var shortEnds = new Dictionary<int, int>();   // 上段を長めに表示しない場合の表示終了（自分の歌唱終了＋ワイプ後）
         var firstMs = new Dictionary<int, int>();     // 行の歌唱開始（行内のタグの最小。絵文字の先行タグを含む）
         var lastMs = new Dictionary<int, int>();      // 行の歌唱終了（行内のタグの最大）
         var manualBegin = new HashSet<int>();
         var manualEnd = new HashSet<int>();
-        var adjusted = new HashSet<int>();
         var pageOf = new Dictionary<int, int>();
-        var emojiYields = new Dictionary<int, int>(); // 絵文字の先行を譲る規則で表示開始が遅れた量
 
         // 1) 希望表示区間
         for (int pi = 0; pi < pages.Count; pi++)
@@ -159,50 +175,141 @@ public static class N3ShowTimePlanner
         int? DisplayEnd(int i) => ends.TryGetValue(i, out int e) ? e : null;
         int? DisplayStart(int i) => begins.TryGetValue(i, out int b) ? b : null;
 
-        var rowMaps = new Dictionary<int, int>[pages.Count];
+        // 行の段（下から／上から k 行目）。1 行だけのページは、描画範囲を使うときは下の段から始めて、前のページとの組で決め直す
+        var rowOf = new Dictionary<int, int>();
         for (int pi = 0; pi < pages.Count; pi++)
         {
-            rowMaps[pi] = PageRowMap.Build(pages, pi, s.AlignFromTop, DisplayEnd, DisplayStart, s.SingleLinePromoteGapMs);
+            var map = PageRowMap.Build(pages, pi, s.AlignFromTop, DisplayEnd, DisplayStart, s.SingleLinePromoteGapMs);
+            foreach (var (row, line) in map) rowOf[line] = row;
+            if (SingleLineOptions(pages[pi], s) is int single) rowOf[single] = 1;
+        }
+
+        // 前のページの行と次のページの行の組を詰める（trial があれば、その行をその段に置いたものとして組を決める）
+        void ResolvePage(PairState st, int p, (int Line, int Row)? trial = null)
+        {
+            int RowOf(int i) => trial is { } t && t.Line == i ? t.Row : rowOf[i];
+            Func<int, int, N3LineArea?>? areaAt = s.LineAreas is null ? null : s.PlacedArea;
+            var pairs = N3RowPlacement.Pairs(
+                pages[p].Select(i => (i, RowOf(i))), pages[p + 1].Select(i => (i, RowOf(i))), areaAt);
+            // 次の行ごとに、前の行は表示終了の遅いものから詰める（遅い行に合わせて次の行を遅らせれば、ほかの前の行は削らずに済む）
+            foreach (var group in pairs.GroupBy(x => x.Next))
+            {
+                var prevs = group.Select(x => x.Prev)
+                    .OrderByDescending(prev => st.Ends.TryGetValue(prev, out int e) ? e : int.MinValue)
+                    .ThenBy(RowOf)
+                    .ToList();
+                foreach (int prev in prevs) ResolveOne(st, prev, group.Key);
+            }
+        }
+
+        void ResolveOne(PairState st, int prev, int next)
+        {
+            if (!st.Ends.TryGetValue(prev, out int prevEnd) || !st.Begins.TryGetValue(next, out int nextBegin)) return;
+            if (!lastMs.TryGetValue(prev, out int prevLast) || !firstMs.TryGetValue(next, out int nextFirst)) return;
+
+            int prevEndShort = shortEnds.GetValueOrDefault(prev, prevEnd);
+            bool prevEndManual = manualEnd.Contains(prev);
+            bool nextBeginManual = manualBegin.Contains(next);
+            var (newEnd, newBegin) = ResolvePair(
+                prevEnd, prevEndShort, prevLast, prevEndManual,
+                nextBegin, nextFirst, nextBeginManual, s);
+            if (YieldingFirstMs(doc.Lines[next], nextFirst, nextBeginManual, s) is int realFirst)
+            {
+                // 絵文字の先行を譲る（規則なしの開始との差を、遅れた量として残す。前の行が複数あれば大きいほう）
+                int plainBegin = newBegin;
+                int minPre = EmojiMinPreMs(doc.Lines[next], realFirst, s);
+                (newEnd, newBegin) = ResolvePairYieldingLead(prevEnd, prevEndShort, prevLast, prevEndManual, nextBegin, realFirst, minPre, s);
+                if (newBegin > plainBegin) st.EmojiYields[next] = Math.Max(st.EmojiYields.GetValueOrDefault(next), newBegin - plainBegin);
+            }
+            if (newEnd != prevEnd)
+            {
+                st.Ends[prev] = newEnd;
+                st.Adjusted.Add(prev);
+            }
+            if (newBegin != nextBegin)
+            {
+                st.Begins[next] = newBegin;
+                st.Adjusted.Add(next);
+            }
         }
 
         for (int p = 0; p + 1 < pages.Count; p++)
         {
-            foreach (var (row, prev) in rowMaps[p])
+            if (SingleLineOptions(pages[p + 1], s) is not int single)
             {
-                if (!rowMaps[p + 1].TryGetValue(row, out int next)) continue;
-                if (!N3RowPlacement.SamePlace(s.LineBounds, prev, next)) continue; // レイアウトで別の場所に出る組は詰めない
-                if (!ends.TryGetValue(prev, out int prevEnd) || !begins.TryGetValue(next, out int nextBegin)) continue;
-                if (!lastMs.TryGetValue(prev, out int prevLast) || !firstMs.TryGetValue(next, out int nextFirst)) continue;
-
-                int prevEndShort = shortEnds.GetValueOrDefault(prev, prevEnd);
-                bool prevEndManual = manualEnd.Contains(prev);
-                bool nextBeginManual = manualBegin.Contains(next);
-                var (newEnd, newBegin) = ResolvePair(
-                    prevEnd, prevEndShort, prevLast, prevEndManual,
-                    nextBegin, nextFirst, nextBeginManual, s);
-                if (YieldingFirstMs(doc.Lines[next], nextFirst, nextBeginManual, s) is int realFirst)
-                {
-                    // 絵文字の先行を譲る（規則なしの開始との差を、遅れた量として残す）
-                    int plainBegin = newBegin;
-                    int minPre = EmojiMinPreMs(doc.Lines[next], realFirst, s);
-                    (newEnd, newBegin) = ResolvePairYieldingLead(prevEnd, prevEndShort, prevLast, prevEndManual, nextBegin, realFirst, minPre, s);
-                    if (newBegin > plainBegin) emojiYields[next] = newBegin - plainBegin;
-                }
-                if (newEnd != prevEnd)
-                {
-                    ends[prev] = newEnd;
-                    adjusted.Add(prev);
-                }
-                if (newBegin != nextBegin)
-                {
-                    begins[next] = newBegin;
-                    adjusted.Add(next);
-                }
+                ResolvePage(state, p);
+                continue;
             }
+
+            // 1 行だけのページ: 下の段のまま・上の段に上げる の両方で詰めてみて、ニコカラメーカー3 の段の決め方と合うほうを選ぶ
+            // （前のページの下の段の行がまだ出ているあいだに出るときだけ上の段に上がる。両方合えば表示開始の早いほう。
+            // 　どちらも合わなければ、下の段で詰めた時刻のまま、その時刻で実際に出る上の段にする）
+            int? lower = pages[p].Where(i => rowOf[i] == 1).Select(i => (int?)i).FirstOrDefault();
+            bool StillShown(PairState st) =>
+                lower is int lw && st.Begins.TryGetValue(single, out int b) && st.Ends.TryGetValue(lw, out int e) && b < e;
+            var down = state.Clone();
+            ResolvePage(down, p, (single, 1));
+            var up = state.Clone();
+            ResolvePage(up, p, (single, 2));
+            bool downOk = !StillShown(down);
+            bool upOk = StillShown(up);
+            bool raise = downOk && upOk
+                ? up.Begins.GetValueOrDefault(single) < down.Begins.GetValueOrDefault(single)
+                : !downOk;
+            state = raise && upOk ? up : down;
+            rowOf[single] = raise ? 2 : 1;
         }
 
         // 3) 結果
-        return BuildPlans(begins, ends, manualBegin, manualEnd, adjusted, pageOf, rowMaps, emojiYields);
+        return BuildPlans(state, manualBegin, manualEnd, pageOf, rowOf);
+    }
+
+    /// <summary>
+    /// 1 行だけのページで、段を表示時刻の計算で決める行（描画範囲を使い、下から対応付けで、下の段・上の段の描画範囲が分かる行）。
+    /// それ以外は null（段は <see cref="PageRowMap"/> で決める。ニコカラメーカー3 と同じ）。
+    /// </summary>
+    private static int? SingleLineOptions(List<int> page, N3ShowTimeSettings s) =>
+        page.Count == 1 && s.LineAreas is not null && !s.AlignFromTop && s.SingleLineAreas?.ContainsKey(page[0]) == true
+            ? page[0]
+            : null;
+
+    /// <summary>
+    /// 計算した表示時刻（<see cref="Plan"/> の結果のページと段）での、前後のページの行の組（前の行, 次の行）。
+    /// 表示時刻の計算で詰めた組と同じ（チェック・行設定の説明で使う）。
+    /// </summary>
+    public static List<(int Prev, int Next)> Pairs(IReadOnlyDictionary<int, N3LinePlan> plans, N3ShowTimeSettings s)
+    {
+        var byPage = plans.Values
+            .Where(p => p.Row > 0)
+            .GroupBy(p => p.PageIndex)
+            .ToDictionary(g => g.Key, g => g.Select(p => (p.LineIndex, p.Row)).ToList());
+        Func<int, int, N3LineArea?>? areaAt = s.LineAreas is null ? null : s.PlacedArea;
+        var pairs = new List<(int, int)>();
+        foreach (var (page, lines) in byPage.OrderBy(x => x.Key))
+        {
+            if (!byPage.TryGetValue(page + 1, out var nextLines)) continue;
+            pairs.AddRange(N3RowPlacement.Pairs(lines, nextLines, areaAt));
+        }
+        return pairs;
+    }
+
+    /// <summary>表示時刻を詰めている途中の値（1 行だけのページの段を決めるとき、写しで両方を試す）。</summary>
+    private sealed class PairState
+    {
+        public Dictionary<int, int> Begins { get; private init; } = new();
+        public Dictionary<int, int> Ends { get; private init; } = new();
+        public HashSet<int> Adjusted { get; private init; } = new();
+
+        /// <summary>絵文字の先行を譲る規則で表示開始が遅れた量。</summary>
+        public Dictionary<int, int> EmojiYields { get; private init; } = new();
+
+        public PairState Clone() => new()
+        {
+            Begins = new(Begins),
+            Ends = new(Ends),
+            Adjusted = new(Adjusted),
+            EmojiYields = new(EmojiYields),
+        };
     }
 
     /// <summary>
@@ -407,26 +514,17 @@ public static class N3ShowTimePlanner
         ResolvePair(prevEnd, prevEndShort, prevLast, prevEndManual, nextBegin, nextFirst, nextBeginManual, s);
 
     private static Dictionary<int, N3LinePlan> BuildPlans(
-        Dictionary<int, int> begins,
-        Dictionary<int, int> ends,
+        PairState state,
         HashSet<int> manualBegin,
         HashSet<int> manualEnd,
-        HashSet<int> adjusted,
         Dictionary<int, int> pageOf,
-        Dictionary<int, int>[] rowMaps,
-        Dictionary<int, int> emojiYields)
+        Dictionary<int, int> rowOf)
     {
-        var rowOf = new Dictionary<int, int>();
-        foreach (var map in rowMaps)
-        {
-            foreach (var (row, line) in map) rowOf[line] = row;
-        }
-
         var plans = new Dictionary<int, N3LinePlan>();
-        foreach (var (i, begin) in begins)
+        foreach (var (i, begin) in state.Begins)
         {
-            plans[i] = new N3LinePlan(i, begin, ends[i], manualBegin.Contains(i), manualEnd.Contains(i),
-                pageOf.GetValueOrDefault(i), rowOf.GetValueOrDefault(i), adjusted.Contains(i), emojiYields.GetValueOrDefault(i));
+            plans[i] = new N3LinePlan(i, begin, state.Ends[i], manualBegin.Contains(i), manualEnd.Contains(i),
+                pageOf.GetValueOrDefault(i), rowOf.GetValueOrDefault(i), state.Adjusted.Contains(i), state.EmojiYields.GetValueOrDefault(i));
         }
         return plans;
     }

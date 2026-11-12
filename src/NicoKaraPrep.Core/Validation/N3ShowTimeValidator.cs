@@ -34,15 +34,6 @@ public static class N3ShowTimeValidator
         N3ShowTimeSettings settings,
         IReadOnlySet<(int Prev, int Next)>? skipPairs = null)
     {
-        // ページ → 段 → 行
-        var pages = new Dictionary<int, Dictionary<int, int>>();
-        foreach (var plan in plans.Values)
-        {
-            if (plan.Row <= 0 || plan.LineIndex < 0 || plan.LineIndex >= doc.Lines.Count) continue;
-            if (!pages.TryGetValue(plan.PageIndex, out var rows)) pages[plan.PageIndex] = rows = new Dictionary<int, int>();
-            rows[plan.Row] = plan.LineIndex;
-        }
-
         // 自動調整の値が、いま実行し直しても同じか（規則が決めた値か）を見るための計算（自動調整の値・読み込んだ値があるときだけ）
         var fresh = N3ShowTimeAdjuster.HasRecomputable(doc) ? N3ShowTimeAdjuster.PlanFresh(doc, settings) : null;
 
@@ -62,23 +53,22 @@ public static class N3ShowTimeValidator
 
         var paired = new HashSet<int>();       // 組の次の行として調べた行
         var prevCovered = new HashSet<int>();  // 組の前の行としてワイプの途中で消えるエラーを出した行・出さない組の前の行
-        foreach (var (page, prevRows) in pages.OrderBy(p => p.Key))
+        var emojiWarned = new HashSet<int>();  // 絵文字が下限より短くなる警告を出した次の行（前の行が複数あっても 1 つだけ出す）
+        // 組は表示時刻の計算で詰めた組と同じ（場所で組にする。場所を使わなければ同じ段どうし）
+        foreach (var (prev, next) in N3ShowTimePlanner.Pairs(plans, settings))
         {
-            if (!pages.TryGetValue(page + 1, out var nextRows)) continue;
-            foreach (var (row, prev) in prevRows.OrderBy(r => r.Key))
+            if (prev < 0 || prev >= doc.Lines.Count || next < 0 || next >= doc.Lines.Count) continue;
+            paired.Add(next);
+            if (skipPairs?.Contains((prev, next)) == true)
             {
-                if (!nextRows.TryGetValue(row, out int next)) continue;
-                if (!N3RowPlacement.SamePlace(settings.LineBounds, prev, next)) continue; // レイアウトで別の場所に出る組（組の無い行と同じに扱う）
-                paired.Add(next);
-                if (skipPairs?.Contains((prev, next)) == true)
-                {
-                    prevCovered.Add(prev);
-                    continue;
-                }
-                if (CheckPair(doc, plans[prev], plans[next], page, row, settings, fresh, lateBegin.Contains(next)) is not { } issue) continue;
-                issues.Add(issue);
-                if (issue.Severity == IssueSeverity.Error) prevCovered.Add(prev);
+                prevCovered.Add(prev);
+                continue;
             }
+            bool skipEmoji = lateBegin.Contains(next) || emojiWarned.Contains(next);
+            if (CheckPair(doc, plans[prev], plans[next], settings, fresh, skipEmoji) is not { } issue) continue;
+            issues.Add(issue);
+            if (issue.Severity == IssueSeverity.Error) prevCovered.Add(prev);
+            else emojiWarned.Add(next);
         }
 
         foreach (var plan in plans.Values.OrderBy(p => p.LineIndex))
@@ -141,7 +131,7 @@ public static class N3ShowTimeValidator
     private static string Format(int ms) => TimeTag.Format((int)Math.Round(ms / 10.0, MidpointRounding.AwayFromZero));
 
     private static ValidationIssue? CheckPair(
-        LyricsDocument doc, N3LinePlan prev, N3LinePlan next, int page, int row, N3ShowTimeSettings s,
+        LyricsDocument doc, N3LinePlan prev, N3LinePlan next, N3ShowTimeSettings s,
         IReadOnlyDictionary<int, N3LinePlan>? fresh, bool skipEmojiWarning)
     {
         var prevLine = doc.Lines[prev.LineIndex];
@@ -150,7 +140,7 @@ public static class N3ShowTimeValidator
         var shrinks = s.YieldsEmojiLead
             ? N3EmojiLead.Describe(nextLine, next.BeginMs, s.LeadMatcher)
             : Array.Empty<(double FromSec, double ToSec)>();
-        string where = $"{next.LineIndex + 1}行目（ページ{page + 1}→{page + 2}・{(s.AlignFromTop ? "上" : "下")}から{row}行目）";
+        string where = $"{next.LineIndex + 1}行目（ページ{prev.PageIndex + 1}→{next.PageIndex + 1}・{N3RowPlacement.RowLabel(s.AlignFromTop, prev.Row, next.Row)}）";
         N3LinePlan? freshNext = null, freshPrev = null;
         fresh?.TryGetValue(next.LineIndex, out freshNext);
         fresh?.TryGetValue(prev.LineIndex, out freshPrev);

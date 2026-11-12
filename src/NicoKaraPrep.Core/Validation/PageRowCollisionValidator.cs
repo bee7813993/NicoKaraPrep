@@ -60,10 +60,12 @@ public sealed class PageCollisionSettings
     public IReadOnlyDictionary<int, int>? LineShowBeginCs { get; set; }
 
     /// <summary>
-    /// 行の画面上の四角（字幕の画面の px）。前後のページの同じ段の行でも、四角が重ならない組は別の場所に出るので知らせない
-    /// （レイアウトで位置が違う行。ニコカラメーカー3 には無い NicoKaraPrep の機能。null = 段だけで組にする）。
+    /// 行の画面上の場所（描画範囲・文字の枠・ページのレイアウト）。前後のページの行は、場所で組にして比べる
+    /// （<see cref="N3RowPlacement.Paired"/>: 同じ段は描画範囲が少しでも重なれば組、段が違えばレイアウトが違うページの間で
+    /// 文字の枠が重なるときだけ組。組にならない行は別の場所に出るので知らせない。
+    /// ニコカラメーカー3 には無い NicoKaraPrep の機能。null = 段だけで組にする。場所の無い行も段だけで決める）。
     /// </summary>
-    public IReadOnlyDictionary<int, N3LineBounds>? LineBounds { get; set; }
+    public IReadOnlyDictionary<int, N3LineArea>? LineAreas { get; set; }
 
     /// <summary>
     /// 1 行だけのページの行が画面の何段目（下から）に出るか（行の添字 → 段。字幕のプレビューで決めたもの）。
@@ -143,7 +145,8 @@ public static class PageRowMap
 ///
 /// 下から対応付けモードでは、1 行だけのページはニコカラメーカーの仕様に合わせて
 /// 「次ページの上段行の表示開始まで十分時間がある場合、下から 2 行目に表示される」
-/// ものとして扱う。
+/// ものとして扱う（字幕のプレビューで決めた段（<see cref="PageCollisionSettings.SingleLineRows"/>）があればそちら）。
+/// 行の場所（<see cref="PageCollisionSettings.LineAreas"/>）が分かる行どうしは、場所で組にする（<see cref="N3RowPlacement.Paired"/>）。
 /// </summary>
 public static class PageRowCollisionValidator
 {
@@ -177,14 +180,17 @@ public static class PageRowCollisionValidator
             rowMaps[i] = PageRowMap.Build(pages, i, settings.AlignFromTop, DisplayEnd, DisplayStart, settings.SingleLinePromoteGapCs, settings.SingleLineRows);
         }
 
+        // 場所が分かる行どうしは場所で組にする（場所を使わなければ同じ段どうし）
+        Func<int, int, N3LineArea?>? areaAt = settings.LineAreas is { } la
+            ? (line, _) => la.TryGetValue(line, out var a) ? a : null
+            : null;
         for (int p = 0; p + 1 < pages.Count; p++)
         {
-            foreach (var (pos, prevLineIdx) in rowMaps[p])
+            var pairs = N3RowPlacement.Pairs(
+                rowMaps[p].Select(x => (x.Value, x.Key)), rowMaps[p + 1].Select(x => (x.Value, x.Key)), areaAt);
+            var rowOf = rowMaps[p].Concat(rowMaps[p + 1]).ToDictionary(x => x.Value, x => x.Key);
+            foreach (var (prevLineIdx, nextLineIdx) in pairs)
             {
-                // 同じ画面位置に次ページの行が来る場合だけ比較する
-                if (!rowMaps[p + 1].TryGetValue(pos, out int nextLineIdx)) continue;
-                if (!N3RowPlacement.SamePlace(settings.LineBounds, prevLineIdx, nextLineIdx)) continue; // レイアウトで別の場所に出る組
-
                 if (DisplayEnd(prevLineIdx) is not int displayEnd) continue;
                 if (DisplayStart(nextLineIdx) is not int displayStart) continue;
 
@@ -192,7 +198,7 @@ public static class PageRowCollisionValidator
                 int allowed = Math.Max(0, settings.AllowedOverlapCs);
                 if (overlap <= allowed) continue; // 重ねてよい時間まで（重ねない設定なら、重ならない組）
 
-                string rowLabel = settings.AlignFromTop ? $"上から{pos}行目" : $"下から{pos}行目";
+                string rowLabel = N3RowPlacement.RowLabel(settings.AlignFromTop, rowOf[prevLineIdx], rowOf[nextLineIdx]);
                 var severity = overlap - allowed > settings.ErrorThresholdCs ? IssueSeverity.Error : IssueSeverity.Warning;
                 string allowedNote = allowed > 0 ? $"・重ねてよいのは {allowed / 100.0:0.0#} 秒まで" : "";
                 issues.Add(new ValidationIssue(

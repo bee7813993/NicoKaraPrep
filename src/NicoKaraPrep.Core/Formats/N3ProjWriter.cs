@@ -666,7 +666,8 @@ public static class N3ProjWriter
         SingleLinePromoteGapMs = s.SingleLinePromoteGapMs,
         EmojiLeadYield = s.EmojiLeadYield,
         LeadMatcher = s.LeadMatcher,
-        LineBounds = s.LineBounds,
+        LineAreas = s.LineAreas,
+        SingleLineAreas = s.SingleLineAreas,
     };
 
     // ------------------------------------------------------------ レイアウト選択（行数）

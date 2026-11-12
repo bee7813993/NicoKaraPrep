@@ -21,7 +21,7 @@ public partial class MainViewModel
     /// </summary>
     /// <param name="tabName">タブの名前（そのタブの上段の表示・絵文字・行の画面上の範囲を使う。null = 表示中のタブの絵文字だけ）。</param>
     /// <param name="withBounds">
-    /// 行の画面上の四角（<see cref="N3ShowTimeSettings.LineBounds"/>。字幕のプレビューを作ったときのもの）を当てるか。
+    /// 行の画面上の場所（<see cref="N3ShowTimeSettings.LineAreas"/>。字幕のプレビューを作ったときのもの）を当てるか。
     /// 四角を作るとき（ページ・段だけを決める計算）は false。
     /// </param>
     public N3ShowTimeSettings CreateShowTimeSettings(string? tabName = null, bool withBounds = true) => new()
@@ -37,7 +37,8 @@ public partial class MainViewModel
         AlignFromTop = Settings.CollisionAlignFromTop,
         EmojiLeadYield = Settings.N3EmojiLeadYield,
         LeadMatcher = CreateEmojiMatcherFor(DocumentOfTab(tabName)),
-        LineBounds = withBounds && tabName is not null && Settings.N3LayoutAwareRows ? _lineBounds.GetValueOrDefault(tabName) : null,
+        LineAreas = withBounds && tabName is not null && Settings.N3LayoutAwareRows ? _lineAreas.GetValueOrDefault(tabName) : null,
+        SingleLineAreas = withBounds && tabName is not null && Settings.N3LayoutAwareRows ? _singleLineAreas.GetValueOrDefault(tabName) : null,
     };
 
     /// <summary>名前のタブの歌詞（表示中のタブ・名前が無いときは表示中の歌詞）。</summary>
@@ -96,11 +97,14 @@ public partial class MainViewModel
         string emoji = N3ShowTimeValidator.FormatShrinks(shrinks);
         if (N3ShowTimeValidator.BelowFloor(shrinks, show.LeadMs).Count > 0)
         {
-            // 理由: 表示開始の手動指定／前のページの同じ段の行（前の行）の表示終了の手動指定／
+            // 理由: 表示開始の手動指定／前のページの組の行（前の行）の表示終了の手動指定／
             // 前の行と歌が重なる（どう詰めても前の行はワイプの途中で消える）／前の行をワイプの最後まで見せる（折衷）
-            var prev = plan.Row > 0
-                ? plans.Values.FirstOrDefault(p => p.PageIndex == plan.PageIndex - 1 && p.Row == plan.Row)
-                : null;
+            // 前の行は表示時刻の計算で詰めた組（画面で重なる行。複数あれば表示終了の遅い行）
+            var prev = N3ShowTimePlanner.Pairs(plans, show)
+                .Where(x => x.Next == plan.LineIndex && plans.ContainsKey(x.Prev))
+                .Select(x => plans[x.Prev])
+                .OrderByDescending(p => p.EndMs)
+                .FirstOrDefault();
             var prevLine = prev is not null && prev.LineIndex >= 0 && prev.LineIndex < Document.Lines.Count ? Document.Lines[prev.LineIndex] : null;
             string? cause = line.HasManualShowBegin ? "表示開始の手動指定のため"
                 : prevLine?.HasManualShowEnd == true ? "前の行の表示終了の手動指定のため"

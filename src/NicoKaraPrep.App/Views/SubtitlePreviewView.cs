@@ -124,15 +124,17 @@ public sealed class SubtitlePreviewView : Grid
         using var clip = ds.CreateLayer(1f, screen);
         double t = timeMs;
         var visible = VisibleLines(model, t);
-        // 行の画面上の四角（重なりの薄め方で、同じ場所に出る前後のページの行を見る）
-        var boxes = new Dictionary<PreviewLine, (float Left, float Top, float Right, float Bottom)>(ReferenceEqualityComparer.Instance);
+        // 行の画面上の場所（重なりの薄め方で、同じ場所に出る前後のページの行を見る。表示時刻の計算・チェックの組と同じ判定）
+        var areas = new Dictionary<PreviewLine, N3LineArea>(ReferenceEqualityComparer.Instance);
+        var layoutIds = new Dictionary<N3LayoutSettings, int>(ReferenceEqualityComparer.Instance);
         foreach (var line in visible)
         {
-            boxes[line] = Bounds(line, line.Source.GetLayout(), W, H, model.Pages.GetValueOrDefault((line.Tab, line.Page)));
+            if (!layoutIds.TryGetValue(line.Layout, out int id)) layoutIds[line.Layout] = id = layoutIds.Count;
+            areas[line] = AreaOf(line, line.Source.GetLayout(), W, H, model.Pages.GetValueOrDefault((line.Tab, line.Page)), id);
         }
         bool SamePlace(PreviewLine a, PreviewLine b) =>
-            boxes.TryGetValue(a, out var x) && boxes.TryGetValue(b, out var y) &&
-            x.Left < y.Right && y.Left < x.Right && x.Top < y.Bottom && y.Top < x.Bottom;
+            areas.TryGetValue(a, out var x) && areas.TryGetValue(b, out var y) &&
+            (a.Page < b.Page ? N3RowPlacement.Paired(x, a.Row, y, b.Row) : N3RowPlacement.Paired(y, b.Row, x, a.Row));
         foreach (var line in visible)
         {
             var layout = line.Source.GetLayout();
@@ -206,15 +208,26 @@ public sealed class SubtitlePreviewView : Grid
     }
 
     /// <summary>
-    /// 行の画面上の四角（字幕の画面の px。左右は行の送りの範囲、上下は行の枠）。前後のページの同じ段の行が画面の同じ場所に出るか
-    /// （表示時刻の計算・チェック・重なりの薄め方。レイアウトで位置が違う行は組にしない）を決めるのに使う。
+    /// 行の画面上の描画範囲（字幕の画面の px。ルビ・縁・飾り・アイコンを含む、描く範囲）と、文字の枠（左右は行の送りの範囲、上下は行を並べる枠）。
+    /// 前後のページの行が画面の同じ場所に出るか（表示時刻の計算・チェック・重なりの薄め方。<see cref="N3RowPlacement.Paired"/>）を決めるのに使う。
     /// <paramref name="page"/> はそのページの行（スマート水平配置で左右の位置を決めるため）。
     /// </summary>
-    internal static (float Left, float Top, float Right, float Bottom) Bounds(PreviewLine line, SubtitleLineLayout layout, float W, float H, IReadOnlyList<PreviewLine>? page)
+    internal static ((float Left, float Top, float Right, float Bottom) Ink, (float Left, float Top, float Right, float Bottom) Box) Bounds(
+        PreviewLine line, SubtitleLineLayout layout, float W, float H, IReadOnlyList<PreviewLine>? page)
     {
         float baseline = Baseline(line, layout, H);
         float x = SmartX(line, layout, W, page);
-        return (x, baseline + layout.BoxTop, x + layout.Width, baseline + layout.BoxBottom);
+        return ((x + layout.Left, baseline + layout.Top, x + layout.Right, baseline + layout.Bottom),
+                (x, baseline + layout.BoxTop, x + layout.Width, baseline + layout.BoxBottom));
+    }
+
+    /// <summary>描画範囲・文字の枠を、組の判定に使う行の場所にする（<paramref name="layoutId"/> はページのレイアウト）。</summary>
+    internal static N3LineArea AreaOf(PreviewLine line, SubtitleLineLayout layout, float W, float H, IReadOnlyList<PreviewLine>? page, int layoutId)
+    {
+        static N3LineBounds Px((float Left, float Top, float Right, float Bottom) r) =>
+            new((int)Math.Floor(r.Left), (int)Math.Floor(r.Top), (int)Math.Ceiling(r.Right), (int)Math.Ceiling(r.Bottom));
+        var (ink, box) = Bounds(line, layout, W, H, page);
+        return new N3LineArea(Px(ink), Px(box), layoutId);
     }
 
     /// <summary>本文のベースラインの y（字幕の画面の px）。</summary>

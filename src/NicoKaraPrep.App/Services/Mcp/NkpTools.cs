@@ -166,7 +166,7 @@ internal sealed class NkpTools
         [Description("同じ段の行を重ねてよい時間（秒。0 = 重ねない）")] double? overlap = null,
         [Description("上段の行を長めに表示する")] bool? topLong = null,
         [Description("絵文字の分だけ行の表示を遅らせる")] bool? emojiYield = null,
-        [Description("レイアウトで画面の位置が違う行は重ねない")] bool? layoutAware = null,
+        [Description("前後のページの行を、画面で重なるかで組にする（同じ段の行は描画範囲（ルビ・縁・飾り・アイコンを含む）が少しでも重なれば組、段が違う行はレイアウトが違うページの間で文字の枠（ルビ・縁を除く）が重なるときだけ組。false = 段だけで組にする）")] bool? layoutAware = null,
         CancellationToken ct = default) =>
         Invoke(MainWindow.McpAccess.Write, w => w.McpSetShowTimeSettings(lead, tail, interval, protect, overlap, topLong, emojiYield, layoutAware), ct);
 

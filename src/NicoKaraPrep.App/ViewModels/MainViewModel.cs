@@ -1902,7 +1902,7 @@ public partial class MainViewModel : ObservableObject
         var collisionSettings = Settings.ToCollisionSettings(exclude);
         collisionSettings.LineDisplayCs = BuildLineDisplayOverrides(exclude);
         collisionSettings.LineShowBeginCs = BuildManualShowBegins();
-        collisionSettings.LineBounds = CurrentLineBounds();
+        collisionSettings.LineAreas = CurrentLineAreas();
         collisionSettings.SingleLineRows = CurrentSingleLineRows(); // 1 行だけのページの段は字幕のプレビューと同じ
         var collisions = PageRowCollisionValidator.Validate(Document, collisionSettings);
         foreach (var issue in collisions) AddPairIssue(issue);

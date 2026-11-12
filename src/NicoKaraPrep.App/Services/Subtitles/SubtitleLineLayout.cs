@@ -168,6 +168,11 @@ internal sealed class SubtitleLineLayout : IDisposable
 
     public float Bottom { get; private set; }
 
+    /// <summary>描く範囲（ルビ・縁・飾り・画像を含む）の左端・右端（行の左端（最初の文字の送りの左端）からの位置）。</summary>
+    public float Left { get; private set; }
+
+    public float Right { get; private set; }
+
     /// <summary>本文・ルビのグラデーション・画像を当てる範囲（字面）。</summary>
     public Rect MainInk { get; private set; }
 
@@ -225,6 +230,7 @@ internal sealed class SubtitleLineLayout : IDisposable
         Rect? mainInk = null;
         float ascent = 0, descent = 0, mainOuter = 0, mainSize = 0;
         float imageTop = 0, imageBottom = 0;
+        float imageLeft = float.PositiveInfinity, imageRight = float.NegativeInfinity;
         float x = 0;
         bool any = false;
 
@@ -272,6 +278,8 @@ internal sealed class SubtitleLineLayout : IDisposable
                     layout.Tokens.Add(new Token(o.Start, o.EndExclusive - 1, start, x - start, true, font));
                     imageTop = Math.Min(imageTop, (float)rect.Top);
                     imageBottom = Math.Max(imageBottom, (float)rect.Bottom);
+                    imageLeft = Math.Min(imageLeft, (float)rect.Left);
+                    imageRight = Math.Max(imageRight, (float)rect.Right);
                     ascent = Math.Max(ascent, reference.Ascent);
                     descent = Math.Max(descent, reference.Descent);
                     mainSize = Math.Max(mainSize, (float)face.SizePx);
@@ -352,6 +360,16 @@ internal sealed class SubtitleLineLayout : IDisposable
         if (rubyInk is Rect ri) top = Math.Min(top, (float)ri.Top);
         layout.Top = top - outer - decor;
         layout.Bottom = Math.Max(layout.TextBottom, imageBottom) + outer + decor;
+        // 左右: 本文・ルビの字面と画像の範囲に、縁・飾りの分を足す
+        float left = (float)Math.Min(layout.MainInk.Left, layout.RubyInk.Left);
+        float right = (float)Math.Max(layout.MainInk.Right, layout.RubyInk.Right);
+        if (imageLeft <= imageRight)
+        {
+            left = Math.Min(left, imageLeft);
+            right = Math.Max(right, imageRight);
+        }
+        layout.Left = left - outer - decor;
+        layout.Right = right + outer + decor;
         return layout;
     }
 
