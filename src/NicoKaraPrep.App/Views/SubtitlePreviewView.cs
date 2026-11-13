@@ -323,6 +323,10 @@ public sealed class SubtitlePreviewView : Grid
 
     private void OnBitmapLoaded(object? sender, EventArgs e) => _canvas.Invalidate();
 
+    /// <summary>UI オートメーション・読み上げで見つけられるようにする（Grid には既定で無い。名前は AutomationProperties.Name）。</summary>
+    protected override Microsoft.UI.Xaml.Automation.Peers.AutomationPeer OnCreateAutomationPeer() =>
+        new Microsoft.UI.Xaml.Automation.Peers.FrameworkElementAutomationPeer(this);
+
     private void OnDraw(CanvasControl sender, CanvasDrawEventArgs args)
     {
         var model = _dragModel ?? _model;

@@ -504,7 +504,7 @@
                 CornerRadius="4"
                 Background="Black"
                 SizeChanged="OnPreviewFrameSizeChanged">
-                <local:SubtitlePreviewView x:Name="LayoutPreview" />
+                <local:SubtitlePreviewView x:Name="LayoutPreview" AutomationProperties.Name="見本（字幕の行をドラッグして位置を変えられます）" />
             </Border>
             <StackPanel Grid.Row="2" Spacing="2">
                 <TextBlock x:Name="LayoutPreviewNoteText" Style="{StaticResource Note}" />

@@ -308,7 +308,7 @@
                     <!-- 動画と字幕のプレビュー（再生の操作は下の行に出して、字幕に重ならないようにする） -->
                     <Grid x:Name="PlayerHost" Height="260" Background="Black">
                         <MediaPlayerElement x:Name="Player" AreTransportControlsEnabled="False" />
-                        <views:SubtitlePreviewView x:Name="SubtitlePreview" />
+                        <views:SubtitlePreviewView x:Name="SubtitlePreview" AutomationProperties.Name="字幕のプレビュー（字幕の行をドラッグして位置を変えられます）" />
                     </Grid>
                     <!-- 再生の操作: 再生・一時停止と位置（左）、音量・時刻ずらし・字幕プレビューの切り替え（右）。
                          右の列に置くときは、位置のスライダーを 1 段目に（右端に時刻ずらし）、ほかを 2 段目にする -->
