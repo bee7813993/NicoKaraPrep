@@ -6,7 +6,6 @@
     xmlns:views="using:NicoKaraPrep.App.Views">
 
     <UserControl.Resources>
-        <CollectionViewSource x:Name="FontGroupsSource" IsSourceGrouped="True" />
         <Style x:Key="FieldLabel" TargetType="TextBlock">
             <Setter Property="FontSize" Value="12" />
             <Setter Property="VerticalAlignment" Value="Center" />
@@ -62,37 +61,58 @@
                 <Button Grid.Column="1" x:Name="FontAutoButton" Content="自動に戻す" Padding="8,4" Click="OnFontAutoClick"
                         ToolTipService.ToolTip="選んだ文字（文字を選んでいなければ選んだ行）のフォントの手動指定をやめ、パート記号で決まるフォント設定に戻します" />
             </Grid>
+            <!-- フォント設定ビュー（F3）と同じ入れ子の階層。見出し（フォルダ・この曲専用・ベースだけ）を押すと畳む・広げる。
+                 下にフォント設定を持つフォント設定は、左の印で畳む・広げる（名前を押すと指定）。畳んだまとまりは右のパネルだけで覚える -->
             <ListView
                 Grid.Row="2"
                 x:Name="FontPickList"
                 SelectionMode="None"
                 IsItemClickEnabled="True"
+                AutomationProperties.Name="フォント設定の一覧（押すと選んだ文字・行に指定。見出しを押すと畳む）"
                 ItemClick="OnFontPickClick">
                 <ListView.ItemContainerStyle>
                     <Style TargetType="ListViewItem" BasedOn="{StaticResource DefaultListViewItemStyle}">
-                        <Setter Property="MinHeight" Value="30" />
-                        <Setter Property="Padding" Value="8,0,8,0" />
+                        <Setter Property="MinHeight" Value="28" />
+                        <Setter Property="Padding" Value="6,0,8,0" />
                     </Style>
                 </ListView.ItemContainerStyle>
-                <ListView.GroupStyle>
-                    <GroupStyle>
-                        <GroupStyle.HeaderTemplate>
-                            <DataTemplate x:DataType="vm:FontPickGroup">
-                                <TextBlock Text="{x:Bind Key}" FontSize="12" FontWeight="SemiBold" Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
-                            </DataTemplate>
-                        </GroupStyle.HeaderTemplate>
-                    </GroupStyle>
-                </ListView.GroupStyle>
                 <ListView.ItemTemplate>
-                    <DataTemplate x:DataType="vm:FontPickItem">
-                        <StackPanel Orientation="Horizontal" Spacing="6" Padding="0,2" ToolTipService.ToolTip="{x:Bind ToolTip}">
-                            <Border Width="10" Height="22" CornerRadius="2" BorderThickness="1" BorderBrush="{ThemeResource ControlStrokeColorDefaultBrush}" Background="{x:Bind After}" />
-                            <Border Width="10" Height="22" CornerRadius="2" BorderThickness="1" BorderBrush="{ThemeResource ControlStrokeColorDefaultBrush}" Background="{x:Bind Before}" />
-                            <TextBlock Text="{x:Bind Name}" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
-                        </StackPanel>
+                    <DataTemplate x:DataType="vm:FontPickRow">
+                        <Grid Margin="{x:Bind IndentMargin}" ColumnSpacing="4" Background="Transparent" ToolTipService.ToolTip="{x:Bind ToolTip}">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="18" />
+                                <ColumnDefinition Width="*" />
+                            </Grid.ColumnDefinitions>
+                            <!-- 見出し: 畳む印・名前・件数（行のどこを押しても畳む・広げる） -->
+                            <FontIcon Glyph="{x:Bind ChevronGlyph}" FontSize="10" Visibility="{x:Bind IsHeader}" Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+                            <Grid Grid.Column="1" ColumnSpacing="6" Visibility="{x:Bind IsHeader}">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="Auto" />
+                                </Grid.ColumnDefinitions>
+                                <TextBlock Text="{x:Bind Name}" FontSize="12" FontWeight="SemiBold" VerticalAlignment="Center" TextTrimming="CharacterEllipsis"
+                                           Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+                                <TextBlock Grid.Column="1" Text="{x:Bind CountText}" FontSize="11" VerticalAlignment="Center" Foreground="{ThemeResource TextFillColorTertiaryBrush}" />
+                            </Grid>
+                            <!-- フォント設定: （下にフォント設定を持つものは）畳む印のボタン・色見本・名前 -->
+                            <Button Padding="0" Width="18" Height="22" MinWidth="0" Background="Transparent" BorderThickness="0"
+                                    Visibility="{x:Bind views:LineSidePanel.FontToggleVisible(IsFont, CanToggle)}" Tag="{x:Bind Key}" Click="OnFontRowToggleClick"
+                                    AutomationProperties.Name="{x:Bind ToggleToolTip}" ToolTipService.ToolTip="{x:Bind ToggleToolTip}">
+                                <FontIcon Glyph="{x:Bind ChevronGlyph}" FontSize="10" Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+                            </Button>
+                            <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="6" Padding="0,2" Visibility="{x:Bind IsFont}">
+                                <Border Width="10" Height="20" CornerRadius="2" BorderThickness="1" BorderBrush="{ThemeResource ControlStrokeColorDefaultBrush}" Background="{x:Bind After}" />
+                                <Border Width="10" Height="20" CornerRadius="2" BorderThickness="1" BorderBrush="{ThemeResource ControlStrokeColorDefaultBrush}" Background="{x:Bind Before}" />
+                                <TextBlock Text="{x:Bind Name}" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
+                                <TextBlock Text="{x:Bind CountText}" FontSize="11" VerticalAlignment="Center" Foreground="{ThemeResource TextFillColorTertiaryBrush}"
+                                           Visibility="{x:Bind views:LineSidePanel.FontToggleVisible(IsFont, CanToggle)}" />
+                            </StackPanel>
+                        </Grid>
                     </DataTemplate>
                 </ListView.ItemTemplate>
             </ListView>
+            <TextBlock Grid.Row="2" x:Name="FontEmptyText" FontSize="12" TextWrapping="Wrap" Visibility="Collapsed" Margin="0,4,0,0"
+                       Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
         </Grid>
 
         <!-- レイアウト: 押したレイアウト設定を、行リストで選んだ行のページに指定する（フォントのタブと同じ使い方）。

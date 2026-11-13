@@ -212,6 +212,12 @@ public sealed class AppSettings
     public bool SideActionWholePage { get; set; }
 
     /// <summary>
+    /// 行リストの右のパネル「フォント」の一覧で畳んでいるまとまり（フォルダ・下にフォント設定を持つフォント設定の Id と、
+    /// 「この曲専用」= <c>song</c>・「ベースの n3proj だけにあるもの」= <c>base</c>）。フォント設定ビュー（F3）の折りたたみとは別に覚える。
+    /// </summary>
+    public List<string> SideFontCollapsed { get; set; } = new();
+
+    /// <summary>
     /// 行リスト・絵文字挿入ビューの右のパネル（フォント・レイアウト、絵文字のパレット）の幅 px（左との境のつまみで変更）。
     /// ウィンドウが狭くて左が狭くなりすぎるときは、表示ではこれより狭める（この値は変えない）。
     /// </summary>

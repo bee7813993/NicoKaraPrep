@@ -1,4 +1,4 @@
-﻿using System.Runtime.CompilerServices;
+﻿using System.Collections.ObjectModel;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using NicoKaraPrep.App.ViewModels;
@@ -85,25 +85,78 @@ public sealed partial class LineSidePanel : UserControl
 
     // ------------------------------------------------------------ フォント
 
-    /// <summary>フォントの一覧を作り直す（中身が同じなら作り直さない。スクロールの位置を保つため）。</summary>
+    /// <summary>フォントの一覧の行（畳んだり広げたりしたときは、変わったところだけを入れ替える。スクロールの位置を保つため）。</summary>
+    private readonly ObservableCollection<FontPickRow> _fontRows = new();
+
+    /// <summary>フォントの一覧を作り直す（中身が同じなら作り直さない。変わったところだけを入れ替える）。</summary>
     public void RefreshFonts(bool force = false)
     {
         if (_vm is null) return;
-        var groups = _vm.BuildFontPickGroups(FontSearchBox.Text);
-        string key = string.Join("|", groups.Select(g =>
-            g.Key + ":" + string.Join(",", g.Select(i => $"{i.Name}/{RuntimeHelpers.GetHashCode(i.After!)}/{RuntimeHelpers.GetHashCode(i.Before!)}"))));
+        if (!ReferenceEquals(FontPickList.ItemsSource, _fontRows)) FontPickList.ItemsSource = _fontRows;
+        var collapsed = new HashSet<string>(_vm.Settings.SideFontCollapsed ?? new List<string>(), StringComparer.Ordinal);
+        var rows = _vm.BuildFontPickRows(FontSearchBox.Text, collapsed);
+        string key = string.Join("\n", rows.Select(r => r.Signature));
         if (!force && key == _fontsKey) return;
         _fontsKey = key;
-        FontGroupsSource.Source = groups;
-        FontPickList.ItemsSource = FontGroupsSource.View;
+        SyncRows(_fontRows, rows);
+
+        bool none = rows.Count == 0;
+        FontEmptyText.Text = FontSearchBox.Text.Trim().Length > 0
+            ? "当てはまるフォント設定がありません"
+            : "フォント設定がありません（フォント設定ビュー（F3）で作れます）";
+        FontEmptyText.Visibility = none ? Visibility.Visible : Visibility.Collapsed;
+    }
+
+    /// <summary>
+    /// 一覧の行を新しい並びに合わせる。前後の同じ行（目印が同じ）は残し、間の違うところだけを入れ替える
+    /// （まとまりを 1 つ畳んだときに、一覧全体を作り直してスクロールの位置が先頭に戻らないように）。
+    /// </summary>
+    private static void SyncRows(ObservableCollection<FontPickRow> current, List<FontPickRow> next)
+    {
+        int head = 0;
+        while (head < current.Count && head < next.Count && current[head].Signature == next[head].Signature) head++;
+        int tail = 0;
+        while (tail < current.Count - head && tail < next.Count - head
+               && current[current.Count - 1 - tail].Signature == next[next.Count - 1 - tail].Signature) tail++;
+        int remove = current.Count - head - tail;
+        for (int i = 0; i < remove; i++) current.RemoveAt(head);
+        for (int i = head; i < next.Count - tail; i++) current.Insert(i, next[i]);
     }
 
     private void OnFontSearchChanged(object sender, TextChangedEventArgs e) => RefreshFonts(force: true);
 
     private void OnFontPickClick(object sender, ItemClickEventArgs e)
     {
-        if (e.ClickedItem is FontPickItem item) FontPicked?.Invoke(this, item.Name);
+        if (e.ClickedItem is not FontPickRow row) return;
+        if (row.IsHeader)
+        {
+            ToggleFontGroup(row);
+            return;
+        }
+        if (row.Font is { } item) FontPicked?.Invoke(this, item.Name);
     }
+
+    /// <summary>下にフォント設定を持つフォント設定の、畳む印のボタン。</summary>
+    private void OnFontRowToggleClick(object sender, RoutedEventArgs e)
+    {
+        if ((sender as FrameworkElement)?.Tag is not string key) return;
+        var row = _fontRows.FirstOrDefault(r => r.Key == key && r.CanToggle);
+        if (row is not null) ToggleFontGroup(row);
+    }
+
+    /// <summary>まとまりを畳む・広げる（アプリ共通に覚える）。名前で絞り込んでいるあいだは畳まない。</summary>
+    private void ToggleFontGroup(FontPickRow row)
+    {
+        if (_vm is null || !row.CanToggle || row.IsSearching) return;
+        var list = _vm.Settings.SideFontCollapsed ??= new List<string>();
+        if (row.IsCollapsed) list.RemoveAll(k => k == row.Key);
+        else if (!list.Contains(row.Key)) list.Add(row.Key);
+        _vm.Settings.Save();
+        RefreshFonts();
+    }
+
+    /// <summary>畳む印のボタンを出すか（下にフォント設定を持つフォント設定の行だけ）。</summary>
+    public static Visibility FontToggleVisible(bool isFont, bool canToggle) => isFont && canToggle ? Visibility.Visible : Visibility.Collapsed;
 
     private void OnFontAutoClick(object sender, RoutedEventArgs e) => FontPicked?.Invoke(this, null);
 
