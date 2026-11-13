@@ -326,6 +326,7 @@ public sealed partial class MainWindow : Window
         ScheduleValidation();
         NotifyLayoutViewDocumentChanged();
         ViewModel.StatusText = MainViewModel.NewDocumentNotice(scope);
+        ViewModel.KeepNoticeBeforeCheck(); // 新規作成のあとのチェックの結果で消えないように
     }
 
     /// <summary>メディアを閉じる（新規作成・ファイルを閉じる時）。</summary>
