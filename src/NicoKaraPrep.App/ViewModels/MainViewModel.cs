@@ -105,6 +105,8 @@ public partial class MainViewModel : ObservableObject
         }
 
         var newDoc = LineOperations.ExtractLines(Document, indexes, GetEffectiveEmojiList());
+        // アプリ共通の絵文字の写しは、タブの絵文字にせずアプリ共通のものを使う（パレットで「曲」の絵文字に見えないように）
+        FoldCommonEmojiCopies(newDoc, CurrentFilePath);
         foreach (int i in indexes.OrderByDescending(x => x))
         {
             LineOperations.DeleteLine(Document, i);
@@ -412,6 +414,7 @@ public partial class MainViewModel : ObservableObject
                 {
                     if (!restoreTabs) continue;
                     tabDoc = TextEditModeFormat.Parse(pt.Text);
+                    FoldCommonEmojiCopies(tabDoc, path);
                     ApplySavedLineKeys(tabDoc, pt.LineKeys);
                 }
                 LineExportSettings.Apply(tabDoc, pt.LineSettings);
