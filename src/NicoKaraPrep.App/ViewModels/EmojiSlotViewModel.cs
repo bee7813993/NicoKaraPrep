@@ -37,6 +37,7 @@ public partial class EmojiSlotViewModel : ObservableObject
 
     /// <summary>このスロットが曲ごとの上書きかどうか（表示用）。</summary>
     [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(ToolTipText))]
     private bool isSongOverride;
 
     public string ReplaceChar => Entry?.ReplaceChar ?? "";
@@ -54,5 +55,8 @@ public partial class EmojiSlotViewModel : ObservableObject
 
     public string ToolTipText => Entry is null
         ? $"スロット {KeyLabel}（未設定）"
-        : $"スロット {KeyLabel}: {Entry.ReplaceChar}{(IsSongOverride ? "（曲専用）" : "")}\n{Entry.ImageBefore}";
+        : $"スロット {KeyLabel}: {Entry.ReplaceChar}\n{Entry.ImageBefore}\n" +
+          (IsSongOverride
+              ? "この曲だけの絵文字（歌詞ファイルの @Emoji として保存。新規作成・ほかの曲を開くと出なくなります）"
+              : "アプリ共通の絵文字（設定に保存。どの曲でも使えます）");
 }

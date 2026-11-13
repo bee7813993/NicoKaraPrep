@@ -105,6 +105,8 @@ public partial class MainViewModel : ObservableObject
         }
 
         var newDoc = LineOperations.ExtractLines(Document, indexes, GetEffectiveEmojiList());
+        // アプリ共通の絵文字の写しは、タブの絵文字にせずアプリ共通のものを使う（パレットで「曲」の絵文字に見えないように）
+        FoldCommonEmojiCopies(newDoc, CurrentFilePath);
         foreach (int i in indexes.OrderByDescending(x => x))
         {
             LineOperations.DeleteLine(Document, i);
@@ -368,6 +370,7 @@ public partial class MainViewModel : ObservableObject
             if (restoreTabs)
             {
                 var mainDoc = TextEditModeFormat.Parse(project.MainText);
+                FoldCommonEmojiCopies(mainDoc, path);
                 mainDoc.RlfExtras = Document.RlfExtras; // rlf 固有情報はファイル読込分を引き継ぐ
                 ApplySavedLineKeys(mainDoc, project.MainLineKeys);
                 Document = mainDoc;
@@ -411,6 +414,7 @@ public partial class MainViewModel : ObservableObject
                 {
                     if (!restoreTabs) continue;
                     tabDoc = TextEditModeFormat.Parse(pt.Text);
+                    FoldCommonEmojiCopies(tabDoc, path);
                     ApplySavedLineKeys(tabDoc, pt.LineKeys);
                 }
                 LineExportSettings.Apply(tabDoc, pt.LineSettings);
@@ -522,9 +526,22 @@ public partial class MainViewModel : ObservableObject
         IsModified = false;
         doc.AssignSplitOrderKeys(); // タブ分離を元の位置へ戻すための行位置キー
         RebuildLines();
+        FoldCommonEmojiCopies(doc, path);
         AssignSlotsToSongEmoji();
         RefreshEmojiSlots();
         UpdateTitle();
+    }
+
+    /// <summary>
+    /// 歌詞の @Emoji のうち、アプリ共通の絵文字と同じ定義のものを、この曲の絵文字にせずアプリ共通のものを使うようにする。
+    /// lrc の保存ではアプリ共通の絵文字も @Emoji として歌詞に書く（ニコカラメーカー3 が読むため）ので、開き直すと全部が
+    /// 「この曲の絵文字」になり、あとでアプリ共通の側を直してもその曲には効かなくなっていた。保存するときはこれまでどおり全部を書く。
+    /// </summary>
+    private void FoldCommonEmojiCopies(LyricsDocument doc, string? path)
+    {
+        if (doc.EmojiEntries.Count == 0 || Settings.GlobalEmojiList.Count == 0) return;
+        string? folder = path is null ? null : Path.GetDirectoryName(path);
+        doc.EmojiEntries.RemoveAll(e => Settings.GlobalEmojiList.Any(g => e.SameDefinition(g, folder)));
     }
 
     /// <summary>
@@ -733,7 +750,13 @@ public partial class MainViewModel : ObservableObject
     {
         StoreActiveTab();
         var main = Tabs.FirstOrDefault(t => t.IsMain);
-        if (main?.FilePath is not string path) return;
+        if (main?.FilePath is not string path)
+        {
+            // 歌詞ファイルを保存していないあいだは .tttproj に書けない。この曲専用のフォント設定を作ったら「変更あり」にして、
+            // 新規作成・ほかの曲を開くときに尋ねる（曲の絵文字は歌詞の変更なので、もとから「変更あり」になる）
+            if (SongFontSets.Count > 0 && !IsModified) MarkModified();
+            return;
+        }
 
         var project = new SongProject
         {
@@ -893,9 +916,16 @@ public partial class MainViewModel : ObservableObject
 
     private const int MaxUndo = 100;
 
+    /// <summary>
+    /// 歌詞の 元に戻す の履歴が変わるたびに増える数（積む・戻す・やり直す）。メディア再生の字幕のプレビューのドラッグで変えた
+    /// レイアウト設定を Ctrl+Z で戻すとき、そのあとに歌詞の操作をしていないかを見るのに使う。
+    /// </summary>
+    public long UndoSerial { get; private set; }
+
     /// <summary>ドキュメントを変更する操作の直前に呼ぶ（アクティブタブの履歴に積む）。</summary>
     public void PushUndo()
     {
+        UndoSerial++;
         _activeTab.UndoStack.Add(Document.Clone());
         if (_activeTab.UndoStack.Count > MaxUndo) _activeTab.UndoStack.RemoveAt(0);
         _activeTab.RedoStack.Clear();
@@ -909,6 +939,7 @@ public partial class MainViewModel : ObservableObject
             StatusText = "元に戻す操作はありません";
             return false;
         }
+        UndoSerial++;
         _activeTab.RedoStack.Add(Document.Clone());
         Document = undo[^1];
         undo.RemoveAt(undo.Count - 1);
@@ -925,6 +956,7 @@ public partial class MainViewModel : ObservableObject
             StatusText = "やり直す操作はありません";
             return false;
         }
+        UndoSerial++;
         _activeTab.UndoStack.Add(Document.Clone());
         Document = redo[^1];
         redo.RemoveAt(redo.Count - 1);

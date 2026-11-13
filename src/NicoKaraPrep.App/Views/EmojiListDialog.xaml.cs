@@ -95,14 +95,21 @@ public sealed partial class EmojiListDialog : ContentDialog
             if (song is not null) Rows.Add(EmojiSlotRow.From(song, songOverride: true));
             else if (global is not null) Rows.Add(EmojiSlotRow.From(global, songOverride: false));
         }
+        // 同じキーに曲の絵文字があって隠れているアプリ共通の絵文字も行に出す（出さないと、OK で消えてしまっていた）
+        var songSlots = new HashSet<int>(document.EmojiEntries.Where(e => e.Slot is >= 1 and <= 20).Select(e => e.Slot!.Value));
+        foreach (var e in settings.GlobalEmojiList.Where(e => e.Slot is int s && songSlots.Contains(s)))
+        {
+            Rows.Add(EmojiSlotRow.From(e, songOverride: false));
+        }
         foreach (var e in document.EmojiEntries.Where(e => e.Slot is null))
         {
             Rows.Add(EmojiSlotRow.From(e, songOverride: true));
         }
-        foreach (var e in settings.GlobalEmojiList.Where(e => e.Slot is null))
+        foreach (var e in settings.GlobalEmojiList.Where(e => e.Slot is null or < 1 or > 20))
         {
             Rows.Add(EmojiSlotRow.From(e, songOverride: false));
         }
+        _songBefore = SongSignature(document.EmojiEntries);
         if (Rows.Count == 0) Rows.Add(new EmojiSlotRow());
 
         InitializeComponent();
@@ -147,8 +154,15 @@ public sealed partial class EmojiListDialog : ContentDialog
         }
 
         _settings.Save();
-        SongListChanged = true;
+        // 歌詞の「変更あり」にするのは、この曲の絵文字（歌詞の @Emoji）が変わったときだけ（アプリ共通だけを直したときは歌詞は変わらない）
+        SongListChanged = SongSignature(_document.EmojiEntries) != _songBefore;
     }
+
+    /// <summary>開いたときのこの曲の絵文字（変わったかを見るため）。</summary>
+    private readonly string _songBefore;
+
+    private static string SongSignature(IEnumerable<EmojiEntry> entries) =>
+        string.Join("\n", entries.Select(e => $"{e.Slot}|{e.ToTagValue()}"));
 
     // ------------------------------------------------------------ 行操作
 

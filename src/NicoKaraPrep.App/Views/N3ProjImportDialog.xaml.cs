@@ -177,7 +177,7 @@ public sealed partial class N3ProjImportDialog : ContentDialog
 
         // ---- アイコン・動画 ----
         IconsBox.IsEnabled = IconRows.Count > 0;
-        IconTargetBox.SelectedIndex = 0;
+        IconTargetBox.SelectedIndex = settings.N3ImportIconsGlobal ? 1 : 0; // 前回選んだ取り込み先（既定はアプリ共通。フォント設定と同じ）
         UpdateIconStatuses();
         foreach (var row in IconRows)
         {
@@ -386,6 +386,7 @@ public sealed partial class N3ProjImportDialog : ContentDialog
             Media = MediaBox.IsChecked == true && MediaBox.IsEnabled,
         };
         _vm.Settings.N3AutoImportNearby = AutoBox.IsChecked == true;
+        if (IconsBox.IsChecked == true && IconRows.Count > 0) _vm.Settings.N3ImportIconsGlobal = IconTargetBox.SelectedIndex == 1;
         _vm.Settings.Save();
     }
 }

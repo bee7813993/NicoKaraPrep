@@ -47,4 +47,26 @@ public class EmojiEntryTests
             Assert.Equal(v, e.ToTagValue());
         }
     }
+
+    [Fact]
+    public void 同じ定義_相対パスは歌詞のフォルダから見て比べる()
+    {
+        string folder = Path.Combine(Path.GetTempPath(), "nkp-emoji-test");
+        var global = new EmojiEntry { ReplaceChar = "（花）", ImageBefore = Path.Combine(folder, "icons", "a.png"), Options = "Zoom=150%, Fix" };
+        var fromLrc = EmojiEntry.ParseTagValue("（花）," + Path.Combine("icons", "a.png") + ",,Zoom=150%,Fix");
+        Assert.True(fromLrc.SameDefinition(global, folder));
+        Assert.False(fromLrc.SameDefinition(global, Path.Combine(folder, "other")));
+    }
+
+    [Fact]
+    public void 同じ定義_文字列か画像かオプションが違えば別()
+    {
+        string a1 = Path.Combine(Path.GetTempPath(), "nkp-icons", "a.png");
+        string b1 = Path.Combine(Path.GetTempPath(), "nkp-icons", "b.png");
+        var a = new EmojiEntry { ReplaceChar = "★", ImageBefore = a1, ImageAfter = b1 };
+        Assert.True(a.SameDefinition(new EmojiEntry { ReplaceChar = "★", ImageBefore = a1.ToUpperInvariant(), ImageAfter = b1, Slot = 3 }));
+        Assert.False(a.SameDefinition(new EmojiEntry { ReplaceChar = "☆", ImageBefore = a1, ImageAfter = b1 }));
+        Assert.False(a.SameDefinition(new EmojiEntry { ReplaceChar = "★", ImageBefore = a1 }));
+        Assert.False(a.SameDefinition(new EmojiEntry { ReplaceChar = "★", ImageBefore = a1, ImageAfter = b1, Options = "Fix" }));
+    }
 }
