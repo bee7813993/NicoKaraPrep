@@ -913,9 +913,16 @@ public partial class MainViewModel : ObservableObject
 
     private const int MaxUndo = 100;
 
+    /// <summary>
+    /// 歌詞の 元に戻す の履歴が変わるたびに増える数（積む・戻す・やり直す）。メディア再生の字幕のプレビューのドラッグで変えた
+    /// レイアウト設定を Ctrl+Z で戻すとき、そのあとに歌詞の操作をしていないかを見るのに使う。
+    /// </summary>
+    public long UndoSerial { get; private set; }
+
     /// <summary>ドキュメントを変更する操作の直前に呼ぶ（アクティブタブの履歴に積む）。</summary>
     public void PushUndo()
     {
+        UndoSerial++;
         _activeTab.UndoStack.Add(Document.Clone());
         if (_activeTab.UndoStack.Count > MaxUndo) _activeTab.UndoStack.RemoveAt(0);
         _activeTab.RedoStack.Clear();
@@ -929,6 +936,7 @@ public partial class MainViewModel : ObservableObject
             StatusText = "元に戻す操作はありません";
             return false;
         }
+        UndoSerial++;
         _activeTab.RedoStack.Add(Document.Clone());
         Document = undo[^1];
         undo.RemoveAt(undo.Count - 1);
@@ -945,6 +953,7 @@ public partial class MainViewModel : ObservableObject
             StatusText = "やり直す操作はありません";
             return false;
         }
+        UndoSerial++;
         _activeTab.UndoStack.Add(Document.Clone());
         Document = redo[^1];
         redo.RemoveAt(redo.Count - 1);

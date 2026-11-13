@@ -942,6 +942,7 @@ public sealed partial class MainWindow : Window
         // 全画面ビューでは歌詞の変更を戻さない（見えない行が変わるため。ビューの中の操作はビュー側で扱う）
         if (LyricsUndoRedoBlocked()) return;
         if (!DebounceUndoRedo()) return;
+        if (TryUndoPreviewLayoutDrag()) return; // 直前にメディア再生の字幕のプレビューで動かしたレイアウト設定
         if (!ViewModel.Undo()) return;
         AfterUndoRedo();
     }
@@ -951,6 +952,7 @@ public sealed partial class MainWindow : Window
         if (FullScreenViewUndoRedo(redo: true)) return; // PerformUndo と同じ
         if (LyricsUndoRedoBlocked()) return;
         if (!DebounceUndoRedo()) return;
+        if (TryRedoPreviewLayoutDrag()) return;
         if (!ViewModel.Redo()) return;
         AfterUndoRedo();
     }

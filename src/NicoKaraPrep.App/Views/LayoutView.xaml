@@ -51,7 +51,7 @@
             <ColumnDefinition Width="12" />
             <ColumnDefinition Width="*" />
             <ColumnDefinition Width="12" />
-            <ColumnDefinition Width="300" />
+            <ColumnDefinition x:Name="PreviewColumn" Width="300" />
         </Grid.ColumnDefinitions>
 
         <!-- ================= 左: 一覧（書き出しの並び） ================= -->
@@ -466,6 +466,24 @@
             </ScrollViewer>
         </Grid>
 
+        <!-- 編集欄と右の列のあいだのつまみ（左右にドラッグ・← → キーで右の列（見本・ページの一覧）の幅を変える。ダブルクリックで元の幅） -->
+        <fs:ColumnResizeGrip
+            x:Name="PreviewResizeGrip"
+            Grid.Column="3"
+            AutomationProperties.Name="見本の幅"
+            ToolTipService.ToolTip="ドラッグで見本（右の列）の幅を変えます（選んで ← → キーでも変えられます。ダブルクリックで元の幅に戻します）">
+            <Grid Background="Transparent">
+                <Rectangle
+                    Width="4"
+                    Height="48"
+                    RadiusX="2"
+                    RadiusY="2"
+                    HorizontalAlignment="Center"
+                    VerticalAlignment="Center"
+                    Fill="{ThemeResource ControlStrongFillColorDefaultBrush}" />
+            </Grid>
+        </fs:ColumnResizeGrip>
+
         <!-- ================= 右: 見本・ページの一覧 ================= -->
         <Grid Grid.Column="4" RowSpacing="8">
             <Grid.RowDefinitions>
@@ -476,7 +494,8 @@
                 <RowDefinition Height="*" />
                 <RowDefinition Height="Auto" />
             </Grid.RowDefinitions>
-            <TextBlock Text="見本" Style="{StaticResource PaneTitle}" />
+            <TextBlock Text="見本" Style="{StaticResource PaneTitle}"
+                       ToolTipService.ToolTip="字幕の行をドラッグすると、選んでいるレイアウト設定の上下余白・左右余白・行間を変えられます（左のつまみで見本を広げられます）" />
             <!-- 見本の枠（高さは幅から 16:9。選んだページの歌詞を、選んだレイアウトで並べる） -->
             <Border
                 x:Name="LayoutPreviewFrame"
@@ -489,6 +508,8 @@
             </Border>
             <StackPanel Grid.Row="2" Spacing="2">
                 <TextBlock x:Name="LayoutPreviewNoteText" Style="{StaticResource Note}" />
+                <TextBlock Style="{StaticResource Note}"
+                           Text="字幕の行をドラッグして位置を変えられます（下寄せは一番下の段・上寄せは一番上の段で上下余白、ほかの段で行間。左寄せ・右寄せの段の左右で左右余白。Shift で縦か横だけ）。左のつまみで見本を広げられます。" />
             </StackPanel>
             <StackPanel Grid.Row="3" Spacing="2" Margin="0,8,0,0">
                 <TextBlock Text="ページ" Style="{StaticResource PaneTitle}" />

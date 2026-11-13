@@ -211,6 +211,9 @@ public sealed class AppSettings
     /// <summary>レイアウト設定ビューの左の一覧の幅 px（一覧と編集欄のあいだのつまみで変更）。</summary>
     public double LayoutListWidthPx { get; set; } = 300;
 
+    /// <summary>レイアウト設定ビューの右の列（見本・ページの一覧）の幅 px（編集欄とのあいだのつまみで変更。見本の大きさもこれで決まる）。</summary>
+    public double LayoutPreviewWidthPx { get; set; } = 300;
+
     /// <summary>
     /// 行リストの右のパネル「字幕アクション」の一覧で、押したアクションを選んだ行のページの行すべてにそろえるか
     /// （false なら選んだ行だけ。フォントと同じ）。

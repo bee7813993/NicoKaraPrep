@@ -23,6 +23,7 @@ public sealed partial class MainWindow
         SubtitlePreview.ShowSubtitles = ViewModel.Settings.PlayerSubtitlePreview;
         SubtitlePreview.Model = ViewModel.PreviewModel;
         ViewModel.PreviewModelChanged += (_, _) => SubtitlePreview.Model = ViewModel.PreviewModel;
+        InitializePreviewLayoutDrag();
     }
 
     /// <summary>メディアを開いたあと、再生の状態の知らせを受け取る（MediaPlayer は最初に開いたときに作られる）。</summary>
