@@ -36,7 +36,7 @@ public sealed class LyricCharSelectEventArgs : EventArgs
 
 /// <summary>
 /// 行リストの歌詞を字幕の見た目（ワイプ前の配色。ニコカラメーカー3 の歌詞設定パネルと同じく暗い背景）で描く。
-/// 文字をクリックすると選び、Shift＋クリック・ドラッグで範囲を広げる（Ctrl＋クリックは行の選び方に任せる）。
+/// 文字をクリックすると選び、Shift＋クリック・ドラッグで範囲を広げる（Ctrl＋クリックと、文字を選んでいない行の Shift＋クリックは行の選び方に任せる）。
 /// </summary>
 public sealed class LyricLineView : Grid
 {
@@ -179,6 +179,9 @@ public sealed class LyricLineView : Grid
         var point = e.GetCurrentPoint(this);
         if (!point.Properties.IsLeftButtonPressed) return;
         if (e.KeyModifiers.HasFlag(VirtualKeyModifiers.Control)) return; // Ctrl＋クリックは行の選び方（ListView）に任せる
+        // Shift＋クリックは、この行で文字を選んでいるときだけ文字の範囲を広げる。ほかの行なら、行の範囲を選ぶのは行リストに任せる
+        bool extend = e.KeyModifiers.HasFlag(VirtualKeyModifiers.Shift) && _anchorToken >= 0 && Line?.CharSelection is not null;
+        if (e.KeyModifiers.HasFlag(VirtualKeyModifiers.Shift) && !extend) return;
         int token = TokenAt(point.Position.X);
         if (token < 0)
         {
@@ -186,7 +189,6 @@ public sealed class LyricLineView : Grid
             if (Line is { } line) CharSelecting?.Invoke(this, new LyricCharSelectEventArgs(line, -1, -1, true));
             return;
         }
-        bool extend = e.KeyModifiers.HasFlag(VirtualKeyModifiers.Shift) && _anchorToken >= 0 && Line?.CharSelection is not null;
         if (!extend) _anchorToken = token;
         _dragging = true;
         CapturePointer(e.Pointer);

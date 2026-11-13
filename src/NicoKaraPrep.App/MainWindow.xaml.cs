@@ -613,8 +613,25 @@ public sealed partial class MainWindow : Window
 
     // ------------------------------------------------------------ 行編集
 
+    /// <summary>
+    /// 行リストの Shift＋クリックで範囲を選ぶときの起点（最後に押した行。1 行だけを選んだときはその行）。
+    /// ListView の起点は、歌詞の文字をクリックして選んだときなど、コードで行を選んだときに動かないので、自分で覚える。
+    /// </summary>
+    private LineViewModel? _lineRangeAnchor;
+
+    /// <summary>Shift＋クリックで範囲を選んでいるあいだ（選択の変化ごとの処理を、選び終わってから 1 回だけ行う）。</summary>
+    private bool _selectingLineRange;
+
     private void OnLineSelectionChanged(object sender, SelectionChangedEventArgs e)
     {
+        if (_selectingLineRange) return;
+        AfterLineSelectionChanged();
+    }
+
+    /// <summary>行リストの選択が変わったあとの処理（行エディタ・行設定・右のパネル・チェックの印・プレビューを今の選択に合わせる）。</summary>
+    private void AfterLineSelectionChanged()
+    {
+        if (LineList.SelectedItems.Count == 1 && LineList.SelectedItem is LineViewModel single) _lineRangeAnchor = single;
         ViewModel.SelectedLine = LineList.SelectedItem as LineViewModel;
         // 文字を選んでいた行だけを選んでいるのでなくなったら、文字の選択を外す
         if (ViewModel.CharSelectionLine is { } charLine && !(LineList.SelectedItems.Count == 1 && ReferenceEquals(LineList.SelectedItem, charLine)))
@@ -638,10 +655,15 @@ public sealed partial class MainWindow : Window
         QueueGutterRefresh();
     }
 
-    /// <summary>行のチェックボックスで選択に追加 / 解除する（他の行の選択は維持）。</summary>
+    /// <summary>
+    /// 行のチェックボックスで選択に追加 / 解除する（他の行の選択は維持）。Shift を押しながらなら、最後に押した行からこの行までを選択に足す
+    /// （挿入ビューの行情報欄と同じ）。
+    /// </summary>
     private void OnRowCheckClick(object sender, RoutedEventArgs e)
     {
         if ((sender as FrameworkElement)?.Tag is not LineViewModel vm) return;
+        if (IsKeyDown(Windows.System.VirtualKey.Shift) && SelectLineRange(vm, additive: true)) return;
+        _lineRangeAnchor = vm;
         if (LineList.SelectedItems.Contains(vm))
         {
             LineList.SelectedItems.Remove(vm);
@@ -650,6 +672,53 @@ public sealed partial class MainWindow : Window
         {
             LineList.SelectedItems.Add(vm);
         }
+    }
+
+    /// <summary>
+    /// 行リストの行を押した（歌詞の文字・チェックボックスなど、押した操作を自分で受け取る部品の上は除く）。
+    /// Shift を押しながらなら、最後に押した行からこの行までを選ぶ（Ctrl も押していれば、今の選択に足す）。
+    /// Shift なしなら、押した行を次の Shift＋クリックの起点にして、行の選び方は ListView に任せる。
+    /// </summary>
+    private void OnLineRowPointerPressed(object sender, Microsoft.UI.Xaml.Input.PointerRoutedEventArgs e)
+    {
+        if ((sender as FrameworkElement)?.Tag is not LineViewModel vm) return;
+        if (!e.GetCurrentPoint(sender as UIElement).Properties.IsLeftButtonPressed) return;
+        var modifiers = e.KeyModifiers;
+        if (modifiers.HasFlag(Windows.System.VirtualKeyModifiers.Shift))
+        {
+            if (SelectLineRange(vm, additive: modifiers.HasFlag(Windows.System.VirtualKeyModifiers.Control))) e.Handled = true;
+            return;
+        }
+        _lineRangeAnchor = vm;
+    }
+
+    /// <summary>
+    /// 起点（最後に押した行）から <paramref name="target"/> までの行を選ぶ。<paramref name="additive"/> なら今の選択に足し、そうでなければ範囲だけにする。
+    /// 起点が無い（行を消したなど）ときは今の行を起点にする。選べたら true。
+    /// </summary>
+    private bool SelectLineRange(LineViewModel target, bool additive)
+    {
+        int to = ViewModel.Lines.IndexOf(target);
+        if (to < 0) return false;
+        int from = _lineRangeAnchor is { } anchor ? ViewModel.Lines.IndexOf(anchor) : -1;
+        if (from < 0 && LineList.SelectedItem is LineViewModel current) from = ViewModel.Lines.IndexOf(current);
+        if (from < 0) from = to;
+        int lo = Math.Min(from, to), hi = Math.Max(from, to);
+        _selectingLineRange = true;
+        try
+        {
+            if (!additive) LineList.SelectedItems.Clear();
+            LineList.SelectRange(new Microsoft.UI.Xaml.Data.ItemIndexRange(lo, (uint)(hi - lo + 1)));
+        }
+        finally
+        {
+            _selectingLineRange = false;
+        }
+        AfterLineSelectionChanged();
+        if (_lineRangeAnchor is null || ViewModel.Lines.IndexOf(_lineRangeAnchor) < 0) _lineRangeAnchor = ViewModel.Lines[from];
+        int count = LineList.SelectedItems.Count;
+        ViewModel.StatusText = $"{lo + 1}〜{hi + 1} 行目を選びました（{count} 行選択中）";
+        return true;
     }
 
     /// <summary>

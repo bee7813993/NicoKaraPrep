@@ -542,7 +542,7 @@
                                 <!-- 列: 選択 / 済・行番号 / 時刻（上の段に歌い出し・歌い終わり、下の段に表示開始・表示終了）/ 印（♪ 重なり・横幅の判定）/ 横幅 /
                                      手動指定 / フォント・レイアウト / 歌詞。列の幅は vm:LineListLayout（MainWindow.Layout.cs）。フォント・レイアウトの欄は行の中身に合わせ、
                                      行リストが狭いときは横幅を 2 段にし、フォントの欄を狭めて歌詞の欄を広く取る -->
-                                <Grid Opacity="{x:Bind Opacity, Mode=OneWay}" ColumnSpacing="6" Background="{x:Bind RowBrush, Mode=OneWay}">
+                                <Grid Opacity="{x:Bind Opacity, Mode=OneWay}" ColumnSpacing="6" Background="{x:Bind RowBrush, Mode=OneWay}" Tag="{x:Bind}" PointerPressed="OnLineRowPointerPressed">
                                     <Grid.ColumnDefinitions>
                                         <ColumnDefinition Width="24" />
                                         <ColumnDefinition Width="36" />
