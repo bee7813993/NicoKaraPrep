@@ -314,19 +314,9 @@ public sealed partial class MainWindow : Window
 
     private async void OnNewClick(object sender, RoutedEventArgs e)
     {
-        if (ViewModel.HasUnsavedChanges)
-        {
-            var dialog = new ContentDialog
-            {
-                XamlRoot = Content.XamlRoot,
-                Title = "新規作成",
-                Content = "保存されていない変更があります。破棄して新規作成（ファイルを閉じる）しますか？",
-                PrimaryButtonText = "破棄して新規作成",
-                CloseButtonText = "キャンセル",
-                DefaultButton = ContentDialogButton.Close,
-            };
-            if (await dialog.ShowAsync() != ContentDialogResult.Primary) return;
-        }
+        // 確認の画面とあとの知らせで、新しい文書に出なくなるもの（この曲だけのもの）とそのまま使えるもの（アプリ共通）を見せる
+        var scope = ViewModel.DescribeDocumentScope();
+        if (!await ConfirmNewAsync(scope)) return;
 
         if (InsertViewActive) SwitchView(MainViewMode.Lines);
         TryRun(ViewModel.NewDocument);
@@ -335,6 +325,7 @@ public sealed partial class MainWindow : Window
         RenderPreview();
         ScheduleValidation();
         NotifyLayoutViewDocumentChanged();
+        ViewModel.StatusText = MainViewModel.NewDocumentNotice(scope);
     }
 
     /// <summary>メディアを閉じる（新規作成・ファイルを閉じる時）。</summary>
@@ -386,8 +377,7 @@ public sealed partial class MainWindow : Window
             await ImportN3ProjAsync(path);
             return;
         }
-        TryRun(() => ViewModel.OpenFile(path));
-        AfterDocumentLoaded();
+        await OpenLyricsFileAsync(path);
         RefreshRecentFilesMenu();
     }
 
@@ -410,8 +400,7 @@ public sealed partial class MainWindow : Window
             await ImportN3ProjAsync(file.Path);
             return;
         }
-        TryRun(() => ViewModel.OpenFile(file.Path));
-        AfterDocumentLoaded();
+        await OpenLyricsFileAsync(file.Path);
     }
 
     private void OnSaveClick(object sender, RoutedEventArgs e)
@@ -568,8 +557,7 @@ public sealed partial class MainWindow : Window
         }
         else
         {
-            TryRun(() => ViewModel.OpenFile(file.Path));
-            AfterDocumentLoaded();
+            await OpenLyricsFileAsync(file.Path);
         }
     }
 
@@ -602,8 +590,7 @@ public sealed partial class MainWindow : Window
             ext.Equals(".lrc", StringComparison.OrdinalIgnoreCase) ||
             ext.Equals(".kra", StringComparison.OrdinalIgnoreCase))
         {
-            TryRun(() => ViewModel.OpenFile(file.Path));
-            AfterDocumentLoaded();
+            await OpenLyricsFileAsync(file.Path);
         }
         else
         {

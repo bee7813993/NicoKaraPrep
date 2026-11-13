@@ -729,7 +729,7 @@ public sealed partial class MainWindow
         if (ext == ".n3proj")
         {
             return McpImportN3Proj(full, openLyrics: true, force, checkFont: true, lineTimes: true, timing: false,
-                lineShowTimes: null, pageLayouts: true, lineActions: true, exportBase: null, fontSets: null, icons: null, iconsGlobal: false, media: null);
+                lineShowTimes: null, pageLayouts: true, lineActions: true, exportBase: null, fontSets: null, icons: null, iconsGlobalChoice: null, media: null);
         }
         if (MediaExtensions.Contains(ext))
         {
@@ -753,8 +753,10 @@ public sealed partial class MainWindow
     }
 
     internal JsonNode McpImportN3Proj(string path, bool openLyrics, bool force, bool checkFont, bool lineTimes, bool timing,
-        bool? lineShowTimes, bool pageLayouts, bool lineActions, bool? exportBase, string[]? fontSets, bool? icons, bool iconsGlobal, bool? media)
+        bool? lineShowTimes, bool pageLayouts, bool lineActions, bool? exportBase, string[]? fontSets, bool? icons, bool? iconsGlobalChoice, bool? media)
     {
+        // 省いたら、読み込み確認画面と同じく前回選んだ取り込み先（既定はアプリ共通。フォント設定と同じ）
+        bool iconsGlobal = iconsGlobalChoice ?? ViewModel.Settings.N3ImportIconsGlobal;
         string full = McpExistingFile(path, "ニコカラメーカー3 プロジェクト");
         if (!full.EndsWith(".n3proj", StringComparison.OrdinalIgnoreCase)) throw new McpToolException($"拡張子が .n3proj のファイルを指定してください: {full}");
         var preview = ViewModel.PrepareN3ProjImport(full);
@@ -1293,7 +1295,7 @@ public sealed partial class MainWindow
         {
             XamlRoot = Content.XamlRoot,
             Title = "ファイルを開く",
-            Content = $"保存していない変更があります。変更を破棄して {fileName} を開きますか？",
+            Content = BuildScopeContent($"保存していない変更があります。変更を破棄して {fileName} を開きますか？", ViewModel.DescribeDocumentScope()),
             PrimaryButtonText = "破棄して開く",
             CloseButtonText = "キャンセル",
             DefaultButton = ContentDialogButton.Close,

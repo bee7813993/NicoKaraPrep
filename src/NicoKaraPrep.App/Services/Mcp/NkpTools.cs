@@ -125,7 +125,7 @@ internal sealed class NkpTools
         [Description("このプロジェクトを n3proj 書き出しのベースにする（省くと、ベースが未設定なら ベースにする）")] bool? exportBase = null,
         [Description("NicoKaraPrep のフォント設定として取り込むフォント設定の名前（[\"*\"] で全部。省くと取り込まない）")] string[]? fontSets = null,
         [Description("アイコン（@Emoji）を取り込む（省くと、追加・置き換えになるものだけ取り込む）")] bool? icons = null,
-        [Description("アイコンをアプリ共通に取り込む（false: この曲専用）")] bool iconsGlobal = false,
+        [Description("アイコンをアプリ共通に取り込む（false: この曲専用。省くと、読み込み確認画面で前回選んだ取り込み先。既定はアプリ共通で、フォント設定と同じ）")] bool? iconsGlobal = null,
         [Description("背景素材の動画をメディア再生に使う（省くと、メディアを開いていなければ使う）")] bool? media = null,
         CancellationToken ct = default) =>
         Invoke(MainWindow.McpAccess.WriteDocument,

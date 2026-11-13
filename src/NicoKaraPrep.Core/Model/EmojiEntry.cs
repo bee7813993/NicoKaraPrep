@@ -109,6 +109,39 @@ public sealed class EmojiEntry
         return new EmojiOptions(zoom, fix, noDecor, marginL, marginR, marginB);
     }
 
+    /// <summary>
+    /// 同じ定義か（置き換える文字列・ワイプ前後の画像・オプションが同じ。スロットは比べない）。
+    /// 画像の相対パスは <paramref name="baseFolder"/>（歌詞ファイルのフォルダ）から見たものとして比べる
+    /// （lrc の保存では、歌詞ファイルのフォルダの下にある画像を相対パスで書くため）。
+    /// </summary>
+    public bool SameDefinition(EmojiEntry other, string? baseFolder = null) =>
+        string.Equals(ReplaceChar, other.ReplaceChar, StringComparison.Ordinal)
+        && SameImage(ImageBefore, other.ImageBefore, baseFolder)
+        && SameImage(ImageAfter, other.ImageAfter, baseFolder)
+        && string.Equals(NormalizeOptions(Options), NormalizeOptions(other.Options), StringComparison.OrdinalIgnoreCase);
+
+    private static bool SameImage(string? a, string? b, string? baseFolder)
+    {
+        if (string.IsNullOrEmpty(a) || string.IsNullOrEmpty(b)) return string.IsNullOrEmpty(a) && string.IsNullOrEmpty(b);
+        return string.Equals(FullImagePath(a, baseFolder), FullImagePath(b, baseFolder), StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static string FullImagePath(string path, string? baseFolder)
+    {
+        try
+        {
+            if (!Path.IsPathRooted(path) && !string.IsNullOrEmpty(baseFolder)) path = Path.Combine(baseFolder, path);
+            return Path.GetFullPath(path);
+        }
+        catch (Exception)
+        {
+            return path;
+        }
+    }
+
+    private static string NormalizeOptions(string? options) =>
+        string.Join(',', (options ?? "").Split(',').Select(s => s.Trim()).Where(s => s.Length > 0));
+
     public EmojiEntry Clone() => new()
     {
         ReplaceChar = ReplaceChar,

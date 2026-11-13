@@ -368,6 +368,7 @@ public partial class MainViewModel : ObservableObject
             if (restoreTabs)
             {
                 var mainDoc = TextEditModeFormat.Parse(project.MainText);
+                FoldCommonEmojiCopies(mainDoc, path);
                 mainDoc.RlfExtras = Document.RlfExtras; // rlf 固有情報はファイル読込分を引き継ぐ
                 ApplySavedLineKeys(mainDoc, project.MainLineKeys);
                 Document = mainDoc;
@@ -522,9 +523,22 @@ public partial class MainViewModel : ObservableObject
         IsModified = false;
         doc.AssignSplitOrderKeys(); // タブ分離を元の位置へ戻すための行位置キー
         RebuildLines();
+        FoldCommonEmojiCopies(doc, path);
         AssignSlotsToSongEmoji();
         RefreshEmojiSlots();
         UpdateTitle();
+    }
+
+    /// <summary>
+    /// 歌詞の @Emoji のうち、アプリ共通の絵文字と同じ定義のものを、この曲の絵文字にせずアプリ共通のものを使うようにする。
+    /// lrc の保存ではアプリ共通の絵文字も @Emoji として歌詞に書く（ニコカラメーカー3 が読むため）ので、開き直すと全部が
+    /// 「この曲の絵文字」になり、あとでアプリ共通の側を直してもその曲には効かなくなっていた。保存するときはこれまでどおり全部を書く。
+    /// </summary>
+    private void FoldCommonEmojiCopies(LyricsDocument doc, string? path)
+    {
+        if (doc.EmojiEntries.Count == 0 || Settings.GlobalEmojiList.Count == 0) return;
+        string? folder = path is null ? null : Path.GetDirectoryName(path);
+        doc.EmojiEntries.RemoveAll(e => Settings.GlobalEmojiList.Any(g => e.SameDefinition(g, folder)));
     }
 
     /// <summary>
@@ -733,7 +747,13 @@ public partial class MainViewModel : ObservableObject
     {
         StoreActiveTab();
         var main = Tabs.FirstOrDefault(t => t.IsMain);
-        if (main?.FilePath is not string path) return;
+        if (main?.FilePath is not string path)
+        {
+            // 歌詞ファイルを保存していないあいだは .tttproj に書けない。この曲専用のフォント設定を作ったら「変更あり」にして、
+            // 新規作成・ほかの曲を開くときに尋ねる（曲の絵文字は歌詞の変更なので、もとから「変更あり」になる）
+            if (SongFontSets.Count > 0 && !IsModified) MarkModified();
+            return;
+        }
 
         var project = new SongProject
         {

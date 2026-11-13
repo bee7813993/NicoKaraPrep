@@ -136,6 +136,12 @@ public sealed class AppSettings
     /// </summary>
     public bool N3AutoImportNearby { get; set; } = true;
 
+    /// <summary>
+    /// n3proj の読み込み確認画面で、アイコン（@Emoji）をアプリ共通に取り込むか（false はこの曲専用）。前回選んだものを覚える。
+    /// 既定はアプリ共通（フォント設定の取り込み先と同じ）。
+    /// </summary>
+    public bool N3ImportIconsGlobal { get; set; } = true;
+
     // ---- MCP（Claude・Codex などの AI エージェントからの操作） ----
     /// <summary>
     /// MCP サーバーを動かすか（起動中の本体を、名前付きパイプ経由で「NicoKaraPrep.exe --mcp」の橋渡しから操作できるようにする）。
