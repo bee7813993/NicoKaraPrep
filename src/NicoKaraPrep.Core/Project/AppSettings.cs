@@ -136,6 +136,12 @@ public sealed class AppSettings
     /// </summary>
     public bool N3AutoImportNearby { get; set; } = true;
 
+    /// <summary>
+    /// n3proj の読み込み確認画面で、アイコン（@Emoji）をアプリ共通に取り込むか（false はこの曲専用）。前回選んだものを覚える。
+    /// 既定はアプリ共通（フォント設定の取り込み先と同じ）。
+    /// </summary>
+    public bool N3ImportIconsGlobal { get; set; } = true;
+
     // ---- MCP（Claude・Codex などの AI エージェントからの操作） ----
     /// <summary>
     /// MCP サーバーを動かすか（起動中の本体を、名前付きパイプ経由で「NicoKaraPrep.exe --mcp」の橋渡しから操作できるようにする）。
@@ -205,11 +211,20 @@ public sealed class AppSettings
     /// <summary>レイアウト設定ビューの左の一覧の幅 px（一覧と編集欄のあいだのつまみで変更）。</summary>
     public double LayoutListWidthPx { get; set; } = 300;
 
+    /// <summary>レイアウト設定ビューの右の列（見本・ページの一覧）の幅 px（編集欄とのあいだのつまみで変更。見本の大きさもこれで決まる）。</summary>
+    public double LayoutPreviewWidthPx { get; set; } = 300;
+
     /// <summary>
     /// 行リストの右のパネル「字幕アクション」の一覧で、押したアクションを選んだ行のページの行すべてにそろえるか
     /// （false なら選んだ行だけ。フォントと同じ）。
     /// </summary>
     public bool SideActionWholePage { get; set; }
+
+    /// <summary>
+    /// 行リストの右のパネル「フォント」の一覧で畳んでいるまとまり（フォルダ・下にフォント設定を持つフォント設定の Id と、
+    /// 「この曲専用」= <c>song</c>・「ベースの n3proj だけにあるもの」= <c>base</c>）。フォント設定ビュー（F3）の折りたたみとは別に覚える。
+    /// </summary>
+    public List<string> SideFontCollapsed { get; set; } = new();
 
     /// <summary>
     /// 行リスト・絵文字挿入ビューの右のパネル（フォント・レイアウト、絵文字のパレット）の幅 px（左との境のつまみで変更）。

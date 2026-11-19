@@ -27,7 +27,8 @@
             <!-- メニュー -->
             <MenuBar Grid.Column="0">
                 <MenuBarItem Title="ファイル(F)" AccessKey="F">
-                    <MenuFlyoutItem Text="新規作成（ファイルを閉じる）" Click="OnNewClick">
+                    <MenuFlyoutItem Text="新規作成（ファイルを閉じる）" Click="OnNewClick"
+                                    ToolTipService.ToolTip="歌詞を閉じて空の文書にします。アプリ共通のフォント設定・絵文字・レイアウト設定・定型文・表示時刻の自動調整のパラメーターはそのまま使えます。この曲専用のフォント設定・この曲の絵文字（パレットの「曲」の印）・行ごとの手動指定・書き出しの設定・動画は、新しい文書には出ません（保存した分は、その曲を開き直すと戻ります）">
                         <MenuFlyoutItem.KeyboardAccelerators>
                             <KeyboardAccelerator Modifiers="Control" Key="N" />
                         </MenuFlyoutItem.KeyboardAccelerators>
@@ -307,7 +308,7 @@
                     <!-- 動画と字幕のプレビュー（再生の操作は下の行に出して、字幕に重ならないようにする） -->
                     <Grid x:Name="PlayerHost" Height="260" Background="Black">
                         <MediaPlayerElement x:Name="Player" AreTransportControlsEnabled="False" />
-                        <views:SubtitlePreviewView x:Name="SubtitlePreview" />
+                        <views:SubtitlePreviewView x:Name="SubtitlePreview" AutomationProperties.Name="字幕のプレビュー（字幕の行をドラッグして位置を変えられます）" />
                     </Grid>
                     <!-- 再生の操作: 再生・一時停止と位置（左）、音量・時刻ずらし・字幕プレビューの切り替え（右）。
                          右の列に置くときは、位置のスライダーを 1 段目に（右端に時刻ずらし）、ほかを 2 段目にする -->
@@ -542,7 +543,7 @@
                                 <!-- 列: 選択 / 済・行番号 / 時刻（上の段に歌い出し・歌い終わり、下の段に表示開始・表示終了）/ 印（♪ 重なり・横幅の判定）/ 横幅 /
                                      手動指定 / フォント・レイアウト / 歌詞。列の幅は vm:LineListLayout（MainWindow.Layout.cs）。フォント・レイアウトの欄は行の中身に合わせ、
                                      行リストが狭いときは横幅を 2 段にし、フォントの欄を狭めて歌詞の欄を広く取る -->
-                                <Grid Opacity="{x:Bind Opacity, Mode=OneWay}" ColumnSpacing="6" Background="{x:Bind RowBrush, Mode=OneWay}">
+                                <Grid Opacity="{x:Bind Opacity, Mode=OneWay}" ColumnSpacing="6" Background="{x:Bind RowBrush, Mode=OneWay}" Tag="{x:Bind}" PointerPressed="OnLineRowPointerPressed">
                                     <Grid.ColumnDefinitions>
                                         <ColumnDefinition Width="24" />
                                         <ColumnDefinition Width="36" />
@@ -978,6 +979,11 @@
                                         <RowDefinition Height="Auto" />
                                     </Grid.RowDefinitions>
                                     <TextBlock Grid.Row="0" Text="{x:Bind KeyLabel}" FontSize="11" FontWeight="Bold" HorizontalAlignment="Center" Foreground="{ThemeResource AccentTextFillColorPrimaryBrush}" />
+                                    <!-- この曲だけの絵文字の印（フォント設定ビューの「曲」と同じ。印の無いものはアプリ共通） -->
+                                    <Border Grid.Row="0" HorizontalAlignment="Right" VerticalAlignment="Top" Padding="3,0" CornerRadius="3"
+                                            Background="{ThemeResource AccentFillColorDefaultBrush}" Visibility="{x:Bind IsSongOverride, Mode=OneWay}">
+                                        <TextBlock Text="曲" FontSize="9" Foreground="{ThemeResource TextOnAccentFillColorPrimaryBrush}" />
+                                    </Border>
                                     <Image Grid.Row="1" Source="{x:Bind Thumbnail, Mode=OneWay}" Stretch="Uniform" MaxHeight="40" />
                                     <TextBlock Grid.Row="2" Text="{x:Bind ReplaceChar, Mode=OneWay}" HorizontalAlignment="Center" FontSize="11" TextTrimming="CharacterEllipsis" />
                                 </Grid>

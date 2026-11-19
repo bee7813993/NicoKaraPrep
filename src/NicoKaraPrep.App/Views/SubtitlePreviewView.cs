@@ -1,10 +1,16 @@
 ﻿using System.Numerics;
 using Microsoft.Graphics.Canvas;
+using Microsoft.Graphics.Canvas.Geometry;
+using Microsoft.Graphics.Canvas.Text;
 using Microsoft.Graphics.Canvas.UI.Xaml;
+using Microsoft.UI.Input;
 using Microsoft.UI.Xaml.Controls;
+using Microsoft.UI.Xaml.Input;
+using Microsoft.UI.Xaml.Media;
 using NicoKaraPrep.App.Services.Subtitles;
 using NicoKaraPrep.Core.Formats;
 using Windows.Foundation;
+using Windows.System;
 using Windows.UI;
 
 namespace NicoKaraPrep.App.Views;
@@ -29,7 +35,7 @@ public sealed class SubtitlePreviewView : Grid
     public SubtitlePreviewView()
     {
         IsHitTestVisible = false;
-        _canvas = new CanvasControl { ClearColor = Microsoft.UI.Colors.Transparent };
+        _canvas = new CanvasControl { ClearColor = Microsoft.UI.Colors.Transparent, IsHitTestVisible = false };
         _canvas.Draw += OnDraw;
         Children.Add(_canvas);
         Loaded += (_, _) =>
@@ -38,6 +44,16 @@ public sealed class SubtitlePreviewView : Grid
             _canvas.Invalidate();
         };
         Unloaded += (_, _) => SubtitleBitmapCache.Loaded -= OnBitmapLoaded;
+        PointerPressed += OnDragPointerPressed;
+        PointerMoved += OnDragPointerMoved;
+        PointerReleased += OnDragPointerReleased;
+        PointerCaptureLost += (_, _) => CancelLayoutDrag();
+        PointerExited += (_, _) =>
+        {
+            if (_drag is not null) return;
+            _hoverOnLine = false;
+            ProtectedCursor = null;
+        };
     }
 
     /// <summary>描く材料（null なら何も描かない）。</summary>
@@ -48,8 +64,225 @@ public sealed class SubtitlePreviewView : Grid
         {
             if (ReferenceEquals(_model, value)) return;
             _model = value;
+            // ドラッグを離したあと、新しい値で作り直した材料が来るまでは、ドラッグ中の見た目のまま描く
+            if (_drag is null) _dragModel = null;
             _canvas.Invalidate();
         }
+    }
+
+    // ------------------------------------------------------------ 行のドラッグでレイアウトを変える
+
+    /// <summary>ドラッグ中の様子（始めたときの行・レイアウト設定・指の位置と、今の値）。</summary>
+    private sealed class DragState
+    {
+        public required PreviewLine Line { get; init; }
+        public required N3LayoutSettings Start { get; init; }
+        public required Point StartPos { get; init; }
+        public required float Scale { get; init; }
+        public N3LayoutSettings Current { get; set; } = null!;
+    }
+
+    private DragState? _drag;
+
+    /// <summary>ドラッグ中の見た目（ドラッグしている行のレイアウト設定を今の値に置き換えた材料。null ならふだんの材料）。</summary>
+    private SubtitlePreviewModel? _dragModel;
+
+    private bool _layoutDragEnabled;
+
+    /// <summary>行の上にカーソルがあるか（カーソルの形を変えたか）。</summary>
+    private bool _hoverOnLine;
+
+    private InputSystemCursor? _moveCursor;
+
+    private static readonly SolidColorBrush HitBackground = new(Microsoft.UI.Colors.Transparent);
+
+    /// <summary>
+    /// 字幕の行をマウスでドラッグして、その行のページのレイアウト設定（上下余白・左右余白・行間）を変えられるようにするか
+    /// （レイアウト設定ビューの見本と、メディア再生の字幕のプレビューで使う。true のあいだは、字幕の行の無いところの操作も下へは通さない）。
+    /// </summary>
+    public bool LayoutDragEnabled
+    {
+        get => _layoutDragEnabled;
+        set
+        {
+            if (_layoutDragEnabled == value) return;
+            _layoutDragEnabled = value;
+            IsHitTestVisible = value;
+            Background = value ? HitBackground : null;
+            if (!value)
+            {
+                CancelLayoutDrag();
+                _hoverOnLine = false;
+                ProtectedCursor = null;
+            }
+        }
+    }
+
+    /// <summary>行を押してドラッグを始めようとした（Cancel で止められる。止めたときの知らせは受け手が出す）。</summary>
+    public event EventHandler<LayoutDragStartingEventArgs>? LayoutDragStarting;
+
+    /// <summary>ドラッグを離して、レイアウト設定の値が変わった（受け手がレイアウト設定に書き込み、材料を作り直す）。</summary>
+    public event EventHandler<LayoutDragCompletedEventArgs>? LayoutDragCompleted;
+
+    /// <summary>今ドラッグ中か。</summary>
+    public bool IsDraggingLayout => _drag is not null;
+
+    /// <summary>字幕の画面を当てはめる倍率と左上（コントロールの座標）。</summary>
+    private (float Scale, float Ox, float Oy) Fit(SubtitlePreviewModel model)
+    {
+        float aw = (float)ActualWidth, ah = (float)ActualHeight;
+        float scale = Math.Min(aw / model.ScreenWidth, ah / model.ScreenHeight);
+        return (scale, (aw - model.ScreenWidth * scale) / 2, (ah - model.ScreenHeight * scale) / 2);
+    }
+
+    /// <summary>コントロールの位置にある字幕の行（描いている範囲の少し外まで。重なっていれば小さい方。無ければ null）。</summary>
+    private PreviewLine? LineAt(Point p)
+    {
+        var model = _model;
+        if (model is null || !_showSubtitles || double.IsNegativeInfinity(_timeMs) || ActualWidth < 2 || ActualHeight < 2) return null;
+        var (scale, ox, oy) = Fit(model);
+        if (scale <= 0) return null;
+        double sx = (p.X - ox) / scale, sy = (p.Y - oy) / scale;
+        double pad = 6 / scale;
+        PreviewLine? best = null;
+        double bestArea = double.MaxValue;
+        foreach (var line in VisibleLines(model, _timeMs))
+        {
+            var layout = line.Source.GetLayout();
+            if (layout.Tokens.Count == 0) continue;
+            var (ink, _) = Bounds(line, layout, model.ScreenWidth, model.ScreenHeight, model.Pages.GetValueOrDefault((line.Tab, line.Page)));
+            if (sx < ink.Left - pad || sx > ink.Right + pad || sy < ink.Top - pad || sy > ink.Bottom + pad) continue;
+            double area = (ink.Right - ink.Left) * (ink.Bottom - ink.Top);
+            if (area < bestArea)
+            {
+                best = line;
+                bestArea = area;
+            }
+        }
+        return best;
+    }
+
+    private void OnDragPointerPressed(object sender, PointerRoutedEventArgs e)
+    {
+        if (!_layoutDragEnabled || _model is not { } model) return;
+        var point = e.GetCurrentPoint(this);
+        if (!point.Properties.IsLeftButtonPressed) return;
+        if (LineAt(point.Position) is not { } line) return;
+        e.Handled = true;
+        var starting = new LayoutDragStartingEventArgs(line);
+        LayoutDragStarting?.Invoke(this, starting);
+        if (starting.Cancel) return;
+        _drag = new DragState
+        {
+            Line = line,
+            Start = line.Layout,
+            Current = line.Layout,
+            StartPos = point.Position,
+            Scale = Fit(model).Scale,
+        };
+        CapturePointer(e.Pointer);
+        _canvas.Invalidate();
+    }
+
+    private void OnDragPointerMoved(object sender, PointerRoutedEventArgs e)
+    {
+        if (!_layoutDragEnabled) return;
+        var point = e.GetCurrentPoint(this);
+        if (_drag is not { } drag)
+        {
+            // 行の上では、動かせることが分かるようにカーソルを変える
+            bool onLine = LineAt(point.Position) is not null;
+            if (onLine != _hoverOnLine)
+            {
+                _hoverOnLine = onLine;
+                ProtectedCursor = onLine ? _moveCursor ??= InputSystemCursor.Create(InputSystemCursorShape.SizeAll) : null;
+            }
+            return;
+        }
+        e.Handled = true;
+        double dx = (point.Position.X - drag.StartPos.X) / drag.Scale;
+        double dy = (point.Position.Y - drag.StartPos.Y) / drag.Scale;
+        if (e.KeyModifiers.HasFlag(VirtualKeyModifiers.Shift))
+        {
+            // Shift を押しながらなら、大きく動かした向きだけ
+            if (Math.Abs(dx) >= Math.Abs(dy)) dy = 0;
+            else dx = 0;
+        }
+        var next = N3LayoutDrag.Apply(drag.Start, drag.Line.Row, drag.Line.RowsInPage, dx, dy);
+        if (next == drag.Current && _dragModel is not null) return;
+        drag.Current = next;
+        _dragModel = WithLayout(_model!, drag.Start.Name, next);
+        _canvas.Invalidate();
+    }
+
+    private void OnDragPointerReleased(object sender, PointerRoutedEventArgs e)
+    {
+        if (_drag is not { } drag) return;
+        e.Handled = true;
+        _drag = null;
+        ReleasePointerCapture(e.Pointer);
+        if (drag.Current == drag.Start)
+        {
+            _dragModel = null;
+        }
+        else
+        {
+            LayoutDragCompleted?.Invoke(this, new LayoutDragCompletedEventArgs(drag.Line, drag.Start, drag.Current));
+        }
+        _canvas.Invalidate();
+    }
+
+    /// <summary>ドラッグをやめて（離したあとの、新しい材料を待つあいだの見た目も）、ふだんの見た目に戻す（値は変えない）。</summary>
+    public void CancelLayoutDrag()
+    {
+        if (_drag is null && _dragModel is null) return;
+        _drag = null;
+        _dragModel = null;
+        _canvas.Invalidate();
+    }
+
+    /// <summary>名前が <paramref name="name"/> のレイアウト設定で出す行を、<paramref name="layout"/> の上下余白・左右余白・行間に置き換えた材料。</summary>
+    private static SubtitlePreviewModel WithLayout(SubtitlePreviewModel model, string name, N3LayoutSettings layout) =>
+        new(model.ScreenWidth, model.ScreenHeight, model.Lines.Select(l => l.Layout.Name == name
+            ? l with
+            {
+                Layout = l.Layout with
+                {
+                    VerticalMarginPx = layout.VerticalMarginPx,
+                    HorizontalMarginPx = layout.HorizontalMarginPx,
+                    LineSpacePx = layout.LineSpacePx,
+                },
+            }
+            : l).ToList());
+
+    /// <summary>ドラッグ中の目安（余白の位置の点線と、今の値の説明）を描く。</summary>
+    private void DrawDragGuide(CanvasDrawingSession ds, SubtitlePreviewModel model, DragState drag)
+    {
+        var (scale, ox, oy) = Fit(model);
+        float W = model.ScreenWidth * scale, H = model.ScreenHeight * scale;
+        var c = drag.Current;
+        var guide = Color.FromArgb(220, 0x33, 0x99, 0xFF);
+        using var dash = new CanvasStrokeStyle { DashStyle = CanvasDashStyle.Dash };
+        if (N3LayoutDrag.IsAnchorRow(c, drag.Line.Row, drag.Line.RowsInPage))
+        {
+            float y = c.VerticalAlignment == 0 ? oy + (float)c.VerticalMarginPx * scale : oy + H - (float)c.VerticalMarginPx * scale;
+            ds.DrawLine(ox, y, ox + W, y, guide, 1.5f, dash);
+        }
+        if (c.AlignmentForRow(drag.Line.Row, Math.Max(drag.Line.RowsInPage, drag.Line.Row)) is 0 or 2)
+        {
+            float m = (float)c.HorizontalMarginPx * scale;
+            ds.DrawLine(ox + m, oy, ox + m, oy + H, guide, 1.5f, dash);
+            ds.DrawLine(ox + W - m, oy, ox + W - m, oy + H, guide, 1.5f, dash);
+        }
+
+        string targets = N3LayoutDrag.Targets(drag.Start, drag.Line.Row, drag.Line.RowsInPage);
+        string text = $"{c.Name}: {N3LayoutDrag.Describe(c)}" +
+            (targets.Length > 0 ? $"\nこの段のドラッグで変わるもの: {targets}（Shift で縦か横だけ）" : "\nこの段は動かせません（中央寄せの真ん中の段・中央の段）");
+        using var format = new CanvasTextFormat { FontFamily = "Yu Gothic UI", FontSize = 12, WordWrapping = CanvasWordWrapping.Wrap };
+        using var textLayout = new CanvasTextLayout(ds, text, format, Math.Max(80, W - 12), H);
+        var box = textLayout.LayoutBounds;
+        ds.FillRoundedRectangle(ox + 4, oy + 4, (float)box.Width + 12, (float)box.Height + 8, 4, 4, Color.FromArgb(190, 0, 0, 0));
+        ds.DrawTextLayout(textLayout, ox + 10, oy + 8, Microsoft.UI.Colors.White);
     }
 
     /// <summary>今の時刻（タグの時刻の基準の ms）。</summary>
@@ -90,15 +323,20 @@ public sealed class SubtitlePreviewView : Grid
 
     private void OnBitmapLoaded(object? sender, EventArgs e) => _canvas.Invalidate();
 
+    /// <summary>UI オートメーション・読み上げで見つけられるようにする（Grid には既定で無い。名前は AutomationProperties.Name）。</summary>
+    protected override Microsoft.UI.Xaml.Automation.Peers.AutomationPeer OnCreateAutomationPeer() =>
+        new Microsoft.UI.Xaml.Automation.Peers.FrameworkElementAutomationPeer(this);
+
     private void OnDraw(CanvasControl sender, CanvasDrawEventArgs args)
     {
-        var model = _model;
+        var model = _dragModel ?? _model;
         if (model is null) return;
         float aw = (float)sender.ActualWidth, ah = (float)sender.ActualHeight;
         if (aw < 2 || ah < 2) return;
         try
         {
             DrawFrame(args.DrawingSession, model, _timeMs, aw, ah, _hasVideo, _showSubtitles);
+            if (_drag is { } drag) DrawDragGuide(args.DrawingSession, model, drag);
         }
         catch (Exception ex) when (!sender.Device.IsDeviceLost(ex.HResult))
         {
@@ -333,4 +571,37 @@ public sealed class SubtitlePreviewView : Grid
         }
         return result;
     }
+}
+
+/// <summary>字幕のプレビューで行のドラッグを始めようとしたとき（<see cref="Cancel"/> で止める）。</summary>
+public sealed class LayoutDragStartingEventArgs : EventArgs
+{
+    public LayoutDragStartingEventArgs(PreviewLine line)
+    {
+        Line = line;
+    }
+
+    /// <summary>押した行（<see cref="PreviewLine.Layout"/> がその行のページのレイアウト設定）。</summary>
+    public PreviewLine Line { get; }
+
+    /// <summary>ドラッグさせない。</summary>
+    public bool Cancel { get; set; }
+}
+
+/// <summary>字幕のプレビューで行をドラッグして離したとき（レイアウト設定の前の値と新しい値）。</summary>
+public sealed class LayoutDragCompletedEventArgs : EventArgs
+{
+    public LayoutDragCompletedEventArgs(PreviewLine line, N3LayoutSettings before, N3LayoutSettings after)
+    {
+        Line = line;
+        Before = before;
+        After = after;
+    }
+
+    public PreviewLine Line { get; }
+
+    public N3LayoutSettings Before { get; }
+
+    /// <summary>新しい値（変わるのは上下余白・左右余白・行間だけ）。</summary>
+    public N3LayoutSettings After { get; }
 }

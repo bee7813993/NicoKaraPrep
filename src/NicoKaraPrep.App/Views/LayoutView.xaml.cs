@@ -47,9 +47,15 @@ public sealed partial class LayoutView : UserControl
     private const double DefaultListWidth = 300;
     private const double MinListWidth = 220;
 
-    /// <summary>編集欄に残す最小の幅と、右の列の幅（px。一覧を広げすぎないように）。</summary>
+    /// <summary>編集欄に残す最小の幅（px。一覧・右の列を広げすぎないように）。</summary>
     private const double MinEditorWidth = 360;
-    private const double RightColumnWidth = 300;
+
+    /// <summary>右の列（見本・ページの一覧）の幅の既定・最小（px）。</summary>
+    private const double DefaultPreviewWidth = 300;
+    private const double MinPreviewWidth = 240;
+
+    /// <summary>つまみのドラッグを始めたときの右の列の幅。</summary>
+    private double _previewWidthAtDragStart;
 
     /// <summary>編集欄を 2 列に並べる中央の幅（px。これより狭いと 1 列）。</summary>
     private const double TwoColumnEditorWidth = 640;
@@ -67,6 +73,27 @@ public sealed partial class LayoutView : UserControl
         LayoutListResizeGrip.DragCompleted += (_, _) => SetListWidth(ListColumn.Width.Value, save: true);
         LayoutListResizeGrip.Stepped += (_, dx) => SetListWidth(ListColumn.Width.Value + dx, save: true);
         LayoutListResizeGrip.ResetRequested += (_, _) => SetListWidth(DefaultListWidth, save: true);
+
+        // 編集欄と右の列（見本・ページの一覧）のあいだのつまみ: 左へ動かすと右の列（見本）が広がる
+        PreviewResizeGrip.DragStarted += (_, _) => _previewWidthAtDragStart = PreviewColumn.Width.Value;
+        PreviewResizeGrip.Dragging += (_, dx) => SetPreviewWidth(_previewWidthAtDragStart - dx, save: false);
+        PreviewResizeGrip.DragCompleted += (_, _) => SetPreviewWidth(PreviewColumn.Width.Value, save: true);
+        PreviewResizeGrip.Stepped += (_, dx) => SetPreviewWidth(PreviewColumn.Width.Value - dx, save: true);
+        PreviewResizeGrip.ResetRequested += (_, _) => SetPreviewWidth(DefaultPreviewWidth, save: true);
+
+        // 見本の字幕の行をドラッグして、選んでいるレイアウトの上下余白・左右余白・行間を変える
+        LayoutPreview.LayoutDragEnabled = true;
+        LayoutPreview.LayoutDragStarting += (_, e) =>
+        {
+            if (ViewModel?.SelectedName != e.Line.Layout.Name) e.Cancel = true;
+        };
+        LayoutPreview.LayoutDragCompleted += (_, e) =>
+        {
+            if (ViewModel is not { } vm) return;
+            if (vm.ApplyDrag(e.Before, e.After)) QueueLoadFields(); // 数値の欄を新しい値に
+            else LayoutPreview.CancelLayoutDrag();
+            RefreshPreview();
+        };
 
         Loaded += (_, _) =>
         {
@@ -100,6 +127,7 @@ public sealed partial class LayoutView : UserControl
 
         // 保存した一覧の幅（画面の広さに合わせた上限は、つまみを動かしたときにかける）
         ListColumn.Width = new GridLength(Math.Clamp(ViewModel.ListWidth, MinListWidth, 1600));
+        PreviewColumn.Width = new GridLength(Math.Clamp(ViewModel.PreviewWidth, MinPreviewWidth, 1600));
 
         LoadFields();
         RefreshPreview();
@@ -228,11 +256,23 @@ public sealed partial class LayoutView : UserControl
     {
         double available = RootGrid.ActualWidth - RootGrid.Padding.Left - RootGrid.Padding.Right
             - RootGrid.ColumnDefinitions[1].Width.Value - RootGrid.ColumnDefinitions[3].Width.Value
-            - RightColumnWidth - MinEditorWidth;
+            - PreviewColumn.Width.Value - MinEditorWidth;
         double max = Math.Max(MinListWidth, available);
         width = Math.Clamp(width, MinListWidth, max);
         ListColumn.Width = new GridLength(width);
         if (save) ViewModel?.SaveListWidth(width);
+    }
+
+    /// <summary>右の列（見本・ページの一覧）の幅を変える（最小 240px。編集欄に 360px と一覧が残る幅まで）。save なら設定に保存する。</summary>
+    private void SetPreviewWidth(double width, bool save)
+    {
+        double available = RootGrid.ActualWidth - RootGrid.Padding.Left - RootGrid.Padding.Right
+            - RootGrid.ColumnDefinitions[1].Width.Value - RootGrid.ColumnDefinitions[3].Width.Value
+            - ListColumn.Width.Value - MinEditorWidth;
+        double max = Math.Max(MinPreviewWidth, available);
+        width = Math.Clamp(width, MinPreviewWidth, max);
+        PreviewColumn.Width = new GridLength(width);
+        if (save) ViewModel?.SavePreviewWidth(width);
     }
 
     /// <summary>中央の幅に合わせて、編集欄のカードを 2 列（基本 | 行ごとの左右配置 / 文字 | ルビ）か 1 列に並べる。</summary>

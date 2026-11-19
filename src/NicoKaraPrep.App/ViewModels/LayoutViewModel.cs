@@ -269,6 +269,25 @@ public sealed partial class LayoutViewModel : ObservableObject
         Refresh(name);
     }
 
+    /// <summary>
+    /// 見本で字幕の行をドラッグして離した: 選んでいるレイアウトの上下余白・左右余白・行間を、ドラッグした位置の値にする（1 回の 元に戻す）。
+    /// 選んでいるレイアウトと違う名前なら何もしない。変えたら true。
+    /// </summary>
+    public bool ApplyDrag(N3LayoutSettings before, N3LayoutSettings after)
+    {
+        if (SelectedLayout is not { } item || item.Name != after.Name) return false;
+        string change = N3LayoutDrag.DescribeChange(before, after);
+        if (change.Length == 0) return false;
+        Edit("見本のドラッグ", l =>
+        {
+            l.VerticalMarginPx = after.VerticalMarginPx;
+            l.HorizontalMarginPx = after.HorizontalMarginPx;
+            l.LineSpacePx = after.LineSpacePx;
+        }, separate: true);
+        SetStatus($"レイアウト設定「{after.Name}」の{change}にしました（見本のドラッグ。Ctrl+Z で戻せます）{MergeOffNote()}");
+        return true;
+    }
+
     /// <summary>「追加」: 選んでいるレイアウトの値を写して「新しいレイアウト」（重なれば 2, 3…）を足し、それを選ぶ。</summary>
     public string? AddNew()
     {
@@ -515,6 +534,17 @@ public sealed partial class LayoutViewModel : ObservableObject
     {
         if (Math.Abs(_main.Settings.LayoutListWidthPx - width) < 0.5) return;
         _main.Settings.LayoutListWidthPx = width;
+        MarkDirty(layouts: false);
+    }
+
+    /// <summary>右の列（見本・ページの一覧）の幅（px。設定に保存したもの）。</summary>
+    public double PreviewWidth => _main.Settings.LayoutPreviewWidthPx;
+
+    /// <summary>右の列の幅を設定に保存する（まとめて保存する）。</summary>
+    public void SavePreviewWidth(double width)
+    {
+        if (Math.Abs(_main.Settings.LayoutPreviewWidthPx - width) < 0.5) return;
+        _main.Settings.LayoutPreviewWidthPx = width;
         MarkDirty(layouts: false);
     }
 
